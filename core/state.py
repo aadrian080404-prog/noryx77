@@ -16,6 +16,10 @@ class NORYXState:
 
     subtasks: list[str] = field(default_factory=list)
 
+    current_task_index: int = 0
+
+    execution_history: list[dict[str, Any]] = field(default_factory=list)
+
     memory: list[dict[str, Any]] = field(default_factory=list)
 
     available_tools: list[str] = field(default_factory=list)
@@ -29,6 +33,10 @@ class NORYXState:
     confidence: float = 0.0
 
     current_action: str = ""
+
+    selected_resource: str = ""
+
+    resource_history: list[dict[str, Any]] = field(default_factory=list)
 
     final_answer: str = ""
 
