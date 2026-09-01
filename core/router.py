@@ -16,6 +16,12 @@ class ResourceRouter:
     def available(self) -> tuple[str, ...]:
         return tuple(sorted(self._agents))
 
+    def default_id(self) -> str:
+        """Return the sole deterministic route; fail closed when routing is ambiguous."""
+        if len(self._agents) != 1:
+            raise LookupError("no unique default resource route")
+        return next(iter(self._agents))
+
     def route(self, preferred: str | None = None):
         if preferred:
             agent = self._agents.get(preferred)
