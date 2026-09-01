@@ -82,7 +82,7 @@ class CrossChecker:
         if len(set(result_task_ids)) != len(result_task_ids): return VerificationResult(False, "cross_check", "duplicate_result_task")
         agent_ids = [result.agent_id for result in results]
         if len(set(agent_ids)) != len(agent_ids): return VerificationResult(False, "cross_check", "duplicate_agent_result")
-        if set(result_task_ids) != set(expected_step_ids): return VerificationResult(False, "cross_check", "result_task_mismatch")
+        if result_task_ids != expected_step_ids: return VerificationResult(False, "cross_check", "result_task_mismatch")
         for result in results:
             if result.verification.stage not in ("result", "agent_result", result.agent_id): return VerificationResult(False, "cross_check", "verification_identity_mismatch")
         return VerificationResult(True, "cross_check", "cross_check_ok")
