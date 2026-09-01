@@ -1,8 +1,9 @@
 """Attested HYPERSYNTH execution facade.
 
-The existing Hypersynth remains the execution engine. This facade adds a
-cryptographically bound evidence record over its externally observable stages.
-It never treats cryptography as proof of semantic truth.
+The existing Hypersynth remains the execution engine. This facade adds
+cryptographically bound evidence over its externally observable stages and a
+separate continuity chain for state/transition integrity. Cryptography does
+not establish semantic or factual truth.
 """
 
 from __future__ import annotations
@@ -14,10 +15,11 @@ from .attestation import HypersynthAttestation, StageAttestation
 from .attestation_session import AttestationSession
 from .crypto import CryptoIntegrity
 from .hypersynth import Hypersynth
+from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 
 
 class AttestedHypersynthKernel:
-    """Run the bounded kernel and emit an authenticated stage evidence chain."""
+    """Run the bounded kernel and emit authenticated stage evidence."""
 
     STAGE_ORDER = (
         "perception", "context", "planning", "hypothesis", "simulation",
@@ -73,6 +75,22 @@ class AttestedHypersynthKernel:
             return cls._canonical(result.get("reflection"))
         raise ValueError("unknown_hypersynth_stage")
 
+    @classmethod
+    def _continuity_state(cls, result: dict[str, Any], stage: str) -> Any:
+        """Return the canonical observable state bound to a stage transition."""
+        state = result.get("state")
+        return {
+            "stage": stage,
+            "state": cls._canonical(state),
+            "status": result.get("status"),
+            "phase": result.get("phase"),
+        }
+
+    @classmethod
+    def _continuity_input(cls, result: dict[str, Any], stage: str, previous: str) -> Any:
+        payload = cls._payload(result, stage)
+        return {"stage": stage, "previous_continuity_tag": previous, "payload": payload}
+
     def run(self, task):
         result = self.kernel.run(task)
         if not isinstance(result, dict):
@@ -88,6 +106,13 @@ class AttestedHypersynthKernel:
 
         try:
             session = AttestationSession(self.attestation.crypto, task_id, risk_class, requirements)
+            continuity = KernelContinuity(
+                self.attestation.crypto,
+                session_id=session.session_id,
+                task_id=task_id,
+                risk_class=risk_class,
+                verification_requirements=requirements,
+            )
         except Exception as exc:
             return {
                 "status": "rejected",
@@ -98,11 +123,29 @@ class AttestedHypersynthKernel:
 
         attestations: list[StageAttestation] = []
         payloads: list[Any] = []
-        for stage in self.STAGE_ORDER:
+        continuity_records: list[KernelContinuityRecord] = []
+        continuity_evidence: list[tuple[str, Any, Any, Any, str]] = []
+        previous_continuity = ""
+
+        for index, stage in enumerate(self.STAGE_ORDER):
             try:
                 payload = self._payload(result, stage)
+                attestation = session.attest(stage, payload)
+                dependency = attestation.tag if stage == "perception" else attestations[-2].tag
+                state = self._continuity_state(result, stage)
+                stage_input = self._continuity_input(result, stage, previous_continuity)
+                record = continuity.attest(
+                    stage,
+                    state,
+                    stage_input,
+                    payload,
+                    dependency_tag=dependency,
+                )
+                attestations.append(attestation)
                 payloads.append(payload)
-                attestations.append(session.attest(stage, payload))
+                continuity_records.append(record)
+                continuity_evidence.append((stage, state, stage_input, payload, dependency))
+                previous_continuity = record.tag
             except Exception as exc:
                 session.close()
                 return {
@@ -110,9 +153,11 @@ class AttestedHypersynthKernel:
                     "phase": stage,
                     "verification": {"valid": False, "reason": "attestation_failure", "error": type(exc).__name__},
                     "attestations": tuple(attestations),
+                    "continuity_records": tuple(continuity_records),
                 }
 
         chain = tuple(attestations)
+        continuity_chain = tuple(continuity_records)
         for stage, attestation, payload in zip(self.STAGE_ORDER, chain, payloads):
             if not session.verify(attestation, stage, payload, consume=True):
                 session.close()
@@ -121,13 +166,50 @@ class AttestedHypersynthKernel:
                     "phase": "verification",
                     "verification": {"valid": False, "reason": "attestation_session_verification_failure"},
                     "attestations": chain,
+                    "continuity_records": continuity_chain,
                 }
 
+        if not continuity.verify_chain(continuity_chain, tuple(continuity_evidence)):
+            session.close()
+            return {
+                "status": "rejected",
+                "phase": "verification",
+                "verification": {"valid": False, "reason": "kernel_continuity_verification_failure"},
+                "attestations": chain,
+                "continuity_records": continuity_chain,
+            }
+
+        stage_tags = tuple(item.tag for item in chain)
+        continuity_tags = tuple(item.tag for item in continuity_chain)
+        final_material = {
+            "session_id": session.session_id,
+            "task_id": task_id,
+            "risk_class": risk_class,
+            "verification_requirements": requirements,
+            "stage_order": self.STAGE_ORDER,
+            "stage_tags": stage_tags,
+            "continuity_tags": continuity_tags,
+        }
+        final_tag = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
+        expected_final = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
+        final_verified = __import__("hmac").compare_digest(final_tag, expected_final)
         session.close()
+        if not final_verified:
+            return {
+                "status": "rejected",
+                "phase": "verification",
+                "verification": {"valid": False, "reason": "final_continuity_binding_failure"},
+                "attestations": chain,
+                "continuity_records": continuity_chain,
+            }
+
         return {
             **result,
             "attestations": chain,
             "attestation_verified": True,
             "attestation_session_id": session.session_id,
             "attestation_context_tag": session.context_tag,
+            "continuity_records": continuity_chain,
+            "continuity_verified": True,
+            "final_continuity_tag": final_tag,
         }
