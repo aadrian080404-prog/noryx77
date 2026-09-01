@@ -1,20 +1,45 @@
-from .contracts import TaskSpec
+from .actions import ActionGate
 from .audit import AuditLog
 from .hypersynth import Hypersynth
+from .limits import RuntimeLimits
+from .memory import MemoryStore
+from .policy import PolicyEngine
+from .security import SecurityBoundary
+from .verification import VerificationEngine
+from .router import ResourceRouter
+
 
 class HypersynthRuntime:
-    """Public facade around the cognitive kernel with audit and fail-closed handling."""
-    def __init__(self, verifier, router, planner=None, audit=None):
+    """Production-shaped facade: owns safety dependencies and exposes one fail-closed entrypoint."""
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None):
         self.audit = audit or AuditLog()
-        self.kernel = Hypersynth(verifier, router, planner=planner)
+        self.verifier = verifier or VerificationEngine()
+        self.router = router or ResourceRouter()
+        self.limits = limits or RuntimeLimits()
+        self.policy = PolicyEngine()
+        self.security = SecurityBoundary(self.policy, self.verifier)
+        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.memory = memory or MemoryStore()
+        self.kernel = Hypersynth(
+            self.verifier,
+            self.router,
+            planner=planner,
+            action_gate=self.action_gate,
+            memory=self.memory,
+            audit=self.audit,
+        )
 
-    def run(self, task: TaskSpec):
-        self.audit.record("hypersynth_start", task_id=task.task_id)
+    def run(self, task):
+        self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
         try:
             result = self.kernel.run(task)
         except Exception as exc:
-            self.audit.record("hypersynth_failure", task_id=task.task_id, error=type(exc).__name__)
-            return {"status": "rejected", "phase": "execution", "reason": "controlled_runtime_failure", "audit": self.audit.snapshot()}
-        self.audit.record("hypersynth_complete", task_id=task.task_id, status=result.get("status"))
+            self.audit.record("hypersynth_failure", task_id=getattr(task, "task_id", None), error=type(exc).__name__)
+            return {
+                "status": "rejected",
+                "phase": "execution",
+                "reason": "controlled_runtime_failure",
+                "audit": self.audit.snapshot(),
+            }
         result["audit"] = self.audit.snapshot()
         return result
