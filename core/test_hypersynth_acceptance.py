@@ -126,7 +126,7 @@ class HypersynthAcceptanceTests(unittest.TestCase):
         result = kernel.run(self.task(task_id="plan-bound"))
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "planning")
-        self.assertEqual(result["verification"].reason, "plan_exceeds_execution_bound")
+        self.assertEqual(result["verification"].reason, "plan_bounds_invalid")
 
     def test_runtime_deadline_is_fail_closed(self):
         ticks = iter((0.0, 2.0))
