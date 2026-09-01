@@ -3,7 +3,6 @@ import unittest
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .reasoning import CrossChecker, Hypothesis, InternalSimulator, SimulationResult
 from .hypersynth import Hypersynth
-from .planning import Plan, PlanStep
 from .router import ResourceRouter
 from .agents import DeterministicAgent
 from .verification import VerificationEngine
@@ -43,7 +42,7 @@ class Attack3Tests(unittest.TestCase):
         )
         check = CrossChecker().verify(task, results, hypotheses)
         self.assertFalse(check.valid)
-        self.assertEqual(check.reason, "result_task_mapping_mismatch")
+        self.assertEqual(check.reason, "result_task_mismatch")
 
     def test_simulator_verifier_rejects_duplicate_hypothesis_identity(self):
         check = InternalSimulator().verify((
