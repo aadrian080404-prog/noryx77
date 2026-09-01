@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Any
 
-from .actions import ActionGate
 from .audit import AuditLog
-from .context import ContextManager, ContextSnapshot
+from .context import ContextManager
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
 from .planning import Planner
+from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
 from .supervisor import AgentSupervisor
 
 
@@ -19,12 +19,23 @@ class CognitiveState:
 
 
 class Hypersynth:
-    """Bounded cognitive kernel: perceive -> context -> plan -> allocate -> execute -> verify -> reflect."""
+    """Bounded cognitive kernel: perceive -> context -> plan -> reason -> allocate -> execute -> verify -> reflect."""
 
-    PHASES = ("perception", "context", "planning", "allocation", "execution", "verification", "metacognition")
+    PHASES = (
+        "perception",
+        "context",
+        "planning",
+        "hypothesis",
+        "simulation",
+        "allocation",
+        "execution",
+        "verification",
+        "metacognition",
+    )
 
     def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None,
-                 action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2):
+                 action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2,
+                 hypothesis_engine=None, simulator=None, cross_checker=None):
         self.verifier = verifier
         self.router = router
         self.planner = planner or Planner(max_steps=max_steps)
@@ -36,6 +47,9 @@ class Hypersynth:
         self.audit = audit or AuditLog()
         self.max_steps = max_steps
         self.max_agents = max_agents
+        self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
+        self.simulator = simulator or InternalSimulator()
+        self.cross_checker = cross_checker or CrossChecker()
 
     def _state(self, phase, task, context, confidence=0.0):
         return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
@@ -52,30 +66,45 @@ class Hypersynth:
         task_check = self.verifier.verify_task(task)
         if not task_check.valid:
             return self._reject("perception", task, task_check)
-        state = self._state("perception", task, task.input)
 
-        try:
-            subtasks = self.decomposer.decompose(task)
-        except Exception:
-            check = VerificationResult(False, "decomposition", "decomposition_failure")
-            return self._reject("context", task, check)
-        if not subtasks:
-            return self._reject("context", task, VerificationResult(False, "decomposition", "no_subtasks"))
+        subtasks = self._decompose(task)
+        if isinstance(subtasks, dict):
+            return subtasks
 
         context = self.context_manager.build(
             task.task_id,
             {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)},
             source_ids=(task.task_id,),
         )
-        state = self._state("context", task, context)
         self.audit.record("context_acquired", task_id=task.task_id, version=context.version)
 
-        plan = self.planner.build(task)
-        plan_check = self.planner.verify(plan, task)
+        try:
+            plan = self.planner.build(task)
+            plan_check = self.planner.verify(plan, task)
+        except Exception:
+            plan_check = VerificationResult(False, "planning", "planner_failure")
+            plan = None
         if not plan_check.valid:
             return self._reject("planning", task, plan_check)
-        state = self._state("planning", task, context)
         self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
+
+        try:
+            hypotheses = self.hypothesis_engine.generate(task, plan)
+            hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
+        except Exception:
+            return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
+        if not hypothesis_check.valid:
+            return self._reject("hypothesis", task, hypothesis_check)
+        self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
+
+        try:
+            simulations = self.simulator.simulate(task, hypotheses)
+            simulation_check = self.simulator.verify(simulations)
+        except Exception:
+            return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
+        if not simulation_check.valid:
+            return self._reject("simulation", task, simulation_check, hypotheses=hypotheses)
+        self.audit.record("simulation_verified", task_id=task.task_id, count=len(simulations))
 
         assignments = []
         agents = self.router.available()
@@ -85,11 +114,13 @@ class Hypersynth:
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
                              task.constraints, task.verification_requirements, step.risk_class)
-            selected, decision = self.supervisor.select(child, preferred=agent_id)
+            try:
+                selected, decision = self.supervisor.select(child, preferred=agent_id)
+            except Exception:
+                return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None:
                 return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
             assignments.append((selected, child, step))
-        state = self._state("allocation", task, context)
 
         results = []
         for index, (agent, child, step) in enumerate(assignments):
@@ -112,7 +143,10 @@ class Hypersynth:
             results.append(result)
             self.audit.record("agent_result_verified", task_id=child.task_id, agent_id=agent.agent_id)
 
-        state = self._state("execution", task, context)
+        cross_check = self.cross_checker.verify(task, results, hypotheses[:len(results)])
+        if not cross_check.valid:
+            return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
+
         consensus = self._verify_consensus(results)
         if not consensus.valid:
             return self._reject("verification", task, consensus, results=tuple(results))
@@ -122,11 +156,12 @@ class Hypersynth:
         if not output_check.valid:
             return self._reject("verification", task, output_check, results=tuple(results))
 
-        # Metacognition is deliberately a high-level validation summary, never hidden chain-of-thought.
         reflection = {
             "result_verified": True,
             "agents_used": tuple(r.agent_id for r in results),
             "steps_executed": len(results),
+            "hypotheses_verified": len(hypotheses),
+            "simulations_verified": len(simulations),
             "confidence": 1.0,
         }
         if self.memory is not None:
@@ -144,11 +179,22 @@ class Hypersynth:
             "state": final_state,
             "context": context,
             "plan": plan,
+            "hypotheses": hypotheses,
+            "simulations": simulations,
             "results": tuple(results),
             "verification": output_check,
             "reflection": reflection,
             "audit": self.audit.snapshot(),
         }
+
+    def _decompose(self, task):
+        try:
+            subtasks = self.decomposer.decompose(task)
+        except Exception:
+            return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
+        if not subtasks:
+            return self._reject("context", task, VerificationResult(False, "decomposition", "no_subtasks"))
+        return subtasks
 
     def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
         if not results:
