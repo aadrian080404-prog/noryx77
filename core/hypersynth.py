@@ -6,7 +6,7 @@ from .context import ContextManager
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .decomposition import Subtask, TaskDecomposer
 from .planning import Plan, PlanStep, Planner
-from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator
+from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
 from .supervisor import AgentSupervisor
 from .validation_requirements import VALID_VERIFICATION_REQUIREMENTS
 
@@ -75,6 +75,29 @@ class Hypersynth:
         if "string" in requirements and not isinstance(output, str):
             return VerificationResult(False, stage, "output_type_mismatch")
         return VerificationResult(True, stage, "independent_output_ok")
+
+    def _independent_simulation_integrity(self, simulations: tuple[SimulationResult, ...], hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
+        """Kernel-owned simulation gate; injected simulators cannot redefine feasibility."""
+        if not isinstance(simulations, tuple) or not simulations:
+            return VerificationResult(False, "simulation", "no_simulations")
+        expected_ids = tuple(h.hypothesis_id for h in hypotheses)
+        actual_ids = tuple(getattr(item, "hypothesis_id", None) for item in simulations)
+        if actual_ids != expected_ids:
+            return VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch")
+        for item, hypothesis in zip(simulations, hypotheses):
+            if not isinstance(item, SimulationResult):
+                return VerificationResult(False, "simulation", "invalid_simulation_type")
+            if not isinstance(item.feasible, bool):
+                return VerificationResult(False, "simulation", "invalid_feasibility_flag")
+            if not isinstance(item.reason, str) or not item.reason.strip():
+                return VerificationResult(False, "simulation", "invalid_simulation_reason")
+            expected_feasible = bool(hypothesis.statement and hypothesis.task_id == task.task_id)
+            if item.feasible != expected_feasible:
+                return VerificationResult(False, "simulation", "simulation_feasibility_mismatch")
+            expected_reason = "feasible" if expected_feasible else "invalid_hypothesis"
+            if item.reason != expected_reason:
+                return VerificationResult(False, "simulation", "simulation_reason_mismatch")
+        return VerificationResult(True, "simulation", "independent_simulation_ok")
 
     def _checked_verification(self, check, *, stage: str, malformed_reason: str) -> VerificationResult:
         """Normalize untrusted verifier responses into a fail-closed result."""
@@ -273,6 +296,9 @@ class Hypersynth:
         simulation_check = self._checked_verification(simulation_check, stage="simulation", malformed_reason="malformed_simulation_verification")
         if not simulation_check.valid:
             return self._reject("simulation", task, simulation_check)
+        independent_simulation_check = self._independent_simulation_integrity(simulations, hypotheses, task)
+        if not independent_simulation_check.valid:
+            return self._reject("simulation", task, independent_simulation_check)
         expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
         actual_simulation_ids = tuple(s.hypothesis_id for s in simulations)
         if actual_simulation_ids != expected_hypothesis_ids:
