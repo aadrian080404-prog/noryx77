@@ -19,7 +19,7 @@ class NORYXRuntime:
         self.policy = PolicyEngine()
         self.security = SecurityBoundary(self.policy, self.verifier)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
-        self.memory = MemoryStore()
+        self.memory = MemoryStore(max_items=self.limits.max_memory_items)
         self.audit = AuditLog()
         self.router = ResourceRouter()
         self.router.register(DeterministicAgent(self.verifier))
