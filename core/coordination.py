@@ -20,7 +20,9 @@ class AgentCoordinator:
         self.max_agents = max_agents
 
     def assign(self, plan: Plan) -> tuple[AgentAssignment, ...]:
-        if not isinstance(plan, Plan) or not plan.is_well_formed():
+        if not isinstance(plan, Plan) or not isinstance(plan.task_id, str) or not plan.task_id.strip():
+            raise ValueError("invalid_plan")
+        if not isinstance(plan.steps, tuple) or not plan.steps:
             raise ValueError("invalid_plan")
         agents = self.router.available()
         if not agents:
@@ -31,6 +33,8 @@ class AgentCoordinator:
             agent_id = getattr(agent, "agent_id", None)
             if not isinstance(agent_id, str) or not agent_id.strip():
                 raise ValueError("invalid_agent_id")
+            if not isinstance(getattr(step, "step_id", None), str) or not step.step_id.strip():
+                raise ValueError("invalid_step_id")
             assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id))
         return tuple(assignments)
 
@@ -48,14 +52,15 @@ class AgentCoordinator:
                 raise ValueError("assignment_step_missing")
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
                              task.constraints, task.verification_requirements, step.risk_class)
+            if not self.verifier.verify_task(child).valid:
+                raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
             result = agent.run(child)
             if not isinstance(result, AgentResult):
                 raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
-            admission = self.verifier.verify_task(child)
-            if not admission.valid:
-                raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
                 raise RuntimeError(f"agent_result_identity_mismatch:{assignment.agent_id}")
+            if result.status != "completed":
+                raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 raise RuntimeError(f"agent_result_unverified:{assignment.agent_id}")
             output_check = self.verifier.verify_output(result.output, stage="agent_result")
