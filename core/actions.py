@@ -17,15 +17,18 @@ class ActionGate:
         self.security = security
         self.limits = limits
 
-    def authorize(self, action: ActionSpec, calls_used: int = 0) -> ActionDecision:
+    def authorize(self, action: ActionSpec, calls_used: int = 0, tool_calls_used: int = 0) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
             return ActionDecision(False, "invalid call count", VerificationResult(False, "action_gate", "invalid_call_count"))
-        # calls_used counts actions already consumed. A new action requires
-        # strictly positive remaining capacity; equality means the budget is exhausted.
-        remaining = self.limits.max_actions_per_task - calls_used
-        if remaining <= 0:
+        if isinstance(tool_calls_used, bool) or not isinstance(tool_calls_used, int) or tool_calls_used < 0:
+            return ActionDecision(False, "invalid tool call count", VerificationResult(False, "action_gate", "invalid_tool_call_count"))
+        if not self.limits.validate_count(calls_used, self.limits.max_actions_per_task):
+            return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
+        if not self.limits.validate_count(tool_calls_used, self.limits.max_tool_calls_per_task):
+            return ActionDecision(False, "tool call budget exceeded", VerificationResult(False, "action_gate", "tool_call_budget"))
+        if calls_used >= self.limits.max_actions_per_task:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
         if not self.policy.allows(action):
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
