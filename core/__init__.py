@@ -4,6 +4,7 @@ from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .context import ContextManager, ContextSnapshot
 from .coordination import AgentAssignment, AgentCoordinator
+from .crypto import CryptoEnvelope, CryptoIntegrity
 from .decomposition import Subtask, TaskDecomposer
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .hypersynth import CognitiveState, Hypersynth
@@ -24,9 +25,9 @@ __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
     "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityRegistry",
     "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
-    "DeterministicAgent", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine",
-    "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "Plan", "PlanStep", "Planner",
-    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
-    "SecurityDecision", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor",
-    "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth", "HypersynthRuntime",
+    "Hypothesis", "HypothesisEngine", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime",
+    "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
+    "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SimulationResult", "Subtask", "TaskDecomposer",
+    "TaskSpec", "ToolExecutor", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
