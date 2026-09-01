@@ -18,18 +18,25 @@ class TwoStepPlanner:
     """Small deterministic planner used to exercise multi-agent execution."""
 
     def build(self, task):
-        return Plan(
-            task.task_id,
-            (
-                PlanStep(task.task_id + ":0", task.objective),
-                PlanStep(task.task_id + ":1", task.objective),
-            ),
-        )
+        return Plan(task.task_id, (
+            PlanStep(task.task_id + ":0", task.objective),
+            PlanStep(task.task_id + ":1", task.objective),
+        ))
 
     def verify(self, plan, task):
         if plan.task_id != task.task_id or len(plan.steps) != 2:
             return VerificationResult(False, "plan", "invalid_acceptance_plan")
         return VerificationResult(True, "plan", "plan_ok")
+
+
+class ThreeStepPlanner:
+    def build(self, task):
+        return Plan(task.task_id, tuple(
+            PlanStep(f"{task.task_id}:{i}", task.objective) for i in range(3)
+        ))
+
+    def verify(self, plan, task):
+        return VerificationResult(plan.task_id == task.task_id and len(plan.steps) == 3, "plan", "plan_ok")
 
 
 class EchoAgent(Agent):
@@ -39,13 +46,8 @@ class EchoAgent(Agent):
 
     def run(self, task):
         output = task.objective
-        return AgentResult(
-            self.agent_id,
-            task.task_id,
-            "completed",
-            output,
-            self.verifier.verify_output(output, stage="agent_result"),
-        )
+        return AgentResult(self.agent_id, task.task_id, "completed", output,
+                           self.verifier.verify_output(output, stage="agent_result"))
 
 
 class NullAgent(Agent):
@@ -61,32 +63,24 @@ class HypersynthAcceptanceTests(unittest.TestCase):
 
     def task(self, **changes):
         values = {
-            "task_id": "acceptance",
-            "task_type": "research",
-            "objective": "produce a verified result",
-            "input": "controlled input",
+            "task_id": "acceptance", "task_type": "research",
+            "objective": "produce a verified result", "input": "controlled input",
             "risk_class": "normal",
         }
         values.update(changes)
         return TaskSpec(**values)
 
-    def gate(self):
+    def gate(self, max_actions=4):
         policy = PolicyEngine()
         security = SecurityBoundary(policy, self.verifier)
-        return ActionGate(policy, security, RuntimeLimits(max_actions_per_task=4))
+        return ActionGate(policy, security, RuntimeLimits(max_actions_per_task=max_actions))
 
     def test_hypersynth_multistep_two_agent_cycle(self):
         router = ResourceRouter()
         router.register(EchoAgent("agent-a", self.verifier))
         router.register(EchoAgent("agent-b", self.verifier))
-        kernel = Hypersynth(
-            self.verifier,
-            router,
-            planner=TwoStepPlanner(),
-            action_gate=self.gate(),
-            memory=MemoryStore(),
-            max_agents=2,
-        )
+        kernel = Hypersynth(self.verifier, router, planner=TwoStepPlanner(),
+                            action_gate=self.gate(), memory=MemoryStore(), max_agents=2)
         result = kernel.run(self.task())
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["phase"], "metacognition")
@@ -98,17 +92,8 @@ class HypersynthAcceptanceTests(unittest.TestCase):
         router = ResourceRouter()
         router.register(EchoAgent("agent-a", self.verifier))
         router.register(EchoAgent("agent-b", self.verifier))
-        kernel = Hypersynth(
-            self.verifier,
-            router,
-            planner=TwoStepPlanner(),
-            action_gate=ActionGate(
-                PolicyEngine(),
-                SecurityBoundary(PolicyEngine(), self.verifier),
-                RuntimeLimits(max_actions_per_task=1),
-            ),
-            max_agents=2,
-        )
+        kernel = Hypersynth(self.verifier, router, planner=TwoStepPlanner(),
+                            action_gate=self.gate(max_actions=1), max_agents=2)
         result = kernel.run(self.task(task_id="budget"))
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "execution")
@@ -141,6 +126,23 @@ class HypersynthAcceptanceTests(unittest.TestCase):
             router.default_id()
         router.register(EchoAgent("only", self.verifier))
         self.assertEqual(router.default_id(), "only")
+
+    def test_constructor_rejects_invalid_bounds(self):
+        router = ResourceRouter()
+        with self.assertRaises(ValueError):
+            Hypersynth(self.verifier, router, max_steps=0)
+        with self.assertRaises(ValueError):
+            Hypersynth(self.verifier, router, max_agents=0)
+
+    def test_plan_cannot_escape_agent_execution_bound(self):
+        router = ResourceRouter()
+        router.register(EchoAgent("only", self.verifier))
+        kernel = Hypersynth(self.verifier, router, planner=ThreeStepPlanner(),
+                            action_gate=self.gate(), max_agents=2)
+        result = kernel.run(self.task(task_id="plan-bound"))
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "planning")
+        self.assertEqual(result["verification"].reason, "plan_exceeds_execution_bound")
 
 
 if __name__ == "__main__":
