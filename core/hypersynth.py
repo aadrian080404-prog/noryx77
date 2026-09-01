@@ -4,9 +4,9 @@ from typing import Any
 from .audit import AuditLog
 from .context import ContextManager
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
-from .decomposition import TaskDecomposer
-from .planning import Planner
-from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
+from .decomposition import Subtask, TaskDecomposer
+from .planning import Plan, PlanStep, Planner
+from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator
 from .supervisor import AgentSupervisor
 
 
@@ -57,6 +57,68 @@ class Hypersynth:
         self.audit.record("phase_entered", task_id=task.task_id, phase=target_phase, index=target_index)
         return VerificationResult(True, "phase", "phase_order_ok")
 
+    def _verify_subtasks(self, task: TaskSpec, subtasks) -> VerificationResult:
+        if not isinstance(subtasks, tuple) or not subtasks:
+            return VerificationResult(False, "context", "invalid_subtask_collection")
+        if len(subtasks) > self.max_agents:
+            return VerificationResult(False, "context", "subtask_bounds_invalid")
+        ids = set()
+        prefix = task.task_id + ":"
+        for subtask in subtasks:
+            if not isinstance(subtask, Subtask):
+                return VerificationResult(False, "context", "invalid_subtask_type")
+            if not isinstance(subtask.subtask_id, str) or not subtask.subtask_id.strip() or subtask.subtask_id in ids:
+                return VerificationResult(False, "context", "invalid_subtask_id")
+            if not subtask.subtask_id.startswith(prefix):
+                return VerificationResult(False, "context", "subtask_parent_mismatch")
+            if not isinstance(subtask.objective, str) or not subtask.objective.strip():
+                return VerificationResult(False, "context", "invalid_subtask_objective")
+            if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type:
+                return VerificationResult(False, "context", "subtask_task_type_mismatch")
+            ids.add(subtask.subtask_id)
+        return VerificationResult(True, "context", "subtasks_ok")
+
+    def _verify_plan_integrity(self, plan: Plan, task: TaskSpec) -> VerificationResult:
+        """Independent structural/policy gate so a custom planner cannot forge its own verification."""
+        if not isinstance(plan, Plan) or plan.task_id != task.task_id:
+            return VerificationResult(False, "planning", "plan_task_mismatch")
+        if not isinstance(plan.steps, tuple) or not plan.steps or len(plan.steps) > min(self.max_steps, self.max_agents):
+            return VerificationResult(False, "planning", "plan_bounds_invalid")
+        ids = set()
+        prefix = task.task_id + ":"
+        for step in plan.steps:
+            if not isinstance(step, PlanStep):
+                return VerificationResult(False, "planning", "plan_step_type_invalid")
+            if not isinstance(step.step_id, str) or not step.step_id.strip() or step.step_id in ids or not step.step_id.startswith(prefix):
+                return VerificationResult(False, "planning", "plan_step_id_invalid")
+            if not isinstance(step.objective, str) or not step.objective.strip():
+                return VerificationResult(False, "planning", "plan_step_objective_invalid")
+            if step.action_type not in Planner.VALID_ACTION_TYPES or step.risk_class not in Planner.VALID_RISKS:
+                return VerificationResult(False, "planning", "plan_step_policy_invalid")
+            if step.risk_class != task.risk_class:
+                return VerificationResult(False, "planning", "plan_step_risk_mismatch")
+            ids.add(step.step_id)
+        return VerificationResult(True, "planning", "plan_integrity_ok")
+
+    def _verify_hypothesis_integrity(self, hypotheses: tuple[Hypothesis, ...], plan: Plan, task: TaskSpec) -> VerificationResult:
+        """Independently bind every hypothesis to the current task and exact plan step."""
+        if not isinstance(hypotheses, tuple) or len(hypotheses) != len(plan.steps) or not hypotheses:
+            return VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch")
+        ids = set()
+        for hypothesis, step in zip(hypotheses, plan.steps):
+            if not isinstance(hypothesis, Hypothesis):
+                return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
+            if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip() or hypothesis.hypothesis_id in ids:
+                return VerificationResult(False, "hypothesis", "invalid_hypothesis_id")
+            if hypothesis.task_id != task.task_id:
+                return VerificationResult(False, "hypothesis", "hypothesis_task_mismatch")
+            if not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip():
+                return VerificationResult(False, "hypothesis", "invalid_hypothesis_statement")
+            if not isinstance(hypothesis.basis, tuple) or len(hypothesis.basis) != 1 or hypothesis.basis[0] != step.step_id:
+                return VerificationResult(False, "hypothesis", "hypothesis_step_mismatch")
+            ids.add(hypothesis.hypothesis_id)
+        return VerificationResult(True, "hypothesis", "hypothesis_integrity_ok")
+
     def _verify_agent_result(self, child: TaskSpec, agent, result: AgentResult) -> VerificationResult:
         if not isinstance(result, AgentResult):
             return VerificationResult(False, "agent_result", "invalid_agent_result")
@@ -101,8 +163,9 @@ class Hypersynth:
         if not phase_check.valid:
             return self._reject("context", task, phase_check)
         phase_index += 1
-        if any(not getattr(s, "subtask_id", None) for s in subtasks):
-            return self._reject("context", task, VerificationResult(False, "context", "invalid_subtask"))
+        subtask_check = self._verify_subtasks(task, subtasks)
+        if not subtask_check.valid:
+            return self._reject("context", task, subtask_check)
         context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
         if context.task_id != task.task_id or context.source_ids != (task.task_id,):
             return self._reject("context", task, VerificationResult(False, "context", "context_identity_mismatch"))
@@ -120,8 +183,9 @@ class Hypersynth:
             plan_check, plan = VerificationResult(False, "planning", "planner_failure"), None
         if not plan_check.valid:
             return self._reject("planning", task, plan_check)
-        if not plan.steps or len(plan.steps) > self.max_agents:
-            return self._reject("planning", task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
+        independent_plan_check = self._verify_plan_integrity(plan, task)
+        if not independent_plan_check.valid:
+            return self._reject("planning", task, independent_plan_check)
         evidence.append("plan_integrity")
         self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
 
@@ -134,8 +198,11 @@ class Hypersynth:
             hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
         except Exception:
             return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
-        if not hypothesis_check.valid or len(hypotheses) != len(plan.steps):
-            return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
+        if not hypothesis_check.valid:
+            return self._reject("hypothesis", task, hypothesis_check)
+        independent_hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
+        if not independent_hypothesis_check.valid:
+            return self._reject("hypothesis", task, independent_hypothesis_check)
         evidence.append("hypothesis_integrity")
         self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
 
