@@ -11,7 +11,7 @@ from .security import SecurityBoundary
 from .verification import VerificationEngine
 
 class NORYXRuntime:
-    """Controlled runtime: validate -> decompose -> route -> execute -> verify -> audit."""
+    """Controlled runtime: validate -> decompose -> route -> execute -> limit -> verify -> audit."""
 
     def __init__(self, limits: RuntimeLimits | None = None):
         self.limits = limits or RuntimeLimits()
@@ -37,8 +37,8 @@ class NORYXRuntime:
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
-        except Exception as exc:
-            self.audit.record("routing_failure", task_id=task.task_id, error=type(exc).__name__)
+        except Exception:
+            self.audit.record("routing_failure", task_id=task.task_id, error="routing_failure")
             return {"status": "rejected", "reason": "routing_failure"}
 
         results = []
@@ -52,6 +52,9 @@ class NORYXRuntime:
                 return {"status": "rejected", "verification": decision.verification}
             result = agent.run(child)
             results.append(result)
+            if not self.limits.validate_output(result.output):
+                self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
+                return {"status": "rejected", "reason": "output_limit_exceeded", "task_id": child.task_id}
             self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
             if result.verification is None or not result.verification.valid:
                 return {"status": "rejected", "result": result}
