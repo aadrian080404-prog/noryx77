@@ -43,7 +43,6 @@ class HypothesisEngine:
 
 class InternalSimulator:
     """Pre-execution bounded feasibility check over the declared plan only."""
-
     def simulate(self, task: TaskSpec, hypotheses: tuple[Hypothesis, ...]) -> tuple[SimulationResult, ...]:
         if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple): return ()
         return tuple(SimulationResult(h.hypothesis_id, bool(h.statement and h.task_id == task.task_id), "feasible" if h.statement and h.task_id == task.task_id else "invalid_hypothesis") for h in hypotheses if isinstance(h, Hypothesis))
@@ -65,7 +64,6 @@ class InternalSimulator:
 
 class CrossChecker:
     """Checks that verified agent results map one-to-one to declared plan steps."""
-
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
         if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
         if not results: return VerificationResult(False, "cross_check", "no_results")
@@ -85,10 +83,6 @@ class CrossChecker:
         agent_ids = [result.agent_id for result in results]
         if len(set(agent_ids)) != len(agent_ids): return VerificationResult(False, "cross_check", "duplicate_agent_result")
         if set(result_task_ids) != set(expected_step_ids): return VerificationResult(False, "cross_check", "result_task_mismatch")
-        # VerificationResult.stage is a verification stage, not an agent identity.
-        # The legacy/current contract uses "result" for ordinary agent output.
-        # A stage equal to the agent_id is also accepted for identity-bound verifiers;
-        # arbitrary identities remain rejected, preserving the tamper boundary.
         for result in results:
-            if result.verification.stage not in ("result", result.agent_id): return VerificationResult(False, "cross_check", "verification_identity_mismatch")
+            if result.verification.stage not in ("result", "agent_result", result.agent_id): return VerificationResult(False, "cross_check", "verification_identity_mismatch")
         return VerificationResult(True, "cross_check", "cross_check_ok")
