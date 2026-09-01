@@ -40,11 +40,11 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
             return VerificationResult(False, "agent_result", "agent_not_completed")
+        output_check = self.verifier.verify_output(result.output, stage="agent_result")
+        if not output_check.valid:
+            return output_check
         if result.verification is None or not result.verification.is_well_formed():
             return VerificationResult(False, "agent_result", "malformed_result_verification")
         if not result.verification.valid:
             return VerificationResult(False, "agent_result", "result_verification_failed")
-        output_check = self.verifier.verify_output(result.output, stage="agent_result")
-        if not output_check.valid:
-            return output_check
         return VerificationResult(True, "agent_result", "agent_result_ok")
