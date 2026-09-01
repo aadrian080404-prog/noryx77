@@ -30,8 +30,20 @@ class ActionGate:
             return ActionDecision(False, "tool call budget exceeded", VerificationResult(False, "action_gate", "tool_call_budget"))
         if calls_used >= self.limits.max_actions_per_task:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
-        if not self.policy.allows(action):
+        try:
+            policy_allowed = self.policy.allows(action)
+        except Exception:
+            return ActionDecision(False, "policy evaluation failed", VerificationResult(False, "action_gate", "policy_evaluation_failure"))
+        if type(policy_allowed) is not bool:
+            return ActionDecision(False, "invalid policy decision", VerificationResult(False, "action_gate", "malformed_policy_decision"))
+        if not policy_allowed:
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
-        if not self.security.allows(action):
+        try:
+            security_allowed = self.security.allows(action)
+        except Exception:
+            return ActionDecision(False, "security boundary evaluation failed", VerificationResult(False, "action_gate", "security_evaluation_failure"))
+        if type(security_allowed) is not bool:
+            return ActionDecision(False, "invalid security decision", VerificationResult(False, "action_gate", "malformed_security_decision"))
+        if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
         return ActionDecision(True, "allowed", VerificationResult(True, "action_gate", "authorized"))
