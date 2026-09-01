@@ -45,9 +45,11 @@ class HypothesisEngine:
             if hypothesis.hypothesis_id in ids:
                 return VerificationResult(False, "hypothesis", "duplicate_hypothesis_id")
             ids.add(hypothesis.hypothesis_id)
-            if hypothesis.task_id != task.task_id or not hypothesis.statement or not hypothesis.basis:
+            if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip():
+                return VerificationResult(False, "hypothesis", "invalid_hypothesis_id")
+            if hypothesis.task_id != task.task_id or not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip() or not hypothesis.basis:
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis")
-            if any(not isinstance(item, str) or not item for item in hypothesis.basis):
+            if any(not isinstance(item, str) or not item.strip() for item in hypothesis.basis):
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis_basis")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
 
@@ -75,14 +77,14 @@ class InternalSimulator:
         for item in simulations:
             if not isinstance(item, SimulationResult):
                 return VerificationResult(False, "simulation", "invalid_simulation_type")
-            if not isinstance(item.hypothesis_id, str) or not item.hypothesis_id:
+            if not isinstance(item.hypothesis_id, str) or not item.hypothesis_id.strip():
                 return VerificationResult(False, "simulation", "invalid_hypothesis_id")
             if item.hypothesis_id in ids:
                 return VerificationResult(False, "simulation", "duplicate_simulation_id")
             ids.add(item.hypothesis_id)
             if not isinstance(item.feasible, bool):
                 return VerificationResult(False, "simulation", "invalid_feasibility_flag")
-            if not isinstance(item.reason, str) or not item.reason:
+            if not isinstance(item.reason, str) or not item.reason.strip():
                 return VerificationResult(False, "simulation", "invalid_simulation_reason")
             if item.feasible and item.reason != "feasible":
                 return VerificationResult(False, "simulation", "feasible_reason_mismatch")
@@ -103,16 +105,26 @@ class CrossChecker:
             return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
         if any(not isinstance(result, AgentResult) for result in results):
             return VerificationResult(False, "cross_check", "invalid_result_type")
+        if any(not result.is_well_formed() for result in results):
+            return VerificationResult(False, "cross_check", "malformed_result")
         if any(not isinstance(hypothesis, Hypothesis) for hypothesis in hypotheses):
             return VerificationResult(False, "cross_check", "invalid_hypothesis_type")
         expected_step_ids = [basis for hypothesis in hypotheses for basis in hypothesis.basis]
         if len(expected_step_ids) != len(hypotheses) or len(set(expected_step_ids)) != len(expected_step_ids):
             return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
-        result_ids = [result.task_id for result in results]
-        if len(set(result_ids)) != len(result_ids):
+        result_task_ids = [result.task_id for result in results]
+        if len(set(result_task_ids)) != len(result_task_ids):
             return VerificationResult(False, "cross_check", "duplicate_result_task")
-        if set(result_ids) != set(expected_step_ids):
+        agent_ids = [result.agent_id for result in results]
+        if len(set(agent_ids)) != len(agent_ids):
+            return VerificationResult(False, "cross_check", "duplicate_agent_result")
+        if set(result_task_ids) != set(expected_step_ids):
             return VerificationResult(False, "cross_check", "result_task_mismatch")
-        if any(result.status != "completed" for result in results):
-            return VerificationResult(False, "cross_check", "incomplete_result")
+        for result in results:
+            if result.status != "completed":
+                return VerificationResult(False, "cross_check", "incomplete_result")
+            if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
+                return VerificationResult(False, "cross_check", "unverified_result")
+            if result.output is None:
+                return VerificationResult(False, "cross_check", "null_output")
         return VerificationResult(True, "cross_check", "cross_check_ok")
