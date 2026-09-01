@@ -44,7 +44,7 @@ class Attack11Tests(unittest.TestCase):
         result = self.kernel(MalformedSimulator()).run(self.task())
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "simulation")
-        self.assertEqual(result["verification"].reason, "invalid_simulation_type")
+        self.assertEqual(result["verification"].reason, "simulation_hypothesis_id_mismatch")
 
     def test_valid_simulation_still_reaches_execution(self):
         result = self.kernel(InternalSimulator()).run(self.task())
