@@ -12,6 +12,7 @@ from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
 
+
 class NORYXRuntime:
     """Controlled runtime: validate -> decompose -> route -> execute -> limit -> verify -> audit."""
 
@@ -88,7 +89,9 @@ class NORYXRuntime:
             if result.agent_id != agent.agent_id or result.task_id != child.task_id:
                 self.audit.record("agent_result_verification", task_id=child.task_id, valid=False, reason="identity_mismatch")
                 return {"status": "rejected", "reason": "identity_mismatch", "task_id": child.task_id}
-            independent_output_check = self.verifier.verify_output(result.output, stage="runtime_output")
+            independent_output_check = self.verifier.verify_output(
+                result.output, stage="runtime_output", requirements=child.verification_requirements
+            )
             if not independent_output_check.valid:
                 self.audit.record("runtime_output_verification", task_id=child.task_id, valid=False, reason=independent_output_check.reason)
                 return {"status": "rejected", "verification": independent_output_check, "task_id": child.task_id}
