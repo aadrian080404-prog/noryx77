@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class RuntimeLimits:
     max_input_chars: int = 100_000
+    max_output_chars: int = 100_000
     max_output_items: int = 1_000
     max_memory_items: int = 10_000
     max_actions_per_task: int = 32
@@ -11,3 +13,9 @@ class RuntimeLimits:
 
     def validate_input(self, value: object) -> bool:
         return len(str(value)) <= self.max_input_chars
+
+    def validate_output(self, value: object) -> bool:
+        return value is not None and len(str(value)) <= self.max_output_chars
+
+    def validate_count(self, value: int, maximum: int) -> bool:
+        return isinstance(value, int) and 0 <= value <= maximum
