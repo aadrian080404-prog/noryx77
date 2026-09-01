@@ -3,7 +3,7 @@ import unittest
 from .agents import DeterministicAgent
 from .contracts import TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
-from .reasoning import SimulationResult
+from .reasoning import InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .verification import VerificationEngine
 
@@ -47,7 +47,7 @@ class Attack11Tests(unittest.TestCase):
         self.assertEqual(result["verification"].reason, "invalid_simulation_type")
 
     def test_valid_simulation_still_reaches_execution(self):
-        result = Hypersynth(VerificationEngine(), ResourceRouter()).run(self.task())
+        result = self.kernel(InternalSimulator()).run(self.task())
         self.assertEqual(result["status"], "completed")
 
 
