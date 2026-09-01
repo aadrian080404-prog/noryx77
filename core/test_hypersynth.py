@@ -60,6 +60,21 @@ class HypersynthTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "agent_disagreement")
 
+    def test_hypersynth_consensus_rejects_duplicate_agent_identity(self):
+        result = self.kernel._verify_consensus((
+            AgentResult("a", "t1", "completed", "same", VerificationResult(True, "result")),
+            AgentResult("a", "t2", "completed", "same", VerificationResult(True, "result")),
+        ))
+        self.assertFalse(result.valid)
+        self.assertEqual(result.reason, "duplicate_agent_result")
+
+    def test_hypersynth_consensus_rejects_unverified_result(self):
+        result = self.kernel._verify_consensus((
+            AgentResult("a", "t1", "completed", "same", None),
+        ))
+        self.assertFalse(result.valid)
+        self.assertEqual(result.reason, "unverified_result")
+
     def test_high_risk_action_is_denied(self):
         policy = PolicyEngine()
         security = SecurityBoundary(policy, self.verifier)
@@ -95,6 +110,43 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "execution")
         self.assertEqual(result["verification"].reason, "agent_execution_failure")
+
+    def test_null_agent_output_is_rejected(self):
+        class NullAgent:
+            agent_id = "null"
+            def run(self, task):
+                return AgentResult(
+                    self.agent_id, task.task_id, "completed", None,
+                    VerificationResult(True, "result"),
+                )
+
+        router = ResourceRouter()
+        router.register(NullAgent())
+        result = HypersynthRuntime(self.verifier, router).run(self.task(task_id="null"))
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "verification")
+        self.assertEqual(result["verification"].reason, "null_output")
+
+    def test_simulation_identity_mismatch_is_fail_closed(self):
+        class TamperingSimulator:
+            def simulate(self, task, hypotheses):
+                return tuple(
+                    type("Simulation", (), {
+                        "hypothesis_id": "forged",
+                        "feasible": True,
+                        "reason": "feasible",
+                    })()
+                    for _ in hypotheses
+                )
+
+            def verify(self, simulations):
+                return VerificationResult(True, "simulation", "simulation_ok")
+
+        kernel = Hypersynth(self.verifier, self.router, simulator=TamperingSimulator())
+        result = kernel.run(self.task(task_id="sim-tamper"))
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "simulation")
+        self.assertEqual(result["verification"].reason, "simulation_hypothesis_id_mismatch")
 
 
 if __name__ == "__main__":
