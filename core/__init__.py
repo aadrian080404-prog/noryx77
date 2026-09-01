@@ -12,6 +12,7 @@ from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .planning import Plan, PlanStep, Planner
 from .policy import PolicyEngine
+from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .runtime import NORYXRuntime
 from .security import SecurityBoundary, SecurityDecision
@@ -22,9 +23,10 @@ from .verification import VerificationEngine
 __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
     "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityRegistry",
-    "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "DeterministicAgent",
-    "Hypersynth", "HypersynthRuntime", "MemoryStore", "NORYXError", "NORYXRuntime", "Plan",
-    "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
-    "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "Subtask", "TaskDecomposer", "TaskSpec",
-    "ToolExecutor", "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
+    "DeterministicAgent", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine",
+    "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "Plan", "PlanStep", "Planner",
+    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
+    "SecurityDecision", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor",
+    "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
