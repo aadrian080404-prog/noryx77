@@ -81,8 +81,8 @@ class Attack2Tests(unittest.TestCase):
     def test_supervisor_cannot_replace_the_preferred_agent(self):
         verifier = VerificationEngine()
         router = ResourceRouter()
-        selected = DeterministicAgent(verifier)
-        attacker = type("Attacker", (DeterministicAgent,), {"agent_id": "attacker"})(verifier)
+        selected = type("PreferredAgent", (DeterministicAgent,), {"agent_id": "preferred"})(verifier)
+        attacker = type("Attacker", (DeterministicAgent,), {"agent_id": "zzz-attacker"})(verifier)
         router.register(selected)
         router.register(attacker)
         supervisor = BypassingSupervisor(attacker)
