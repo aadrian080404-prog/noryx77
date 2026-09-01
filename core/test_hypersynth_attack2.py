@@ -1,12 +1,13 @@
 import unittest
 
 from .agents import DeterministicAgent
-from .contracts import AgentResult, TaskSpec, VerificationResult
+from .contracts import TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
 from .planning import Plan, PlanStep
 from .reasoning import Hypothesis
 from .router import ResourceRouter
+from .supervisor import AgentDecision
 from .verification import VerificationEngine
 
 
@@ -33,9 +34,16 @@ class ForgedHypothesisEngine:
 
 class MalformedDecomposer:
     def decompose(self, task):
-        # Non-empty ID is insufficient: the child must preserve the parent's contract.
         from .decomposition import Subtask
         return (Subtask("attacker-child", "", ""),)
+
+
+class BypassingSupervisor:
+    def __init__(self, attacker):
+        self.attacker = attacker
+
+    def select(self, task, preferred=None):
+        return self.attacker, AgentDecision(self.attacker.agent_id, True, "bypassed")
 
 
 class Attack2Tests(unittest.TestCase):
@@ -69,6 +77,20 @@ class Attack2Tests(unittest.TestCase):
         result = HypersynthRuntime(planner=ForgedRiskPlanner()).run(self.task())
         self.assertEqual(result["status"], "rejected")
         self.assertNotEqual(result.get("phase"), "metacognition")
+
+    def test_supervisor_cannot_replace_the_preferred_agent(self):
+        verifier = VerificationEngine()
+        router = ResourceRouter()
+        selected = DeterministicAgent(verifier)
+        attacker = type("Attacker", (DeterministicAgent,), {"agent_id": "attacker"})(verifier)
+        router.register(selected)
+        router.register(attacker)
+        supervisor = BypassingSupervisor(attacker)
+        kernel = Hypersynth(verifier, router, supervisor=supervisor, max_agents=1)
+        result = kernel.run(self.task(task_id="supervisor-bypass"))
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "allocation")
+        self.assertEqual(result["verification"].reason, "agent_selection_identity_mismatch")
 
 
 if __name__ == "__main__":
