@@ -25,11 +25,12 @@ from .verification import VerificationEngine
 
 __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "AttestationKernel" if False else "CapabilityAttestation", "CapabilityRegistry",
+    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityAttestation", "CapabilityRegistry",
     "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
     "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth", "HypersynthAttestation",
-    "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime",
-    "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
-    "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer",
-    "TaskSpec", "ToolExecutor", "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine", "InternalSimulator",
+    "MemoryStore", "NORYXError", "NORYXRuntime", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine",
+    "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SimulationResult",
+    "StageAttestation", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor", "VerificationEngine",
+    "VerificationFailure", "VerificationResult",
 ]
