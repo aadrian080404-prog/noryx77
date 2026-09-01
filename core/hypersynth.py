@@ -101,7 +101,7 @@ class Hypersynth:
         if not phase_check.valid:
             return self._reject("context", task, phase_check)
         phase_index += 1
-        if any(not isinstance(s, object) or not getattr(s, "subtask_id", None) for s in subtasks):
+        if any(not getattr(s, "subtask_id", None) for s in subtasks):
             return self._reject("context", task, VerificationResult(False, "context", "invalid_subtask"))
         context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
         if context.task_id != task.task_id or context.source_ids != (task.task_id,):
@@ -206,8 +206,8 @@ class Hypersynth:
         if not phase_check.valid:
             return self._reject("verification", task, phase_check, results=tuple(results))
         phase_index += 1
-        for agent, child, _step in assignments:
-            check = self._verify_agent_result(child, agent, results[len([r for r in results if r.task_id != child.task_id])])
+        for index, (agent, child, _step) in enumerate(assignments):
+            check = self._verify_agent_result(child, agent, results[index])
             if not check.valid:
                 return self._reject("verification", task, check, results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
@@ -228,7 +228,6 @@ class Hypersynth:
         phase_check = self._advance_phase(phase_index, "metacognition", task)
         if not phase_check.valid:
             return self._reject("metacognition", task, phase_check, results=tuple(results))
-        phase_index += 1
         confidence = self._evidence_confidence(evidence, 9)
         reflection = {
             "result_verified": True,
