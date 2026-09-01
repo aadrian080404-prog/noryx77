@@ -24,6 +24,10 @@ class SecurityBoundary:
             return SecurityDecision(False, "policy_denied", action.risk_class)
         return SecurityDecision(True, "allowed", action.risk_class)
 
+    def allows(self, action: ActionSpec) -> bool:
+        """Boolean authorization boundary; inspection remains the source of the decision."""
+        return self.inspect(action).allowed
+
     def verify(self, action: ActionSpec, output):
         decision = self.inspect(action)
         if not decision.allowed:
