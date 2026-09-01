@@ -1,3 +1,5 @@
+import time
+
 from .actions import ActionGate
 from .agents import DeterministicAgent
 from .audit import AuditLog
@@ -26,14 +28,28 @@ class NORYXRuntime:
         self.decomposer = TaskDecomposer()
 
     def run(self, task: TaskSpec, agent_id: str = "deterministic"):
+        started = time.monotonic()
+        deadline = started + self.limits.max_task_seconds
+
+        def deadline_exceeded() -> bool:
+            return time.monotonic() > deadline
+
         if not self.limits.validate_input(task.input):
             result = {"status": "rejected", "reason": "input_limit_exceeded"}
             self.audit.record("task_rejected", task_id=getattr(task, "task_id", None), reason=result["reason"])
             return result
+        if deadline_exceeded():
+            self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
+            return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
+
         task_check = self.verifier.verify_task(task)
         self.audit.record("task_verification", task_id=task.task_id, valid=task_check.valid, reason=task_check.reason)
         if not task_check.valid:
             return {"status": "rejected", "verification": task_check}
+        if deadline_exceeded():
+            self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
+            return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
+
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
@@ -47,14 +63,20 @@ class NORYXRuntime:
 
         results = []
         for subtask in subtasks:
+            if deadline_exceeded():
+                self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
+                return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class)
             action = ActionSpec("act:" + child.task_id, "compute", risk_class=child.risk_class)
-            decision = self.action_gate.authorize(action)
+            decision = self.action_gate.authorize(action, calls_used=len(results))
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return {"status": "rejected", "verification": decision.verification}
             result = agent.run(child)
+            if deadline_exceeded():
+                self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
+                return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": child.task_id}
             if not self.limits.validate_output(result.output):
                 self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
                 return {"status": "rejected", "reason": "output_limit_exceeded", "task_id": child.task_id}
@@ -66,4 +88,7 @@ class NORYXRuntime:
             if result.verification is None or not result.verification.valid:
                 return {"status": "rejected", "result": result}
 
+        if deadline_exceeded():
+            self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
+            return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
         return {"status": "completed", "results": tuple(results), "audit": self.audit.snapshot()}
