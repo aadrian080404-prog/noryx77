@@ -101,7 +101,7 @@ class Hypersynth:
         return VerificationResult(True, "planning", "plan_integrity_ok")
 
     def _verify_hypothesis_integrity(self, hypotheses: tuple[Hypothesis, ...], plan: Plan, task: TaskSpec) -> VerificationResult:
-        """Independently bind every hypothesis to the current task and exact plan step."""
+        """Independently bind every hypothesis to the current task, exact plan step, and objective."""
         if not isinstance(hypotheses, tuple) or len(hypotheses) != len(plan.steps) or not hypotheses:
             return VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch")
         ids = set()
@@ -114,6 +114,8 @@ class Hypersynth:
                 return VerificationResult(False, "hypothesis", "hypothesis_task_mismatch")
             if not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip():
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis_statement")
+            if hypothesis.statement != step.objective:
+                return VerificationResult(False, "hypothesis", "hypothesis_statement_mismatch")
             if not isinstance(hypothesis.basis, tuple) or len(hypothesis.basis) != 1 or hypothesis.basis[0] != step.step_id:
                 return VerificationResult(False, "hypothesis", "hypothesis_step_mismatch")
             ids.add(hypothesis.hypothesis_id)
