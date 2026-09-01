@@ -40,7 +40,7 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
             return VerificationResult(False, "agent_result", "agent_not_completed")
-        output_check = self.verifier.verify_output(result.output, stage="agent_result")
+        output_check = self.verifier.verify_output(result.output, requirements=task.verification_requirements, stage="agent_result")
         if not output_check.valid:
             return output_check
         if result.verification is None:
