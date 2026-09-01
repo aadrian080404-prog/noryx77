@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from .contracts import TaskSpec, AgentResult, VerificationResult
 
+
 @dataclass(frozen=True)
 class AgentDecision:
     agent_id: str
     accepted: bool
     reason: str
+
 
 class AgentSupervisor:
     """Supervises agent selection and result admission; it never bypasses verification."""
@@ -28,10 +30,21 @@ class AgentSupervisor:
         return agent, decision
 
     def admit(self, task: TaskSpec, result: AgentResult):
+        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+            return VerificationResult(False, "agent_result", "invalid_task_contract")
         if not isinstance(result, AgentResult):
             return VerificationResult(False, "agent_result", "invalid_agent_result")
+        if not result.is_well_formed():
+            return VerificationResult(False, "agent_result", "malformed_agent_result")
         if result.task_id != task.task_id:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
             return VerificationResult(False, "agent_result", "agent_not_completed")
-        return self.verifier.verify_output(result.output, stage="agent_result")
+        if result.verification is None or not result.verification.is_well_formed():
+            return VerificationResult(False, "agent_result", "malformed_result_verification")
+        if not result.verification.valid:
+            return VerificationResult(False, "agent_result", "result_verification_failed")
+        output_check = self.verifier.verify_output(result.output, stage="agent_result")
+        if not output_check.valid:
+            return output_check
+        return VerificationResult(True, "agent_result", "agent_result_ok")
