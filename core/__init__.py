@@ -17,21 +17,21 @@ from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .planning import Plan, PlanStep, Planner
 from .policy import PolicyEngine
-from .reasoning import Hypothesis, HypothesisEngine, InternalSimulator
+from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .security import SecurityBoundary, SecurityDecision
 from .secure_tools import SecureCapabilityRegistry, SecureToolExecutor
-from .state import NORYXRuntime
+from .state import NORYXState
 from .supervisor import AgentSupervisor
 from .verification import VerificationEngine
 
 __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "AttestationSession", "CapabilityAttestation",
+    "AgentResult", "AgentSupervisor", "AuditLog", "AttestationSession", "CapabilityAttestation",
     "SecureCapabilityRegistry", "SecureToolExecutor", "ContextManager", "ContextSnapshot", "ContractViolation",
     "CognitiveState", "CrossChecker", "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth",
     "HypersynthAttestation", "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine",
-    "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "MemoryStore", "NORYXError", "NORYXRuntime",
+    "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "MemoryStore", "NORYXError", "NORYXState",
     "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits",
     "SecurityBoundary", "SecurityDecision", "SessionContext", "SimulationResult", "StageAttestation", "Subtask",
     "TaskDecomposer", "TaskSpec", "VerificationEngine", "VerificationFailure", "VerificationResult",
