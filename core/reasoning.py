@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .planning import Plan
@@ -40,7 +39,7 @@ class HypothesisEngine:
         if not hypotheses:
             return VerificationResult(False, "hypothesis", "no_hypotheses")
         for hypothesis in hypotheses:
-            if hypothesis.task_id != task.task_id or not hypothesis.statement:
+            if hypothesis.task_id != task.task_id or not hypothesis.statement or not hypothesis.basis:
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
 
@@ -67,14 +66,17 @@ class InternalSimulator:
 
 
 class CrossChecker:
-    """Checks that verified agent results map back to the declared task and plan."""
+    """Checks that verified agent results map back to the declared plan steps."""
 
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
         if not results:
             return VerificationResult(False, "cross_check", "no_results")
         if len(results) != len(hypotheses):
             return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
-        if any(result.task_id not in {task.task_id, *(h.hypothesis_id for h in hypotheses)} for result in results):
+        expected_step_ids = {hypothesis.basis[0] for hypothesis in hypotheses if hypothesis.basis}
+        if len(expected_step_ids) != len(hypotheses):
+            return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
+        if any(result.task_id not in expected_step_ids for result in results):
             return VerificationResult(False, "cross_check", "result_task_mismatch")
         if any(result.status != "completed" for result in results):
             return VerificationResult(False, "cross_check", "incomplete_result")
