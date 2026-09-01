@@ -11,7 +11,7 @@ class CrossCheckerTests(unittest.TestCase):
         self.checker = CrossChecker()
 
     def result(self, **kwargs):
-        values = dict(agent_id="agent", task_id="s1", status="completed", output="ok", verification=VerificationResult(True, "agent", "ok"))
+        values = dict(agent_id="agent", task_id="s1", status="completed", output="ok", verification=VerificationResult(True, "result", "ok"))
         values.update(kwargs)
         return AgentResult(**values)
 
@@ -33,7 +33,7 @@ class CrossCheckerTests(unittest.TestCase):
         self.assertEqual(result.reason, "unverified_result")
 
     def test_rejects_invalid_verification(self):
-        result = self.checker.verify(self.task, (self.result(verification=VerificationResult(False, "agent", "failed")),), self.hypotheses)
+        result = self.checker.verify(self.task, (self.result(verification=VerificationResult(False, "result", "failed")),), self.hypotheses)
         self.assertFalse(result.valid)
         self.assertEqual(result.reason, "unverified_result")
 
