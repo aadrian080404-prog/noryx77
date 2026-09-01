@@ -37,6 +37,15 @@ class CrossCheckerTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertEqual(result.reason, "unverified_result")
 
+    def test_rejects_verification_identity_mismatch(self):
+        result = self.checker.verify(
+            self.task,
+            (self.result(verification=VerificationResult(True, "different-agent", "ok")),),
+            self.hypotheses,
+        )
+        self.assertFalse(result.valid)
+        self.assertEqual(result.reason, "verification_identity_mismatch")
+
     def test_rejects_null_output(self):
         result = self.checker.verify(self.task, (self.result(output=None),), self.hypotheses)
         self.assertFalse(result.valid)
