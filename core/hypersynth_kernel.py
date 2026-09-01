@@ -7,6 +7,7 @@ It never treats cryptography as proof of semantic truth.
 
 from __future__ import annotations
 
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from .attestation import HypersynthAttestation, StageAttestation
@@ -18,15 +19,8 @@ class AttestedHypersynthKernel:
     """Run the bounded kernel and emit an authenticated stage evidence chain."""
 
     STAGE_ORDER = (
-        "perception",
-        "context",
-        "planning",
-        "hypothesis",
-        "simulation",
-        "allocation",
-        "execution",
-        "verification",
-        "metacognition",
+        "perception", "context", "planning", "hypothesis", "simulation",
+        "allocation", "execution", "verification", "metacognition",
     )
 
     def __init__(self, kernel: Hypersynth, *, crypto: CryptoIntegrity | None = None,
@@ -38,27 +32,44 @@ class AttestedHypersynthKernel:
         self.kernel = kernel
         self.attestation = attestation or HypersynthAttestation(crypto or CryptoIntegrity())
 
-    @staticmethod
-    def _payload(result: dict[str, Any], stage: str) -> Any:
+    @classmethod
+    def _canonical(cls, value: Any) -> Any:
+        if is_dataclass(value) and not isinstance(value, type):
+            return {key: cls._canonical(item) for key, item in asdict(value).items()}
+        if isinstance(value, dict):
+            return {str(key): cls._canonical(item) for key, item in value.items()}
+        if isinstance(value, (tuple, list)):
+            return [cls._canonical(item) for item in value]
+        if isinstance(value, (str, int, bool)) or value is None:
+            return value
+        if isinstance(value, float):
+            if value != value or value in (float("inf"), float("-inf")):
+                raise TypeError("non_finite_kernel_evidence")
+            return value
+        raise TypeError("non_canonical_kernel_evidence")
+
+    @classmethod
+    def _payload(cls, result: dict[str, Any], stage: str) -> Any:
         if stage == "perception":
-            return {"task_id": result.get("state").task_id if result.get("state") is not None else result.get("task_id"),
-                    "verification": result.get("verification")}
+            state = result.get("state")
+            return {"task_id": getattr(state, "task_id", result.get("task_id")),
+                    "verification": cls._canonical(result.get("verification"))}
         if stage == "context":
-            return result.get("context")
+            return cls._canonical(result.get("context"))
         if stage == "planning":
-            return result.get("plan")
+            return cls._canonical(result.get("plan"))
         if stage == "hypothesis":
-            return result.get("hypotheses")
+            return cls._canonical(result.get("hypotheses"))
         if stage == "simulation":
-            return result.get("simulations")
+            return cls._canonical(result.get("simulations"))
         if stage == "allocation":
-            return tuple((r.agent_id, r.task_id) for r in result.get("results", ()))
+            return cls._canonical(tuple((r.agent_id, r.task_id) for r in result.get("results", ())))
         if stage == "execution":
-            return result.get("results")
+            return cls._canonical(result.get("results"))
         if stage == "verification":
-            return result.get("verification")
+            return cls._canonical(result.get("verification"))
         if stage == "metacognition":
-            return result.get("reflection")
+            return cls._canonical(result.get("reflection"))
         raise ValueError("unknown_hypersynth_stage")
 
     def run(self, task):
@@ -75,9 +86,11 @@ class AttestedHypersynthKernel:
             return {**result, "attestations": ()}
 
         attestations: list[StageAttestation] = []
+        payloads: list[Any] = []
         for stage in self.STAGE_ORDER:
             try:
                 payload = self._payload(result, stage)
+                payloads.append(payload)
                 attestations.append(self.attestation.attest_stage(task_id, stage, risk_class, requirements, payload))
             except Exception as exc:
                 return {
@@ -87,8 +100,7 @@ class AttestedHypersynthKernel:
                     "attestations": tuple(attestations),
                 }
         chain = tuple(attestations)
-        payloads = tuple(self._payload(result, stage) for stage in self.STAGE_ORDER)
-        if not self.attestation.verify_pipeline(chain, payloads, task_id, risk_class, requirements):
+        if not self.attestation.verify_pipeline(chain, tuple(payloads), task_id, risk_class, requirements):
             return {
                 "status": "rejected",
                 "phase": "verification",
