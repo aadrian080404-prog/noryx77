@@ -62,14 +62,19 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "max_actions_per_task_exceeded", "task_id": task.task_id}
 
         results = []
+        tool_calls_used = 0
         for subtask in subtasks:
             if deadline_exceeded():
                 self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class)
+            child_check = self.verifier.verify_task(child)
+            if not child_check.valid:
+                self.audit.record("child_task_verification", task_id=child.task_id, valid=False, reason=child_check.reason)
+                return {"status": "rejected", "verification": child_check, "task_id": child.task_id}
             action = ActionSpec("act:" + child.task_id, "compute", risk_class=child.risk_class)
-            decision = self.action_gate.authorize(action, calls_used=len(results))
+            decision = self.action_gate.authorize(action, calls_used=len(results), tool_calls_used=tool_calls_used)
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return {"status": "rejected", "verification": decision.verification}
@@ -77,16 +82,27 @@ class NORYXRuntime:
             if deadline_exceeded():
                 self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": child.task_id}
+            if not result.is_well_formed():
+                self.audit.record("agent_result_verification", task_id=child.task_id, valid=False, reason="malformed_agent_result")
+                return {"status": "rejected", "reason": "malformed_agent_result", "task_id": child.task_id}
+            if result.agent_id != agent.agent_id or result.task_id != child.task_id:
+                self.audit.record("agent_result_verification", task_id=child.task_id, valid=False, reason="identity_mismatch")
+                return {"status": "rejected", "reason": "identity_mismatch", "task_id": child.task_id}
+            independent_output_check = self.verifier.verify_output(result.output, stage="runtime_output")
+            if not independent_output_check.valid:
+                self.audit.record("runtime_output_verification", task_id=child.task_id, valid=False, reason=independent_output_check.reason)
+                return {"status": "rejected", "verification": independent_output_check, "task_id": child.task_id}
             if not self.limits.validate_output(result.output):
                 self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
                 return {"status": "rejected", "reason": "output_limit_exceeded", "task_id": child.task_id}
             if not self.limits.validate_output_items(result.output):
                 self.audit.record("output_item_limit", task_id=child.task_id, allowed=False, reason="max_output_items_exceeded")
                 return {"status": "rejected", "reason": "max_output_items_exceeded", "task_id": child.task_id}
+            if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
+                self.audit.record("agent_verification", task_id=child.task_id, valid=False, reason="missing_or_invalid_agent_verification")
+                return {"status": "rejected", "result": result}
             results.append(result)
             self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
-            if result.verification is None or not result.verification.valid:
-                return {"status": "rejected", "result": result}
 
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
