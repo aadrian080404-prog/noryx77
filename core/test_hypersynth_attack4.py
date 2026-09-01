@@ -2,7 +2,8 @@ import unittest
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
-from .reasoning import Hypothesis, InternalSimulator, SimulationResult
+from .planning import Plan, PlanStep, Planner
+from .reasoning import InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .agents import DeterministicAgent
 from .verification import VerificationEngine
@@ -11,6 +12,14 @@ from .verification import VerificationEngine
 class ExplodingSimulator(InternalSimulator):
     def simulate(self, task, hypotheses):
         raise RuntimeError("injected simulator failure")
+
+
+class TwoStepPlanner(Planner):
+    def build(self, task):
+        return Plan(task.task_id, (
+            PlanStep(task.task_id + ":0", task.objective, "compute", task.risk_class),
+            PlanStep(task.task_id + ":1", task.objective, "compute", task.risk_class),
+        ))
 
 
 class PartialFailureAgent(DeterministicAgent):
@@ -26,11 +35,14 @@ class PartialFailureAgent(DeterministicAgent):
         return super().run(task)
 
 
-class MaliciousAgent:
-    agent_id = "malicious"
-
+class ForgedResultAgent(DeterministicAgent):
     def run(self, task):
-        return AgentResult(self.agent_id, task.task_id, "completed", "forged", VerificationResult(True, "result", "forged"))
+        return AgentResult(self.agent_id, "forged-task", "completed", "forged", VerificationResult(True, "result", "forged"))
+
+
+class ForgedSimulation(InternalSimulator):
+    def simulate(self, task, hypotheses):
+        return tuple(SimulationResult("forged", True, "feasible") for _ in hypotheses)
 
 
 class Attack4Tests(unittest.TestCase):
@@ -53,30 +65,23 @@ class Attack4Tests(unittest.TestCase):
     def test_partial_execution_failure_never_reports_success(self):
         verifier = VerificationEngine()
         agent = PartialFailureAgent(verifier, fail_on=2)
-        kernel = Hypersynth(verifier, self.router(agent), max_steps=2, max_agents=2)
+        kernel = Hypersynth(verifier, self.router(agent), planner=TwoStepPlanner(max_steps=2), max_steps=2, max_agents=2)
         result = kernel.run(self.task())
         self.assertEqual(result["status"], "rejected")
-        self.assertNotEqual(result["status"], "completed")
         self.assertEqual(result["verification"].reason, "agent_execution_failure")
         self.assertEqual(len(result["results"]), 1)
 
-    def test_forged_agent_verification_cannot_override_output_contract(self):
+    def test_forged_agent_result_cannot_override_identity(self):
         verifier = VerificationEngine()
-        agent = MaliciousAgent()
+        agent = ForgedResultAgent(verifier)
         kernel = Hypersynth(verifier, self.router(agent))
         result = kernel.run(self.task())
         self.assertEqual(result["status"], "rejected")
-        self.assertEqual(result["verification"].reason, "agent_id_mismatch")
+        self.assertEqual(result["verification"].reason, "task_id_mismatch")
 
     def test_simulation_ids_are_bound_to_hypotheses(self):
         verifier = VerificationEngine()
-        router = self.router(DeterministicAgent(verifier))
-        kernel = Hypersynth(verifier, router)
-        original = kernel.simulator
-        class ForgedSimulation(InternalSimulator):
-            def simulate(self, task, hypotheses):
-                return tuple(SimulationResult("forged", True, "feasible") for _ in hypotheses)
-        kernel.simulator = ForgedSimulation()
+        kernel = Hypersynth(verifier, self.router(DeterministicAgent(verifier)), simulator=ForgedSimulation())
         result = kernel.run(self.task())
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["verification"].reason, "simulation_hypothesis_id_mismatch")
