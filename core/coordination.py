@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+
 from .contracts import AgentResult, TaskSpec, VerificationResult
-from .planning import Plan
+from .planning import Plan, PlanStep
 
 
 @dataclass(frozen=True)
@@ -24,17 +25,20 @@ class AgentCoordinator:
             raise ValueError("invalid_plan")
         if not isinstance(plan.steps, tuple) or not plan.steps:
             raise ValueError("invalid_plan")
+        if any(not isinstance(step, PlanStep) for step in plan.steps):
+            raise ValueError("invalid_plan_step")
         agents = self.router.available()
-        if not agents:
+        if not isinstance(agents, tuple) or not agents:
             raise LookupError("no agents available")
         assignments = []
         for index, step in enumerate(plan.steps[:self.max_agents]):
-            agent = agents[index % len(agents)]
-            agent_id = getattr(agent, "agent_id", None)
+            agent_id = agents[index % len(agents)]
             if not isinstance(agent_id, str) or not agent_id.strip():
                 raise ValueError("invalid_agent_id")
-            if not isinstance(getattr(step, "step_id", None), str) or not step.step_id.strip():
+            if not isinstance(step.step_id, str) or not step.step_id.strip():
                 raise ValueError("invalid_step_id")
+            if not step.step_id.startswith(plan.task_id + ":"):
+                raise ValueError("step_task_identity_mismatch")
             assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id))
         return tuple(assignments)
 
@@ -45,16 +49,23 @@ class AgentCoordinator:
         results = []
         for assignment in assignments:
             agent = self.router.route(assignment.agent_id)
-            if agent is None:
+            if agent is None or getattr(agent, "agent_id", None) != assignment.agent_id:
                 raise LookupError(f"agent_unavailable:{assignment.agent_id}")
             step = next((s for s in plan.steps if s.step_id == assignment.step_id), None)
             if step is None:
                 raise ValueError("assignment_step_missing")
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
                              task.constraints, task.verification_requirements, step.risk_class)
-            if not self.verifier.verify_task(child).valid:
+            try:
+                child_check = self.verifier.verify_task(child)
+            except Exception as exc:
+                raise RuntimeError(f"child_task_verification_failure:{assignment.agent_id}") from exc
+            if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
-            result = agent.run(child)
+            try:
+                result = agent.run(child)
+            except Exception as exc:
+                raise RuntimeError(f"agent_execution_failure:{assignment.agent_id}") from exc
             if not isinstance(result, AgentResult):
                 raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
@@ -63,8 +74,11 @@ class AgentCoordinator:
                 raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 raise RuntimeError(f"agent_result_unverified:{assignment.agent_id}")
-            output_check = self.verifier.verify_output(result.output, stage="agent_result")
-            if not output_check.valid:
+            try:
+                output_check = self.verifier.verify_output(result.output, requirements=child.verification_requirements, stage="agent_result")
+            except Exception as exc:
+                raise RuntimeError(f"agent_output_verification_failure:{assignment.agent_id}") from exc
+            if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed() or not output_check.valid:
                 raise RuntimeError(f"agent_output_invalid:{assignment.agent_id}")
             results.append(result)
         return tuple(results)
