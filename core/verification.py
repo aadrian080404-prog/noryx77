@@ -11,10 +11,8 @@ class VerificationEngine:
     def verify_task(self, task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec):
             return VerificationResult(False, "contract", "invalid_task_spec")
-        if not all(isinstance(v, str) for v in (task.task_id, task.task_type, task.objective)):
-            return VerificationResult(False, "contract", "task_fields_must_be_text")
-        if not task.task_id or not task.task_type or not task.objective:
-            return VerificationResult(False, "contract", "missing_required_task_fields")
+        if not task.is_well_formed():
+            return VerificationResult(False, "contract", "malformed_task_spec")
         if task.risk_class not in self.VALID_RISKS:
             return VerificationResult(False, "policy", "unsupported_risk_class")
         return VerificationResult(True, "contract", "task_ok")
@@ -22,6 +20,8 @@ class VerificationEngine:
     def verify_output(self, output, *, stage: str = "result") -> VerificationResult:
         if output is None:
             return VerificationResult(False, stage, "null_output")
+        if isinstance(output, (str, bytes)) and len(output) == 0:
+            return VerificationResult(False, stage, "empty_output")
         return VerificationResult(True, stage, "output_present")
 
     def verify_state(self, state) -> VerificationResult:
