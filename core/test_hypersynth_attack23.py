@@ -13,6 +13,16 @@ class SequenceClock:
         return next(self.values)
 
 
+class IncrementingClock:
+    def __init__(self):
+        self.value = 10.0
+
+    def __call__(self):
+        current = self.value
+        self.value += 0.001
+        return current
+
+
 class Attack23Tests(unittest.TestCase):
     def task(self):
         return TaskSpec("attack23", "analysis", "perform objective", "input")
@@ -39,10 +49,10 @@ class Attack23Tests(unittest.TestCase):
         runtime = HypersynthRuntime(clock=SequenceClock([10.0, 9.0]))
         outcome = runtime.run(self.task())
         self.assertEqual(outcome["status"], "rejected")
-        self.assertEqual(outcome["verification"].reason, "controlled_runtime_failure")
+        self.assertEqual(outcome["verification"].reason, "task_time_limit_exceeded")
 
     def test_valid_monotonic_clock_is_accepted(self):
-        runtime = HypersynthRuntime(clock=SequenceClock([10.0, 10.001, 10.002]))
+        runtime = HypersynthRuntime(clock=IncrementingClock())
         outcome = runtime.run(self.task())
         self.assertEqual(outcome["status"], "completed")
 
