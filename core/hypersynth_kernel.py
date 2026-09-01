@@ -11,6 +11,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from .attestation import HypersynthAttestation, StageAttestation
+from .attestation_session import AttestationSession
 from .crypto import CryptoIntegrity
 from .hypersynth import Hypersynth
 
@@ -85,26 +86,48 @@ class AttestedHypersynthKernel:
         if result.get("status") != "completed":
             return {**result, "attestations": ()}
 
+        try:
+            session = AttestationSession(self.attestation.crypto, task_id, risk_class, requirements)
+        except Exception as exc:
+            return {
+                "status": "rejected",
+                "phase": "perception",
+                "verification": {"valid": False, "reason": "attestation_session_failure", "error": type(exc).__name__},
+                "attestations": (),
+            }
+
         attestations: list[StageAttestation] = []
         payloads: list[Any] = []
         for stage in self.STAGE_ORDER:
             try:
                 payload = self._payload(result, stage)
                 payloads.append(payload)
-                attestations.append(self.attestation.attest_stage(task_id, stage, risk_class, requirements, payload))
+                attestations.append(session.attest(stage, payload))
             except Exception as exc:
+                session.close()
                 return {
                     "status": "rejected",
                     "phase": stage,
                     "verification": {"valid": False, "reason": "attestation_failure", "error": type(exc).__name__},
                     "attestations": tuple(attestations),
                 }
+
         chain = tuple(attestations)
-        if not self.attestation.verify_pipeline(chain, tuple(payloads), task_id, risk_class, requirements):
-            return {
-                "status": "rejected",
-                "phase": "verification",
-                "verification": {"valid": False, "reason": "attestation_chain_failure"},
-                "attestations": chain,
-            }
-        return {**result, "attestations": chain, "attestation_verified": True}
+        for stage, attestation, payload in zip(self.STAGE_ORDER, chain, payloads):
+            if not session.verify(attestation, stage, payload, consume=True):
+                session.close()
+                return {
+                    "status": "rejected",
+                    "phase": "verification",
+                    "verification": {"valid": False, "reason": "attestation_session_verification_failure"},
+                    "attestations": chain,
+                }
+
+        session.close()
+        return {
+            **result,
+            "attestations": chain,
+            "attestation_verified": True,
+            "attestation_session_id": session.session_id,
+            "attestation_context_tag": session.context_tag,
+        }
