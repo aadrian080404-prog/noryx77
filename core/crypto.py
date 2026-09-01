@@ -40,7 +40,16 @@ class CryptoIntegrity:
 
     @staticmethod
     def canonical(value: Any) -> bytes:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        try:
+            return json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError, UnicodeError) as exc:
+            raise TypeError("non_canonical_crypto_payload") from exc
 
     def _validate_domain(self, domain: str) -> None:
         if not isinstance(domain, str) or not domain.strip() or len(domain) > self.MAX_DOMAIN_LENGTH:
