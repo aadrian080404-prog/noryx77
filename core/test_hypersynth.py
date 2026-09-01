@@ -83,7 +83,7 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "allocation")
 
-    def test_runtime_failure_is_controlled(self):
+    def test_agent_failure_is_rejected_at_execution_boundary(self):
         class BrokenAgent:
             agent_id = "broken"
             def run(self, task):
@@ -93,7 +93,8 @@ class HypersynthTests(unittest.TestCase):
         router.register(BrokenAgent())
         result = HypersynthRuntime(self.verifier, router).run(self.task(task_id="broken"))
         self.assertEqual(result["status"], "rejected")
-        self.assertEqual(result["reason"], "controlled_runtime_failure")
+        self.assertEqual(result["phase"], "execution")
+        self.assertEqual(result["verification"].reason, "agent_execution_failure")
 
 
 if __name__ == "__main__":
