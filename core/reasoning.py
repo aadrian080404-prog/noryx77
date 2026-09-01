@@ -123,8 +123,11 @@ class CrossChecker:
         for result in results:
             if result.status != "completed":
                 return VerificationResult(False, "cross_check", "incomplete_result")
-            if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
+            verification = result.verification
+            if verification is None or not verification.is_well_formed() or not verification.valid:
                 return VerificationResult(False, "cross_check", "unverified_result")
+            if verification.stage != result.agent_id:
+                return VerificationResult(False, "cross_check", "verification_identity_mismatch")
             if result.output is None:
                 return VerificationResult(False, "cross_check", "null_output")
         return VerificationResult(True, "cross_check", "cross_check_ok")
