@@ -243,6 +243,8 @@ class Hypersynth:
                 return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None:
                 return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
+            if getattr(selected, "agent_id", None) != agent_id:
+                return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_identity_mismatch"))
             assignments.append((selected, child, step))
         if len(assignments) != len(plan.steps):
             return self._reject("allocation", task, VerificationResult(False, "allocation", "assignment_count_mismatch"))
