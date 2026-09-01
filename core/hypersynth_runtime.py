@@ -69,10 +69,6 @@ class HypersynthRuntime:
             return VerificationResult(False, "runtime", "runtime_decomposition_failure")
         if len(results) != len(expected_task_ids):
             return VerificationResult(False, "runtime", "kernel_result_count_mismatch")
-        try:
-            available_agents = tuple(getattr(self_router, "agent_id", self_router) for self_router in ())
-        except Exception:
-            available_agents = ()
         task_ids = []
         agent_ids = []
         for index, item in enumerate(results):
