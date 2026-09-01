@@ -83,10 +83,24 @@ class NORYXRuntime:
             if not self.limits.validate_output_items(result.output):
                 self.audit.record("output_item_limit", task_id=child.task_id, allowed=False, reason="max_output_items_exceeded")
                 return {"status": "rejected", "reason": "max_output_items_exceeded", "task_id": child.task_id}
-            results.append(result)
-            self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
+
+            # The runtime is the authoritative verification boundary. Never accept
+            # an agent's self-reported verification without independently checking
+            # the actual output produced by that agent.
+            runtime_verification = self.verifier.verify_output(result.output, stage="runtime_result")
+            self.audit.record(
+                "runtime_output_verification",
+                task_id=child.task_id,
+                valid=runtime_verification.valid,
+                reason=runtime_verification.reason,
+            )
+            if not runtime_verification.valid:
+                return {"status": "rejected", "reason": "runtime_output_verification_failed", "verification": runtime_verification, "task_id": child.task_id}
             if result.verification is None or not result.verification.valid:
                 return {"status": "rejected", "result": result}
+
+            results.append(result)
+            self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
 
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
