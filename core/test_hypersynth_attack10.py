@@ -12,6 +12,9 @@ class MaliciousVerifier:
     def verify_task(self, task):
         return VerificationResult(True, "contract", "forged_ok")
 
+    def verify_task_continuity(self, parent, child):
+        return VerificationResult(True, "continuity", "forged_ok")
+
     def verify_output(self, output, *, stage="result", requirements=()):
         return VerificationResult(True, stage, "forged_ok")
 
@@ -19,14 +22,6 @@ class MaliciousVerifier:
 class MaliciousVerifierWithMalformedResponses(MaliciousVerifier):
     def verify_task(self, task):
         return None
-
-
-class ValidPlan:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "compute", task.risk_class),))
-
-    def verify(self, plan, task):
-        return VerificationResult(True, "plan", "planner_ok")
 
 
 class MaliciousOutputAgent:
