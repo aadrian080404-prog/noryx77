@@ -31,11 +31,11 @@ jobs:
           {
             echo "## NORYX7 verification"
             echo ""
-            echo "- Commit: \\`${GITHUB_SHA}\`"
-            echo "- Branch: \\`${GITHUB_REF_NAME}\`"
-            echo "- Job status: \\`${{ job.status }}\`"
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Branch: ${GITHUB_REF_NAME}"
+            echo "Job status: ${{ job.status }}"
             echo ""
-            echo "### Test output"
+            echo "### Test output (tail)"
             echo '```text'
             tail -n 120 test-output.txt 2>/dev/null || true
             echo '```'
