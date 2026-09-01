@@ -1,3 +1,4 @@
+import math
 import time
 
 from .actions import ActionGate
@@ -34,6 +35,17 @@ class HypersynthRuntime:
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
         )
+
+    def _read_clock(self):
+        """Read a finite monotonic timestamp; malformed or regressing clocks fail closed."""
+        if not callable(self.clock):
+            raise TypeError("invalid_runtime_clock")
+        value = self.clock()
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError("invalid_runtime_clock_value")
+        if not math.isfinite(value):
+            raise ValueError("non_finite_runtime_clock")
+        return value
 
     @staticmethod
     def _independent_kernel_result_contract(task: TaskSpec, result) -> VerificationResult:
@@ -90,9 +102,9 @@ class HypersynthRuntime:
 
     def run(self, task):
         task_id = getattr(task, "task_id", None)
-        started = self.clock()
-        self.audit.record("hypersynth_start", task_id=task_id)
         try:
+            started = self._read_clock()
+            self.audit.record("hypersynth_start", task_id=task_id)
             task_check = self.verifier.verify_task(task)
             if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
                 check = VerificationResult(False, "runtime", "malformed_task_verification")
@@ -101,7 +113,8 @@ class HypersynthRuntime:
             if not task_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=task_check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": task_check, "audit": self.audit.snapshot()}
-            if self.clock() - started > self.limits.max_task_seconds:
+            elapsed = self._read_clock() - started
+            if elapsed < 0 or elapsed > self.limits.max_task_seconds:
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
@@ -117,22 +130,23 @@ class HypersynthRuntime:
             kernel_check = self._independent_kernel_result_contract(task, result)
             if not kernel_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=kernel_check.reason)
-                return {"status": "rejected", "phase": "verification", "verification": kernel_check, "audit": self.audit.snapshot()}
-            if self.clock() - started > self.limits.max_task_seconds:
+                return {"status": "rejected", "phase":"verification", "verification": kernel_check, "audit": self.audit.snapshot()}
+            elapsed = self._read_clock() - started
+            if elapsed < 0 or elapsed > self.limits.max_task_seconds:
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                return {"status": "rejected", "phase":"verification", "verification": check, "audit": self.audit.snapshot()}
             output = result.get("results", ())
             if result.get("status") == "completed":
                 if not self.limits.validate_count(len(output), self.limits.max_output_items):
                     check = VerificationResult(False, "limits", "output_item_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status": "rejected", "phase":"verification", "verification": check, "audit": self.audit.snapshot()}
                 final_output = output[-1].output if output else None
                 if not self.limits.validate_output(final_output):
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status": "rejected", "phase":"verification", "verification": check, "audit": self.audit.snapshot()}
         except Exception as exc:
             check = VerificationResult(False, "runtime", "controlled_runtime_failure")
             self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__, reason=check.reason)
