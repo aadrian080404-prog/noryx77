@@ -23,7 +23,7 @@ class HypersynthRuntime:
         self.policy = PolicyEngine()
         self.security = SecurityBoundary(self.policy, self.verifier)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
-        self.memory = memory or MemoryStore()
+        self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
             self.verifier,
             self.router,
