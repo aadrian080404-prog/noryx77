@@ -10,6 +10,7 @@ class AuditLog:
     """Append-only runtime evidence authenticated by a keyed hash chain."""
 
     _GENESIS = b"NORYX7:AUDIT:GENESIS:v1"
+    _RESERVED = frozenset({"auth"})
 
     def __init__(self, key: bytes | None = None):
         if key is None:
@@ -30,6 +31,8 @@ class AuditLog:
     def record(self, event: str, **data) -> dict[str, Any]:
         if not isinstance(event, str) or not event.strip():
             raise ValueError("audit event must be non-empty text")
+        if any(key in self._RESERVED for key in data):
+            raise ValueError("audit reserved field")
         entry = {"event": event, **deepcopy(data)}
         mac = self._mac(self._chain, entry)
         entry["auth"] = mac
