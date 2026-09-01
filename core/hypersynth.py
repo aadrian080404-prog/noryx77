@@ -249,6 +249,9 @@ class Hypersynth:
         for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
+            continuity_check = self.verifier.verify_task_continuity(task, child)
+            if not continuity_check.valid:
+                return self._reject("allocation", task, continuity_check)
             try:
                 selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception:
@@ -288,6 +291,9 @@ class Hypersynth:
             return self._reject("verification", task, phase_check, results=tuple(results))
         phase_index += 1
         for index, (agent, child, _step) in enumerate(assignments):
+            continuity_check = self.verifier.verify_task_continuity(task, child)
+            if not continuity_check.valid:
+                return self._reject("verification", task, continuity_check, results=tuple(results))
             check = self._verify_agent_result(child, agent, results[index])
             if not check.valid:
                 return self._reject("verification", task, check, results=tuple(results))
