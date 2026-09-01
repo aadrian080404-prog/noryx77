@@ -9,6 +9,7 @@ from .crypto import CryptoEnvelope, CryptoIntegrity
 from .decomposition import Subtask, TaskDecomposer
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .hypersynth import CognitiveState, Hypersynth
+from .hypersynth_kernel import AttestedHypersynthKernel
 from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .memory import MemoryStore
@@ -24,10 +25,10 @@ from .verification import VerificationEngine
 
 __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityAttestation", "CapabilityRegistry",
+    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "AttestationKernel" if False else "CapabilityAttestation", "CapabilityRegistry",
     "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
     "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth", "HypersynthAttestation",
-    "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime",
+    "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime",
     "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
     "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer",
     "TaskSpec", "ToolExecutor", "VerificationEngine", "VerificationFailure", "VerificationResult",
