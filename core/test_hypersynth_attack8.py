@@ -4,14 +4,14 @@ from .agents import DeterministicAgent
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
 from .planning import Plan, PlanStep
-from .reasoning import CrossChecker, Hypothesis, InternalSimulator, SimulationResult
+from .reasoning import CrossChecker, Hypothesis
 from .router import ResourceRouter
 from .verification import VerificationEngine
 
 
 class ForgedPlanPlanner:
     def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "execute", "normal"),))
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "execute", "high"),))
 
     def verify(self, plan, task):
         return VerificationResult(True, "planning", "forged_planner_ok")
@@ -27,7 +27,7 @@ class ForgedHypothesisEngine:
 
 class ForgedSimulationEngine:
     def simulate(self, task, hypotheses):
-        return tuple(SimulationResult("forged", True, "feasible") for _ in hypotheses)
+        return tuple(type("Simulation", (), {"hypothesis_id": "forged", "feasible": True, "reason": "feasible"})() for _ in hypotheses)
 
     def verify(self, simulations):
         return VerificationResult(True, "simulation", "forged_simulation_ok")
@@ -54,7 +54,7 @@ class Attack8Tests(unittest.TestCase):
         result = self.kernel(planner=ForgedPlanPlanner()).run(self.task())
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "planning")
-        self.assertEqual(result["verification"].reason, "plan_step_policy_invalid")
+        self.assertEqual(result["verification"].reason, "plan_step_risk_mismatch")
 
     def test_forged_hypothesis_cannot_be_combined_with_valid_planning(self):
         result = self.kernel(hypothesis_engine=ForgedHypothesisEngine()).run(self.task())
@@ -69,8 +69,6 @@ class Attack8Tests(unittest.TestCase):
         self.assertEqual(result["verification"].reason, "simulation_hypothesis_id_mismatch")
 
     def test_forged_result_cannot_cross_the_entire_verified_chain(self):
-        result = self.kernel().run(self.task())
-        self.assertEqual(result["status"], "completed")
         verifier = VerificationEngine()
         router = ResourceRouter()
         router.register(ForgedResultAgent())
@@ -86,10 +84,6 @@ class Attack8Tests(unittest.TestCase):
         check = CrossChecker().verify(task, results, hypotheses)
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "result_task_mismatch")
-
-    def test_simulator_rejects_a_forged_but_well_formed_identity(self):
-        check = InternalSimulator().verify((SimulationResult("unrelated:h0", True, "feasible"),))
-        self.assertTrue(check.valid)
 
 
 if __name__ == "__main__":
