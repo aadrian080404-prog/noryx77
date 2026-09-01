@@ -74,8 +74,14 @@ class CrossChecker:
         if any(h.task_id != task.task_id for h in hypotheses): return VerificationResult(False, "cross_check", "hypothesis_task_mismatch")
         if any(not isinstance(h.hypothesis_id, str) or not h.hypothesis_id.strip() for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_id")
         if len({h.hypothesis_id for h in hypotheses}) != len(hypotheses): return VerificationResult(False, "cross_check", "duplicate_hypothesis_id")
-        expected_step_ids = [basis for h in hypotheses for basis in h.basis]
-        if len(expected_step_ids) != len(hypotheses) or len(set(expected_step_ids)) != len(expected_step_ids): return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
+        for hypothesis in hypotheses:
+            if not isinstance(hypothesis.basis, tuple) or len(hypothesis.basis) != 1:
+                return VerificationResult(False, "cross_check", "invalid_hypothesis_basis")
+            basis = hypothesis.basis[0]
+            if not isinstance(basis, str) or not basis.strip() or not basis.startswith(task.task_id + ":"):
+                return VerificationResult(False, "cross_check", "hypothesis_basis_identity_mismatch")
+        expected_step_ids = [h.basis[0] for h in hypotheses]
+        if len(set(expected_step_ids)) != len(expected_step_ids): return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
         if any(result.status != "completed" for result in results): return VerificationResult(False, "cross_check", "incomplete_result")
         for result in results:
             verification = result.verification

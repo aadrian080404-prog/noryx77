@@ -1,3 +1,4 @@
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,7 +13,7 @@ class MemoryItem:
 
 
 class MemoryStore:
-    """Deterministic bounded store with explicit validation and overwrite semantics."""
+    """Deterministic bounded store with explicit validation and isolation."""
 
     VALID_KINDS = {"working", "local", "edge", "cloud", "long_term", "suspended"}
 
@@ -23,7 +24,7 @@ class MemoryStore:
         self._items: dict[str, MemoryItem] = {}
 
     def put(self, item: MemoryItem) -> None:
-        if not isinstance(item, MemoryItem) or not isinstance(item.memory_id, str) or not item.memory_id:
+        if not isinstance(item, MemoryItem) or not isinstance(item.memory_id, str) or not item.memory_id.strip():
             raise ValueError("valid memory item with memory_id required")
         if item.memory_id not in self._items and len(self._items) >= self.max_items:
             raise MemoryError("memory_capacity_exceeded")
@@ -35,15 +36,16 @@ class MemoryStore:
             raise ValueError("memory importance must be numeric")
         if not 0.0 <= float(item.importance) <= 1.0:
             raise ValueError("memory importance must be between 0 and 1")
-        self._items[item.memory_id] = item
+        self._items[item.memory_id] = deepcopy(item)
 
     def get(self, memory_id: str):
-        return self._items.get(memory_id) if isinstance(memory_id, str) else None
+        item = self._items.get(memory_id) if isinstance(memory_id, str) else None
+        return deepcopy(item) if item is not None else None
 
     def list(self, kind: str | None = None):
         if kind is not None and kind not in self.VALID_KINDS:
             return ()
-        return tuple(x for x in self._items.values() if kind is None or x.kind == kind)
+        return tuple(deepcopy(x) for x in self._items.values() if kind is None or x.kind == kind)
 
     def delete(self, memory_id: str) -> bool:
         if not isinstance(memory_id, str):

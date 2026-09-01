@@ -28,8 +28,13 @@ class SecurityBoundary:
             policy_decision = self.policy.evaluate(action)
         except Exception:
             return SecurityDecision(False, "policy_evaluation_failure", action.risk_class)
-        if not isinstance(policy_decision, dict) or not policy_decision.get("allowed", False):
-            reason = policy_decision.get("reason", "policy_denied") if isinstance(policy_decision, dict) else "invalid_policy_decision"
+        if not isinstance(policy_decision, dict):
+            return SecurityDecision(False, "invalid_policy_decision", action.risk_class)
+        allowed = policy_decision.get("allowed", False)
+        reason = policy_decision.get("reason", "policy_denied")
+        if type(allowed) is not bool or not isinstance(reason, str) or not reason.strip():
+            return SecurityDecision(False, "malformed_policy_decision", action.risk_class)
+        if not allowed:
             return SecurityDecision(False, reason, action.risk_class)
         return SecurityDecision(True, "allowed", action.risk_class)
 
@@ -41,6 +46,9 @@ class SecurityBoundary:
         if not decision.allowed:
             return VerificationResult(False, "security", decision.reason)
         try:
-            return self.verifier.verify_output(output, stage="security_result")
+            result = self.verifier.verify_output(output, stage="security_result")
         except Exception:
             return VerificationResult(False, "security", "verification_failure")
+        if not isinstance(result, VerificationResult) or not result.is_well_formed():
+            return VerificationResult(False, "security", "malformed_verification")
+        return result
