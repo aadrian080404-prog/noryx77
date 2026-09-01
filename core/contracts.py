@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+
 @dataclass(frozen=True)
 class TaskSpec:
     task_id: str
@@ -11,6 +12,18 @@ class TaskSpec:
     verification_requirements: tuple[str, ...] = ()
     risk_class: str = "normal"
 
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.task_id, str) and bool(self.task_id.strip())
+            and isinstance(self.task_type, str) and bool(self.task_type.strip())
+            and isinstance(self.objective, str) and bool(self.objective.strip())
+            and isinstance(self.constraints, Mapping)
+            and isinstance(self.verification_requirements, tuple)
+            and all(isinstance(item, str) and bool(item.strip()) for item in self.verification_requirements)
+            and isinstance(self.risk_class, str) and bool(self.risk_class.strip())
+        )
+
+
 @dataclass(frozen=True)
 class ActionSpec:
     action_id: str
@@ -20,12 +33,24 @@ class ActionSpec:
     risk_class: str = "normal"
     requires_authorization: bool = False
 
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.action_id, str) and bool(self.action_id.strip())
+            and isinstance(self.action_type, str) and bool(self.action_type.strip())
+            and isinstance(self.target, str)
+            and isinstance(self.parameters, Mapping)
+            and isinstance(self.risk_class, str) and bool(self.risk_class.strip())
+            and isinstance(self.requires_authorization, bool)
+        )
+
+
 @dataclass(frozen=True)
 class VerificationResult:
     valid: bool
     stage: str
     reason: str = ""
     details: tuple[str, ...] = ()
+
 
 @dataclass(frozen=True)
 class AgentResult:
