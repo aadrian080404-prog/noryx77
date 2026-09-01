@@ -32,5 +32,10 @@ class RuntimeLimits:
     def validate_output(self, value: object) -> bool:
         return value is not None and len(str(value)) <= self.max_output_chars
 
+    def validate_output_items(self, value: object) -> bool:
+        if isinstance(value, (list, tuple, set, frozenset, dict)):
+            return len(value) <= self.max_output_items
+        return True
+
     def validate_count(self, value: int, maximum: int) -> bool:
         return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= maximum
