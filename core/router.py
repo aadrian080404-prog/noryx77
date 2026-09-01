@@ -11,7 +11,11 @@ class ResourceRouter:
     def _validate_agent(agent: Agent) -> str:
         agent_id = getattr(agent, "agent_id", None)
         run = getattr(agent, "run", None)
-        if not isinstance(agent_id, str) or not agent_id.strip() or not callable(run):
+        if not isinstance(agent_id, str):
+            raise TypeError("invalid_agent")
+        if not agent_id.strip():
+            raise ValueError("agent_id required")
+        if not callable(run):
             raise TypeError("invalid_agent")
         return agent_id
 
@@ -37,7 +41,7 @@ class ResourceRouter:
                 raise RuntimeError("invalid_registered_agent_id")
             try:
                 registered_id = self._validate_agent(agent)
-            except TypeError as exc:
+            except (TypeError, ValueError) as exc:
                 raise RuntimeError("invalid_registered_agent") from exc
             if registered_id != agent_id:
                 raise RuntimeError("agent_identity_mismatch")
@@ -61,7 +65,7 @@ class ResourceRouter:
                 raise LookupError("requested agent unavailable")
             try:
                 registered_id = self._validate_agent(agent)
-            except TypeError as exc:
+            except (TypeError, ValueError) as exc:
                 raise LookupError("invalid_registered_agent") from exc
             if registered_id != preferred:
                 raise LookupError("agent_identity_mismatch")
