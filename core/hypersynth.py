@@ -8,6 +8,7 @@ from .decomposition import Subtask, TaskDecomposer
 from .planning import Plan, PlanStep, Planner
 from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator
 from .supervisor import AgentSupervisor
+from .validation_requirements import VALID_VERIFICATION_REQUIREMENTS
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,39 @@ class Hypersynth:
         result = {"status": "rejected", "phase": phase, "verification": check}
         result.update(extra)
         return result
+
+    def _independent_task_contract(self, task: TaskSpec) -> VerificationResult:
+        """Kernel-owned task boundary that cannot be overridden by an injected verifier."""
+        if not isinstance(task, TaskSpec):
+            return VerificationResult(False, "contract", "invalid_task_spec")
+        if not task.is_well_formed():
+            return VerificationResult(False, "contract", "malformed_task_spec")
+        if task.risk_class not in {"normal", "sensitive", "high"}:
+            return VerificationResult(False, "policy", "unsupported_risk_class")
+        if any(requirement not in VALID_VERIFICATION_REQUIREMENTS for requirement in task.verification_requirements):
+            return VerificationResult(False, "contract", "unsupported_verification_requirement")
+        return VerificationResult(True, "contract", "independent_task_ok")
+
+    def _independent_output_contract(self, output, requirements: tuple[str, ...], *, stage: str) -> VerificationResult:
+        """Kernel-owned output requirement check so a custom verifier cannot weaken task requirements."""
+        if not isinstance(requirements, tuple) or any(
+            not isinstance(requirement, str) or requirement not in VALID_VERIFICATION_REQUIREMENTS
+            for requirement in requirements
+        ):
+            return VerificationResult(False, stage, "unsupported_verification_requirement")
+        if output is None:
+            return VerificationResult(False, stage, "null_output")
+        if isinstance(output, (str, bytes)) and len(output) == 0:
+            return VerificationResult(False, stage, "empty_output")
+        if "string" in requirements and not isinstance(output, str):
+            return VerificationResult(False, stage, "output_type_mismatch")
+        return VerificationResult(True, stage, "independent_output_ok")
+
+    def _checked_verification(self, check, *, stage: str, malformed_reason: str) -> VerificationResult:
+        """Normalize untrusted verifier responses into a fail-closed result."""
+        if not isinstance(check, VerificationResult) or not check.is_well_formed():
+            return VerificationResult(False, stage, malformed_reason)
+        return check
 
     def _advance_phase(self, current_index, target_phase, task):
         if target_phase not in self.PHASES:
@@ -132,7 +166,14 @@ class Hypersynth:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
             return VerificationResult(False, "agent_result", "agent_not_completed")
-        output_check = self.verifier.verify_output(result.output, requirements=child.verification_requirements, stage="runtime_output")
+        independent_output = self._independent_output_contract(result.output, child.verification_requirements, stage="runtime_output")
+        if not independent_output.valid:
+            return independent_output
+        try:
+            output_check = self.verifier.verify_output(result.output, requirements=child.verification_requirements, stage="runtime_output")
+        except Exception:
+            return VerificationResult(False, "agent_result", "verifier_output_failure")
+        output_check = self._checked_verification(output_check, stage="runtime_output", malformed_reason="malformed_output_verification")
         if not output_check.valid:
             return output_check
         if result.verification is None or not result.verification.is_well_formed():
@@ -152,7 +193,14 @@ class Hypersynth:
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
         evidence: list[str] = []
         phase_index = 0
-        task_check = self.verifier.verify_task(task)
+        independent_task_check = self._independent_task_contract(task)
+        if not independent_task_check.valid:
+            return self._reject("perception", task, independent_task_check)
+        try:
+            task_check = self.verifier.verify_task(task)
+        except Exception:
+            return self._reject("perception", task, VerificationResult(False, "contract", "verifier_task_failure"))
+        task_check = self._checked_verification(task_check, stage="contract", malformed_reason="malformed_task_verification")
         if not task_check.valid:
             return self._reject("perception", task, task_check)
         evidence.append("task_contract")
@@ -186,6 +234,7 @@ class Hypersynth:
             plan_check = self.planner.verify(plan, task)
         except Exception:
             plan_check, plan = VerificationResult(False, "planning", "planner_failure"), None
+        plan_check = self._checked_verification(plan_check, stage="planning", malformed_reason="malformed_plan_verification")
         if not plan_check.valid:
             return self._reject("planning", task, plan_check)
         independent_plan_check = self._verify_plan_integrity(plan, task)
@@ -203,6 +252,7 @@ class Hypersynth:
             hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
         except Exception:
             return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
+        hypothesis_check = self._checked_verification(hypothesis_check, stage="hypothesis", malformed_reason="malformed_hypothesis_verification")
         if not hypothesis_check.valid:
             return self._reject("hypothesis", task, hypothesis_check)
         independent_hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
@@ -220,6 +270,7 @@ class Hypersynth:
             simulation_check = self.simulator.verify(simulations)
         except Exception:
             return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
+        simulation_check = self._checked_verification(simulation_check, stage="simulation", malformed_reason="malformed_simulation_verification")
         if not simulation_check.valid:
             return self._reject("simulation", task, simulation_check)
         expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
@@ -250,6 +301,7 @@ class Hypersynth:
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
             continuity_check = self.verifier.verify_task_continuity(task, child)
+            continuity_check = self._checked_verification(continuity_check, stage="continuity", malformed_reason="malformed_continuity_verification")
             if not continuity_check.valid:
                 return self._reject("allocation", task, continuity_check)
             try:
@@ -292,12 +344,14 @@ class Hypersynth:
         phase_index += 1
         for index, (agent, child, _step) in enumerate(assignments):
             continuity_check = self.verifier.verify_task_continuity(task, child)
+            continuity_check = self._checked_verification(continuity_check, stage="continuity", malformed_reason="malformed_continuity_verification")
             if not continuity_check.valid:
                 return self._reject("verification", task, continuity_check, results=tuple(results))
             check = self._verify_agent_result(child, agent, results[index])
             if not check.valid:
                 return self._reject("verification", task, check, results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
+        cross_check = self._checked_verification(cross_check, stage="cross_check", malformed_reason="malformed_cross_check")
         if not cross_check.valid:
             return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
         if len({r.task_id for r in results}) == 1:
@@ -305,7 +359,14 @@ class Hypersynth:
             if not consensus.valid:
                 return self._reject("verification", task, consensus, results=tuple(results))
         final_output = results[-1].output
-        output_check = self.verifier.verify_output(final_output, requirements=task.verification_requirements, stage="hypersynth_result")
+        independent_output = self._independent_output_contract(final_output, task.verification_requirements, stage="hypersynth_result")
+        if not independent_output.valid:
+            return self._reject("verification", task, independent_output, results=tuple(results))
+        try:
+            output_check = self.verifier.verify_output(final_output, requirements=task.verification_requirements, stage="hypersynth_result")
+        except Exception:
+            return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "verifier_output_failure"), results=tuple(results))
+        output_check = self._checked_verification(output_check, stage="hypersynth_result", malformed_reason="malformed_output_verification")
         if not output_check.valid:
             return self._reject("verification", task, output_check, results=tuple(results))
         evidence.append("result_integrity")
