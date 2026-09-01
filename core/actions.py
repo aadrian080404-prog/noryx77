@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from .contracts import ActionSpec, VerificationResult
+from .crypto import CryptoIntegrity
 
 
 @dataclass(frozen=True)
@@ -12,10 +13,12 @@ class ActionDecision:
 
 class ActionGate:
     """Final fail-closed gate before an action can reach a tool/controller."""
-    def __init__(self, policy, security, limits):
+    def __init__(self, policy, security, limits, crypto=None):
         self.policy = policy
         self.security = security
         self.limits = limits
+        self.crypto = crypto or CryptoIntegrity()
+        self._authorization_counter = 0
 
     def authorize(self, action: ActionSpec, calls_used: int = 0, tool_calls_used: int = 0) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
@@ -30,6 +33,13 @@ class ActionGate:
             return ActionDecision(False, "tool call budget exceeded", VerificationResult(False, "action_gate", "tool_call_budget"))
         if calls_used >= self.limits.max_actions_per_task:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
+        try:
+            envelope = self.crypto.sign("action_gate", asdict(action), self._authorization_counter)
+            self._authorization_counter += 1
+            if not self.crypto.verify(envelope):
+                return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
+        except Exception:
+            return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
         try:
             policy_allowed = self.policy.allows(action)
         except Exception:
