@@ -38,7 +38,11 @@ class HypothesisEngine:
     def verify(self, hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
         if not hypotheses:
             return VerificationResult(False, "hypothesis", "no_hypotheses")
+        ids = set()
         for hypothesis in hypotheses:
+            if hypothesis.hypothesis_id in ids:
+                return VerificationResult(False, "hypothesis", "duplicate_hypothesis_id")
+            ids.add(hypothesis.hypothesis_id)
             if hypothesis.task_id != task.task_id or not hypothesis.statement or not hypothesis.basis:
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
@@ -60,23 +64,31 @@ class InternalSimulator:
     def verify(self, simulations: tuple[SimulationResult, ...]) -> VerificationResult:
         if not simulations:
             return VerificationResult(False, "simulation", "no_simulations")
-        if any(not item.feasible for item in simulations):
-            return VerificationResult(False, "simulation", "simulation_rejected")
+        ids = set()
+        for item in simulations:
+            if item.hypothesis_id in ids:
+                return VerificationResult(False, "simulation", "duplicate_simulation_id")
+            ids.add(item.hypothesis_id)
+            if not item.feasible:
+                return VerificationResult(False, "simulation", "simulation_rejected")
         return VerificationResult(True, "simulation", "simulation_ok")
 
 
 class CrossChecker:
-    """Checks that verified agent results map back to the declared plan steps."""
+    """Checks that verified agent results map one-to-one to declared plan steps."""
 
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
         if not results:
             return VerificationResult(False, "cross_check", "no_results")
         if len(results) != len(hypotheses):
             return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
-        expected_step_ids = {hypothesis.basis[0] for hypothesis in hypotheses if hypothesis.basis}
-        if len(expected_step_ids) != len(hypotheses):
+        expected_step_ids = [basis for hypothesis in hypotheses for basis in hypothesis.basis]
+        if len(expected_step_ids) != len(hypotheses) or len(set(expected_step_ids)) != len(expected_step_ids):
             return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
-        if any(result.task_id not in expected_step_ids for result in results):
+        result_ids = [result.task_id for result in results]
+        if len(set(result_ids)) != len(result_ids):
+            return VerificationResult(False, "cross_check", "duplicate_result_task")
+        if set(result_ids) != set(expected_step_ids):
             return VerificationResult(False, "cross_check", "result_task_mismatch")
         if any(result.status != "completed" for result in results):
             return VerificationResult(False, "cross_check", "incomplete_result")
