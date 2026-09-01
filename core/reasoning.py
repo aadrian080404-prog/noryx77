@@ -75,9 +75,17 @@ class InternalSimulator:
         for item in simulations:
             if not isinstance(item, SimulationResult):
                 return VerificationResult(False, "simulation", "invalid_simulation_type")
+            if not isinstance(item.hypothesis_id, str) or not item.hypothesis_id:
+                return VerificationResult(False, "simulation", "invalid_hypothesis_id")
             if item.hypothesis_id in ids:
                 return VerificationResult(False, "simulation", "duplicate_simulation_id")
             ids.add(item.hypothesis_id)
+            if not isinstance(item.feasible, bool):
+                return VerificationResult(False, "simulation", "invalid_feasibility_flag")
+            if not isinstance(item.reason, str) or not item.reason:
+                return VerificationResult(False, "simulation", "invalid_simulation_reason")
+            if item.feasible and item.reason != "feasible":
+                return VerificationResult(False, "simulation", "feasible_reason_mismatch")
             if not item.feasible:
                 return VerificationResult(False, "simulation", "simulation_rejected")
         return VerificationResult(True, "simulation", "simulation_ok")
