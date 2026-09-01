@@ -4,10 +4,10 @@ from core.contracts import AgentResult, TaskSpec, VerificationResult
 from core.hypersynth import Hypersynth
 from core.hypersynth_kernel import AttestedHypersynthKernel
 from core.planning import Plan, PlanStep
-from core.reasoning import HypothesisEngine
 from core.router import ResourceRouter
 from core.agents import Agent
 from core.verification import VerificationEngine
+from core.attestation_session import AttestationSession
 
 
 class KernelPlanner:
@@ -46,15 +46,19 @@ class AttestedKernelTests(unittest.TestCase):
         self.assertTrue(result["attestation_verified"])
         self.assertEqual(len(result["attestations"]), 9)
         self.assertEqual(tuple(item.stage for item in result["attestations"]), AttestedHypersynthKernel.STAGE_ORDER)
+        self.assertTrue(isinstance(result["attestation_session_id"], str))
+        self.assertEqual(len(result["attestation_context_tag"]), 64)
 
     def test_tampering_with_attested_stage_payload_is_rejected(self):
         kernel = Hypersynth(self.verifier, self.router, planner=KernelPlanner(), max_agents=1)
         attested = AttestedHypersynthKernel(kernel)
         result = attested.run(self.make_task("tamper"))
         chain = result["attestations"]
+        session = AttestationSession(attested.attestation.crypto, "tamper", "normal", ())
         payloads = [attested._payload(result, stage) for stage in attested.STAGE_ORDER]
         payloads[5] = {"agent": "forged-agent"}
-        self.assertFalse(attested.attestation.verify_pipeline(chain, tuple(payloads), "tamper", "normal", ()))
+        # A completed run's attestation chain is bound to its original random session.
+        self.assertFalse(session.verify(chain[5], "allocation", payloads[5], consume=False))
 
     def test_rejected_kernel_does_not_claim_attestation_success(self):
         class RejectingPlanner(KernelPlanner):
