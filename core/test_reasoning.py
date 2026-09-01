@@ -38,11 +38,7 @@ class CrossCheckerTests(unittest.TestCase):
         self.assertEqual(result.reason, "unverified_result")
 
     def test_rejects_verification_identity_mismatch(self):
-        result = self.checker.verify(
-            self.task,
-            (self.result(verification=VerificationResult(True, "different-agent", "ok")),),
-            self.hypotheses,
-        )
+        result = self.checker.verify(self.task, (self.result(verification=VerificationResult(True, "different-agent", "ok")),), self.hypotheses)
         self.assertFalse(result.valid)
         self.assertEqual(result.reason, "verification_identity_mismatch")
 
@@ -55,6 +51,11 @@ class CrossCheckerTests(unittest.TestCase):
         result = self.checker.verify(self.task, (self.result(agent_id=" "),), self.hypotheses)
         self.assertFalse(result.valid)
         self.assertEqual(result.reason, "malformed_result")
+
+    def test_rejects_result_step_mapping_mismatch(self):
+        result = self.checker.verify(self.task, (self.result(task_id="wrong-step"),), self.hypotheses)
+        self.assertFalse(result.valid)
+        self.assertEqual(result.reason, "result_task_mismatch")
 
 
 if __name__ == "__main__":
