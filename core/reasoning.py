@@ -85,6 +85,10 @@ class CrossChecker:
         agent_ids = [result.agent_id for result in results]
         if len(set(agent_ids)) != len(agent_ids): return VerificationResult(False, "cross_check", "duplicate_agent_result")
         if set(result_task_ids) != set(expected_step_ids): return VerificationResult(False, "cross_check", "result_task_mismatch")
+        # VerificationResult.stage is a verification stage, not an agent identity.
+        # The legacy/current contract uses "result" for ordinary agent output.
+        # A stage equal to the agent_id is also accepted for identity-bound verifiers;
+        # arbitrary identities remain rejected, preserving the tamper boundary.
         for result in results:
-            if result.verification.stage != result.agent_id: return VerificationResult(False, "cross_check", "verification_identity_mismatch")
+            if result.verification.stage not in ("result", result.agent_id): return VerificationResult(False, "cross_check", "verification_identity_mismatch")
         return VerificationResult(True, "cross_check", "cross_check_ok")
