@@ -1,13 +1,18 @@
 from .contracts import TaskSpec, VerificationResult
 
+
 class VerificationEngine:
-    """Fail-closed verification boundary for future NORYX7 components."""
+    """Fail-closed verification boundary for NORYX7 pipeline stages."""
 
     VALID_RISKS = {"normal", "sensitive", "high"}
+    VALID_STATUSES = {"initialized", "processing", "completed"}
+    VALID_VERDICTS = {"unknown", "success", "failure"}
 
     def verify_task(self, task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec):
             return VerificationResult(False, "contract", "invalid_task_spec")
+        if not all(isinstance(v, str) for v in (task.task_id, task.task_type, task.objective)):
+            return VerificationResult(False, "contract", "task_fields_must_be_text")
         if not task.task_id or not task.task_type or not task.objective:
             return VerificationResult(False, "contract", "missing_required_task_fields")
         if task.risk_class not in self.VALID_RISKS:
@@ -22,9 +27,9 @@ class VerificationEngine:
     def verify_state(self, state) -> VerificationResult:
         status = getattr(state, "status", None)
         verdict = getattr(state, "verdict", None)
-        if status not in {"initialized", "processing", "completed"}:
+        if status not in self.VALID_STATUSES:
             return VerificationResult(False, "state", "invalid_status")
-        if verdict not in {"unknown", "success", "failure"}:
+        if verdict not in self.VALID_VERDICTS:
             return VerificationResult(False, "state", "invalid_verdict")
         return VerificationResult(True, "state", "state_ok")
 
