@@ -40,12 +40,16 @@ class Attack22Tests(unittest.TestCase):
         self.assertEqual(outcome["status"], "rejected")
         self.assertEqual(outcome["verification"].reason, "kernel_result_task_identity_mismatch")
 
-    def test_unknown_result_agent_is_rejected(self):
-        result = self.valid_result(agent_id="forged-agent")
+    def test_duplicate_result_task_identity_is_rejected(self):
+        result = self.valid_result()
+        result["results"] = (
+            result["results"][0],
+            AgentResult("second", "attack22:0", "completed", "output", VerificationResult(True, "agent_result", "ok")),
+        )
         runtime = self.runtime_with(result)
         outcome = runtime.run(self.task())
         self.assertEqual(outcome["status"], "rejected")
-        self.assertEqual(outcome["verification"].reason, "kernel_result_agent_identity_mismatch")
+        self.assertEqual(outcome["verification"].reason, "kernel_result_count_mismatch")
 
     def test_exact_runtime_result_binding_is_accepted(self):
         result = self.valid_result()
