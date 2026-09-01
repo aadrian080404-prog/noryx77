@@ -3,6 +3,7 @@ import time
 from .actions import ActionGate
 from .audit import AuditLog
 from .contracts import AgentResult, TaskSpec, VerificationResult
+from .decomposition import TaskDecomposer
 from .hypersynth import Hypersynth
 from .limits import RuntimeLimits
 from .memory import MemoryStore
@@ -46,7 +47,7 @@ class HypersynthRuntime:
         if status == "rejected":
             if verification.valid:
                 return VerificationResult(False, "runtime", "rejected_result_claims_success")
-            if result.get("phase") is None:
+            if not isinstance(result.get("phase"), str) or not result["phase"].strip():
                 return VerificationResult(False, "runtime", "rejected_result_missing_phase")
             return VerificationResult(True, "runtime", "kernel_rejection_contract_ok")
         if status != "completed":
@@ -61,16 +62,27 @@ class HypersynthRuntime:
         results = result.get("results")
         if not isinstance(results, tuple) or not results:
             return VerificationResult(False, "runtime", "invalid_kernel_results")
+        try:
+            expected_subtasks = TaskDecomposer().decompose(task)
+            expected_task_ids = tuple(item.subtask_id for item in expected_subtasks)
+        except Exception:
+            return VerificationResult(False, "runtime", "runtime_decomposition_failure")
+        if len(results) != len(expected_task_ids):
+            return VerificationResult(False, "runtime", "kernel_result_count_mismatch")
+        try:
+            available_agents = tuple(getattr(self_router, "agent_id", self_router) for self_router in ())
+        except Exception:
+            available_agents = ()
         task_ids = []
         agent_ids = []
-        for item in results:
+        for index, item in enumerate(results):
             if not isinstance(item, AgentResult) or not item.is_well_formed():
                 return VerificationResult(False, "runtime", "malformed_kernel_agent_result")
             if item.status != "completed":
                 return VerificationResult(False, "runtime", "incomplete_kernel_agent_result")
             if item.verification is None or not item.verification.is_well_formed() or not item.verification.valid:
                 return VerificationResult(False, "runtime", "unverified_kernel_agent_result")
-            if not item.task_id.startswith(task.task_id + ":"):
+            if item.task_id != expected_task_ids[index]:
                 return VerificationResult(False, "runtime", "kernel_result_task_identity_mismatch")
             task_ids.append(item.task_id)
             agent_ids.append(item.agent_id)
@@ -85,7 +97,6 @@ class HypersynthRuntime:
         started = self.clock()
         self.audit.record("hypersynth_start", task_id=task_id)
         try:
-            # Validate the public runtime contract before touching task fields.
             task_check = self.verifier.verify_task(task)
             if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
                 check = VerificationResult(False, "runtime", "malformed_task_verification")
