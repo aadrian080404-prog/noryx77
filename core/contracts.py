@@ -51,6 +51,15 @@ class VerificationResult:
     reason: str = ""
     details: tuple[str, ...] = ()
 
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.valid, bool)
+            and isinstance(self.stage, str) and bool(self.stage.strip())
+            and isinstance(self.reason, str)
+            and isinstance(self.details, tuple)
+            and all(isinstance(item, str) for item in self.details)
+        )
+
 
 @dataclass(frozen=True)
 class AgentResult:
@@ -59,3 +68,11 @@ class AgentResult:
     status: str
     output: Any = None
     verification: VerificationResult | None = None
+
+    def is_well_formed(self) -> bool:
+        return (
+            isinstance(self.agent_id, str) and bool(self.agent_id.strip())
+            and isinstance(self.task_id, str) and bool(self.task_id.strip())
+            and isinstance(self.status, str) and bool(self.status.strip())
+            and (self.verification is None or isinstance(self.verification, VerificationResult))
+        )
