@@ -22,7 +22,8 @@ class ActionGate:
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
             return ActionDecision(False, "invalid call count", VerificationResult(False, "action_gate", "invalid_call_count"))
-        if not self.limits.validate_count(calls_used, self.limits.max_actions_per_task):
+        # calls_used counts actions already consumed; no new action is admitted at capacity.
+        if calls_used >= self.limits.max_actions_per_task:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
         if not self.policy.allows(action):
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
