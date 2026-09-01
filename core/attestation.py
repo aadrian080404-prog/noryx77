@@ -40,6 +40,7 @@ class HypersynthAttestation:
     MAX_CAPABILITY_LENGTH = 128
     MAX_REQUIREMENTS = 32
     MAX_SEQUENCE = 2**64 - 1
+    _ATTESTATION_NONCE = "attestation"
 
     def __init__(self, crypto: CryptoIntegrity):
         if not isinstance(crypto, CryptoIntegrity):
@@ -105,7 +106,7 @@ class HypersynthAttestation:
             raise OverflowError("attestation_sequence_exhausted")
         sequence = self._sequence + 1
         body = self._stage_payload(task_id, stage, risk_class, verification_requirements, payload, sequence, self._previous)
-        envelope = self.crypto.sign("hypersynth_stage", body, sequence)
+        envelope = self.crypto.sign("hypersynth_stage", body, sequence, nonce=self._ATTESTATION_NONCE)
         attestation = StageAttestation(task_id, stage, sequence, risk_class, verification_requirements,
                                        body["payload_digest"], self._previous, envelope.tag)
         self._sequence = sequence
@@ -119,10 +120,8 @@ class HypersynthAttestation:
             body = self._stage_payload(attestation.task_id, attestation.stage, attestation.risk_class,
                                        attestation.verification_requirements, payload,
                                        attestation.sequence, attestation.previous_tag)
-            envelope = self.crypto.sign("hypersynth_stage", body, attestation.sequence, nonce="attestation")
-            # Recompute the tag without consuming replay state. The fixed nonce is local to verification only.
-            expected = envelope.tag
-            if not hmac.compare_digest(expected, attestation.tag):
+            envelope = self.crypto.sign("hypersynth_stage", body, attestation.sequence, nonce=self._ATTESTATION_NONCE)
+            if not hmac.compare_digest(envelope.tag, attestation.tag):
                 return False
             if attestation.previous_tag and len(attestation.previous_tag) != 64:
                 return False
@@ -189,10 +188,8 @@ class HypersynthAttestation:
                         verification_requirements: tuple[str, ...], stages: tuple[tuple[str, Any], ...]) -> tuple[StageAttestation, ...]:
         if not isinstance(stages, tuple) or not stages:
             raise ValueError("empty_pipeline")
-        attestations = []
-        for stage, payload in stages:
-            attestations.append(self.attest_stage(task_id, stage, risk_class, verification_requirements, payload))
-        return tuple(attestations)
+        return tuple(self.attest_stage(task_id, stage, risk_class, verification_requirements, payload)
+                     for stage, payload in stages)
 
     def verify_pipeline(self, attestations: tuple[StageAttestation, ...], payloads: tuple[Any, ...],
                         task_id: str, risk_class: str, requirements: tuple[str, ...]) -> bool:
@@ -201,6 +198,8 @@ class HypersynthAttestation:
         previous = ""
         expected_sequence = None
         for attestation, payload in zip(attestations, payloads):
+            if not isinstance(attestation, StageAttestation):
+                return False
             if attestation.task_id != task_id or attestation.risk_class != risk_class or attestation.verification_requirements != requirements:
                 return False
             if expected_sequence is not None and attestation.sequence != expected_sequence + 1:
