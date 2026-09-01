@@ -78,6 +78,7 @@ class DeepValidationTests(unittest.TestCase):
         verifier = VerificationEngine()
         router = ResourceRouter()
         router.register(DeterministicAgent(verifier))
+        router.register(type("SecondAgent", (DeterministicAgent,), {"agent_id": "second"})(verifier))
         kernel = Hypersynth(verifier, router, planner=TwoStepPlanner(), max_agents=2)
         result = kernel.run(self.task(task_id="multi"))
         self.assertEqual(result["status"], "completed")
