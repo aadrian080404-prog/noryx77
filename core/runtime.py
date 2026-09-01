@@ -41,8 +41,12 @@ class NORYXRuntime:
             self.audit.record("routing_failure", task_id=task.task_id, error="routing_failure")
             return {"status": "rejected", "reason": "routing_failure"}
 
+        if len(subtasks) > self.limits.max_actions_per_task:
+            self.audit.record("action_limit", task_id=task.task_id, allowed=False, reason="max_actions_per_task_exceeded")
+            return {"status": "rejected", "reason": "max_actions_per_task_exceeded", "task_id": task.task_id}
+
         results = []
-        for subtask in subtasks[: self.limits.max_actions_per_task]:
+        for subtask in subtasks:
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class)
             action = ActionSpec("act:" + child.task_id, "compute", risk_class=child.risk_class)
@@ -51,10 +55,13 @@ class NORYXRuntime:
             if not decision.allowed:
                 return {"status": "rejected", "verification": decision.verification}
             result = agent.run(child)
-            results.append(result)
             if not self.limits.validate_output(result.output):
                 self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
                 return {"status": "rejected", "reason": "output_limit_exceeded", "task_id": child.task_id}
+            if not self.limits.validate_output_items(result.output):
+                self.audit.record("output_item_limit", task_id=child.task_id, allowed=False, reason="max_output_items_exceeded")
+                return {"status": "rejected", "reason": "max_output_items_exceeded", "task_id": child.task_id}
+            results.append(result)
             self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
             if result.verification is None or not result.verification.valid:
                 return {"status": "rejected", "result": result}
