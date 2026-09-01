@@ -28,6 +28,7 @@ class HypersynthRuntime:
             action_gate=self.action_gate,
             memory=self.memory,
             audit=self.audit,
+            max_steps=self.limits.max_actions_per_task,
         )
 
     def run(self, task):
@@ -38,7 +39,22 @@ class HypersynthRuntime:
                 check = VerificationResult(False, "limits", "input_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
+            if not self.limits.validate_input(getattr(task, "objective", "")):
+                check = VerificationResult(False, "limits", "objective_limit_exceeded")
+                self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
+                return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             result = self.kernel.run(task)
+            output = result.get("results", ())
+            if result.get("status") == "completed":
+                if not self.limits.validate_count(len(output), self.limits.max_output_items):
+                    check = VerificationResult(False, "limits", "output_item_limit_exceeded")
+                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                final_output = result.get("results", ())[-1].output if output else None
+                if not self.limits.validate_output(final_output):
+                    check = VerificationResult(False, "limits", "output_limit_exceeded")
+                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
         except Exception as exc:
             self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__)
             return {
