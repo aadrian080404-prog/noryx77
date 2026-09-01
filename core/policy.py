@@ -18,3 +18,7 @@ class PolicyEngine:
         if action.requires_authorization:
             return {"allowed": False, "reason": "authorization_required"}
         return {"allowed": True, "reason": "policy_ok"}
+
+    def allows(self, action: ActionSpec) -> bool:
+        """Boolean convenience boundary; callers must not bypass evaluate()."""
+        return bool(self.evaluate(action).get("allowed"))
