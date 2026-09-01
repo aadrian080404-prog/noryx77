@@ -8,6 +8,7 @@ from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
+from .reasoning import InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
@@ -147,6 +148,20 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "simulation")
         self.assertEqual(result["verification"].reason, "simulation_hypothesis_id_mismatch")
+
+    def test_simulation_verifier_rejects_feasible_reason_mismatch(self):
+        check = InternalSimulator().verify((
+            SimulationResult("t1:h0", True, "fabricated"),
+        ))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "feasible_reason_mismatch")
+
+    def test_simulation_verifier_rejects_invalid_types_and_empty_fields(self):
+        simulator = InternalSimulator()
+        self.assertEqual(simulator.verify(("not-a-simulation",)).reason, "invalid_simulation_type")
+        self.assertEqual(simulator.verify((SimulationResult("", True, "feasible"),)).reason, "invalid_hypothesis_id")
+        self.assertEqual(simulator.verify((SimulationResult("t1:h0", True, ""),)).reason, "invalid_simulation_reason")
+        self.assertEqual(simulator.verify((SimulationResult("t1:h0", 1, "feasible"),)).reason, "invalid_feasibility_flag")
 
 
 if __name__ == "__main__":
