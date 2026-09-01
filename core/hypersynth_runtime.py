@@ -68,7 +68,8 @@ class HypersynthRuntime:
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
         except Exception as exc:
-            self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__)
-            return {"status": "rejected", "phase": "execution", "reason": "controlled_runtime_failure", "audit": self.audit.snapshot()}
+            check = VerificationResult(False, "runtime", "controlled_runtime_failure")
+            self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__, reason=check.reason)
+            return {"status": "rejected", "phase": "execution", "reason": check.reason, "verification": check, "audit": self.audit.snapshot()}
         result["audit"] = self.audit.snapshot()
         return result
