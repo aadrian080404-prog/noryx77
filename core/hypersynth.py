@@ -29,9 +29,9 @@ class Hypersynth:
     def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None,
                  action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2,
                  hypothesis_engine=None, simulator=None, cross_checker=None):
-        if not isinstance(max_steps, int) or max_steps < 1:
+        if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
-        if not isinstance(max_agents, int) or max_agents < 1:
+        if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1:
             raise ValueError("max_agents must be a positive integer")
         self.verifier = verifier
         self.router = router
@@ -42,9 +42,9 @@ class Hypersynth:
         self.decomposer = decomposer or TaskDecomposer()
         self.context_manager = context_manager or ContextManager()
         self.action_gate = action_gate
-        self.supervisor = supervisor or AgentSupervisor(router, verifier, audit=audit)
-        self.memory = memory
         self.audit = audit or AuditLog()
+        self.supervisor = supervisor or AgentSupervisor(router, verifier, audit=self.audit)
+        self.memory = memory
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self.simulator = simulator or InternalSimulator()
         self.cross_checker = cross_checker or CrossChecker()
@@ -53,7 +53,8 @@ class Hypersynth:
         return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
 
     def _reject(self, phase, task, check, **extra):
-        self.audit.record("hypersynth_rejected", task_id=task.task_id, phase=phase, reason=check.reason)
+        task_id = getattr(task, "task_id", None)
+        self.audit.record("hypersynth_rejected", task_id=task_id, phase=phase, reason=check.reason)
         result = {"status": "rejected", "phase": phase, "verification": check}
         result.update(extra)
         return result
