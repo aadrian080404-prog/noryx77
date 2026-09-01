@@ -8,6 +8,7 @@ not establish semantic or factual truth.
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -127,20 +128,14 @@ class AttestedHypersynthKernel:
         continuity_evidence: list[tuple[str, Any, Any, Any, str]] = []
         previous_continuity = ""
 
-        for index, stage in enumerate(self.STAGE_ORDER):
+        for stage in self.STAGE_ORDER:
             try:
                 payload = self._payload(result, stage)
                 attestation = session.attest(stage, payload)
-                dependency = attestation.tag if stage == "perception" else attestations[-2].tag
+                dependency = session.context_tag if not attestations else attestations[-1].tag
                 state = self._continuity_state(result, stage)
                 stage_input = self._continuity_input(result, stage, previous_continuity)
-                record = continuity.attest(
-                    stage,
-                    state,
-                    stage_input,
-                    payload,
-                    dependency_tag=dependency,
-                )
+                record = continuity.attest(stage, state, stage_input, payload, dependency_tag=dependency)
                 attestations.append(attestation)
                 payloads.append(payload)
                 continuity_records.append(record)
@@ -192,7 +187,7 @@ class AttestedHypersynthKernel:
         }
         final_tag = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
         expected_final = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
-        final_verified = __import__("hmac").compare_digest(final_tag, expected_final)
+        final_verified = hmac.compare_digest(final_tag, expected_final)
         session.close()
         if not final_verified:
             return {
