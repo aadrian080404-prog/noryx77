@@ -168,7 +168,10 @@ class Hypersynth:
         subtask_check = self._verify_subtasks(task, subtasks)
         if not subtask_check.valid:
             return self._reject("context", task, subtask_check)
-        context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
+        try:
+            context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
+        except Exception:
+            return self._reject("context", task, VerificationResult(False, "context", "context_build_failure"))
         if context.task_id != task.task_id or context.source_ids != (task.task_id,):
             return self._reject("context", task, VerificationResult(False, "context", "context_identity_mismatch"))
         evidence.append("context_integrity")
@@ -233,9 +236,16 @@ class Hypersynth:
             return self._reject("allocation", task, phase_check)
         phase_index += 1
         assignments = []
-        agents = self.router.available()
-        if not agents:
+        try:
+            agents = self.router.available()
+        except Exception:
+            return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_discovery_failure"))
+        if not isinstance(agents, tuple) or not agents:
             return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
+        if any(not isinstance(agent_id, str) or not agent_id.strip() for agent_id in agents):
+            return self._reject("allocation", task, VerificationResult(False, "allocation", "invalid_agent_identity"))
+        if len(set(agents)) != len(agents):
+            return self._reject("allocation", task, VerificationResult(False, "allocation", "duplicate_agent_identity"))
         for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
