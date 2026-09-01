@@ -2,11 +2,15 @@ name: NORYX7 Foundation Verification
 
 on:
   push:
-    branches: ["main", "Noryx7", "noryx7-foundation"]
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening"]
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: noryx7-foundation-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   foundation:
