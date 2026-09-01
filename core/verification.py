@@ -20,6 +20,24 @@ class VerificationEngine:
             return VerificationResult(False, "contract", "unsupported_verification_requirement")
         return VerificationResult(True, "contract", "task_ok")
 
+    def verify_task_continuity(self, parent: TaskSpec, child: TaskSpec) -> VerificationResult:
+        """Ensure derived tasks cannot silently change source-of-truth identity, risk, or verification requirements."""
+        if not isinstance(parent, TaskSpec) or not parent.is_well_formed():
+            return VerificationResult(False, "continuity", "invalid_parent_task")
+        if not isinstance(child, TaskSpec) or not child.is_well_formed():
+            return VerificationResult(False, "continuity", "invalid_child_task")
+        if child.task_id == parent.task_id:
+            return VerificationResult(False, "continuity", "child_identity_not_derived")
+        if not child.task_id.startswith(parent.task_id + ":"):
+            return VerificationResult(False, "continuity", "child_identity_mismatch")
+        if child.task_type != parent.task_type:
+            return VerificationResult(False, "continuity", "child_task_type_mismatch")
+        if child.risk_class != parent.risk_class:
+            return VerificationResult(False, "continuity", "child_risk_mismatch")
+        if child.verification_requirements != parent.verification_requirements:
+            return VerificationResult(False, "continuity", "child_verification_requirements_mismatch")
+        return VerificationResult(True, "continuity", "task_continuity_ok")
+
     def verify_output(self, output, *, stage: str = "result", requirements: tuple[str, ...] = ()) -> VerificationResult:
         if not isinstance(requirements, tuple) or any(
             not isinstance(requirement, str) or requirement not in VALID_VERIFICATION_REQUIREMENTS
