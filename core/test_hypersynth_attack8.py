@@ -54,7 +54,7 @@ class Attack8Tests(unittest.TestCase):
         result = self.kernel(planner=ForgedPlanPlanner()).run(self.task())
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["phase"], "planning")
-        self.assertEqual(result["verification"].reason, "plan_step_risk_mismatch")
+        self.assertEqual(result["verification"].reason, "plan_step_policy_invalid")
 
     def test_forged_hypothesis_cannot_be_combined_with_valid_planning(self):
         result = self.kernel(hypothesis_engine=ForgedHypothesisEngine()).run(self.task())
