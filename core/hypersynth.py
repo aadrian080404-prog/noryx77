@@ -22,31 +22,29 @@ class Hypersynth:
     """Bounded cognitive kernel: perceive -> context -> plan -> reason -> allocate -> execute -> verify -> reflect."""
 
     PHASES = (
-        "perception",
-        "context",
-        "planning",
-        "hypothesis",
-        "simulation",
-        "allocation",
-        "execution",
-        "verification",
-        "metacognition",
+        "perception", "context", "planning", "hypothesis", "simulation",
+        "allocation", "execution", "verification", "metacognition",
     )
 
     def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None,
                  action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2,
                  hypothesis_engine=None, simulator=None, cross_checker=None):
+        if not isinstance(max_steps, int) or max_steps < 1:
+            raise ValueError("max_steps must be a positive integer")
+        if not isinstance(max_agents, int) or max_agents < 1:
+            raise ValueError("max_agents must be a positive integer")
         self.verifier = verifier
         self.router = router
-        self.planner = planner or Planner(max_steps=max_steps)
+        self.max_steps = max_steps
+        self.max_agents = max_agents
+        bounded_steps = min(max_steps, max_agents)
+        self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
         self.context_manager = context_manager or ContextManager()
         self.action_gate = action_gate
         self.supervisor = supervisor or AgentSupervisor(router, verifier, audit=audit)
         self.memory = memory
         self.audit = audit or AuditLog()
-        self.max_steps = max_steps
-        self.max_agents = max_agents
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self.simulator = simulator or InternalSimulator()
         self.cross_checker = cross_checker or CrossChecker()
@@ -62,7 +60,6 @@ class Hypersynth:
 
     def run(self, task: TaskSpec):
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
-
         task_check = self.verifier.verify_task(task)
         if not task_check.valid:
             return self._reject("perception", task, task_check)
@@ -73,7 +70,8 @@ class Hypersynth:
 
         context = self.context_manager.build(
             task.task_id,
-            {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)},
+            {"input": task.input, "objective": task.objective,
+             "subtasks": tuple(s.subtask_id for s in subtasks)},
             source_ids=(task.task_id,),
         )
         self.audit.record("context_acquired", task_id=task.task_id, version=context.version)
@@ -86,6 +84,11 @@ class Hypersynth:
             plan = None
         if not plan_check.valid:
             return self._reject("planning", task, plan_check)
+        if not plan.steps or len(plan.steps) > self.max_agents:
+            return self._reject(
+                "planning", task,
+                VerificationResult(False, "planning", "plan_exceeds_execution_bound"),
+            )
         self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
 
         try:
@@ -93,8 +96,11 @@ class Hypersynth:
             hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
         except Exception:
             return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
-        if not hypothesis_check.valid:
-            return self._reject("hypothesis", task, hypothesis_check)
+        if not hypothesis_check.valid or len(hypotheses) != len(plan.steps):
+            return self._reject(
+                "hypothesis", task,
+                VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"),
+            )
         self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
 
         try:
@@ -102,18 +108,23 @@ class Hypersynth:
             simulation_check = self.simulator.verify(simulations)
         except Exception:
             return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
-        if not simulation_check.valid:
-            return self._reject("simulation", task, simulation_check, hypotheses=hypotheses)
+        if not simulation_check.valid or len(simulations) != len(hypotheses):
+            return self._reject(
+                "simulation", task,
+                VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"),
+            )
         self.audit.record("simulation_verified", task_id=task.task_id, count=len(simulations))
 
         assignments = []
         agents = self.router.available()
         if not agents:
             return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
-        for index, step in enumerate(plan.steps[:self.max_agents]):
+        for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
-            child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
-                             task.constraints, task.verification_requirements, step.risk_class)
+            child = TaskSpec(
+                step.step_id, task.task_type, step.objective, task.input,
+                task.constraints, task.verification_requirements, step.risk_class,
+            )
             try:
                 selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception:
@@ -143,11 +154,11 @@ class Hypersynth:
             results.append(result)
             self.audit.record("agent_result_verified", task_id=child.task_id, agent_id=agent.agent_id)
 
-        cross_check = self.cross_checker.verify(task, results, hypotheses[:len(results)])
+        cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
         if not cross_check.valid:
             return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
 
-        consensus = self._verify_consensus(results)
+        consensus = self._verify_consensus(tuple(results))
         if not consensus.valid:
             return self._reject("verification", task, consensus, results=tuple(results))
 
@@ -167,23 +178,20 @@ class Hypersynth:
         if self.memory is not None:
             try:
                 from .memory import MemoryItem
-                self.memory.put(MemoryItem("task:" + task.task_id, final_output, kind="working", source=task.task_id, importance=0.5))
+                self.memory.put(MemoryItem(
+                    "task:" + task.task_id, final_output, kind="working",
+                    source=task.task_id, importance=0.5,
+                ))
             except Exception:
                 self.audit.record("memory_write_failed", task_id=task.task_id)
 
         final_state = self._state("metacognition", task, context, confidence=1.0)
         self.audit.record("hypersynth_complete", task_id=task.task_id, status="completed")
         return {
-            "status": "completed",
-            "phase": final_state.phase,
-            "state": final_state,
-            "context": context,
-            "plan": plan,
-            "hypotheses": hypotheses,
-            "simulations": simulations,
-            "results": tuple(results),
-            "verification": output_check,
-            "reflection": reflection,
+            "status": "completed", "phase": final_state.phase, "state": final_state,
+            "context": context, "plan": plan, "hypotheses": hypotheses,
+            "simulations": simulations, "results": tuple(results),
+            "verification": output_check, "reflection": reflection,
             "audit": self.audit.snapshot(),
         }
 
