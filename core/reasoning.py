@@ -71,6 +71,9 @@ class CrossChecker:
         if any(not isinstance(result, AgentResult) for result in results): return VerificationResult(False, "cross_check", "invalid_result_type")
         if any(not result.is_well_formed() for result in results): return VerificationResult(False, "cross_check", "malformed_result")
         if any(not isinstance(h, Hypothesis) for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_type")
+        if any(h.task_id != task.task_id for h in hypotheses): return VerificationResult(False, "cross_check", "hypothesis_task_mismatch")
+        if any(not isinstance(h.hypothesis_id, str) or not h.hypothesis_id.strip() for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_id")
+        if len({h.hypothesis_id for h in hypotheses}) != len(hypotheses): return VerificationResult(False, "cross_check", "duplicate_hypothesis_id")
         expected_step_ids = [basis for h in hypotheses for basis in h.basis]
         if len(expected_step_ids) != len(hypotheses) or len(set(expected_step_ids)) != len(expected_step_ids): return VerificationResult(False, "cross_check", "duplicate_hypothesis_basis")
         if any(result.status != "completed" for result in results): return VerificationResult(False, "cross_check", "incomplete_result")
