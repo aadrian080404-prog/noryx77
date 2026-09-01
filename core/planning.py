@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from .contracts import TaskSpec, VerificationResult
 
+
 @dataclass(frozen=True)
 class PlanStep:
     step_id: str
@@ -8,10 +9,12 @@ class PlanStep:
     action_type: str = "compute"
     risk_class: str = "normal"
 
+
 @dataclass(frozen=True)
 class Plan:
     task_id: str
     steps: tuple[PlanStep, ...]
+
 
 class Planner:
     """Deterministic bounded planner; model planners plug in behind this contract."""
@@ -30,23 +33,38 @@ class Planner:
         return Plan(task.task_id, (step,))
 
     def verify(self, plan: Plan, task: TaskSpec) -> VerificationResult:
+        """Independently validate a plan as an untrusted planner output."""
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return VerificationResult(False, "plan", "invalid_task")
-        if not isinstance(plan, Plan) or not isinstance(plan.task_id, str) or plan.task_id != task.task_id:
+        if not isinstance(plan, Plan):
+            return VerificationResult(False, "plan", "invalid_plan_type")
+        if not isinstance(plan.task_id, str) or not plan.task_id.strip() or plan.task_id != task.task_id:
             return VerificationResult(False, "plan", "plan_task_mismatch")
         if not isinstance(plan.steps, tuple) or not plan.steps or len(plan.steps) > self.max_steps:
             return VerificationResult(False, "plan", "plan_bounds_invalid")
+
         ids = set()
+        prefix = task.task_id + ":"
         for step in plan.steps:
             if not isinstance(step, PlanStep):
                 return VerificationResult(False, "plan", "plan_step_type_invalid")
-            if not isinstance(step.step_id, str) or not step.step_id or step.step_id in ids:
+            if not isinstance(step.step_id, str) or not step.step_id.strip():
                 return VerificationResult(False, "plan", "plan_step_id_invalid")
-            ids.add(step.step_id)
+            if not step.step_id.startswith(prefix):
+                return VerificationResult(False, "plan", "plan_step_parent_mismatch")
+            if step.step_id in ids:
+                return VerificationResult(False, "plan", "plan_step_id_invalid")
             if not isinstance(step.objective, str) or not step.objective.strip():
                 return VerificationResult(False, "plan", "plan_step_objective_invalid")
-            if step.action_type not in self.VALID_ACTION_TYPES or step.risk_class not in self.VALID_RISKS:
+            if not isinstance(step.action_type, str) or not step.action_type.strip():
+                return VerificationResult(False, "plan", "plan_step_action_invalid")
+            if step.action_type not in self.VALID_ACTION_TYPES:
+                return VerificationResult(False, "plan", "plan_step_policy_invalid")
+            if not isinstance(step.risk_class, str) or not step.risk_class.strip():
+                return VerificationResult(False, "plan", "plan_step_risk_invalid")
+            if step.risk_class not in self.VALID_RISKS:
                 return VerificationResult(False, "plan", "plan_step_policy_invalid")
             if step.risk_class != task.risk_class:
                 return VerificationResult(False, "plan", "plan_step_risk_mismatch")
+            ids.add(step.step_id)
         return VerificationResult(True, "plan", "plan_ok")
