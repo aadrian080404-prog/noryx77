@@ -2,7 +2,7 @@ import time
 
 from .actions import ActionGate
 from .audit import AuditLog
-from .contracts import VerificationResult
+from .contracts import TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
 from .limits import RuntimeLimits
 from .memory import MemoryStore
@@ -39,15 +39,20 @@ class HypersynthRuntime:
         started = self.clock()
         self.audit.record("hypersynth_start", task_id=task_id)
         try:
+            # Validate the public runtime contract before touching task fields.
+            task_check = self.verifier.verify_task(task)
+            if not task_check.valid:
+                self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=task_check.reason)
+                return {"status": "rejected", "phase": "perception", "verification": task_check, "audit": self.audit.snapshot()}
             if self.clock() - started > self.limits.max_task_seconds:
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
-            if not self.limits.validate_input(getattr(task, "input", None)):
+            if not self.limits.validate_input(task.input):
                 check = VerificationResult(False, "limits", "input_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
-            if not self.limits.validate_input(getattr(task, "objective", "")):
+            if not self.limits.validate_input(task.objective):
                 check = VerificationResult(False, "limits", "objective_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
