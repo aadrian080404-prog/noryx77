@@ -109,7 +109,16 @@ class Hypersynth:
             simulation_check = self.simulator.verify(simulations)
         except Exception:
             return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
-        if not simulation_check.valid or len(simulations) != len(hypotheses):
+        if not simulation_check.valid:
+            return self._reject("simulation", task, simulation_check)
+        expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
+        actual_simulation_ids = tuple(s.hypothesis_id for s in simulations)
+        if actual_simulation_ids != expected_hypothesis_ids:
+            return self._reject(
+                "simulation", task,
+                VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"),
+            )
+        if len(simulations) != len(hypotheses):
             return self._reject(
                 "simulation", task,
                 VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"),
@@ -210,6 +219,10 @@ class Hypersynth:
             return VerificationResult(False, "consensus", "no_results")
         if any(r.status != "completed" for r in results):
             return VerificationResult(False, "consensus", "incomplete_result")
+        if len({r.agent_id for r in results}) != len(results):
+            return VerificationResult(False, "consensus", "duplicate_agent_result")
+        if any(r.verification is None or not r.verification.valid for r in results):
+            return VerificationResult(False, "consensus", "unverified_result")
         outputs = {repr(r.output) for r in results}
         if len(outputs) > 1:
             return VerificationResult(False, "consensus", "agent_disagreement")
