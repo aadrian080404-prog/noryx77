@@ -32,17 +32,12 @@ class HypothesisEngine:
             return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
         ids = set()
         for hypothesis in hypotheses:
-            if not isinstance(hypothesis, Hypothesis):
-                return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
-            if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip():
-                return VerificationResult(False, "hypothesis", "invalid_hypothesis_id")
-            if hypothesis.hypothesis_id in ids:
-                return VerificationResult(False, "hypothesis", "duplicate_hypothesis_id")
+            if not isinstance(hypothesis, Hypothesis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
+            if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip(): return VerificationResult(False, "hypothesis", "invalid_hypothesis_id")
+            if hypothesis.hypothesis_id in ids: return VerificationResult(False, "hypothesis", "duplicate_hypothesis_id")
             ids.add(hypothesis.hypothesis_id)
-            if hypothesis.task_id != task.task_id or not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip() or not hypothesis.basis:
-                return VerificationResult(False, "hypothesis", "invalid_hypothesis")
-            if any(not isinstance(item, str) or not item.strip() for item in hypothesis.basis):
-                return VerificationResult(False, "hypothesis", "invalid_hypothesis_basis")
+            if hypothesis.task_id != task.task_id or not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip() or not hypothesis.basis: return VerificationResult(False, "hypothesis", "invalid_hypothesis")
+            if any(not isinstance(item, str) or not item.strip() for item in hypothesis.basis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_basis")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
 
 
@@ -50,13 +45,11 @@ class InternalSimulator:
     """Pre-execution bounded feasibility check over the declared plan only."""
 
     def simulate(self, task: TaskSpec, hypotheses: tuple[Hypothesis, ...]) -> tuple[SimulationResult, ...]:
-        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple):
-            return ()
+        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple): return ()
         return tuple(SimulationResult(h.hypothesis_id, bool(h.statement and h.task_id == task.task_id), "feasible" if h.statement and h.task_id == task.task_id else "invalid_hypothesis") for h in hypotheses if isinstance(h, Hypothesis))
 
     def verify(self, simulations: tuple[SimulationResult, ...]) -> VerificationResult:
-        if not isinstance(simulations, tuple) or not simulations:
-            return VerificationResult(False, "simulation", "no_simulations")
+        if not isinstance(simulations, tuple) or not simulations: return VerificationResult(False, "simulation", "no_simulations")
         ids = set()
         for item in simulations:
             if not isinstance(item, SimulationResult): return VerificationResult(False, "simulation", "invalid_simulation_type")
@@ -74,8 +67,7 @@ class CrossChecker:
     """Checks that verified agent results map one-to-one to declared plan steps."""
 
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
-        if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple):
-            return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
+        if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
         if not results: return VerificationResult(False, "cross_check", "no_results")
         if len(results) != len(hypotheses): return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
         if any(not isinstance(result, AgentResult) for result in results): return VerificationResult(False, "cross_check", "invalid_result_type")
@@ -92,7 +84,6 @@ class CrossChecker:
         if len(set(result_task_ids)) != len(result_task_ids): return VerificationResult(False, "cross_check", "duplicate_result_task")
         agent_ids = [result.agent_id for result in results]
         if len(set(agent_ids)) != len(agent_ids): return VerificationResult(False, "cross_check", "duplicate_agent_result")
-        # AgentResult.task_id is the execution step identifier in the current contract.
         if set(result_task_ids) != set(expected_step_ids): return VerificationResult(False, "cross_check", "result_task_mismatch")
         for result in results:
             if result.verification.stage != result.agent_id: return VerificationResult(False, "cross_check", "verification_identity_mismatch")
