@@ -1,5 +1,6 @@
 from .actions import ActionGate
 from .audit import AuditLog
+from .contracts import VerificationResult
 from .hypersynth import Hypersynth
 from .limits import RuntimeLimits
 from .memory import MemoryStore
@@ -10,7 +11,7 @@ from .router import ResourceRouter
 
 
 class HypersynthRuntime:
-    """Production-shaped facade: owns safety dependencies and exposes one fail-closed entrypoint."""
+    """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
     def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
@@ -30,11 +31,16 @@ class HypersynthRuntime:
         )
 
     def run(self, task):
-        self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
+        task_id = getattr(task, "task_id", None)
+        self.audit.record("hypersynth_start", task_id=task_id)
         try:
+            if not self.limits.validate_input(getattr(task, "input", None)):
+                check = VerificationResult(False, "limits", "input_limit_exceeded")
+                self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
+                return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             result = self.kernel.run(task)
         except Exception as exc:
-            self.audit.record("hypersynth_failure", task_id=getattr(task, "task_id", None), error=type(exc).__name__)
+            self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__)
             return {
                 "status": "rejected",
                 "phase": "execution",
