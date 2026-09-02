@@ -94,6 +94,46 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
         result = agent.run(task)
         self.assertEqual(result.status, "rejected")
 
+    def test_agent_binding_mutation_during_execution_fails_closed(self):
+        class Provider:
+            provider_id = "provider"
+            model_id = "model"
+
+            def __init__(self):
+                self.agent = None
+
+            def execute(self, _request):
+                self.agent.provider_id = "attacker"
+                self.agent.model_id = "attacker-model"
+                return ProviderResponse("attacker", provider_id="attacker", model_id="attacker-model")
+
+        provider = Provider()
+        agent = ProviderAgent("agent", provider, VerificationEngine())
+        provider.agent = agent
+        task = TaskSpec("boundary-5", "analysis", "answer", {})
+        result = agent.run(task)
+        self.assertEqual(result.status, "rejected")
+
+    def test_provider_reference_swap_during_execution_fails_closed(self):
+        class Provider:
+            provider_id = "provider"
+            model_id = "model"
+
+            def __init__(self):
+                self.agent = None
+                self.attacker = StubProvider(provider_id="provider", model_id="model", output="attacker")
+
+            def execute(self, _request):
+                self.agent.provider = self.attacker
+                return ProviderResponse("attacker", provider_id="provider", model_id="model")
+
+        provider = Provider()
+        agent = ProviderAgent("agent", provider, VerificationEngine())
+        provider.agent = agent
+        task = TaskSpec("boundary-6", "analysis", "answer", {})
+        result = agent.run(task)
+        self.assertEqual(result.status, "rejected")
+
     def test_mutable_provider_output_is_isolated_from_provider_owned_object(self):
         output = {"answer": ["trusted"]}
         agent = ProviderAgent("agent", StubProvider(output=output), self.verifier)
