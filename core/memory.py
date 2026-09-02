@@ -58,8 +58,11 @@ class MemoryStore:
         if item.memory_id not in self._items and len(self._items) >= self.max_items:
             raise MemoryError("memory_capacity_exceeded")
         stored = deepcopy(item)
+        # Authenticate before mutating the store. A serialization/crypto failure
+        # must not leave an unauthenticated item occupying state or capacity.
+        tag = self._crypto.digest("memory", self._payload(stored))
         self._items[item.memory_id] = stored
-        self._auth[item.memory_id] = self._crypto.digest("memory", self._payload(stored))
+        self._auth[item.memory_id] = tag
 
     def get(self, memory_id: str):
         item = self._items.get(memory_id) if isinstance(memory_id, str) else None
