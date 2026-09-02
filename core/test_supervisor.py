@@ -72,6 +72,21 @@ class SupervisorAdmissionTests(unittest.TestCase):
         self.assertFalse(decision.accepted)
         self.assertEqual(decision.reason, "agent_route_failure")
 
+    def test_default_selection_is_task_aware_with_multiple_agents(self):
+        self.router = ResourceRouter()
+        self.router.register(TestAgent("medium-agent", "medium"))
+        self.router.register(TestAgent("large-agent", "large"))
+        self.supervisor = AgentSupervisor(self.router, self.verifier)
+        selected, decision = self.supervisor.select(self.task)
+        self.assertEqual(selected.agent_id, "large-agent")
+        self.assertTrue(decision.accepted)
+
+    def test_invalid_explicit_preference_is_not_silently_replaced(self):
+        selected, decision = self.supervisor.select(self.task, preferred="")
+        self.assertIsNone(selected)
+        self.assertFalse(decision.accepted)
+        self.assertEqual(decision.reason, "invalid_preferred_agent_id")
+
 
 if __name__ == "__main__":
     unittest.main()
