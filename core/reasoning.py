@@ -138,7 +138,7 @@ class InternalSimulator:
         if not isinstance(simulations, tuple) or not simulations: return VerificationResult(False, "simulation", "no_simulations")
         ids = set()
         for item in simulations:
-            if not isinstance(item, SimulationResult): return VerificationResult(False, "simulation", "invalid_simulation_type")
+            if type(item) is not SimulationResult: return VerificationResult(False, "simulation", "invalid_simulation_type")
             if not isinstance(item.hypothesis_id, str) or not item.hypothesis_id.strip(): return VerificationResult(False, "simulation", "invalid_hypothesis_id")
             if item.hypothesis_id in ids: return VerificationResult(False, "simulation", "duplicate_simulation_id")
             ids.add(item.hypothesis_id)
