@@ -95,7 +95,11 @@ class SecureToolExecutor:
         if self._action_digest(action) != action_digest:
             self._incident("tool_action_integrity_mismatch", 10)
             raise PermissionError("action_runtime_integrity_mismatch")
-        current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
+        try:
+            current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
+        except RuntimeError as exc:
+            self._incident("tool_capability_integrity_failure", 10)
+            raise PermissionError("capability_runtime_integrity_failure") from exc
         if current_handler is not handler:
             self._incident("tool_capability_identity_mismatch", 10)
             raise PermissionError("capability_runtime_identity_mismatch")
@@ -149,11 +153,7 @@ class SecureToolExecutor:
                     output = self._execute_handler(handler, action_target, action_parameters, action_digest, action)
             except PermissionError as exc:
                 reason = str(exc)
-                if reason == "global_lockdown":
-                    return None, VerificationResult(False, "tool_policy", "global_lockdown")
-                if reason == "action_runtime_integrity_mismatch":
-                    return None, VerificationResult(False, "tool_policy", reason)
-                if reason == "capability_runtime_identity_mismatch":
+                if reason in {"global_lockdown", "action_runtime_integrity_mismatch", "capability_runtime_identity_mismatch", "capability_runtime_integrity_failure"}:
                     return None, VerificationResult(False, "tool_policy", reason)
                 raise
         except Exception as exc:
