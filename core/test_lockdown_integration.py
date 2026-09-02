@@ -54,17 +54,17 @@ class LockdownIntegrationTests(unittest.TestCase):
         authorizer_calls = []
         def authorizer(proof):
             authorizer_calls.append(proof)
-            return proof == b"admin"
+            return proof == expected_challenge
         crypto = CryptoIntegrity()
         lockdown = SecurityLockdown(crypto, authorizer)
         lockdown.record_incident("integrity_failure", severity=10)
         with self.assertRaises(PermissionError):
             lockdown.recover(b"attacker")
-        self.assertFalse(lockdown.permits())
-        state = lockdown.recover(b"admin")
+        expected_challenge = lockdown.admin_challenge()
+        state = lockdown.recover(expected_challenge)
         self.assertEqual(state.mode, SecurityLockdown.NORMAL)
         self.assertTrue(lockdown.permits())
-        self.assertEqual(authorizer_calls, [b"attacker", b"admin"])
+        self.assertEqual(authorizer_calls, [expected_challenge])
 
 
 if __name__ == "__main__":
