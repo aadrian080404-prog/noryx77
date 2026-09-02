@@ -141,15 +141,15 @@ class ProviderAgent(Agent):
         except Exception:
             return self._rejected(task)
         if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
-            return self._rejected(task)
+            return self._rejected(task, "provider_binding_changed")
         if not isinstance(response, ProviderResponse):
             return self._rejected(task)
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
-            return self._rejected(task)
+            return self._rejected(task, "provider_identity_mismatch")
         if response.provider_id != expected_provider_id:
-            return self._rejected(task)
+            return self._rejected(task, "provider_identity_mismatch")
         if not isinstance(response.model_id, str) or not response.model_id.strip() or response.model_id != expected_model_id:
-            return self._rejected(task)
+            return self._rejected(task, "provider_identity_mismatch")
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
             return self._rejected(task)
         try:
