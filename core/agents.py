@@ -37,6 +37,12 @@ class DeterministicAgent(Agent):
 class ProviderAgent(Agent):
     """Executes a task through an injected Provider and exposes routing metadata."""
 
+    @staticmethod
+    def _callable_fingerprint(callable_obj):
+        function = getattr(callable_obj, "__func__", None)
+        owner = getattr(callable_obj, "__self__", None)
+        return (id(function if function is not None else callable_obj), id(owner) if owner is not None else None)
+
     def __init__(self, agent_id: str, provider: Provider, verifier: VerificationEngine | None = None, *, model_class: str = "medium", capabilities: tuple[str, ...] = ()):
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id_required")
@@ -60,6 +66,7 @@ class ProviderAgent(Agent):
         self.capacity_exempt = False
         self.provider_id = provider_id
         self.model_id = model_id
+        self._provider_execute_fingerprint = self._callable_fingerprint(provider.execute)
 
     def run(self, task: TaskSpec) -> AgentResult:
         task_check = self.verifier.verify_task(task)
@@ -70,9 +77,11 @@ class ProviderAgent(Agent):
         expected_provider_id = self.provider_id
         expected_model_id = self.model_id
         try:
-            # Bind the exact callable before crossing the provider execution boundary.
-            # This prevents an instance-level execute replacement between lookup and call.
-            expected_execute = expected_provider.execute
+            current_execute = expected_provider.execute
+            if self._callable_fingerprint(current_execute) != self._provider_execute_fingerprint:
+                check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            expected_execute = current_execute
             response = expected_execute(request_from_task(task))
         except Exception:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
