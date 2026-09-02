@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .attestation import HypersynthAttestation, StageAttestation
 from .crypto import CryptoIntegrity
-from .kernel_continuity import KernelContinuityRecord
+from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal
 
 
@@ -61,6 +61,68 @@ class HypersynthIntegrityVerifier:
                 "kernel_continuity_seal", {**material, "chain_digest": expected_digest}
             )
             return hmac.compare_digest(expected_digest, seal.chain_digest) and hmac.compare_digest(expected_seal, seal.seal)
+        except Exception:
+            return False
+
+    @staticmethod
+    def verify_continuity_chain(
+        crypto: CryptoIntegrity,
+        records: tuple[KernelContinuityRecord, ...],
+        evidence: tuple[tuple[str, Any, Any, Any, str], ...],
+        *,
+        session_id: str,
+        task_id: str,
+        risk_class: str,
+        requirements: tuple[str, ...],
+        stage_order: tuple[str, ...],
+    ) -> bool:
+        """Recompute every continuity record from exported evidence, independently of policy state."""
+        try:
+            if not isinstance(crypto, CryptoIntegrity):
+                return False
+            if not isinstance(records, tuple) or not isinstance(evidence, tuple):
+                return False
+            if not isinstance(stage_order, tuple) or not stage_order:
+                return False
+            if len(records) != len(evidence) or len(records) != len(stage_order):
+                return False
+            verifier = KernelContinuity(
+                crypto,
+                session_id=session_id,
+                task_id=task_id,
+                risk_class=risk_class,
+                verification_requirements=requirements,
+            )
+            previous = ""
+            seen: set[str] = set()
+            for index, (record, item, expected_stage) in enumerate(
+                zip(records, evidence, stage_order), start=1
+            ):
+                if not isinstance(record, KernelContinuityRecord):
+                    return False
+                if not isinstance(item, tuple) or len(item) != 5:
+                    return False
+                stage, state, stage_input, output, dependency_tag = item
+                if stage != expected_stage:
+                    return False
+                if record.task_id != task_id or record.stage != stage or record.sequence != index:
+                    return False
+                if record.previous_tag != previous or record.tag in seen:
+                    return False
+                if not verifier.verify(
+                    record,
+                    stage,
+                    state,
+                    stage_input,
+                    output,
+                    dependency_tag=dependency_tag,
+                    previous_tag=previous,
+                    sequence=index,
+                ):
+                    return False
+                seen.add(record.tag)
+                previous = record.tag
+            return True
         except Exception:
             return False
 
@@ -159,6 +221,7 @@ class HypersynthIntegrityVerifier:
         continuity_seal: ContinuitySeal,
         final_continuity_tag: str,
         context_tag: str | None = None,
+        continuity_evidence: tuple[tuple[str, Any, Any, Any, str], ...] | None = None,
     ) -> bool:
         try:
             if not cls.verify_attestation_chain(
@@ -166,6 +229,12 @@ class HypersynthIntegrityVerifier:
                 task_id=task_id, risk_class=risk_class,
                 requirements=requirements, stage_order=stage_order,
                 session_id=session_id, context_tag=context_tag,
+            ):
+                return False
+            if continuity_evidence is not None and not cls.verify_continuity_chain(
+                crypto, continuity_records, continuity_evidence,
+                session_id=session_id, task_id=task_id, risk_class=risk_class,
+                requirements=requirements, stage_order=stage_order,
             ):
                 return False
             if not cls.verify_continuity_seal(
