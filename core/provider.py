@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 
@@ -55,12 +56,17 @@ class CallableProvider:
 def request_from_task(task: TaskSpec) -> ProviderRequest:
     if not isinstance(task, TaskSpec) or not task.is_well_formed():
         raise TypeError("task_must_be_well_formed")
+    try:
+        isolated_input = deepcopy(task.input)
+        isolated_constraints = deepcopy(dict(task.constraints))
+    except Exception as exc:
+        raise TypeError("task_input_not_isolatable") from exc
     return ProviderRequest(
         task_id=task.task_id,
         task_type=task.task_type,
         objective=task.objective,
-        input=task.input,
-        constraints=dict(task.constraints),
+        input=isolated_input,
+        constraints=isolated_constraints,
     )
 
 
