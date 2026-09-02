@@ -92,6 +92,8 @@ class SQLiteLockdownStore:
             if expected_generation is not None:
                 if row is None or row[0] != expected_generation:
                     raise ValueError("lockdown_store_conflict")
+                if generation < row[0]:
+                    raise ValueError("lockdown_store_rollback")
             elif row is not None and generation < row[0]:
                 raise ValueError("lockdown_store_rollback")
             connection.execute(
