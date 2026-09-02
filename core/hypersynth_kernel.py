@@ -1,10 +1,4 @@
-"""Attested HYPERSYNTH execution facade.
-
-The existing Hypersynth remains the execution engine. This facade adds
-cryptographically bound evidence over its externally observable stages and a
-separate continuity chain for state/transition integrity. Cryptography does
-not establish semantic or factual truth.
-"""
+"""Attested HYPERSYNTH execution facade."""
 
 from __future__ import annotations
 
@@ -17,6 +11,7 @@ from .attestation_session import AttestationSession
 from .crypto import CryptoIntegrity
 from .hypersynth import Hypersynth
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
+from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
 
 
 class AttestedHypersynthKernel:
@@ -78,19 +73,21 @@ class AttestedHypersynthKernel:
 
     @classmethod
     def _continuity_state(cls, result: dict[str, Any], stage: str) -> Any:
-        """Return the canonical observable state bound to a stage transition."""
         state = result.get("state")
-        return {
-            "stage": stage,
-            "state": cls._canonical(state),
-            "status": result.get("status"),
-            "phase": result.get("phase"),
-        }
+        return {"stage": stage, "state": cls._canonical(state),
+                "status": result.get("status"), "phase": result.get("phase")}
 
     @classmethod
     def _continuity_input(cls, result: dict[str, Any], stage: str, previous: str) -> Any:
-        payload = cls._payload(result, stage)
-        return {"stage": stage, "previous_continuity_tag": previous, "payload": payload}
+        return {"stage": stage, "previous_continuity_tag": previous,
+                "payload": cls._payload(result, stage)}
+
+    @staticmethod
+    def _reject(phase: str, reason: str, *, attestations=(), continuity_records=(), **extra):
+        return {"status": "rejected", "phase": phase,
+                "verification": {"valid": False, "reason": reason},
+                "attestations": tuple(attestations),
+                "continuity_records": tuple(continuity_records), **extra}
 
     def run(self, task):
         result = self.kernel.run(task)
@@ -99,7 +96,9 @@ class AttestedHypersynthKernel:
         task_id = getattr(task, "task_id", None)
         risk_class = getattr(task, "risk_class", None)
         requirements = getattr(task, "verification_requirements", None)
-        if not isinstance(task_id, str) or not task_id.strip() or not isinstance(risk_class, str) or not risk_class.strip() or not isinstance(requirements, tuple):
+        if (not isinstance(task_id, str) or not task_id.strip()
+                or not isinstance(risk_class, str) or not risk_class.strip()
+                or not isinstance(requirements, tuple)):
             raise RuntimeError("malformed_hypersynth_task_contract")
 
         if result.get("status") != "completed":
@@ -108,19 +107,17 @@ class AttestedHypersynthKernel:
         try:
             session = AttestationSession(self.attestation.crypto, task_id, risk_class, requirements)
             continuity = KernelContinuity(
-                self.attestation.crypto,
-                session_id=session.session_id,
-                task_id=task_id,
-                risk_class=risk_class,
+                self.attestation.crypto, session_id=session.session_id,
+                task_id=task_id, risk_class=risk_class,
                 verification_requirements=requirements,
             )
+            continuity_policy = KernelContinuityPolicy(
+                self.attestation.crypto, session_id=session.session_id,
+                task_id=task_id, stage_order=self.STAGE_ORDER,
+            )
         except Exception as exc:
-            return {
-                "status": "rejected",
-                "phase": "perception",
-                "verification": {"valid": False, "reason": "attestation_session_failure", "error": type(exc).__name__},
-                "attestations": (),
-            }
+            return self._reject("perception", "attestation_session_failure",
+                                error=type(exc).__name__)
 
         attestations: list[StageAttestation] = []
         payloads: list[Any] = []
@@ -143,36 +140,40 @@ class AttestedHypersynthKernel:
                 previous_continuity = record.tag
             except Exception as exc:
                 session.close()
-                return {
-                    "status": "rejected",
-                    "phase": stage,
-                    "verification": {"valid": False, "reason": "attestation_failure", "error": type(exc).__name__},
-                    "attestations": tuple(attestations),
-                    "continuity_records": tuple(continuity_records),
-                }
+                return self._reject(stage, "attestation_failure",
+                                    attestations=attestations,
+                                    continuity_records=continuity_records,
+                                    error=type(exc).__name__)
 
         chain = tuple(attestations)
         continuity_chain = tuple(continuity_records)
         for stage, attestation, payload in zip(self.STAGE_ORDER, chain, payloads):
             if not session.verify(attestation, stage, payload, consume=True):
                 session.close()
-                return {
-                    "status": "rejected",
-                    "phase": "verification",
-                    "verification": {"valid": False, "reason": "attestation_session_verification_failure"},
-                    "attestations": chain,
-                    "continuity_records": continuity_chain,
-                }
+                return self._reject("verification", "attestation_session_verification_failure",
+                                    attestations=chain, continuity_records=continuity_chain)
 
         if not continuity.verify_chain(continuity_chain, tuple(continuity_evidence)):
             session.close()
-            return {
-                "status": "rejected",
-                "phase": "verification",
-                "verification": {"valid": False, "reason": "kernel_continuity_verification_failure"},
-                "attestations": chain,
-                "continuity_records": continuity_chain,
-            }
+            return self._reject("verification", "kernel_continuity_verification_failure",
+                                attestations=chain, continuity_records=continuity_chain)
+
+        if not continuity_policy.admit(continuity_chain):
+            session.close()
+            return self._reject("verification", "kernel_continuity_policy_rejection",
+                                attestations=chain, continuity_records=continuity_chain)
+
+        try:
+            continuity_seal: ContinuitySeal = continuity_policy.seal(continuity_chain)
+        except Exception:
+            session.close()
+            return self._reject("verification", "kernel_continuity_seal_failure",
+                                attestations=chain, continuity_records=continuity_chain)
+
+        if not continuity_policy.verify_seal(continuity_seal, continuity_chain):
+            session.close()
+            return self._reject("verification", "kernel_continuity_seal_verification_failure",
+                                attestations=chain, continuity_records=continuity_chain)
 
         stage_tags = tuple(item.tag for item in chain)
         continuity_tags = tuple(item.tag for item in continuity_chain)
@@ -184,19 +185,15 @@ class AttestedHypersynthKernel:
             "stage_order": self.STAGE_ORDER,
             "stage_tags": stage_tags,
             "continuity_tags": continuity_tags,
+            "continuity_seal": continuity_seal.seal,
         }
         final_tag = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
         expected_final = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
         final_verified = hmac.compare_digest(final_tag, expected_final)
         session.close()
         if not final_verified:
-            return {
-                "status": "rejected",
-                "phase": "verification",
-                "verification": {"valid": False, "reason": "final_continuity_binding_failure"},
-                "attestations": chain,
-                "continuity_records": continuity_chain,
-            }
+            return self._reject("verification", "final_continuity_binding_failure",
+                                attestations=chain, continuity_records=continuity_chain)
 
         return {
             **result,
@@ -206,5 +203,6 @@ class AttestedHypersynthKernel:
             "attestation_context_tag": session.context_tag,
             "continuity_records": continuity_chain,
             "continuity_verified": True,
+            "continuity_seal": continuity_seal,
             "final_continuity_tag": final_tag,
         }
