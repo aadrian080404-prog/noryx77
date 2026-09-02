@@ -1,19 +1,12 @@
 from .agents import Agent
+from .routing_policy import MODEL_ORDER, TASK_MODEL_HINTS
 
 
 class ResourceRouter:
     """Select registered agents through deterministic task-aware resource routing."""
 
-    MODEL_ORDER = ("micro", "small", "medium", "large", "frontier")
-    TASK_MODEL_HINTS = {
-        "simple": "micro",
-        "classification": "small",
-        "analysis": "medium",
-        "research": "large",
-        "reasoning": "large",
-        "planning": "large",
-        "frontier": "frontier",
-    }
+    MODEL_ORDER = MODEL_ORDER
+    TASK_MODEL_HINTS = TASK_MODEL_HINTS
 
     def __init__(self):
         self._agents: dict[str, Agent] = {}
@@ -87,7 +80,7 @@ class ResourceRouter:
         raise LookupError("no unambiguous resource route")
 
     def route_for_task(self, task):
-        """Choose the strongest eligible model class for a task, deterministically."""
+        """Choose the smallest model class that satisfies the task, deterministically."""
         task_type = getattr(task, "task_type", None)
         if not isinstance(task_type, str) or not task_type.strip():
             raise ValueError("invalid_task_type")
