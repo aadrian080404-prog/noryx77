@@ -30,7 +30,9 @@ class Attack22Tests(unittest.TestCase):
 
     def runtime_with(self, result):
         runtime = HypersynthRuntime()
-        runtime.kernel = ForgedKernel(result)
+        # Runtime admission now executes the attested wrapper, so the forged
+        # kernel must replace that boundary rather than the inner kernel.
+        runtime.attested_kernel = ForgedKernel(result)
         return runtime
 
     def test_foreign_prefixed_result_task_id_is_rejected(self):
