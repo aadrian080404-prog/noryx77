@@ -142,7 +142,9 @@ class ProviderAgent(Agent):
             return self._rejected(task)
         if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
             return self._rejected(task)
-        if not isinstance(response, ProviderResponse):
+        # ProviderResponse is a trust-boundary record. Reject subclasses so an
+        # attacker cannot override attribute access or validation semantics.
+        if type(response) is not ProviderResponse:
             return self._rejected(task)
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
             return self._rejected(task)
