@@ -31,7 +31,9 @@ class Hypersynth:
         bounded_steps = min(max_steps, max_agents)
         self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
-        self.context_manager = context_manager or ContextManager()
+        self.context_manager = context_manager or ContextManager(memory=memory)
+        if memory is not None and context_manager is not None:
+            self.context_manager.attach_memory(memory)
         self.action_gate = action_gate
         self.audit = audit or AuditLog()
         self.supervisor = supervisor or AgentSupervisor(router, verifier, audit=self.audit)
@@ -243,10 +245,15 @@ class Hypersynth:
             context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
         except Exception:
             return self._reject("context", task, VerificationResult(False, "context", "context_build_failure"))
-        if context.task_id != task.task_id or context.source_ids != (task.task_id,):
+        if context.task_id != task.task_id or not context.source_ids or context.source_ids[0] != task.task_id:
             return self._reject("context", task, VerificationResult(False, "context", "context_identity_mismatch"))
+        memory_items = context.values.get("memory", ())
+        if not isinstance(memory_items, tuple) or any(getattr(item, "memory_id", None) not in context.source_ids[1:] for item in memory_items):
+            return self._reject("context", task, VerificationResult(False, "context", "context_memory_provenance_mismatch"))
         evidence.append("context_integrity")
-        self.audit.record("context_acquired", task_id=task.task_id, version=context.version)
+        if memory_items:
+            evidence.append("memory_context_integrity")
+        self.audit.record("context_acquired", task_id=task.task_id, version=context.version, memory_items=len(memory_items))
 
         phase_check = self._advance_phase(phase_index, "planning", task)
         if not phase_check.valid:
