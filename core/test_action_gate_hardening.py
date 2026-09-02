@@ -75,6 +75,24 @@ class ActionGateHardeningTests(unittest.TestCase):
         self.assertEqual(gate._authorization_counter, 128)
         self.assertEqual(len(self.crypto._nonces.get("action_gate", set())), 128)
 
+    def test_separate_gates_sharing_crypto_preserve_replay_state(self):
+        crypto = CryptoIntegrity()
+        gate_a = ActionGate(self.policy, self.security, self.limits, crypto=crypto)
+        gate_b = ActionGate(self.policy, self.security, self.limits, crypto=crypto)
+        actions = [ActionSpec(f"shared-{i}", "read", target=str(i)) for i in range(128)]
+
+        def authorize(indexed_action):
+            gate, action = indexed_action
+            return gate.authorize(action)
+
+        inputs = [(gate_a if index % 2 == 0 else gate_b, action) for index, action in enumerate(actions)]
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            decisions = list(pool.map(authorize, inputs))
+
+        self.assertTrue(all(decision.allowed for decision in decisions))
+        self.assertEqual(gate_a._authorization_counter + gate_b._authorization_counter, 128)
+        self.assertEqual(len(crypto._nonces.get("action_gate", set())), 128)
+
 
 if __name__ == "__main__":
     unittest.main()
