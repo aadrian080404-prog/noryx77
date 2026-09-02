@@ -45,7 +45,7 @@ class Attack18Tests(unittest.TestCase):
         router.register(DeterministicAgent())
         with self.assertRaisesRegex(ValueError, "invalid_preferred_agent_id"):
             router.route("")
-        with self.assertRaisesRegex(TypeError, "invalid_preferred_agent_id"):
+        with self.assertRaisesRegex(ValueError, "invalid_preferred_agent_id"):
             router.route(123)
 
     def test_available_fails_closed_on_registered_identity_mutation(self):
