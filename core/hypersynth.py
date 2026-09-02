@@ -312,6 +312,10 @@ class Hypersynth:
                 decision = self.action_gate.authorize(action, calls_used=index)
                 self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
                 if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
+            runtime_registration_check = self.supervisor.validate_selected(child, agent)
+            if not runtime_registration_check.valid:
+                return self._reject("execution", task, runtime_registration_check, results=tuple(results))
+            self.audit.record("agent_runtime_revalidated", task_id=child.task_id, agent_id=getattr(agent, "agent_id", None), accepted=True)
             try: result = agent.run(child)
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             results.append(result)
