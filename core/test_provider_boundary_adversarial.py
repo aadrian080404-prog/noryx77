@@ -2,7 +2,7 @@ import unittest
 
 from .agents import ProviderAgent
 from .contracts import TaskSpec
-from .provider import ProviderResponse
+from .provider import CallableProvider, ProviderResponse
 from .router import ResourceRouter
 from .verification import VerificationEngine
 
@@ -55,6 +55,44 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
         agent.model_id = "attacker-model"
         with self.assertRaises(RuntimeError):
             router.get("provider-agent")
+
+    def test_callable_provider_rejects_blank_model_identity(self):
+        with self.assertRaises(ValueError) as context:
+            CallableProvider(lambda _request: "ok", provider_id="provider", model_id="   ")
+        self.assertEqual(str(context.exception), "model_id_required")
+
+    def test_provider_response_subclass_preserves_explicit_identity_validation(self):
+        class ResponseSubclass(ProviderResponse):
+            pass
+
+        class Provider:
+            provider_id = "provider"
+            model_id = "model"
+
+            def execute(self, _request):
+                return ResponseSubclass("ok", provider_id="provider", model_id="model")
+
+        agent = ProviderAgent("agent", Provider(), VerificationEngine())
+        task = TaskSpec("boundary-1", "analysis", "answer", {}, verification_requirements=("string",))
+        result = agent.run(task)
+        self.assertEqual(result.status, "completed")
+        self.assertEqual(result.output, "ok")
+
+    def test_provider_identity_mutation_during_execution_fails_closed(self):
+        class Provider:
+            provider_id = "provider"
+            model_id = "model"
+
+            def execute(self, _request):
+                self.provider_id = "attacker"
+                self.model_id = "attacker-model"
+                return ProviderResponse("ok", provider_id="attacker", model_id="attacker-model")
+
+        provider = Provider()
+        agent = ProviderAgent("agent", provider, VerificationEngine())
+        task = TaskSpec("boundary-2", "analysis", "answer", {})
+        result = agent.run(task)
+        self.assertEqual(result.status, "rejected")
 
 
 if __name__ == "__main__":
