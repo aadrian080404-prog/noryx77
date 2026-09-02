@@ -14,15 +14,22 @@ class ActionDecision:
 
 class ActionGate:
     """Final fail-closed gate before an action can reach a tool/controller."""
-    def __init__(self, policy, security, limits, crypto=None):
+    def __init__(self, policy, security, limits, crypto=None, lockdown=None):
         self.policy = policy
         self.security = security
         self.limits = limits
         self.crypto = crypto or CryptoIntegrity()
+        self.lockdown = lockdown
         self._authorization_counter = 0
         self._authorization_lock = Lock()
 
     def authorize(self, action: ActionSpec, calls_used: int = 0, tool_calls_used: int = 0) -> ActionDecision:
+        if self.lockdown is not None:
+            try:
+                if not self.lockdown.permits():
+                    return ActionDecision(False, "global security lockdown active", VerificationResult(False, "action_gate", "global_lockdown"))
+            except Exception:
+                return ActionDecision(False, "global security lockdown unavailable", VerificationResult(False, "action_gate", "lockdown_integrity_failure"))
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
