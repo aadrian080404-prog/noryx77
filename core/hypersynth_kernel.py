@@ -7,6 +7,7 @@ from typing import Any
 
 from .attestation import HypersynthAttestation, StageAttestation
 from .attestation_session import AttestationSession
+from .contracts import TaskSpec
 from .crypto import CryptoIntegrity
 from .hypersynth import Hypersynth
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
@@ -92,12 +93,17 @@ class AttestedHypersynthKernel:
                 "continuity_records": tuple(continuity_records), **extra}
 
     def run(self, task):
+        # TaskSpec is the source-of-truth identity for every downstream
+        # attestation field.  Reject subclasses before invoking the kernel so
+        # hostile attribute access cannot influence execution or authentication.
+        if type(task) is not TaskSpec or not task.is_well_formed():
+            raise RuntimeError("malformed_hypersynth_task_contract")
         result = self.kernel.run(task)
         if not isinstance(result, dict):
             raise RuntimeError("malformed_hypersynth_result")
-        task_id = getattr(task, "task_id", None)
-        risk_class = getattr(task, "risk_class", None)
-        requirements = getattr(task, "verification_requirements", None)
+        task_id = task.task_id
+        risk_class = task.risk_class
+        requirements = task.verification_requirements
         if (not isinstance(task_id, str) or not task_id.strip()
                 or not isinstance(risk_class, str) or not risk_class.strip()
                 or not isinstance(requirements, tuple)):
