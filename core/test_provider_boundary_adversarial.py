@@ -89,7 +89,7 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
                 return ProviderResponse("ok", provider_id="attacker", model_id="attacker-model")
 
         provider = Provider()
-        agent = ProviderAgent("agent", Provider(), VerificationEngine())
+        agent = ProviderAgent("agent", provider, VerificationEngine())
         task = TaskSpec("boundary-2", "analysis", "answer", {})
         result = agent.run(task)
         self.assertEqual(result.status, "rejected")
