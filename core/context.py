@@ -12,7 +12,7 @@ class ContextSnapshot:
 
 
 class ContextManager:
-    """Build immutable context snapshots with optional authenticated memory retrieval."""
+    """Build immutable context snapshots with authenticated, task-scoped memory retrieval."""
 
     def __init__(self, memory=None, *, memory_limit: int = 8):
         if memory_limit is not None and (isinstance(memory_limit, bool) or not isinstance(memory_limit, int) or memory_limit < 1):
@@ -34,8 +34,9 @@ class ContextManager:
         version = self._versions.get(task_id, 0) + 1
         self._versions[task_id] = version
         snapshot_values = deepcopy(values or {})
+        normalized_sources = tuple(source_ids)
         if self._memory is not None:
-            memories = self._memory.retrieve(limit=self._memory_limit)
+            memories = self._memory.retrieve(source=task_id, limit=self._memory_limit)
             snapshot_values["memory"] = tuple(deepcopy(item) for item in memories)
-            source_ids = tuple(source_ids) + tuple(item.memory_id for item in memories)
-        return ContextSnapshot(task_id, snapshot_values, tuple(source_ids), version)
+            normalized_sources = normalized_sources + tuple(item.memory_id for item in memories)
+        return ContextSnapshot(task_id, snapshot_values, normalized_sources, version)
