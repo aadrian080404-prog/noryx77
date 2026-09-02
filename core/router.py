@@ -10,7 +10,7 @@ class ResourceRouter:
 
     def __init__(self):
         self._agents: dict[str, Agent] = {}
-        self._registration_policy: dict[str, tuple[str, tuple[str, ...], bool]] = {}
+        self._registration_policy: dict[str, tuple[object, ...]] = {}
 
     @staticmethod
     def _validate_agent(agent: Agent) -> str:
@@ -33,16 +33,22 @@ class ResourceRouter:
             raise ValueError("invalid_capacity_exempt")
         return agent_id
 
+    @staticmethod
+    def _registration_snapshot(agent: Agent) -> tuple[object, ...]:
+        return (
+            getattr(agent, "model_class", "medium"),
+            getattr(agent, "capabilities", ()),
+            getattr(agent, "capacity_exempt", False),
+            getattr(agent, "provider_id", None),
+            getattr(agent, "model_id", None),
+            id(getattr(agent, "provider", None)),
+        )
+
     def _validate_registered_state(self, agent_id: str, agent: Agent) -> None:
         registered = self._registration_policy.get(agent_id)
         if registered is None:
             raise RuntimeError("missing_registration_policy")
-        current = (
-            getattr(agent, "model_class", "medium"),
-            getattr(agent, "capabilities", ()),
-            getattr(agent, "capacity_exempt", False),
-        )
-        if current != registered:
+        if self._registration_snapshot(agent) != registered:
             raise RuntimeError("registered_agent_metadata_mutated")
 
     def register(self, agent: Agent) -> None:
@@ -50,11 +56,7 @@ class ResourceRouter:
         if agent_id in self._agents:
             raise ValueError("duplicate_agent_id")
         self._agents[agent_id] = agent
-        self._registration_policy[agent_id] = (
-            getattr(agent, "model_class", "medium"),
-            getattr(agent, "capabilities", ()),
-            getattr(agent, "capacity_exempt", False),
-        )
+        self._registration_policy[agent_id] = self._registration_snapshot(agent)
 
     def get(self, agent_id: str):
         if not isinstance(agent_id, str) or not agent_id.strip():
