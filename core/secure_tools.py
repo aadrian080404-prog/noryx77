@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from threading import Lock
+from threading import Lock, RLock
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
@@ -20,6 +20,7 @@ class SecureCapabilityRegistry:
             raise TypeError("invalid_crypto_integrity")
         self.crypto = crypto
         self._capabilities = {}
+        self._lock = RLock()
 
     @staticmethod
     def _fingerprint(handler) -> str:
@@ -33,32 +34,36 @@ class SecureCapabilityRegistry:
             raise ValueError("invalid_capability")
         if not isinstance(risk_class, str) or risk_class not in self.VALID_RISKS:
             raise ValueError("invalid_capability_risk")
-        if name in self._capabilities:
-            raise ValueError("duplicate_capability")
-        self._capabilities[name] = (handler, risk_class, self._capability_tag(name, risk_class, handler))
+        with self._lock:
+            if name in self._capabilities:
+                raise ValueError("duplicate_capability")
+            self._capabilities[name] = (handler, risk_class, self._capability_tag(name, risk_class, handler))
 
     def resolve(self, name: str, *, risk_class: str | None = None):
-        item = self._capabilities.get(name)
-        if item is None:
-            return None
-        handler, registered_risk, tag = item
-        if not self.crypto.verify_digest("capability", {"name": name, "risk": registered_risk, "handler_fingerprint": self._fingerprint(handler)}, tag):
-            raise RuntimeError("capability_integrity_failure")
-        if risk_class is not None and risk_class != registered_risk:
-            raise RuntimeError("capability_risk_mismatch")
-        return handler
+        with self._lock:
+            item = self._capabilities.get(name)
+            if item is None:
+                return None
+            handler, registered_risk, tag = item
+            if not self.crypto.verify_digest("capability", {"name": name, "risk": registered_risk, "handler_fingerprint": self._fingerprint(handler)}, tag):
+                raise RuntimeError("capability_integrity_failure")
+            if risk_class is not None and risk_class != registered_risk:
+                raise RuntimeError("capability_risk_mismatch")
+            return handler
 
     def risk(self, name: str):
-        item = self._capabilities.get(name)
-        if item is None:
-            return None
-        self.resolve(name)
-        return item[1]
+        with self._lock:
+            item = self._capabilities.get(name)
+            if item is None:
+                return None
+            self.resolve(name)
+            return item[1]
 
     def names(self):
-        for name in tuple(self._capabilities):
-            self.resolve(name)
-        return tuple(sorted(self._capabilities))
+        with self._lock:
+            for name in tuple(self._capabilities):
+                self.resolve(name)
+            return tuple(sorted(self._capabilities))
 
 
 class SecureToolExecutor:
