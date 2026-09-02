@@ -15,19 +15,9 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
     def test_new_runtime_reads_persisted_emergency_and_denies_execution(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            first = HypersynthRuntime(
-                crypto=CryptoIntegrity(KEY),
-                admin_authorizer=lambda proof: True,
-                lockdown_store=SQLiteLockdownStore(path),
-            )
+            first = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path))
             first.security_lockdown.record_incident("process_boundary", severity=10)
-
-            second = HypersynthRuntime(
-                crypto=CryptoIntegrity(KEY),
-                admin_authorizer=lambda proof: True,
-                lockdown_store=SQLiteLockdownStore(path),
-            )
-
+            second = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path))
             self.assertEqual(second.security_lockdown.state.mode, SecurityLockdown.EMERGENCY)
             self.assertFalse(second.security_lockdown.permits())
 
@@ -38,7 +28,6 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             first.record_incident("incident", severity=10)
             seal = first.export_seal()
-
             second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             self.assertEqual(second.state, first.state)
             stale = dict(seal)
@@ -49,19 +38,13 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
     def test_same_generation_writers_cannot_both_commit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            first = SecurityLockdown(
-                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
-            )
-            second = SecurityLockdown(
-                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
-            )
+            first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
+            second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
             self.assertEqual(first.state.generation, 0)
             self.assertEqual(second.state.generation, 0)
-
             first.record_incident("writer_a", severity=1)
             with self.assertRaisesRegex(ValueError, "lockdown_store_conflict"):
                 second.record_incident("writer_b", severity=1)
-
             self.assertEqual(first.state.generation, 1)
             self.assertEqual(second.state.generation, 1)
             self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
@@ -72,24 +55,15 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
     def test_same_generation_recovery_race_fails_closed_for_loser(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            bootstrap = SecurityLockdown(
-                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
-            )
+            bootstrap = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
             bootstrap.record_incident("recovery_race", severity=10)
-
-            first = SecurityLockdown(
-                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
-            )
-            second = SecurityLockdown(
-                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
-            )
+            first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
+            second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
             first_proof = first.admin_challenge()
             second_proof = second.admin_challenge()
-
             first.recover(first_proof)
             with self.assertRaisesRegex(PermissionError, "admin_recovery_denied"):
                 second.recover(second_proof)
-
             self.assertEqual(first.state.mode, SecurityLockdown.NORMAL)
             self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
             self.assertFalse(second.permits())
@@ -97,7 +71,9 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             self.assertEqual(persisted["payload"], first.export_seal()["payload"])
 
     def test_incident_persistence_failure_fails_closed(self):
-        lockdown = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=_FailingStore())
+        store = _FailingStore()
+        store.fail_writes = True
+        lockdown = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
         with self.assertRaisesRegex(OSError, "persistence_down"):
             lockdown.record_incident("storage_failure", severity=1)
         self.assertEqual(lockdown.state.mode, SecurityLockdown.EMERGENCY)
@@ -143,14 +119,8 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             first = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=store)
             normal_seal = first.export_lockdown_seal()
             first.security_lockdown.record_incident("replay", severity=10)
-
             with self.assertRaises(ValueError):
-                HypersynthRuntime(
-                    crypto=CryptoIntegrity(KEY),
-                    admin_authorizer=lambda proof: True,
-                    lockdown_store=SQLiteLockdownStore(path),
-                    lockdown_seal=normal_seal,
-                )
+                HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path), lockdown_seal=normal_seal)
 
 
 class _FailingStore:
