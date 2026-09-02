@@ -13,6 +13,7 @@ from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
 from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
 from .export_manifest_121_130 import ExportIntegrityManifest, IntegrityManifest
+from .export_manifest_boundary_131_140 import ExportManifestAcceptanceBoundary
 
 
 class AttestedHypersynthKernel:
@@ -226,7 +227,7 @@ class AttestedHypersynthKernel:
                 continuity_seal=continuity_seal,
                 final_continuity_tag=final_tag,
             )
-            manifest_ok = ExportIntegrityManifest.verify(
+            manifest_ok = ExportManifestAcceptanceBoundary.verify(
                 self.attestation.crypto,
                 manifest,
                 session_id=session.session_id,
@@ -240,6 +241,7 @@ class AttestedHypersynthKernel:
                 continuity_evidence=evidence,
                 continuity_seal=continuity_seal,
                 final_continuity_tag=final_tag,
+                context_tag=session.context_tag,
             )
         except Exception:
             session.close()
