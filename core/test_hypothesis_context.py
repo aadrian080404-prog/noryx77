@@ -1,6 +1,7 @@
 import unittest
 
-from .contracts import TaskSpec
+from .contracts import TaskSpec, VerificationResult
+from .hypersynth import Hypersynth
 from .planning import Plan, PlanStep
 from .reasoning import Hypothesis, HypothesisEngine
 
@@ -49,6 +50,20 @@ class HypothesisContextBindingTests(unittest.TestCase):
         check = HypothesisEngine().verify_against_plan(forged, plan, task)
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "hypothesis_step_mismatch")
+
+    def test_runtime_invokes_planning_hypothesis_binding_gate(self):
+        class RejectingEngine(HypothesisEngine):
+            def verify_against_plan(self, hypotheses, plan, task):
+                return VerificationResult(False, "hypothesis", "runtime_binding_rejected")
+
+        task = self.task()
+        plan = self.plan()
+        hypotheses = HypothesisEngine().generate(task, plan)
+        kernel = Hypersynth.__new__(Hypersynth)
+        kernel.hypothesis_engine = RejectingEngine()
+        check = kernel._verify_hypothesis_integrity(hypotheses, plan, task)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "runtime_binding_rejected")
 
 
 if __name__ == "__main__":
