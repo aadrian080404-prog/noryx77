@@ -13,6 +13,11 @@ class PermissivePolicy:
         return True
 
 
+class PermissiveSecurity:
+    def inspect(self, action):
+        return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": action.risk_class})()
+
+
 class SecureToolLockdownLinearizationTests(unittest.TestCase):
     def _lockdown(self):
         return SecurityLockdown(CryptoIntegrity(), lambda proof: True)
@@ -61,6 +66,7 @@ class SecureToolLockdownLinearizationTests(unittest.TestCase):
         lockdown = self._lockdown()
         verifier = VerificationEngine()
         executor = SecureToolExecutor(PermissivePolicy(), verifier, CryptoIntegrity(), lockdown=lockdown)
+        executor.security = PermissiveSecurity()
         entered = threading.Event()
         release = threading.Event()
         incident_done = threading.Event()
