@@ -7,7 +7,7 @@ from threading import Lock, RLock
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
-from .security import SecurityBoundary
+from .security import SecurityBoundary, SecurityDecision
 
 
 class SecureCapabilityRegistry:
@@ -112,7 +112,7 @@ class SecureToolExecutor:
                     return None, VerificationResult(False, "tool_policy", "global_lockdown")
             except Exception:
                 return None, VerificationResult(False, "tool_policy", "lockdown_integrity_failure")
-        if not isinstance(action, ActionSpec) or not action.is_well_formed():
+        if type(action) is not ActionSpec or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
         try:
             action_digest = self._action_digest(action)
@@ -137,7 +137,10 @@ class SecureToolExecutor:
             except Exception:
                 self._incident("tool_security_boundary_failure", 7)
                 return None, VerificationResult(False, "tool_policy", "security_evaluation_failure")
-            if (not hasattr(security_decision, "allowed") or type(security_decision.allowed) is not bool or not hasattr(security_decision, "reason") or not isinstance(security_decision.reason, str) or not security_decision.reason.strip() or not hasattr(security_decision, "risk_class") or not isinstance(security_decision.risk_class, str) or not security_decision.risk_class.strip()):
+            if type(security_decision) is not SecurityDecision:
+                self._incident("malformed_security_decision", 10)
+                return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
+            if (type(security_decision.allowed) is not bool or not isinstance(security_decision.reason, str) or not security_decision.reason.strip() or not isinstance(security_decision.risk_class, str) or not security_decision.risk_class.strip()):
                 self._incident("malformed_security_decision", 7)
                 return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
             if security_decision.risk_class != action.risk_class:
@@ -162,6 +165,6 @@ class SecureToolExecutor:
             check = self.verifier.verify_output(output, stage="tool_result")
         except Exception:
             return None, VerificationResult(False, "tool_result", "verification_failure")
-        if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid:
+        if type(check) is not VerificationResult or not check.is_well_formed() or not check.valid:
             return None, VerificationResult(False, "tool_result", "invalid_tool_result_verification")
         return output, check
