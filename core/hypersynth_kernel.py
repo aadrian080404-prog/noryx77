@@ -202,6 +202,7 @@ class AttestedHypersynthKernel:
             continuity_records=continuity_chain,
             continuity_seal=continuity_seal,
             final_continuity_tag=final_tag,
+            context_tag=session.context_tag,
         )
         if not exported_ok:
             return self._reject("verification", "independent_final_integrity_failure",
