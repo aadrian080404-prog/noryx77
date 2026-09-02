@@ -19,8 +19,6 @@ class DeterministicAgent(Agent):
     agent_id = "deterministic"
     model_class = "micro"
     capabilities = ("deterministic",)
-    # DeterministicAgent is the bounded local fallback/test execution backend.
-    # Its model_class describes implementation size, not a claim about task quality.
     capacity_exempt = True
 
     def __init__(self, verifier: VerificationEngine | None = None):
@@ -47,8 +45,8 @@ class ProviderAgent(Agent):
         model_id = getattr(provider, "model_id", "")
         if not isinstance(provider_id, str) or not provider_id.strip():
             raise ValueError("provider_id_required")
-        if not isinstance(model_id, str):
-            raise TypeError("model_id_invalid")
+        if not isinstance(model_id, str) or not model_id.strip():
+            raise ValueError("model_id_required")
         if model_class not in ("micro", "small", "medium", "large", "frontier"):
             raise ValueError("invalid_model_class")
         if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
@@ -80,7 +78,7 @@ class ProviderAgent(Agent):
         if response.provider_id != self.provider_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if not isinstance(response.model_id, str) or response.model_id != self.model_id:
+        if not isinstance(response.model_id, str) or not response.model_id.strip() or response.model_id != self.model_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
