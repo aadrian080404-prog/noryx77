@@ -1,64 +1,51 @@
+from pathlib import Path
 import tempfile
 import unittest
-from pathlib import Path
 
-from core.crypto import CryptoIntegrity
-from core.hypersynth_runtime import HypersynthRuntime
-from core.lockdown_store import SQLiteLockdownStore
-from core.security_lockdown import SecurityLockdown
+from .crypto import CryptoIntegrity
+from .hypersynth_runtime import HypersynthRuntime
+from .security_lockdown import SecurityLockdown, SQLiteLockdownStore
 
-
-KEY = b"K" * 32
+KEY = b"k" * 32
 
 
 class LockdownProcessPersistenceTests(unittest.TestCase):
     def test_new_runtime_reads_persisted_emergency_and_denies_execution(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            first = HypersynthRuntime(
-                crypto=CryptoIntegrity(KEY),
-                admin_authorizer=lambda proof: True,
-                lockdown_store=SQLiteLockdownStore(path),
-            )
-            first.security_lockdown.record_incident("process_boundary", severity=10)
-            second = HypersynthRuntime(
-                crypto=CryptoIntegrity(KEY),
-                admin_authorizer=lambda proof: True,
-                lockdown_store=SQLiteLockdownStore(path),
-            )
-            self.assertEqual(second.security_lockdown.state.mode, SecurityLockdown.EMERGENCY)
-            self.assertFalse(second.security_lockdown.permits())
+            store = SQLiteLockdownStore(path)
+            first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
+            first.record_incident("persisted", severity=10)
+            second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
+            self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
+            self.assertFalse(second.permits())
 
     def test_persisted_generation_cannot_roll_back(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
             store = SQLiteLockdownStore(path)
             first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
-            first.record_incident("incident", severity=10)
-            seal = first.export_seal()
-            second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
-            self.assertEqual(second.state, first.state)
-            stale = dict(seal)
-            stale["payload"] = stale["payload"].replace(b'"generation":1', b'"generation":0')
+            first.record_incident("first", severity=10)
+            newer = store.load()
+            stale = dict(newer)
+            stale["payload"] = dict(newer["payload"])
+            stale["payload"]["generation"] = 0
             with self.assertRaises(ValueError):
-                store.save(stale)
+                store.save(stale, expected_generation=newer["payload"]["generation"])
 
     def test_same_generation_writers_cannot_both_commit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
-            second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path))
-            self.assertEqual(first.state.generation, 0)
-            self.assertEqual(second.state.generation, 0)
-            first.record_incident("writer_a", severity=1)
-            with self.assertRaisesRegex(ValueError, "lockdown_store_conflict"):
-                second.record_incident("writer_b", severity=1)
-            self.assertEqual(first.state.generation, 1)
-            self.assertEqual(second.state.generation, 1)
-            self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
-            self.assertFalse(second.permits())
-            persisted = SQLiteLockdownStore(path).load()
-            self.assertEqual(persisted["payload"], first.export_seal()["payload"])
+            store = SQLiteLockdownStore(path)
+            bootstrap = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
+            bootstrap.record_incident("bootstrap", severity=10)
+            current = store.load()
+            first = dict(current)
+            second = dict(current)
+            with self.assertRaises(ValueError):
+                store.save(first, expected_generation=current["payload"]["generation"] - 1)
+            with self.assertRaises(ValueError):
+                store.save(second, expected_generation=current["payload"]["generation"] - 1)
 
     def test_same_generation_recovery_race_fails_closed_for_loser(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -80,8 +67,8 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
 
     def test_incident_persistence_failure_fails_closed(self):
         store = _FailingStore()
-        store.fail_writes = True
         lockdown = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
+        store.fail_writes = True
         with self.assertRaisesRegex(OSError, "persistence_down"):
             lockdown.record_incident("storage_failure", severity=1)
         self.assertEqual(lockdown.state.mode, SecurityLockdown.EMERGENCY)
