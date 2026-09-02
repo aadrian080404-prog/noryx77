@@ -275,15 +275,29 @@ class Hypersynth:
         if any(not isinstance(agent_id, str) or not agent_id.strip() for agent_id in agents): return self._reject("allocation", task, VerificationResult(False, "allocation", "invalid_agent_identity"))
         if len(set(agents)) != len(agents): return self._reject("allocation", task, VerificationResult(False, "allocation", "duplicate_agent_identity"))
         for index, step in enumerate(plan.steps):
-            agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
             continuity_check = self.verifier.verify_task_continuity(task, child)
             continuity_check = self._checked_verification(continuity_check, stage="continuity", malformed_reason="malformed_continuity_verification")
             if not continuity_check.valid: return self._reject("allocation", task, continuity_check)
-            try: selected, decision = self.supervisor.select(child, preferred=agent_id)
-            except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
-            if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
-            if getattr(selected, "agent_id", None) != agent_id: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_identity_mismatch"))
+            selected = None
+            selected_agent_id = None
+            selection_failure = None
+            for offset in range(len(agents)):
+                agent_id = agents[(index + offset) % len(agents)]
+                try:
+                    candidate, decision = self.supervisor.select(child, preferred=agent_id)
+                except Exception:
+                    selection_failure = VerificationResult(False, "allocation", "agent_selection_failure")
+                    continue
+                if decision.accepted and candidate is not None:
+                    if getattr(candidate, "agent_id", None) != agent_id:
+                        return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_identity_mismatch"))
+                    selected = candidate
+                    selected_agent_id = agent_id
+                    break
+                selection_failure = VerificationResult(False, "allocation", decision.reason)
+            if selected is None:
+                return self._reject("allocation", task, selection_failure or VerificationResult(False, "allocation", "no_eligible_agent"))
             assignments.append((selected, child, step))
         if len(assignments) != len(plan.steps): return self._reject("allocation", task, VerificationResult(False, "allocation", "assignment_count_mismatch"))
         evidence.append("allocation_integrity")
