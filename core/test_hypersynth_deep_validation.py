@@ -9,10 +9,12 @@ from .verification import VerificationEngine
 
 
 class TwoStepPlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective), PlanStep(task.task_id + ":1", task.objective)))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective), PlanStep(task.task_id + ":1", task.objective)), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         return VerificationResult(plan.task_id == task.task_id and len(plan.steps) == 2, "plan", "plan_ok")
 
 
@@ -53,7 +55,7 @@ class DeepValidationTests(unittest.TestCase):
         kernel = self.kernel(DeterministicAgent(VerificationEngine()))
         result = kernel.run(self.task())
         self.assertEqual(result["status"], "completed")
-        self.assertEqual(result["reflection"]["evidence_count"], 9)
+        self.assertEqual(result["reflection"]["evidence_count"], 10)
         self.assertEqual(result["reflection"]["evidence_required"], 9)
         self.assertEqual(result["reflection"]["confidence"], 1.0)
         self.assertEqual(result["state"].confidence, 1.0)
@@ -83,7 +85,7 @@ class DeepValidationTests(unittest.TestCase):
         result = kernel.run(self.task(task_id="multi"))
         self.assertEqual(result["status"], "completed")
         self.assertEqual(tuple(r.task_id for r in result["results"]), ("multi:0", "multi:1"))
-        self.assertEqual(result["reflection"]["evidence_count"], 9)
+        self.assertEqual(result["reflection"]["evidence_count"], 10)
 
     def test_phase_gate_rejects_non_sequential_transition(self):
         verifier = VerificationEngine()
