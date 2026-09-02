@@ -24,6 +24,13 @@ class HypersynthRuntimeProviderTests(unittest.TestCase):
         self.assertEqual(result["results"][0].output, "provider-output")
         self.assertEqual(runtime.router.get("provider").model_class, "large")
 
+    def test_provider_runtime_accepts_explicit_model_class_and_capabilities(self):
+        provider = CallableProvider(lambda _request: ProviderResponse("x", "p", "m", {}), provider_id="p", model_id="m")
+        runtime = HypersynthRuntime(provider=provider, provider_model_class="frontier", provider_capabilities=("reasoning", "research"))
+        agent = runtime.router.get("provider")
+        self.assertEqual(agent.model_class, "frontier")
+        self.assertEqual(agent.capabilities, ("reasoning", "research"))
+
     def test_provider_runtime_rejects_invalid_model_class(self):
         provider = CallableProvider(lambda _request: ProviderResponse("x", "p", "m", {}), provider_id="p", model_id="m")
         with self.assertRaises(ValueError):
