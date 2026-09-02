@@ -117,9 +117,6 @@ class AcceptanceLedger:
     def verify(self, records: Iterable[AcceptanceLedgerRecord] | None = None) -> bool:
         try:
             records = tuple(self._records if records is None else records)
-            # Verification of an explicit snapshot must cover the complete
-            # committed ledger. Otherwise a valid prefix could be mistaken for
-            # an intact ledger after deletion of its tail records.
             if len(records) != len(self._records):
                 return False
             previous = ""
@@ -152,9 +149,16 @@ class AcceptanceLedger:
                 if not hmac.compare_digest(expected, record.tag):
                     return False
                 seen.add(record.tag); manifests.add(record.manifest_tag); previous = record.tag
-            if self._sealed:
-                if self._seal_length is None or self._seal_root is None:
-                    return False
+
+            # Seal metadata is itself part of the integrity state. Never allow
+            # flipping the mutable _sealed flag to bypass an existing seal.
+            has_length = self._seal_length is not None
+            has_root = self._seal_root is not None
+            if has_length != has_root:
+                return False
+            if self._sealed and not (has_length and has_root):
+                return False
+            if has_length and has_root:
                 if len(records) != self._seal_length:
                     return False
                 if not hmac.compare_digest(self._root(records), self._seal_root):
