@@ -25,13 +25,57 @@ class DeterministicAgent(Agent):
     def __init__(self, verifier: VerificationEngine | None = None):
         self.verifier = verifier or VerificationEngine()
 
+    def _rejected(self, task: TaskSpec, reason: str = "deterministic_verification_failure") -> AgentResult:
+        try:
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            if (
+                isinstance(check, VerificationResult)
+                and check.is_well_formed()
+                and not check.valid
+                and check.stage == "result"
+            ):
+                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        except Exception:
+            pass
+        return AgentResult(
+            self.agent_id,
+            task.task_id,
+            "rejected",
+            verification=VerificationResult(False, "result", reason),
+        )
+
     def run(self, task: TaskSpec) -> AgentResult:
-        check = self.verifier.verify_task(task)
-        if not check.valid:
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        result = AgentResult(self.agent_id, task.task_id, "completed", output=task.objective)
-        output_check = self.verifier.verify_output(result.output, requirements=task.verification_requirements, stage="result")
-        return AgentResult(self.agent_id, task.task_id, result.status, result.output, output_check)
+        try:
+            task_check = self.verifier.verify_task(task)
+        except Exception:
+            return self._rejected(task, "deterministic_task_verification_failure")
+        if (
+            not isinstance(task_check, VerificationResult)
+            or not task_check.is_well_formed()
+            or task_check.stage != "contract"
+        ):
+            return self._rejected(task, "malformed_task_verification")
+        if not task_check.valid:
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=task_check)
+
+        try:
+            output = task.objective
+            output_check = self.verifier.verify_output(
+                output,
+                requirements=task.verification_requirements,
+                stage="result",
+            )
+        except Exception:
+            return self._rejected(task, "deterministic_output_verification_failure")
+        if (
+            not isinstance(output_check, VerificationResult)
+            or not output_check.is_well_formed()
+            or output_check.stage != "result"
+        ):
+            return self._rejected(task, "malformed_output_verification")
+        if not output_check.valid:
+            return AgentResult(self.agent_id, task.task_id, "rejected", output, output_check)
+        return AgentResult(self.agent_id, task.task_id, "completed", output, output_check)
 
 
 class ProviderAgent(Agent):
@@ -72,7 +116,12 @@ class ProviderAgent(Agent):
         """Construct a structurally valid rejection even if the verifier itself is unavailable."""
         try:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            if isinstance(check, VerificationResult) and check.is_well_formed():
+            if (
+                isinstance(check, VerificationResult)
+                and check.is_well_formed()
+                and not check.valid
+                and check.stage == "result"
+            ):
                 return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         except Exception:
             pass
@@ -88,7 +137,11 @@ class ProviderAgent(Agent):
             task_check = self.verifier.verify_task(task)
         except Exception:
             return self._rejected(task, "provider_task_verification_failure")
-        if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
+        if (
+            not isinstance(task_check, VerificationResult)
+            or not task_check.is_well_formed()
+            or task_check.stage != "contract"
+        ):
             return self._rejected(task, "malformed_task_verification")
         if not task_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=task_check)
@@ -124,7 +177,11 @@ class ProviderAgent(Agent):
             output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
         except Exception:
             return self._rejected(task, "provider_output_verification_failure")
-        if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed():
+        if (
+            not isinstance(output_check, VerificationResult)
+            or not output_check.is_well_formed()
+            or output_check.stage != "result"
+        ):
             return self._rejected(task, "malformed_output_verification")
         if not output_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", isolated_output, output_check)
