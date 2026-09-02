@@ -10,18 +10,22 @@ from .verification import VerificationEngine
 
 
 class RiskDowngradePlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "compute", "normal"),))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "compute", "normal"),), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         return VerificationResult(True, "plan", "planner_claimed_ok")
 
 
 class RiskUpgradePlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "compute", "high"),))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "compute", "high"),), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         return VerificationResult(True, "plan", "planner_claimed_ok")
 
 
