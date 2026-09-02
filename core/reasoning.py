@@ -47,7 +47,7 @@ class HypothesisEngine:
             return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
         ids = set()
         for hypothesis in hypotheses:
-            if not isinstance(hypothesis, Hypothesis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
+            if type(hypothesis) is not Hypothesis: return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
             if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip(): return VerificationResult(False, "hypothesis", "invalid_hypothesis_id")
             if hypothesis.hypothesis_id in ids: return VerificationResult(False, "hypothesis", "duplicate_hypothesis_id")
             ids.add(hypothesis.hypothesis_id)
@@ -73,7 +73,7 @@ class HypothesisEngine:
         if not isinstance(hypotheses, tuple) or len(hypotheses) != len(plan.steps) or not hypotheses:
             return VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch")
         for hypothesis, step in zip(hypotheses, plan.steps):
-            if not isinstance(hypothesis, Hypothesis):
+            if type(hypothesis) is not Hypothesis:
                 return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
             if hypothesis.context_version != plan.context_version or hypothesis.context_source_ids != plan.context_source_ids:
                 return VerificationResult(False, "hypothesis", "hypothesis_context_mismatch")
@@ -99,7 +99,7 @@ class InternalSimulator:
         expected_version = None
         results = []
         for hypothesis in hypotheses:
-            if not isinstance(hypothesis, Hypothesis):
+            if type(hypothesis) is not Hypothesis:
                 return tuple(SimulationResult("__invalid__", False, "invalid_hypothesis") for _ in range(1))
             if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip() or hypothesis.hypothesis_id in ids:
                 return tuple(SimulationResult(hypothesis.hypothesis_id if isinstance(hypothesis.hypothesis_id, str) else "__invalid__", False, "invalid_hypothesis_id") for _ in range(1))
@@ -155,9 +155,9 @@ class CrossChecker:
         if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
         if not results: return VerificationResult(False, "cross_check", "no_results")
         if len(results) != len(hypotheses): return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
-        if any(not isinstance(result, AgentResult) for result in results): return VerificationResult(False, "cross_check", "invalid_result_type")
+        if any(type(result) is not AgentResult for result in results): return VerificationResult(False, "cross_check", "invalid_result_type")
         if any(not result.is_well_formed() for result in results): return VerificationResult(False, "cross_check", "malformed_result")
-        if any(not isinstance(h, Hypothesis) for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_type")
+        if any(type(h) is not Hypothesis for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_type")
         if any(h.task_id != task.task_id for h in hypotheses): return VerificationResult(False, "cross_check", "hypothesis_task_mismatch")
         if any(not isinstance(h.hypothesis_id, str) or not h.hypothesis_id.strip() for h in hypotheses): return VerificationResult(False, "cross_check", "invalid_hypothesis_id")
         if len({h.hypothesis_id for h in hypotheses}) != len(hypotheses): return VerificationResult(False, "cross_check", "duplicate_hypothesis_id")
@@ -172,7 +172,7 @@ class CrossChecker:
         if any(result.status != "completed" for result in results): return VerificationResult(False, "cross_check", "incomplete_result")
         for result in results:
             verification = result.verification
-            if verification is None or not verification.is_well_formed() or not verification.valid: return VerificationResult(False, "cross_check", "unverified_result")
+            if type(verification) is not VerificationResult or not verification.is_well_formed() or not verification.valid: return VerificationResult(False, "cross_check", "unverified_result")
             if result.output is None: return VerificationResult(False, "cross_check", "null_output")
             if isinstance(result.output, (str, bytes)) and not result.output: return VerificationResult(False, "cross_check", "empty_output")
             for requirement in task.verification_requirements:
