@@ -26,10 +26,7 @@ class SecureCapabilityRegistry:
         return f"{type(handler).__module__}.{type(handler).__qualname__}:{id(handler)}"
 
     def _capability_tag(self, name: str, risk_class: str, handler) -> str:
-        return self.crypto.digest(
-            "capability",
-            {"name": name, "risk": risk_class, "handler_fingerprint": self._fingerprint(handler)},
-        )
+        return self.crypto.digest("capability", {"name": name, "risk": risk_class, "handler_fingerprint": self._fingerprint(handler)})
 
     def register(self, name: str, handler, *, risk_class: str = "normal") -> None:
         if not isinstance(name, str) or not name.strip() or not callable(handler):
@@ -45,11 +42,7 @@ class SecureCapabilityRegistry:
         if item is None:
             return None
         handler, registered_risk, tag = item
-        if not self.crypto.verify_digest(
-            "capability",
-            {"name": name, "risk": registered_risk, "handler_fingerprint": self._fingerprint(handler)},
-            tag,
-        ):
+        if not self.crypto.verify_digest("capability", {"name": name, "risk": registered_risk, "handler_fingerprint": self._fingerprint(handler)}, tag):
             raise RuntimeError("capability_integrity_failure")
         if risk_class is not None and risk_class != registered_risk:
             raise RuntimeError("capability_risk_mismatch")
@@ -81,18 +74,16 @@ class SecureToolExecutor:
         self._counter = 0
         self._authorization_lock = Lock()
 
+    def _incident(self, category: str, severity: int) -> None:
+        if self.lockdown is None:
+            return
+        try:
+            self.lockdown.record_incident(category, severity=severity)
+        except Exception:
+            pass
+
     def _action_digest(self, action: ActionSpec) -> str:
-        return self.crypto.digest(
-            "tool_action",
-            {
-                "action_id": action.action_id,
-                "action_type": action.action_type,
-                "target": action.target,
-                "parameters": dict(action.parameters),
-                "risk_class": action.risk_class,
-                "requires_authorization": action.requires_authorization,
-            },
-        )
+        return self.crypto.digest("tool_action", {"action_id": action.action_id, "action_type": action.action_type, "target": action.target, "parameters": dict(action.parameters), "risk_class": action.risk_class, "requires_authorization": action.requires_authorization})
 
     def execute(self, action: ActionSpec):
         if self.lockdown is not None:
@@ -111,50 +102,39 @@ class SecureToolExecutor:
             if registered_risk is None:
                 return None, VerificationResult(False, "tool_policy", "unknown_capability")
             if registered_risk != action.risk_class:
+                self._incident("capability_risk_mismatch", 7)
                 return None, VerificationResult(False, "tool_policy", "capability_risk_mismatch")
             handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
             with self._authorization_lock:
                 counter = self.crypto.next_counter("tool_execution")
-                authorization = self.crypto.sign(
-                    "tool_execution",
-                    {
-                        "action": action.action_id,
-                        "type": action.action_type,
-                        "target": action.target,
-                        "risk": action.risk_class,
-                        "action_digest": action_digest,
-                    },
-                    counter,
-                )
+                authorization = self.crypto.sign("tool_execution", {"action": action.action_id, "type": action.action_type, "target": action.target, "risk": action.risk_class, "action_digest": action_digest}, counter)
                 self._counter += 1
                 if not self.crypto.verify(authorization):
+                    self._incident("tool_authorization_integrity_failure", 10)
                     return None, VerificationResult(False, "tool_policy", "cryptographic_authorization_failure")
             try:
                 security_decision = self.security.inspect(action)
             except Exception:
+                self._incident("tool_security_boundary_failure", 7)
                 return None, VerificationResult(False, "tool_policy", "security_evaluation_failure")
-            if (
-                not hasattr(security_decision, "allowed")
-                or type(security_decision.allowed) is not bool
-                or not hasattr(security_decision, "reason")
-                or not isinstance(security_decision.reason, str)
-                or not security_decision.reason.strip()
-                or not hasattr(security_decision, "risk_class")
-                or not isinstance(security_decision.risk_class, str)
-                or not security_decision.risk_class.strip()
-            ):
+            if (not hasattr(security_decision, "allowed") or type(security_decision.allowed) is not bool or not hasattr(security_decision, "reason") or not isinstance(security_decision.reason, str) or not security_decision.reason.strip() or not hasattr(security_decision, "risk_class") or not isinstance(security_decision.risk_class, str) or not security_decision.risk_class.strip()):
+                self._incident("malformed_security_decision", 7)
                 return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
             if security_decision.risk_class != action.risk_class:
+                self._incident("security_risk_mismatch", 7)
                 return None, VerificationResult(False, "tool_policy", "security_risk_mismatch")
             if not security_decision.allowed:
                 return None, VerificationResult(False, "tool_policy", security_decision.reason)
             try:
                 if self._action_digest(action) != action_digest:
+                    self._incident("tool_action_integrity_mismatch", 10)
                     return None, VerificationResult(False, "tool_policy", "action_runtime_integrity_mismatch")
                 current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
             except Exception:
+                self._incident("tool_capability_integrity_failure", 10)
                 return None, VerificationResult(False, "tool_policy", "capability_runtime_integrity_failure")
             if current_handler is not handler:
+                self._incident("tool_capability_identity_mismatch", 10)
                 return None, VerificationResult(False, "tool_policy", "capability_runtime_identity_mismatch")
             output = current_handler(action_target, action_parameters)
         except Exception as exc:
