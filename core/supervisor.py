@@ -32,10 +32,6 @@ class AgentSupervisor:
         return check
 
     def _resource_eligibility(self, task: TaskSpec, agent) -> VerificationResult:
-        # Capacity enforcement applies only when the agent explicitly publishes
-        # routing metadata on the instance. This preserves the pre-routing
-        # compatibility contract for legacy agents while keeping explicit model
-        # declarations enforceable and fail-closed.
         explicit_model = isinstance(getattr(agent, "__dict__", None), dict) and "model_class" in agent.__dict__
         model_class = getattr(agent, "model_class", "medium")
         if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
@@ -46,6 +42,16 @@ class AgentSupervisor:
         if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
             return VerificationResult(False, "allocation", "resource_underpowered_for_task")
         return VerificationResult(True, "allocation", "resource_task_eligible")
+
+    def _resolve_registered_agent(self, agent_id: str, agent):
+        """Re-resolve the selected object through the router's registration boundary."""
+        try:
+            registered = self.router.get(agent_id)
+        except Exception:
+            return None
+        if registered is not agent:
+            return None
+        return registered
 
     def select(self, task: TaskSpec, preferred=None):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -62,9 +68,6 @@ class AgentSupervisor:
         if not check.valid:
             return None, AgentDecision("", False, check.reason)
 
-        # Explicit preferences are strict and are never silently replaced.
-        # Without a preference, delegate task-aware choice to ResourceRouter so
-        # the supervisor and router share one authoritative routing decision.
         if preferred is not None:
             if not isinstance(preferred, str) or not preferred.strip():
                 return None, AgentDecision("", False, "invalid_preferred_agent_id")
@@ -88,13 +91,16 @@ class AgentSupervisor:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
         if getattr(agent, "agent_id", None) != agent_id:
             return None, AgentDecision(agent_id, False, "agent_identity_mismatch")
-        eligibility = self._resource_eligibility(task, agent)
+        registered = self._resolve_registered_agent(agent_id, agent)
+        if registered is None:
+            return None, AgentDecision(agent_id, False, "agent_registration_mismatch")
+        eligibility = self._resource_eligibility(task, registered)
         if not eligibility.valid:
             return None, AgentDecision(agent_id, False, eligibility.reason)
         decision = AgentDecision(agent_id, True, "agent_selected")
         if self.audit:
-            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True, model_class=getattr(agent, "model_class", "medium"))
-        return agent, decision
+            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True, model_class=getattr(registered, "model_class", "medium"))
+        return registered, decision
 
     def admit(self, task: TaskSpec, result: AgentResult):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
