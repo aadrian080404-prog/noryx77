@@ -2,6 +2,7 @@ import math
 import time
 
 from .actions import ActionGate
+from .agents import DeterministicAgent, ProviderAgent
 from .audit import AuditLog
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
@@ -9,6 +10,7 @@ from .hypersynth import Hypersynth
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
+from .provider import Provider
 from .security import SecurityBoundary
 from .verification import VerificationEngine
 from .router import ResourceRouter
@@ -16,7 +18,7 @@ from .router import ResourceRouter
 
 class HypersynthRuntime:
     """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider"):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -26,6 +28,10 @@ class HypersynthRuntime:
         self.security = SecurityBoundary(self.policy, self.verifier)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
+        if provider is not None:
+            self.router.register(ProviderAgent(agent_id, provider, self.verifier))
+        elif not self.router.available():
+            self.router.register(DeterministicAgent(self.verifier))
         self.kernel = Hypersynth(
             self.verifier,
             self.router,
