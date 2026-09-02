@@ -53,6 +53,12 @@ class ResourceRouterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             router.register(BadAgent())
 
+    def test_malformed_preferred_identity_is_rejected(self):
+        router = ResourceRouter()
+        router.register(self.provider_agent("medium", "medium"))
+        with self.assertRaises(ValueError):
+            router.route("")
+
 
 if __name__ == "__main__":
     unittest.main()
