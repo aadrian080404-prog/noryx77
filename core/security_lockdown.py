@@ -61,9 +61,21 @@ class SecurityLockdown:
         with self._lock:
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
 
-    def _persist(self) -> None:
+    def _persist(self, *, expected_generation: int | None = None) -> None:
         if self._state_store is not None:
-            self._state_store.save(self.export_seal())
+            seal = self.export_seal()
+            if expected_generation is None:
+                self._state_store.save(seal)
+            else:
+                try:
+                    self._state_store.save(seal, expected_generation=expected_generation)
+                except TypeError as exc:
+                    raise ValueError("lockdown_store_conflict") from exc
+
+    def _fail_closed_after_persistence_conflict(self) -> None:
+        with self._lock:
+            self._mode = self.EMERGENCY
+            self._issued_challenges.clear()
 
     def record_incident(self, category: str, *, severity: int = 1) -> LockdownState:
         if not isinstance(category, str) or not category.strip():
@@ -71,6 +83,7 @@ class SecurityLockdown:
         if isinstance(severity, bool) or not isinstance(severity, int) or not 1 <= severity <= 10:
             raise ValueError("invalid_incident_severity")
         with self._lock:
+            previous_generation = self._generation
             self._incidents += 1
             self._score += severity
             if severity >= 10 or self._score >= self._emergency_threshold:
@@ -81,7 +94,12 @@ class SecurityLockdown:
                 self._mode = self.RESTRICTED
             self._generation += 1
             state = LockdownState(self._mode, self._score, self._incidents, self._generation)
-        self._persist()
+        try:
+            self._persist(expected_generation=previous_generation)
+        except ValueError as exc:
+            if str(exc) == "lockdown_store_conflict":
+                self._fail_closed_after_persistence_conflict()
+            raise
         return state
 
     def permits(self, *, is_admin: bool = False) -> bool:
@@ -130,7 +148,13 @@ class SecurityLockdown:
             self._score = 0
             self._generation += 1
             state = LockdownState(self._mode, self._score, self._incidents, self._generation)
-        self._persist()
+        try:
+            self._persist(expected_generation=authorization_generation)
+        except ValueError as exc:
+            if str(exc) == "lockdown_store_conflict":
+                self._fail_closed_after_persistence_conflict()
+                raise PermissionError("admin_recovery_denied") from exc
+            raise
         return state
 
     def export_seal(self) -> dict:
