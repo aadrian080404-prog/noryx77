@@ -26,7 +26,7 @@ class HypothesisEngine:
     """Bounded, inspectable hypothesis generation; never exposes hidden reasoning traces."""
 
     def generate(self, task: TaskSpec, plan: Plan) -> tuple[Hypothesis, ...]:
-        if not isinstance(task, TaskSpec) or not isinstance(plan, Plan) or not plan.steps:
+        if type(task) is not TaskSpec or not isinstance(plan, Plan) or not plan.steps:
             return ()
         if plan.task_id != task.task_id:
             return ()
@@ -43,7 +43,7 @@ class HypothesisEngine:
         )
 
     def verify(self, hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
-        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple) or not hypotheses:
+        if type(task) is not TaskSpec or not isinstance(hypotheses, tuple) or not hypotheses:
             return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
         ids = set()
         for hypothesis in hypotheses:
@@ -66,6 +66,8 @@ class HypothesisEngine:
 
     def verify_against_plan(self, hypotheses: tuple[Hypothesis, ...], plan: Plan, task: TaskSpec) -> VerificationResult:
         """Verify that each hypothesis is bound to the exact verified planning context."""
+        if type(task) is not TaskSpec:
+            return VerificationResult(False, "hypothesis", "invalid_task_type")
         if not isinstance(plan, Plan):
             return VerificationResult(False, "hypothesis", "invalid_plan")
         if plan.task_id != task.task_id:
@@ -90,7 +92,7 @@ class InternalSimulator:
     MAX_SIMULATIONS = 8
 
     def simulate(self, task: TaskSpec, hypotheses: tuple[Hypothesis, ...]) -> tuple[SimulationResult, ...]:
-        if not isinstance(task, TaskSpec) or not task.is_well_formed() or not isinstance(hypotheses, tuple) or not hypotheses:
+        if type(task) is not TaskSpec or not task.is_well_formed() or not isinstance(hypotheses, tuple) or not hypotheses:
             return ()
         if len(hypotheses) > self.MAX_SIMULATIONS:
             return tuple(SimulationResult("__invalid__", False, "simulation_bounds_exceeded") for _ in range(1))
@@ -152,7 +154,7 @@ class InternalSimulator:
 class CrossChecker:
     """Checks that verified agent results map one-to-one to declared plan steps."""
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
-        if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
+        if type(task) is not TaskSpec or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
         if not results: return VerificationResult(False, "cross_check", "no_results")
         if len(results) != len(hypotheses): return VerificationResult(False, "cross_check", "result_hypothesis_count_mismatch")
         if any(type(result) is not AgentResult for result in results): return VerificationResult(False, "cross_check", "invalid_result_type")
