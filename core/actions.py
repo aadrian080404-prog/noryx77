@@ -23,6 +23,15 @@ class ActionGate:
         self._authorization_counter = 0
         self._authorization_lock = Lock()
 
+    def _incident(self, category: str, severity: int) -> None:
+        if self.lockdown is None:
+            return
+        try:
+            self.lockdown.record_incident(category, severity=severity)
+        except Exception:
+            # A containment telemetry failure must never turn a deny into an allow.
+            pass
+
     def authorize(self, action: ActionSpec, calls_used: int = 0, tool_calls_used: int = 0) -> ActionDecision:
         if self.lockdown is not None:
             try:
@@ -48,22 +57,27 @@ class ActionGate:
                 envelope = self.crypto.sign("action_gate", asdict(action), counter)
                 self._authorization_counter += 1
                 if not self.crypto.verify(envelope):
+                    self._incident("action_authorization_integrity_failure", 10)
                     return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
         except Exception:
+            self._incident("action_authorization_integrity_failure", 10)
             return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
         try:
             policy_allowed = self.policy.allows(action)
         except Exception:
             return ActionDecision(False, "policy evaluation failed", VerificationResult(False, "action_gate", "policy_evaluation_failure"))
         if type(policy_allowed) is not bool:
+            self._incident("malformed_policy_decision", 7)
             return ActionDecision(False, "invalid policy decision", VerificationResult(False, "action_gate", "malformed_policy_decision"))
         if not policy_allowed:
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
         try:
             security_allowed = self.security.allows(action)
         except Exception:
+            self._incident("security_boundary_failure", 7)
             return ActionDecision(False, "security boundary evaluation failed", VerificationResult(False, "action_gate", "security_evaluation_failure"))
         if type(security_allowed) is not bool:
+            self._incident("malformed_security_decision", 7)
             return ActionDecision(False, "invalid security decision", VerificationResult(False, "action_gate", "malformed_security_decision"))
         if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
