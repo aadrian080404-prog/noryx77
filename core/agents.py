@@ -80,7 +80,7 @@ class ProviderAgent(Agent):
         if response.provider_id != self.provider_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if not isinstance(response.model_id, str):
+        if not isinstance(response.model_id, str) or response.model_id != self.model_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
