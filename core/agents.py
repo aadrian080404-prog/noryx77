@@ -1,7 +1,7 @@
 from copy import deepcopy
 from collections.abc import Mapping
 
-from .contracts import AgentResult, TaskSpec
+from .contracts import AgentResult, TaskSpec, VerificationResult
 from .provider import Provider, ProviderResponse, request_from_task
 from .verification import VerificationEngine
 
@@ -68,8 +68,28 @@ class ProviderAgent(Agent):
         self.model_id = model_id
         self._provider_execute_fingerprint = self._callable_fingerprint(provider.execute)
 
+    def _rejected(self, task: TaskSpec, reason: str = "provider_execution_failure") -> AgentResult:
+        """Construct a structurally valid rejection even if the verifier itself is unavailable."""
+        try:
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            if isinstance(check, VerificationResult) and check.is_well_formed():
+                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        except Exception:
+            pass
+        return AgentResult(
+            self.agent_id,
+            task.task_id,
+            "rejected",
+            verification=VerificationResult(False, "result", reason),
+        )
+
     def run(self, task: TaskSpec) -> AgentResult:
-        task_check = self.verifier.verify_task(task)
+        try:
+            task_check = self.verifier.verify_task(task)
+        except Exception:
+            return self._rejected(task, "provider_task_verification_failure")
+        if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
+            return self._rejected(task, "malformed_task_verification")
         if not task_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=task_check)
 
@@ -79,37 +99,33 @@ class ProviderAgent(Agent):
         try:
             current_execute = expected_provider.execute
             if self._callable_fingerprint(current_execute) != self._provider_execute_fingerprint:
-                check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+                return self._rejected(task)
             expected_execute = current_execute
             response = expected_execute(request_from_task(task))
         except Exception:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if not isinstance(response, ProviderResponse):
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if response.provider_id != expected_provider_id:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if not isinstance(response.model_id, str) or not response.model_id.strip() or response.model_id != expected_model_id:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+            return self._rejected(task)
         try:
             isolated_output = deepcopy(response.output)
         except Exception:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
+            return self._rejected(task)
+        try:
+            output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
+        except Exception:
+            return self._rejected(task, "provider_output_verification_failure")
+        if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed():
+            return self._rejected(task, "malformed_output_verification")
         if not output_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", isolated_output, output_check)
         return AgentResult(self.agent_id, task.task_id, "completed", isolated_output, output_check)
