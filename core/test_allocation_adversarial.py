@@ -20,14 +20,14 @@ class AllocationAdversarialTests(unittest.TestCase):
         router.register(
             ProviderAgent(
                 "a-underpowered",
-                CallableProvider(execute, provider_id="p-small"),
+                CallableProvider(execute, provider_id="p-small", model_id="m-small"),
                 model_class="medium",
             )
         )
         router.register(
             ProviderAgent(
                 "z-sufficient",
-                CallableProvider(execute, provider_id="p-large"),
+                CallableProvider(execute, provider_id="p-large", model_id="m-large"),
                 model_class="large",
             )
         )
