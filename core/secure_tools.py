@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from threading import Lock
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
@@ -77,6 +78,7 @@ class SecureToolExecutor:
         self.security = security or SecurityBoundary(policy, verifier)
         self.capabilities = SecureCapabilityRegistry(crypto)
         self._counter = 0
+        self._authorization_lock = Lock()
 
     def _action_digest(self, action: ActionSpec) -> str:
         return self.crypto.digest(
@@ -104,20 +106,21 @@ class SecureToolExecutor:
             if registered_risk != action.risk_class:
                 return None, VerificationResult(False, "tool_policy", "capability_risk_mismatch")
             handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
-            authorization = self.crypto.sign(
-                "tool_execution",
-                {
-                    "action": action.action_id,
-                    "type": action.action_type,
-                    "target": action.target,
-                    "risk": action.risk_class,
-                    "action_digest": action_digest,
-                },
-                self._counter,
-            )
-            self._counter += 1
-            if not self.crypto.verify(authorization):
-                return None, VerificationResult(False, "tool_policy", "cryptographic_authorization_failure")
+            with self._authorization_lock:
+                authorization = self.crypto.sign(
+                    "tool_execution",
+                    {
+                        "action": action.action_id,
+                        "type": action.action_type,
+                        "target": action.target,
+                        "risk": action.risk_class,
+                        "action_digest": action_digest,
+                    },
+                    self._counter,
+                )
+                self._counter += 1
+                if not self.crypto.verify(authorization):
+                    return None, VerificationResult(False, "tool_policy", "cryptographic_authorization_failure")
             try:
                 security_decision = self.security.inspect(action)
             except Exception:
