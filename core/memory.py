@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any
+import secrets
 
 from .crypto import CryptoIntegrity
 
@@ -28,16 +29,19 @@ class MemoryStore:
         self._items: dict[str, MemoryItem] = {}
         self._auth: dict[str, str] = {}
         self._crypto = crypto or CryptoIntegrity()
+        # A store-local namespace prevents authenticated entries from one store
+        # being replayed into another store that happens to share the same key.
+        self._auth_namespace = secrets.token_hex(16)
         self._lock = RLock()
 
-    @classmethod
-    def _payload(cls, item: MemoryItem) -> dict[str, Any]:
+    def _payload(self, item: MemoryItem) -> dict[str, Any]:
         # MemoryItem is a security boundary: subclasses may override attribute
         # access and therefore must never participate in authenticated encoding.
         if type(item) is not MemoryItem:
             raise TypeError("memory_item_must_be_canonical")
         return {
-            "auth_schema_version": cls.AUTH_SCHEMA_VERSION,
+            "auth_schema_version": self.AUTH_SCHEMA_VERSION,
+            "auth_namespace": self._auth_namespace,
             "memory_id": item.memory_id,
             "content": deepcopy(item.content),
             "kind": item.kind,
