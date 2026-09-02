@@ -26,17 +26,8 @@ class DeterministicAgent(Agent):
         self.verifier = verifier or VerificationEngine()
 
     def _rejected(self, task: TaskSpec, reason: str = "deterministic_verification_failure") -> AgentResult:
-        try:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            if (
-                type(check) is VerificationResult
-                and check.is_well_formed()
-                and not check.valid
-                and check.stage == "result"
-            ):
-                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        except Exception:
-            pass
+        # Rejection evidence must come from this trusted boundary, not from the
+        # verifier that just failed or returned malformed evidence.
         return AgentResult(
             self.agent_id,
             task.task_id,
@@ -115,18 +106,8 @@ class ProviderAgent(Agent):
         self._provider_execute_fingerprint = self._callable_fingerprint(provider.execute)
 
     def _rejected(self, task: TaskSpec, reason: str = "provider_execution_failure") -> AgentResult:
-        """Construct a structurally valid rejection even if the verifier itself is unavailable."""
-        try:
-            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
-            if (
-                type(check) is VerificationResult
-                and check.is_well_formed()
-                and not check.valid
-                and check.stage == "result"
-            ):
-                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        except Exception:
-            pass
+        # Never promote verifier-supplied rejection evidence after a boundary
+        # failure. The rejection record is constructed locally and canonically.
         return AgentResult(
             self.agent_id,
             task.task_id,
