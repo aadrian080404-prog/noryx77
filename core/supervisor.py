@@ -68,13 +68,29 @@ class AgentSupervisor:
         check = self._checked_task_verification(check)
         if not check.valid:
             return None, AgentDecision("", False, check.reason)
-        agent_id = preferred or self.router.default_id()
+
+        # Explicit preferences are strict and are never silently replaced.
+        # Without a preference, delegate task-aware choice to ResourceRouter so
+        # the supervisor and router share one authoritative routing decision.
+        if preferred is not None:
+            if not isinstance(preferred, str) or not preferred.strip():
+                return None, AgentDecision("", False, "invalid_preferred_agent_id")
+            agent_id = preferred
+            try:
+                agent = self.router.route(agent_id)
+            except Exception:
+                return None, AgentDecision(agent_id, False, "agent_route_failure")
+        else:
+            try:
+                agent = self.router.route_for_task(task)
+            except LookupError:
+                return None, AgentDecision("", False, "no_resource_satisfies_task")
+            except Exception:
+                return None, AgentDecision("", False, "agent_route_failure")
+            agent_id = getattr(agent, "agent_id", None)
+
         if not isinstance(agent_id, str) or not agent_id.strip():
             return None, AgentDecision("", False, "invalid_agent_id")
-        try:
-            agent = self.router.route(agent_id)
-        except Exception:
-            return None, AgentDecision(agent_id, False, "agent_route_failure")
         if agent is None:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
         if getattr(agent, "agent_id", None) != agent_id:
