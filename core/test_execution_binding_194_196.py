@@ -47,7 +47,7 @@ class ExecutionBinding194To196Tests(unittest.TestCase):
         registered = _Agent([])
         router.register(registered)
         replacement = _Agent([])
-        with self.assertRaisesRegex(RuntimeError, "registered_agent_identity_changed"):
+        with self.assertRaisesRegex(LookupError, "agent_registration_mismatch"):
             router.resolve_execution(replacement)
 
 
