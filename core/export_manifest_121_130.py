@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 import hmac
 
@@ -10,7 +10,6 @@ from .crypto import CryptoIntegrity
 from .attestation import StageAttestation
 from .kernel_continuity import KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal
-from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
 
 
 @dataclass(frozen=True)
@@ -43,13 +42,29 @@ class ExportIntegrityManifest:
         "allocation", "execution", "verification", "metacognition",
     )
 
+    @classmethod
+    def _canonical(cls, value: Any) -> Any:
+        if is_dataclass(value) and not isinstance(value, type):
+            return {key: cls._canonical(item) for key, item in asdict(value).items()}
+        if isinstance(value, dict):
+            return {str(key): cls._canonical(item) for key, item in value.items()}
+        if isinstance(value, (tuple, list)):
+            return [cls._canonical(item) for item in value]
+        if isinstance(value, (str, int, bool)) or value is None:
+            return value
+        if isinstance(value, float):
+            if value != value or value in (float("inf"), float("-inf")):
+                raise TypeError("non_finite_manifest_evidence")
+            return value
+        raise TypeError("non_canonical_manifest_evidence")
+
     @staticmethod
     def _valid_text(value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip())
 
     @classmethod
     def _digest(cls, crypto: CryptoIntegrity, domain: str, value: Any) -> str:
-        return crypto.digest(domain, value)
+        return crypto.digest(domain, cls._canonical(value))
 
     @classmethod
     def _validate_inputs(
@@ -76,6 +91,12 @@ class ExportIntegrityManifest:
             raise ValueError("invalid_manifest_stage_count")
         if len(continuity_records) != len(stage_order) or len(continuity_evidence) != len(stage_order):
             raise ValueError("invalid_manifest_continuity_count")
+        if not all(isinstance(item, StageAttestation) for item in attestations):
+            raise TypeError("invalid_manifest_attestation_item")
+        if not all(isinstance(item, KernelContinuityRecord) for item in continuity_records):
+            raise TypeError("invalid_manifest_record_item")
+        if not all(isinstance(item, tuple) and len(item) == 5 for item in continuity_evidence):
+            raise TypeError("invalid_manifest_evidence_item")
         if not isinstance(continuity_seal, ContinuitySeal):
             raise TypeError("invalid_manifest_seal")
         if not isinstance(final_continuity_tag, str) or len(final_continuity_tag) != cls.TAG_LENGTH:
