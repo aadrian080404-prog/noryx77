@@ -50,21 +50,23 @@ class AgentSupervisor:
         model_class = getattr(agent, "model_class", "medium")
         if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
             return VerificationResult(False, "allocation", "invalid_model_class")
+
+        required_capabilities = self._required_capabilities(task)
+        if required_capabilities is None:
+            if "required_capabilities" in getattr(task, "constraints", {}):
+                return VerificationResult(False, "allocation", "invalid_required_capabilities")
+        else:
+            capabilities = getattr(agent, "capabilities", ())
+            if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
+                return VerificationResult(False, "allocation", "invalid_agent_capabilities")
+            if not set(required_capabilities).issubset(capabilities):
+                return VerificationResult(False, "allocation", "resource_missing_required_capability")
+
         if getattr(agent, "capacity_exempt", False) is True or not explicit_model:
             return VerificationResult(True, "allocation", "resource_legacy_eligible")
         required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
         if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
             return VerificationResult(False, "allocation", "resource_underpowered_for_task")
-        required_capabilities = self._required_capabilities(task)
-        if required_capabilities is None:
-            if "required_capabilities" in getattr(task, "constraints", {}):
-                return VerificationResult(False, "allocation", "invalid_required_capabilities")
-            return VerificationResult(True, "allocation", "resource_task_eligible")
-        capabilities = getattr(agent, "capabilities", ())
-        if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
-            return VerificationResult(False, "allocation", "invalid_agent_capabilities")
-        if not set(required_capabilities).issubset(capabilities):
-            return VerificationResult(False, "allocation", "resource_missing_required_capability")
         return VerificationResult(True, "allocation", "resource_task_eligible")
 
     def _resolve_registered_agent(self, agent_id: str, agent):
