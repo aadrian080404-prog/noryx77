@@ -7,6 +7,7 @@ class Agent:
     agent_id = "base"
     model_class = "medium"
     capabilities = ()
+    capacity_exempt = False
 
     def run(self, task: TaskSpec) -> AgentResult:
         raise NotImplementedError
@@ -16,6 +17,9 @@ class DeterministicAgent(Agent):
     agent_id = "deterministic"
     model_class = "micro"
     capabilities = ("deterministic",)
+    # DeterministicAgent is the bounded local fallback/test execution backend.
+    # Its model_class describes implementation size, not a claim about task quality.
+    capacity_exempt = True
 
     def __init__(self, verifier: VerificationEngine | None = None):
         self.verifier = verifier or VerificationEngine()
@@ -46,6 +50,7 @@ class ProviderAgent(Agent):
         self.verifier = verifier or VerificationEngine()
         self.model_class = model_class
         self.capabilities = capabilities
+        self.capacity_exempt = False
         self.provider_id = getattr(provider, "provider_id", "")
         self.model_id = getattr(provider, "model_id", "")
 
