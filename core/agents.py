@@ -60,6 +60,8 @@ class DeterministicAgent(Agent):
 
         try:
             output = task.objective
+            if output is None:
+                return self._rejected(task, "null_output")
             output_check = self.verifier.verify_output(
                 output,
                 requirements=task.verification_requirements,
@@ -171,6 +173,8 @@ class ProviderAgent(Agent):
             return self._rejected(task)
         try:
             isolated_output = deepcopy(response.output)
+            if isolated_output is None:
+                return self._rejected(task, "null_output")
         except Exception:
             return self._rejected(task)
         try:
