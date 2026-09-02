@@ -19,6 +19,11 @@ class _FailingProvider(_Provider):
         raise RuntimeError("provider unavailable")
 
 
+class _NullProvider(_Provider):
+    def execute(self, _request):
+        return ProviderResponse(None, provider_id=self.provider_id, model_id=self.model_id, metadata={})
+
+
 class _WrongStageVerifier(VerificationEngine):
     def verify_task(self, _task):
         return VerificationResult(True, "result", "wrong_stage")
@@ -93,6 +98,27 @@ class VerifierStageAndDeterministic206To210Tests(unittest.TestCase):
 
     def test_attack_210_deterministic_agent_output_verifier_exception_fails_closed(self):
         result = DeterministicAgent(_RaisesVerifier(output=True)).run(self.task)
+        self.assertEqual(result.status, "rejected")
+        self.assertIsInstance(result.verification, VerificationResult)
+        self.assertFalse(result.verification.valid)
+
+    def test_attack_211_provider_null_output_cannot_be_promoted_by_malicious_verifier(self):
+        result = ProviderAgent("agent", _NullProvider(), _ValidNullVerifier()).run(self.task)
+        self.assertEqual(result.status, "rejected")
+        self.assertIsInstance(result.verification, VerificationResult)
+        self.assertFalse(result.verification.valid)
+
+    def test_attack_212_deterministic_null_objective_cannot_be_promoted_by_malicious_verifier(self):
+        malformed_task = TaskSpec(
+            "verifier-stage-null-objective",
+            "analysis",
+            None,
+            {},
+            {},
+            ("string",),
+            "normal",
+        )
+        result = DeterministicAgent(_ValidNullVerifier()).run(malformed_task)
         self.assertEqual(result.status, "rejected")
         self.assertIsInstance(result.verification, VerificationResult)
         self.assertFalse(result.verification.valid)
