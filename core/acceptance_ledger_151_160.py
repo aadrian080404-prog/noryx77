@@ -98,6 +98,11 @@ class AcceptanceLedger:
     def verify(self, records: Iterable[AcceptanceLedgerRecord] | None = None) -> bool:
         try:
             records = tuple(self._records if records is None else records)
+            # Verification of an explicit snapshot must cover the complete
+            # committed ledger. Otherwise a valid prefix could be mistaken for
+            # an intact ledger after deletion of its tail records.
+            if len(records) != len(self._records):
+                return False
             previous = ""
             seen: set[str] = set()
             manifests: set[str] = set()
