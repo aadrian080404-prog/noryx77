@@ -29,7 +29,7 @@ class DeterministicAgent(Agent):
         try:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             if (
-                isinstance(check, VerificationResult)
+                type(check) is VerificationResult
                 and check.is_well_formed()
                 and not check.valid
                 and check.stage == "result"
@@ -50,7 +50,7 @@ class DeterministicAgent(Agent):
         except Exception:
             return self._rejected(task, "deterministic_task_verification_failure")
         if (
-            not isinstance(task_check, VerificationResult)
+            type(task_check) is not VerificationResult
             or not task_check.is_well_formed()
             or task_check.stage != "contract"
         ):
@@ -70,7 +70,7 @@ class DeterministicAgent(Agent):
         except Exception:
             return self._rejected(task, "deterministic_output_verification_failure")
         if (
-            not isinstance(output_check, VerificationResult)
+            type(output_check) is not VerificationResult
             or not output_check.is_well_formed()
             or output_check.stage != "result"
         ):
@@ -119,7 +119,7 @@ class ProviderAgent(Agent):
         try:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             if (
-                isinstance(check, VerificationResult)
+                type(check) is VerificationResult
                 and check.is_well_formed()
                 and not check.valid
                 and check.stage == "result"
@@ -140,7 +140,7 @@ class ProviderAgent(Agent):
         except Exception:
             return self._rejected(task, "provider_task_verification_failure")
         if (
-            not isinstance(task_check, VerificationResult)
+            type(task_check) is not VerificationResult
             or not task_check.is_well_formed()
             or task_check.stage != "contract"
         ):
@@ -182,7 +182,7 @@ class ProviderAgent(Agent):
         except Exception:
             return self._rejected(task, "provider_output_verification_failure")
         if (
-            not isinstance(output_check, VerificationResult)
+            type(output_check) is not VerificationResult
             or not output_check.is_well_formed()
             or output_check.stage != "result"
         ):
