@@ -28,14 +28,17 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
                                      risk_class=self.risk, verification_requirements=self.requirements)
         previous = ""
         records = []
+        evidence = []
         for index, (stage, payload) in enumerate(zip(self.STAGES, self.payloads)):
             state = {"stage": stage, "value": payload["value"]}
             stage_input = {"stage": stage, "previous_continuity_tag": previous, "payload": payload}
             dependency = self.context_tag if index == 0 else self.attestations[index - 1].tag
             record = continuity.attest(stage, state, stage_input, payload, dependency_tag=dependency)
             records.append(record)
+            evidence.append((stage, state, stage_input, payload, dependency))
             previous = record.tag
         self.records = tuple(records)
+        self.evidence = tuple(evidence)
         self.policy = KernelContinuityPolicy(self.crypto, session_id=self.session_id,
                                              task_id=self.task_id, stage_order=self.STAGES)
         self.seal = self.policy.seal(self.records)
@@ -46,13 +49,15 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
             continuity_tags=tuple(item.tag for item in self.records), continuity_seal=self.seal.seal,
         )
 
-    def _verify(self, *, attestations=None, seal=None, final_tag=None, session_id=None, task_id=None):
+    def _verify(self, *, attestations=None, seal=None, final_tag=None, session_id=None, task_id=None,
+                continuity_evidence=None):
         sid = self.session_id if session_id is None else session_id
         tid = self.task_id if task_id is None else task_id
         context = self.context_tag if session_id is None else self.crypto.digest("hypersynth_session", {
             "session_id": sid, "task_id": tid, "risk_class": self.risk,
             "verification_requirements": self.requirements,
         })
+        evidence = self.evidence if continuity_evidence is None else continuity_evidence
         return HypersynthIntegrityVerifier.verify_exported_integrity(
             self.crypto, session_id=sid, task_id=tid, risk_class=self.risk,
             requirements=self.requirements, stage_order=self.STAGES,
@@ -60,7 +65,7 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
             payloads=self.payloads, continuity_records=self.records,
             continuity_seal=self.seal if seal is None else seal,
             final_continuity_tag=self.final_tag if final_tag is None else final_tag,
-            context_tag=context,
+            context_tag=context, continuity_evidence=evidence,
         )
 
     def test_attack91_external_verifier_does_not_depend_on_policy_sealed_state(self):
