@@ -10,6 +10,7 @@ class ResourceRouter:
 
     def __init__(self):
         self._agents: dict[str, Agent] = {}
+        self._registration_policy: dict[str, tuple[str, tuple[str, ...], bool]] = {}
 
     @staticmethod
     def _validate_agent(agent: Agent) -> str:
@@ -27,13 +28,33 @@ class ResourceRouter:
         capabilities = getattr(agent, "capabilities", ())
         if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
             raise ValueError("invalid_capabilities")
+        capacity_exempt = getattr(agent, "capacity_exempt", False)
+        if not isinstance(capacity_exempt, bool):
+            raise ValueError("invalid_capacity_exempt")
         return agent_id
+
+    def _validate_registered_state(self, agent_id: str, agent: Agent) -> None:
+        registered = self._registration_policy.get(agent_id)
+        if registered is None:
+            raise RuntimeError("missing_registration_policy")
+        current = (
+            getattr(agent, "model_class", "medium"),
+            getattr(agent, "capabilities", ()),
+            getattr(agent, "capacity_exempt", False),
+        )
+        if current != registered:
+            raise RuntimeError("registered_agent_metadata_mutated")
 
     def register(self, agent: Agent) -> None:
         agent_id = self._validate_agent(agent)
         if agent_id in self._agents:
             raise ValueError("duplicate_agent_id")
         self._agents[agent_id] = agent
+        self._registration_policy[agent_id] = (
+            getattr(agent, "model_class", "medium"),
+            getattr(agent, "capabilities", ()),
+            getattr(agent, "capacity_exempt", False),
+        )
 
     def get(self, agent_id: str):
         if not isinstance(agent_id, str) or not agent_id.strip():
@@ -43,6 +64,7 @@ class ResourceRouter:
             self._validate_agent(agent)
             if getattr(agent, "agent_id", None) != agent_id:
                 raise LookupError("agent_identity_mismatch")
+            self._validate_registered_state(agent_id, agent)
         return agent
 
     def available(self) -> tuple[str, ...]:
@@ -55,6 +77,7 @@ class ResourceRouter:
                 raise RuntimeError("invalid_registered_agent") from exc
             if registered_id != agent_id:
                 raise RuntimeError("agent_identity_mismatch")
+            self._validate_registered_state(agent_id, agent)
         return tuple(sorted(self._agents))
 
     def default_id(self) -> str:
@@ -73,6 +96,7 @@ class ResourceRouter:
             self._validate_agent(agent)
             if getattr(agent, "agent_id", None) != preferred:
                 raise LookupError("agent_identity_mismatch")
+            self._validate_registered_state(preferred, agent)
             return agent
         available = self.available()
         if len(available) == 1:
