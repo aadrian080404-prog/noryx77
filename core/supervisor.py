@@ -42,6 +42,11 @@ class AgentSupervisor:
         model_class = getattr(agent, "model_class", None)
         if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
             return VerificationResult(False, "allocation", "invalid_model_class")
+        # A deterministic fallback is intentionally bounded and verified at every
+        # later boundary. Its micro implementation class is not a capacity claim.
+        # Explicitly modeled ProviderAgents remain subject to the normal capacity gate.
+        if getattr(agent, "capacity_exempt", False) is True:
+            return VerificationResult(True, "allocation", "resource_fallback_eligible")
         required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
         if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
             return VerificationResult(False, "allocation", "resource_underpowered_for_task")
