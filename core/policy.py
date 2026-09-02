@@ -10,7 +10,7 @@ class PolicyEngine:
     HIGH_RISK = {"execute_external", "publish", "financial", "delete_external", "system_change"}
 
     def evaluate(self, action: ActionSpec) -> dict:
-        if not isinstance(action, ActionSpec) or not action.is_well_formed():
+        if type(action) is not ActionSpec or not action.is_well_formed():
             return {"allowed": False, "reason": "invalid_action"}
         if action.action_type in self.HIGH_RISK:
             return {"allowed": False, "reason": "authorization_required"}
@@ -21,4 +21,5 @@ class PolicyEngine:
         return {"allowed": True, "reason": "policy_ok"}
 
     def allows(self, action: ActionSpec) -> bool:
-        return bool(self.evaluate(action).get("allowed"))
+        decision = self.evaluate(action)
+        return type(decision) is dict and type(decision.get("allowed")) is bool and decision["allowed"]
