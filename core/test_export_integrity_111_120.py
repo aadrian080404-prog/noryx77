@@ -96,7 +96,9 @@ class ExportIntegrity111To120Tests(unittest.TestCase):
     def test_attack118_missing_or_extra_stage_rejected(self):
         self.assertFalse(self._verify_core(stage_order=self.STAGES[:-1]))
         self.assertFalse(self._verify_core(stage_order=self.STAGES + ("extra",)))
-        self.assertFalse(self.verify())
+        # The exported boundary owns the canonical stage order, so a valid
+        # export must remain accepted when no mutation is supplied.
+        self.assertTrue(self.verify())
 
     def test_attack119_malformed_export_schema_rejected(self):
         self.assertFalse(self.verify(attestations=list(self.attestations)))
