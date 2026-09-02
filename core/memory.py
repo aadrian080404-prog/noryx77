@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass
+from threading import RLock
 from typing import Any
 
 from .crypto import CryptoIntegrity
@@ -26,6 +27,7 @@ class MemoryStore:
         self._items: dict[str, MemoryItem] = {}
         self._auth: dict[str, str] = {}
         self._crypto = crypto or CryptoIntegrity()
+        self._lock = RLock()
 
     @staticmethod
     def _payload(item: MemoryItem) -> dict[str, Any]:
@@ -55,33 +57,36 @@ class MemoryStore:
 
     def put(self, item: MemoryItem) -> None:
         self._validate(item)
-        if item.memory_id not in self._items and len(self._items) >= self.max_items:
-            raise MemoryError("memory_capacity_exceeded")
-        stored = deepcopy(item)
-        # Authenticate before mutating the store. A serialization/crypto failure
-        # must not leave an unauthenticated item occupying state or capacity.
-        tag = self._crypto.digest("memory", self._payload(stored))
-        self._items[item.memory_id] = stored
-        self._auth[item.memory_id] = tag
+        with self._lock:
+            if item.memory_id not in self._items and len(self._items) >= self.max_items:
+                raise MemoryError("memory_capacity_exceeded")
+            stored = deepcopy(item)
+            # Authenticate before mutating the store. A serialization/crypto failure
+            # must not leave an unauthenticated item occupying state or capacity.
+            tag = self._crypto.digest("memory", self._payload(stored))
+            self._items[item.memory_id] = stored
+            self._auth[item.memory_id] = tag
 
     def get(self, memory_id: str):
-        item = self._items.get(memory_id) if isinstance(memory_id, str) else None
-        if item is None:
-            return None
-        if not self._integrity_ok(memory_id, item):
-            raise MemoryError("memory_integrity_failure")
-        return deepcopy(item)
-
-    def list(self, kind: str | None = None):
-        if kind is not None and kind not in self.VALID_KINDS:
-            return ()
-        result = []
-        for memory_id, item in self._items.items():
+        with self._lock:
+            item = self._items.get(memory_id) if isinstance(memory_id, str) else None
+            if item is None:
+                return None
             if not self._integrity_ok(memory_id, item):
                 raise MemoryError("memory_integrity_failure")
-            if kind is None or item.kind == kind:
-                result.append(deepcopy(item))
-        return tuple(result)
+            return deepcopy(item)
+
+    def list(self, kind: str | None = None):
+        with self._lock:
+            if kind is not None and kind not in self.VALID_KINDS:
+                return ()
+            result = []
+            for memory_id, item in self._items.items():
+                if not self._integrity_ok(memory_id, item):
+                    raise MemoryError("memory_integrity_failure")
+                if kind is None or item.kind == kind:
+                    result.append(deepcopy(item))
+            return tuple(result)
 
     def retrieve(self, *, source: str | None = None, kind: str | None = None, limit: int | None = None):
         """Return authenticated memories matching explicit provenance filters.
@@ -89,33 +94,43 @@ class MemoryStore:
         Results are deterministic: higher-importance entries first, then memory_id.
         The returned objects are deep copies, so retrieval cannot mutate storage.
         """
-        if source is not None and not isinstance(source, str):
-            raise ValueError("memory source filter must be text")
-        if kind is not None and kind not in self.VALID_KINDS:
-            raise ValueError("unsupported memory kind")
-        if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
-            raise ValueError("memory retrieval limit must be a positive integer")
+        with self._lock:
+            if source is not None and not isinstance(source, str):
+                raise ValueError("memory source filter must be text")
+            if kind is not None and kind not in self.VALID_KINDS:
+                raise ValueError("unsupported memory kind")
+            if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
+                raise ValueError("memory retrieval limit must be a positive integer")
 
-        result = []
-        for memory_id, item in self._items.items():
-            if not self._integrity_ok(memory_id, item):
-                raise MemoryError("memory_integrity_failure")
-            if source is not None and item.source != source:
-                continue
-            if kind is not None and item.kind != kind:
-                continue
-            result.append(deepcopy(item))
-        result.sort(key=lambda item: (-float(item.importance), item.memory_id))
-        if limit is not None:
-            result = result[:limit]
-        return tuple(result)
+            result = []
+            for memory_id, item in self._items.items():
+                if not self._integrity_ok(memory_id, item):
+                    raise MemoryError("memory_integrity_failure")
+                if source is not None and item.source != source:
+                    continue
+                if kind is not None and item.kind != kind:
+                    continue
+                result.append(deepcopy(item))
+            result.sort(key=lambda item: (-float(item.importance), item.memory_id))
+            if limit is not None:
+                result = result[:limit]
+            return tuple(result)
 
     def delete(self, memory_id: str) -> bool:
         if not isinstance(memory_id, str):
             return False
-        removed = self._items.pop(memory_id, None)
-        self._auth.pop(memory_id, None)
-        return removed is not None
+        with self._lock:
+            item = self._items.get(memory_id)
+            if item is None:
+                return False
+            # Never silently destroy corrupted authenticated state: callers must
+            # observe the integrity failure instead of using deletion as a bypass.
+            if not self._integrity_ok(memory_id, item):
+                raise MemoryError("memory_integrity_failure")
+            del self._items[memory_id]
+            self._auth.pop(memory_id, None)
+            return True
 
     def __len__(self) -> int:
-        return len(self._items)
+        with self._lock:
+            return len(self._items)
