@@ -34,6 +34,13 @@ class ResourceRouter:
         return agent_id
 
     @staticmethod
+    def _callable_fingerprint(callable_obj) -> tuple[object, ...]:
+        """Stable identity for an instance/class callable without using ephemeral bound-method ids."""
+        function = getattr(callable_obj, "__func__", None)
+        owner = getattr(callable_obj, "__self__", None)
+        return (id(function if function is not None else callable_obj), id(owner) if owner is not None else None)
+
+    @staticmethod
     def _registration_snapshot(agent: Agent) -> tuple[object, ...]:
         return (
             getattr(agent, "model_class", "medium"),
@@ -42,6 +49,7 @@ class ResourceRouter:
             getattr(agent, "provider_id", None),
             getattr(agent, "model_id", None),
             id(getattr(agent, "provider", None)),
+            ResourceRouter._callable_fingerprint(getattr(agent, "run")),
         )
 
     def _validate_registered_state(self, agent_id: str, agent: Agent) -> None:
