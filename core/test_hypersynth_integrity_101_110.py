@@ -194,3 +194,5 @@ class HypersynthIntegrity101To110Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# CI trigger: validate the complete repository after 101-110 hardening.
