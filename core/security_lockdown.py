@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from threading import Lock
 from typing import Callable
+import json
 
 from .crypto import CryptoIntegrity, CryptoEnvelope
 
@@ -25,6 +26,7 @@ class SecurityLockdown:
     RESTRICTED = "restricted"
     LOCKDOWN = "lockdown"
     EMERGENCY = "emergency"
+    STATE_DOMAIN = "security_lockdown_state"
 
     def __init__(self, crypto: CryptoIntegrity, admin_authorizer: Callable[[bytes], bool], *, restricted_threshold: int = 4, lockdown_threshold: int = 7, emergency_threshold: int = 10, state_store=None):
         if not isinstance(crypto, CryptoIntegrity):
@@ -134,7 +136,7 @@ class SecurityLockdown:
     def export_seal(self) -> dict:
         with self._lock:
             payload = {"mode": self._mode, "score": self._score, "incidents": self._incidents, "generation": self._generation}
-            envelope = self.crypto.sign("security_lockdown_state", payload, self.crypto.next_counter("security_lockdown_state"))
+            envelope = self.crypto.sign(self.STATE_DOMAIN, payload, self.crypto.next_counter(self.STATE_DOMAIN))
             return {"domain": envelope.domain, "nonce": envelope.nonce, "counter": envelope.counter, "payload": envelope.payload, "tag": envelope.tag}
 
     def restore_seal(self, seal: dict) -> LockdownState:
@@ -144,10 +146,12 @@ class SecurityLockdown:
             envelope = CryptoEnvelope(seal["domain"], seal["nonce"], seal["counter"], seal["payload"], seal["tag"])
         except (KeyError, TypeError):
             raise ValueError("invalid_lockdown_seal")
+        if envelope.domain != self.STATE_DOMAIN:
+            raise ValueError("invalid_lockdown_seal")
         if not self.crypto.verify(envelope, consume=False):
             raise ValueError("invalid_lockdown_seal")
         try:
-            payload = __import__("json").loads(envelope.payload.decode("utf-8"))
+            payload = json.loads(envelope.payload.decode("utf-8"))
             mode, score, incidents, generation = payload["mode"], payload["score"], payload["incidents"], payload["generation"]
         except (KeyError, TypeError, ValueError, UnicodeError):
             raise ValueError("invalid_lockdown_seal")
