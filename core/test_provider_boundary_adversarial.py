@@ -89,8 +89,27 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
                 return ProviderResponse("ok", provider_id="attacker", model_id="attacker-model")
 
         provider = Provider()
-        agent = ProviderAgent("agent", provider, VerificationEngine())
+        agent = ProviderAgent("agent", Provider(), VerificationEngine())
         task = TaskSpec("boundary-2", "analysis", "answer", {})
+        result = agent.run(task)
+        self.assertEqual(result.status, "rejected")
+
+    def test_mutable_provider_output_is_isolated_from_provider_owned_object(self):
+        output = {"answer": ["trusted"]}
+        agent = ProviderAgent("agent", StubProvider(output=output), self.verifier)
+        task = TaskSpec("boundary-3", "analysis", "answer", {})
+        result = agent.run(task)
+        self.assertEqual(result.status, "completed")
+        result.output["answer"].append("consumer-mutation")
+        self.assertEqual(output, {"answer": ["trusted"]})
+
+    def test_non_copyable_provider_output_fails_closed(self):
+        class NonCopyable:
+            def __deepcopy__(self, memo):
+                raise RuntimeError("no-copy")
+
+        agent = ProviderAgent("agent", StubProvider(output=NonCopyable()), self.verifier)
+        task = TaskSpec("boundary-4", "analysis", "answer", {})
         result = agent.run(task)
         self.assertEqual(result.status, "rejected")
 
