@@ -1,10 +1,20 @@
 import unittest
 
-from .agents import DeterministicAgent
+from .agents import Agent, DeterministicAgent
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .router import ResourceRouter
 from .supervisor import AgentSupervisor
 from .verification import VerificationEngine
+
+
+class TestAgent(Agent):
+    def __init__(self, agent_id, model_class):
+        self.agent_id = agent_id
+        self.model_class = model_class
+        self.capabilities = ()
+
+    def run(self, task):
+        return AgentResult(self.agent_id, task.task_id, "completed", task.objective, VerificationResult(True, "result", "ok"))
 
 
 class SupervisorAdmissionTests(unittest.TestCase):
@@ -39,7 +49,7 @@ class SupervisorAdmissionTests(unittest.TestCase):
         self.assertEqual(check.reason, "task_id_mismatch")
 
     def test_underpowered_preferred_agent_is_rejected_before_execution(self):
-        agent = DeterministicAgent(self.verifier, agent_id="medium-agent")
+        agent = TestAgent("medium-agent", "medium")
         self.router.register(agent)
         selected, decision = self.supervisor.select(self.task, preferred="medium-agent")
         self.assertIsNone(selected)
@@ -47,7 +57,7 @@ class SupervisorAdmissionTests(unittest.TestCase):
         self.assertEqual(decision.reason, "resource_underpowered_for_task")
 
     def test_sufficient_preferred_agent_is_accepted(self):
-        agent = DeterministicAgent(self.verifier, agent_id="large-agent", model_class="large")
+        agent = TestAgent("large-agent", "large")
         self.router.register(agent)
         selected, decision = self.supervisor.select(self.task, preferred="large-agent")
         self.assertIs(selected, agent)
@@ -55,7 +65,7 @@ class SupervisorAdmissionTests(unittest.TestCase):
         self.assertEqual(decision.reason, "agent_selected")
 
     def test_invalid_model_class_is_rejected(self):
-        agent = DeterministicAgent(self.verifier, agent_id="bad-agent", model_class="unknown")
+        agent = TestAgent("bad-agent", "unknown")
         self.router._agents["bad-agent"] = agent
         selected, decision = self.supervisor.select(self.task, preferred="bad-agent")
         self.assertIsNone(selected)
