@@ -159,7 +159,11 @@ class Hypersynth:
             if hypothesis.statement != step.objective: return VerificationResult(False, "hypothesis", "hypothesis_statement_mismatch")
             if not isinstance(hypothesis.basis, tuple) or len(hypothesis.basis) != 1 or hypothesis.basis[0] != step.step_id: return VerificationResult(False, "hypothesis", "hypothesis_step_mismatch")
             ids.add(hypothesis.hypothesis_id)
-        return VerificationResult(True, "hypothesis", "hypothesis_integrity_ok")
+        try:
+            binding_check = self.hypothesis_engine.verify_against_plan(hypotheses, plan, task)
+        except Exception:
+            return VerificationResult(False, "hypothesis", "hypothesis_plan_binding_failure")
+        return self._checked_verification(binding_check, stage="hypothesis", malformed_reason="malformed_hypothesis_plan_binding")
 
     def _verify_agent_result(self, child: TaskSpec, agent, result: AgentResult) -> VerificationResult:
         if not isinstance(result, AgentResult): return VerificationResult(False, "agent_result", "invalid_agent_result")
