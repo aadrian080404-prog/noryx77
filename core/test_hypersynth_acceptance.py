@@ -15,20 +15,26 @@ from .verification import VerificationEngine
 
 
 class TwoStepPlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective), PlanStep(task.task_id + ":1", task.objective)))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective), PlanStep(task.task_id + ":1", task.objective)), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         if plan.task_id != task.task_id or len(plan.steps) != 2:
             return VerificationResult(False, "plan", "invalid_acceptance_plan")
+        if context is not None and (plan.context_version != context.version or plan.context_source_ids != context.source_ids):
+            return VerificationResult(False, "plan", "plan_context_mismatch")
         return VerificationResult(True, "plan", "plan_ok")
 
 
 class ThreeStepPlanner:
-    def build(self, task):
-        return Plan(task.task_id, tuple(PlanStep(f"{task.task_id}:{i}", task.objective) for i in range(3)))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, tuple(PlanStep(f"{task.task_id}:{i}", task.objective) for i in range(3)), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         return VerificationResult(plan.task_id == task.task_id and len(plan.steps) == 3, "plan", "plan_ok")
 
 
