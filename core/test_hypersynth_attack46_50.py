@@ -6,6 +6,9 @@ from .secure_tools import SecureCapabilityRegistry, SecureToolExecutor
 
 
 class AllowAll:
+    def evaluate(self, action):
+        return {"allowed": True, "reason": "allowed"}
+
     def allows(self, action):
         return True
 
@@ -41,8 +44,12 @@ class Attack46To50Tests(unittest.TestCase):
 
     def test_attack49_policy_exception_fails_closed(self):
         class ExplodingPolicy:
-            def allows(self, action):
+            def evaluate(self, action):
                 raise RuntimeError("boom")
+
+            def allows(self, action):
+                return True
+
         executor = SecureToolExecutor(ExplodingPolicy(), OutputVerifier(), self.crypto)
         executor.capabilities.register("compute", lambda target, params: target)
         output, check = executor.execute(ActionSpec("a49", "compute", target="x"))
@@ -54,6 +61,7 @@ class Attack46To50Tests(unittest.TestCase):
         class BadVerifier:
             def verify_output(self, output, stage):
                 return object()
+
         executor = SecureToolExecutor(AllowAll(), BadVerifier(), self.crypto)
         executor.capabilities.register("compute", lambda target, params: target)
         output, check = executor.execute(ActionSpec("a50", "compute", target="x"))
