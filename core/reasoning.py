@@ -84,10 +84,54 @@ class HypothesisEngine:
 
 
 class InternalSimulator:
-    """Pre-execution bounded feasibility check over the declared plan only."""
+    """Pre-execution bounded feasibility check over declared hypotheses and task constraints."""
+
+    MAX_SIMULATIONS = 8
+
     def simulate(self, task: TaskSpec, hypotheses: tuple[Hypothesis, ...]) -> tuple[SimulationResult, ...]:
-        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple): return ()
-        return tuple(SimulationResult(h.hypothesis_id, bool(h.statement and h.task_id == task.task_id), "feasible" if h.statement and h.task_id == task.task_id else "invalid_hypothesis") for h in hypotheses if isinstance(h, Hypothesis))
+        if not isinstance(task, TaskSpec) or not task.is_well_formed() or not isinstance(hypotheses, tuple) or not hypotheses:
+            return ()
+        if len(hypotheses) > self.MAX_SIMULATIONS:
+            return tuple(SimulationResult("__invalid__", False, "simulation_bounds_exceeded") for _ in range(1))
+        ids = set()
+        expected_sources = None
+        expected_version = None
+        results = []
+        for hypothesis in hypotheses:
+            if not isinstance(hypothesis, Hypothesis):
+                return tuple(SimulationResult("__invalid__", False, "invalid_hypothesis") for _ in range(1))
+            if not isinstance(hypothesis.hypothesis_id, str) or not hypothesis.hypothesis_id.strip() or hypothesis.hypothesis_id in ids:
+                return tuple(SimulationResult(hypothesis.hypothesis_id if isinstance(hypothesis.hypothesis_id, str) else "__invalid__", False, "invalid_hypothesis_id") for _ in range(1))
+            if hypothesis.task_id != task.task_id:
+                return (SimulationResult(hypothesis.hypothesis_id, False, "hypothesis_task_mismatch"),)
+            if not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip():
+                return (SimulationResult(hypothesis.hypothesis_id, False, "invalid_hypothesis"),)
+            if not isinstance(hypothesis.basis, tuple) or len(hypothesis.basis) != 1:
+                return (SimulationResult(hypothesis.hypothesis_id, False, "invalid_hypothesis_basis"),)
+            basis = hypothesis.basis[0]
+            if not isinstance(basis, str) or not basis.startswith(task.task_id + ":"):
+                return (SimulationResult(hypothesis.hypothesis_id, False, "hypothesis_basis_identity_mismatch"),)
+            if hypothesis.context_version is not None:
+                if isinstance(hypothesis.context_version, bool) or not isinstance(hypothesis.context_version, int) or hypothesis.context_version < 1:
+                    return (SimulationResult(hypothesis.hypothesis_id, False, "invalid_context_version"),)
+                if not isinstance(hypothesis.context_source_ids, tuple) or not hypothesis.context_source_ids or hypothesis.context_source_ids[0] != task.task_id:
+                    return (SimulationResult(hypothesis.hypothesis_id, False, "invalid_context_sources"),)
+                if expected_version is None:
+                    expected_version = hypothesis.context_version
+                    expected_sources = hypothesis.context_source_ids
+                elif hypothesis.context_version != expected_version or hypothesis.context_source_ids != expected_sources:
+                    return (SimulationResult(hypothesis.hypothesis_id, False, "context_binding_mismatch"),)
+            elif hypothesis.context_source_ids:
+                return (SimulationResult(hypothesis.hypothesis_id, False, "unexpected_context_binding"),)
+            ids.add(hypothesis.hypothesis_id)
+            results.append(SimulationResult(hypothesis.hypothesis_id, True, "feasible"))
+        max_steps = task.constraints.get("max_steps") if hasattr(task.constraints, "get") else None
+        if max_steps is not None:
+            if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
+                return (SimulationResult("__constraints__", False, "invalid_max_steps_constraint"),)
+            if len(hypotheses) > max_steps:
+                return (SimulationResult("__constraints__", False, "step_budget_exceeded"),)
+        return tuple(results)
 
     def verify(self, simulations: tuple[SimulationResult, ...]) -> VerificationResult:
         if not isinstance(simulations, tuple) or not simulations: return VerificationResult(False, "simulation", "no_simulations")
