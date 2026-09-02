@@ -34,6 +34,10 @@ class HypersynthRuntime:
             raise TypeError("invalid_crypto_integrity")
         if lockdown is not None and lockdown_store is not None:
             raise ValueError("lockdown_and_store_are_mutually_exclusive")
+        if lockdown is not None and lockdown_seal is not None:
+            raise ValueError("lockdown_and_seal_are_mutually_exclusive")
+        if lockdown_store is not None and lockdown_seal is not None:
+            raise ValueError("lockdown_store_and_seal_are_mutually_exclusive")
         if lockdown is not None and not isinstance(lockdown, SecurityLockdown):
             raise TypeError("invalid_security_lockdown")
         self.security_lockdown = lockdown or SecurityLockdown(
