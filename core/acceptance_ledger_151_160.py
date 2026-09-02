@@ -34,10 +34,20 @@ class AcceptanceLedger:
         self.crypto = crypto
         self._records: list[AcceptanceLedgerRecord] = []
         self._sealed = False
+        self._seal_length: int | None = None
+        self._seal_root: str | None = None
 
     @property
     def records(self) -> tuple[AcceptanceLedgerRecord, ...]:
         return tuple(self._records)
+
+    @property
+    def sealed(self) -> bool:
+        return self._sealed
+
+    @property
+    def seal_root(self) -> str | None:
+        return self._seal_root
 
     def _verify_receipt_crypto(self, receipt: AcceptanceReceipt) -> bool:
         if not isinstance(receipt, AcceptanceReceipt):
@@ -87,11 +97,20 @@ class AcceptanceLedger:
         self._records.append(record)
         return record
 
+    def _root(self, records: Iterable[AcceptanceLedgerRecord]) -> str:
+        records = tuple(records)
+        return self.crypto.digest(
+            self.DOMAIN + ":root",
+            {"length": len(records), "tail": records[-1].tag if records else ""},
+        )
+
     def seal(self) -> tuple[AcceptanceLedgerRecord, ...]:
         if self._sealed:
             raise RuntimeError("ledger_already_sealed")
         if not self.verify(self._records):
             raise RuntimeError("ledger_integrity_failure")
+        self._seal_length = len(self._records)
+        self._seal_root = self._root(self._records)
         self._sealed = True
         return self.records
 
@@ -133,6 +152,13 @@ class AcceptanceLedger:
                 if not hmac.compare_digest(expected, record.tag):
                     return False
                 seen.add(record.tag); manifests.add(record.manifest_tag); previous = record.tag
+            if self._sealed:
+                if self._seal_length is None or self._seal_root is None:
+                    return False
+                if len(records) != self._seal_length:
+                    return False
+                if not hmac.compare_digest(self._root(records), self._seal_root):
+                    return False
             return True
         except Exception:
             return False
