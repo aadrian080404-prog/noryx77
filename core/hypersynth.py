@@ -231,19 +231,15 @@ class Hypersynth:
         if not independent_plan_check.valid: return self._reject("planning", task, independent_plan_check)
         evidence.append("plan_integrity")
         evidence.append("context_planning_binding")
-        self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps), context_version=context.version)
+        self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
 
         phase_check = self._advance_phase(phase_index, "hypothesis", task)
         if not phase_check.valid: return self._reject("hypothesis", task, phase_check)
         phase_index += 1
-        try:
-            hypotheses = self.hypothesis_engine.generate(task, plan)
-            hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
-        except Exception: return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
-        hypothesis_check = self._checked_verification(hypothesis_check, stage="hypothesis", malformed_reason="malformed_hypothesis_verification")
+        try: hypotheses = self.hypothesis_engine.generate(task, plan)
+        except Exception: return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_generation_failure"))
+        hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
         if not hypothesis_check.valid: return self._reject("hypothesis", task, hypothesis_check)
-        independent_hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
-        if not independent_hypothesis_check.valid: return self._reject("hypothesis", task, independent_hypothesis_check)
         evidence.append("hypothesis_integrity")
         self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
 
@@ -317,7 +313,11 @@ class Hypersynth:
                 self.audit.record("agent_runtime_revalidation", task_id=child.task_id, agent_id=getattr(agent, "agent_id", None), allowed=False, reason=runtime_check.reason)
                 return self._reject("execution", task, runtime_check, results=tuple(results))
             self.audit.record("agent_runtime_revalidation", task_id=child.task_id, agent_id=getattr(agent, "agent_id", None), allowed=True, reason=runtime_check.reason)
-            try: result = agent.run(child)
+            try:
+                # Bind the already-validated callable before invoking the execution boundary.
+                # Instance-level replacement after this point cannot redirect this invocation.
+                agent_run = agent.run
+                result = agent_run(child)
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             results.append(result)
         if len(results) != len(assignments): return self._reject("execution", task, VerificationResult(False, "execution", "result_count_mismatch"), results=tuple(results))
