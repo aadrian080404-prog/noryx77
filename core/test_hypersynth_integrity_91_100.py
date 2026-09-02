@@ -32,14 +32,12 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
         )
         previous = ""
         records = []
-        evidence = []
         for stage, payload in zip(self.STAGES, self.payloads):
             state = {"stage": stage, "value": payload["value"]}
             stage_input = {"stage": stage, "previous": previous}
             dependency = self.attestations[len(records)].tag
             record = continuity.attest(stage, state, stage_input, payload, dependency_tag=dependency)
             records.append(record)
-            evidence.append((stage, state, stage_input, payload, dependency))
             previous = record.tag
         self.records = tuple(records)
         self.policy = KernelContinuityPolicy(
@@ -58,23 +56,22 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
             continuity_seal=self.seal.seal,
         )
 
-    def _verify(self, attestations=None, seal=None, final_tag=None, session_id=None, task_id=None):
+    def _verify(self, *, attestations=None, seal=None, final_tag=None, session_id=None, task_id=None):
         return HypersynthIntegrityVerifier.verify_exported_integrity(
             self.crypto,
-            session_id=session_id or self.session_id,
-            task_id=task_id or self.task_id,
+            session_id=self.session_id if session_id is None else session_id,
+            task_id=self.task_id if task_id is None else task_id,
             risk_class=self.risk,
             requirements=self.requirements,
             stage_order=self.STAGES,
-            attestations=attestations or self.attestations,
+            attestations=self.attestations if attestations is None else attestations,
             payloads=self.payloads,
             continuity_records=self.records,
-            continuity_seal=seal or self.seal,
-            final_continuity_tag=final_tag or self.final_tag,
+            continuity_seal=self.seal if seal is None else seal,
+            final_continuity_tag=self.final_tag if final_tag is None else final_tag,
         )
 
     def test_attack91_external_verifier_does_not_depend_on_policy_sealed_state(self):
-        self.policy.seal(self.records) if False else None
         fresh = KernelContinuityPolicy(self.crypto, session_id=self.session_id, task_id=self.task_id, stage_order=self.STAGES)
         self.assertTrue(HypersynthIntegrityVerifier.verify_continuity_seal(
             self.crypto, self.seal, self.records,
@@ -110,10 +107,14 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
     def test_attack96_exported_attestation_and_record_collections_are_immutable(self):
         self.assertIsInstance(self.attestations, tuple)
         self.assertIsInstance(self.records, tuple)
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(TypeError):
             self.attestations[0] = self.attestations[0]
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(TypeError):
             self.records[0] = self.records[0]
+        with self.assertRaises(Exception):
+            self.attestations[0].tag = "0" * 64
+        with self.assertRaises(Exception):
+            self.records[0].tag = "0" * 64
 
     def test_attack97_domain_separation_prevents_cross_domain_reuse(self):
         payload = {"x": 1, "stage": "planning"}
@@ -127,8 +128,8 @@ class HypersynthIntegrity91To100Tests(unittest.TestCase):
             self.crypto.canonical({"b": 2, "a": 1}),
         )
         self.assertNotEqual(
-            self.crypto.canonical({"x": [1, 2]}),
-            self.crypto.canonical({"x": (1, 2)}),
+            self.crypto.canonical({"x": 1}),
+            self.crypto.canonical({"x": "1"}),
         )
 
     def test_attack99_final_tag_tamper_fails_closed(self):
