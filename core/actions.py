@@ -37,7 +37,8 @@ class ActionGate:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
         try:
             with self._authorization_lock:
-                envelope = self.crypto.sign("action_gate", asdict(action), self._authorization_counter)
+                counter = self.crypto.next_counter("action_gate")
+                envelope = self.crypto.sign("action_gate", asdict(action), counter)
                 self._authorization_counter += 1
                 if not self.crypto.verify(envelope):
                     return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
