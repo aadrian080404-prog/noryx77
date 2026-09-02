@@ -20,7 +20,7 @@ class SecurityBoundary:
         self.verifier = verifier
 
     def inspect(self, action: ActionSpec) -> SecurityDecision:
-        if not isinstance(action, ActionSpec) or not action.is_well_formed():
+        if type(action) is not ActionSpec or not action.is_well_formed():
             return SecurityDecision(False, "invalid_action", "unknown")
         if action.risk_class not in self.ALLOWED_RISKS:
             return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
@@ -39,16 +39,19 @@ class SecurityBoundary:
         return SecurityDecision(True, "allowed", action.risk_class)
 
     def allows(self, action: ActionSpec) -> bool:
-        return self.inspect(action).allowed
+        decision = self.inspect(action)
+        return type(decision) is SecurityDecision and decision.allowed
 
     def verify(self, action: ActionSpec, output):
         decision = self.inspect(action)
+        if type(decision) is not SecurityDecision:
+            return VerificationResult(False, "security", "malformed_security_decision")
         if not decision.allowed:
             return VerificationResult(False, "security", decision.reason)
         try:
             result = self.verifier.verify_output(output, stage="security_result")
         except Exception:
             return VerificationResult(False, "security", "verification_failure")
-        if not isinstance(result, VerificationResult) or not result.is_well_formed():
+        if type(result) is not VerificationResult or not result.is_well_formed():
             return VerificationResult(False, "security", "malformed_verification")
         return result
