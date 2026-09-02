@@ -121,7 +121,7 @@ class Hypersynth:
         except Exception: return VerificationResult(False, "hypothesis", "hypothesis_plan_binding_failure")
         return self._checked_verification(binding_check, stage="hypothesis", malformed_reason="malformed_hypothesis_plan_binding")
     def _verify_agent_result(self, child: TaskSpec, agent, result: AgentResult) -> VerificationResult:
-        if not isinstance(result, AgentResult): return VerificationResult(False, "agent_result", "invalid_agent_result")
+        if type(result) is not AgentResult: return VerificationResult(False, "agent_result", "invalid_agent_result")
         if not result.is_well_formed(): return VerificationResult(False, "agent_result", "malformed_agent_result")
         if result.agent_id != getattr(agent, "agent_id", None): return VerificationResult(False, "agent_result", "agent_id_mismatch")
         if result.task_id != child.task_id: return VerificationResult(False, "agent_result", "task_id_mismatch")
@@ -132,7 +132,8 @@ class Hypersynth:
         except Exception: return VerificationResult(False, "agent_result", "verifier_output_failure")
         output_check = self._checked_verification(output_check, stage="runtime_output", malformed_reason="malformed_output_verification")
         if not output_check.valid: return output_check
-        if result.verification is None or not result.verification.is_well_formed(): return VerificationResult(False, "agent_result", "malformed_result_verification")
+        if type(result.verification) is not VerificationResult: return VerificationResult(False, "agent_result", "malformed_result_verification")
+        if not result.verification.is_well_formed(): return VerificationResult(False, "agent_result", "malformed_result_verification")
         if not result.verification.valid: return VerificationResult(False, "agent_result", "result_verification_failed")
         if result.verification.stage not in ("result", "agent_result", result.agent_id): return VerificationResult(False, "agent_result", "verification_identity_mismatch")
         return VerificationResult(True, "agent_result", "independent_result_verified")
