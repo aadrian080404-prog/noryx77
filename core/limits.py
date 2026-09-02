@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,12 @@ class RuntimeLimits:
         for name, value in numeric.items():
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise ValueError(f"invalid_runtime_limit:{name}")
-        if isinstance(self.max_task_seconds, bool) or not isinstance(self.max_task_seconds, (int, float)) or self.max_task_seconds <= 0:
+        if (
+            isinstance(self.max_task_seconds, bool)
+            or not isinstance(self.max_task_seconds, (int, float))
+            or not math.isfinite(self.max_task_seconds)
+            or self.max_task_seconds <= 0
+        ):
             raise ValueError("invalid_runtime_limit:max_task_seconds")
 
     def validate_input(self, value: object) -> bool:
