@@ -85,6 +85,17 @@ class SecureToolExecutor:
     def _action_digest(self, action: ActionSpec) -> str:
         return self.crypto.digest("tool_action", {"action_id": action.action_id, "action_type": action.action_type, "target": action.target, "parameters": dict(action.parameters), "risk_class": action.risk_class, "requires_authorization": action.requires_authorization})
 
+    def _execute_handler(self, handler, action_target, action_parameters, action_digest, action):
+        """Run only after all final integrity checks have linearized against lockdown."""
+        if self._action_digest(action) != action_digest:
+            self._incident("tool_action_integrity_mismatch", 10)
+            raise PermissionError("action_runtime_integrity_mismatch")
+        current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
+        if current_handler is not handler:
+            self._incident("tool_capability_identity_mismatch", 10)
+            raise PermissionError("capability_runtime_identity_mismatch")
+        return current_handler(action_target, action_parameters)
+
     def execute(self, action: ActionSpec):
         if self.lockdown is not None:
             try:
@@ -126,17 +137,20 @@ class SecureToolExecutor:
             if not security_decision.allowed:
                 return None, VerificationResult(False, "tool_policy", security_decision.reason)
             try:
-                if self._action_digest(action) != action_digest:
-                    self._incident("tool_action_integrity_mismatch", 10)
-                    return None, VerificationResult(False, "tool_policy", "action_runtime_integrity_mismatch")
-                current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
-            except Exception:
-                self._incident("tool_capability_integrity_failure", 10)
-                return None, VerificationResult(False, "tool_policy", "capability_runtime_integrity_failure")
-            if current_handler is not handler:
-                self._incident("tool_capability_identity_mismatch", 10)
-                return None, VerificationResult(False, "tool_policy", "capability_runtime_identity_mismatch")
-            output = current_handler(action_target, action_parameters)
+                if self.lockdown is not None:
+                    with self.lockdown.execution_guard():
+                        output = self._execute_handler(handler, action_target, action_parameters, action_digest, action)
+                else:
+                    output = self._execute_handler(handler, action_target, action_parameters, action_digest, action)
+            except PermissionError as exc:
+                reason = str(exc)
+                if reason == "global_lockdown":
+                    return None, VerificationResult(False, "tool_policy", "global_lockdown")
+                if reason == "action_runtime_integrity_mismatch":
+                    return None, VerificationResult(False, "tool_policy", reason)
+                if reason == "capability_runtime_identity_mismatch":
+                    return None, VerificationResult(False, "tool_policy", reason)
+                raise
         except Exception as exc:
             return None, VerificationResult(False, "tool_execution", f"execution_failed:{type(exc).__name__}")
         try:
