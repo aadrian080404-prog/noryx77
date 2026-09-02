@@ -65,9 +65,16 @@ class ProviderAgent(Agent):
         task_check = self.verifier.verify_task(task)
         if not task_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=task_check)
+
+        expected_provider = self.provider
+        expected_provider_id = self.provider_id
+        expected_model_id = self.model_id
         try:
-            response = self.provider.execute(request_from_task(task))
+            response = expected_provider.execute(request_from_task(task))
         except Exception:
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         if not isinstance(response, ProviderResponse):
@@ -76,10 +83,10 @@ class ProviderAgent(Agent):
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if response.provider_id != self.provider_id:
+        if response.provider_id != expected_provider_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if not isinstance(response.model_id, str) or not response.model_id.strip() or response.model_id != self.model_id:
+        if not isinstance(response.model_id, str) or not response.model_id.strip() or response.model_id != expected_model_id:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
@@ -87,7 +94,7 @@ class ProviderAgent(Agent):
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         try:
             isolated_output = deepcopy(response.output)
-        except Exception as exc:
+        except Exception:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
