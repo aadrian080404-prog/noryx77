@@ -20,6 +20,16 @@ class SecureCapabilityRegistry:
         self.crypto = crypto
         self._capabilities = {}
 
+    @staticmethod
+    def _fingerprint(handler) -> str:
+        return f"{type(handler).__module__}.{type(handler).__qualname__}:{id(handler)}"
+
+    def _capability_tag(self, name: str, risk_class: str, handler) -> str:
+        return self.crypto.digest(
+            "capability",
+            {"name": name, "risk": risk_class, "handler_fingerprint": self._fingerprint(handler)},
+        )
+
     def register(self, name: str, handler, *, risk_class: str = "normal") -> None:
         if not isinstance(name, str) or not name.strip() or not callable(handler):
             raise ValueError("invalid_capability")
@@ -27,14 +37,18 @@ class SecureCapabilityRegistry:
             raise ValueError("invalid_capability_risk")
         if name in self._capabilities:
             raise ValueError("duplicate_capability")
-        self._capabilities[name] = (handler, risk_class, self.crypto.digest("capability", {"name": name, "risk": risk_class}))
+        self._capabilities[name] = (handler, risk_class, self._capability_tag(name, risk_class, handler))
 
     def resolve(self, name: str, *, risk_class: str | None = None):
         item = self._capabilities.get(name)
         if item is None:
             return None
         handler, registered_risk, tag = item
-        if not self.crypto.verify_digest("capability", {"name": name, "risk": registered_risk}, tag):
+        if not self.crypto.verify_digest(
+            "capability",
+            {"name": name, "risk": registered_risk, "handler_fingerprint": self._fingerprint(handler)},
+            tag,
+        ):
             raise RuntimeError("capability_integrity_failure")
         if risk_class is not None and risk_class != registered_risk:
             raise RuntimeError("capability_risk_mismatch")
@@ -90,7 +104,13 @@ class SecureToolExecutor:
                 return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
             if not security_decision.allowed:
                 return None, VerificationResult(False, "tool_policy", security_decision.reason)
-            output = handler(action.target, deepcopy(dict(action.parameters)))
+            try:
+                current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
+            except Exception:
+                return None, VerificationResult(False, "tool_policy", "capability_runtime_integrity_failure")
+            if current_handler is not handler:
+                return None, VerificationResult(False, "tool_policy", "capability_runtime_identity_mismatch")
+            output = current_handler(action.target, deepcopy(dict(action.parameters)))
         except Exception as exc:
             return None, VerificationResult(False, "tool_execution", f"execution_failed:{type(exc).__name__}")
         try:
