@@ -10,10 +10,12 @@ from .verification import VerificationEngine
 
 
 class ForgedPlanPlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "execute", "high"),))
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective, "execute", "high"),), version, sources)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
         return VerificationResult(True, "planning", "forged_planner_ok")
 
 
