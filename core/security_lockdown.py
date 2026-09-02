@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from threading import Lock
 from typing import Callable
 
-from .crypto import CryptoIntegrity
+from .crypto import CryptoIntegrity, CryptoEnvelope
 
 
 @dataclass(frozen=True)
@@ -25,25 +26,12 @@ class SecurityLockdown:
     LOCKDOWN = "lockdown"
     EMERGENCY = "emergency"
 
-    def __init__(
-        self,
-        crypto: CryptoIntegrity,
-        admin_authorizer: Callable[[bytes], bool],
-        *,
-        restricted_threshold: int = 4,
-        lockdown_threshold: int = 7,
-        emergency_threshold: int = 10,
-    ):
+    def __init__(self, crypto: CryptoIntegrity, admin_authorizer: Callable[[bytes], bool], *, restricted_threshold: int = 4, lockdown_threshold: int = 7, emergency_threshold: int = 10):
         if not isinstance(crypto, CryptoIntegrity):
             raise TypeError("invalid_crypto_integrity")
         if not callable(admin_authorizer):
             raise TypeError("invalid_admin_authorizer")
-        if not (
-            isinstance(restricted_threshold, int)
-            and isinstance(lockdown_threshold, int)
-            and isinstance(emergency_threshold, int)
-            and 0 < restricted_threshold < lockdown_threshold < emergency_threshold
-        ):
+        if not (isinstance(restricted_threshold, int) and isinstance(lockdown_threshold, int) and isinstance(emergency_threshold, int) and 0 < restricted_threshold < lockdown_threshold < emergency_threshold):
             raise ValueError("invalid_lockdown_thresholds")
         self.crypto = crypto
         self._admin_authorizer = admin_authorizer
@@ -54,6 +42,7 @@ class SecurityLockdown:
         self._score = 0
         self._incidents = 0
         self._generation = 0
+        self._issued_challenges: set[bytes] = set()
         self._lock = Lock()
 
     @property
@@ -62,7 +51,6 @@ class SecurityLockdown:
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
 
     def record_incident(self, category: str, *, severity: int = 1) -> LockdownState:
-        """Record a high-confidence security event and atomically escalate containment."""
         if not isinstance(category, str) or not category.strip():
             raise ValueError("invalid_incident_category")
         if isinstance(severity, bool) or not isinstance(severity, int) or not 1 <= severity <= 10:
@@ -80,79 +68,59 @@ class SecurityLockdown:
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
 
     def permits(self, *, is_admin: bool = False) -> bool:
-        """Return whether the caller may use the normal runtime path."""
         with self._lock:
             if self._mode == self.NORMAL:
                 return True
             return type(is_admin) is bool and is_admin
 
     def admin_challenge(self) -> bytes:
-        """Issue a one-time challenge for an external admin authentication mechanism."""
+        """Issue a cryptographically authenticated, single-use recovery challenge."""
         with self._lock:
-            challenge = self.crypto.sign(
-                "admin_recovery_challenge",
-                {"generation": self._generation, "mode": self._mode},
-                self.crypto.next_counter("admin_recovery_challenge"),
-            )
-            return challenge.payload + b":" + challenge.tag.encode("ascii")
+            challenge = self.crypto.sign("admin_recovery_challenge", {"generation": self._generation, "mode": self._mode}, self.crypto.next_counter("admin_recovery_challenge"))
+            encoded = challenge.payload + b":" + challenge.tag.encode("ascii")
+            self._issued_challenges.add(sha256(encoded).digest())
+            return encoded
 
     def recover(self, proof: bytes) -> LockdownState:
-        """Clear containment only when the independent admin authority approves the proof."""
+        """Clear containment only for an issued, unused challenge approved externally."""
         if not isinstance(proof, bytes) or not proof:
             raise PermissionError("admin_recovery_denied")
+        proof_id = sha256(proof).digest()
         with self._lock:
             if self._mode == self.NORMAL:
                 return LockdownState(self._mode, self._score, self._incidents, self._generation)
+            if proof_id not in self._issued_challenges:
+                raise PermissionError("admin_recovery_denied")
             try:
                 authorized = self._admin_authorizer(proof)
             except Exception as exc:
                 raise PermissionError("admin_recovery_denied") from exc
             if type(authorized) is not bool or not authorized:
                 raise PermissionError("admin_recovery_denied")
+            self._issued_challenges.remove(proof_id)
             self._mode = self.NORMAL
             self._score = 0
             self._generation += 1
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
 
     def export_seal(self) -> dict:
-        """Return an authenticated state snapshot suitable for trusted persistence."""
         with self._lock:
-            payload = {
-                "mode": self._mode,
-                "score": self._score,
-                "incidents": self._incidents,
-                "generation": self._generation,
-            }
-            counter = self.crypto.next_counter("security_lockdown_state")
-            envelope = self.crypto.sign("security_lockdown_state", payload, counter)
-            return {
-                "domain": envelope.domain,
-                "nonce": envelope.nonce,
-                "counter": envelope.counter,
-                "payload": envelope.payload,
-                "tag": envelope.tag,
-            }
+            payload = {"mode": self._mode, "score": self._score, "incidents": self._incidents, "generation": self._generation}
+            envelope = self.crypto.sign("security_lockdown_state", payload, self.crypto.next_counter("security_lockdown_state"))
+            return {"domain": envelope.domain, "nonce": envelope.nonce, "counter": envelope.counter, "payload": envelope.payload, "tag": envelope.tag}
 
     def restore_seal(self, seal: dict) -> LockdownState:
-        """Restore only an authenticated state snapshot; malformed/tampered state is rejected."""
         if not isinstance(seal, dict):
             raise ValueError("invalid_lockdown_seal")
-        from .crypto import CryptoEnvelope
-
         try:
-            envelope = CryptoEnvelope(
-                seal["domain"], seal["nonce"], seal["counter"], seal["payload"], seal["tag"]
-            )
+            envelope = CryptoEnvelope(seal["domain"], seal["nonce"], seal["counter"], seal["payload"], seal["tag"])
         except (KeyError, TypeError):
             raise ValueError("invalid_lockdown_seal")
         if not self.crypto.verify(envelope, consume=False):
             raise ValueError("invalid_lockdown_seal")
         try:
             payload = __import__("json").loads(envelope.payload.decode("utf-8"))
-            mode = payload["mode"]
-            score = payload["score"]
-            incidents = payload["incidents"]
-            generation = payload["generation"]
+            mode, score, incidents, generation = payload["mode"], payload["score"], payload["incidents"], payload["generation"]
         except (KeyError, TypeError, ValueError, UnicodeError):
             raise ValueError("invalid_lockdown_seal")
         if mode not in {self.NORMAL, self.RESTRICTED, self.LOCKDOWN, self.EMERGENCY}:
@@ -162,8 +130,6 @@ class SecurityLockdown:
         with self._lock:
             if generation < self._generation:
                 raise ValueError("stale_lockdown_seal")
-            self._mode = mode
-            self._score = score
-            self._incidents = incidents
-            self._generation = generation
+            self._mode, self._score, self._incidents, self._generation = mode, score, incidents, generation
+            self._issued_challenges.clear()
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
