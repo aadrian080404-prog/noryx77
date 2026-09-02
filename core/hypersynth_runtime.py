@@ -12,6 +12,7 @@ from .hypersynth_kernel import AttestedHypersynthKernel
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
+from .provider import Provider
 from .security import SecurityBoundary
 from .security_lockdown import SecurityLockdown
 from .verification import VerificationEngine
