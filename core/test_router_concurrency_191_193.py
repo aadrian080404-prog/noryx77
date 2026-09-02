@@ -54,7 +54,8 @@ class RouterConcurrency191To193Tests(unittest.TestCase):
                 future.result()
             snapshots = [future.result() for future in reads]
 
-        self.assertEqual(router.available(), tuple(f"a{i}" for i in range(20)))
+        expected = tuple(sorted((f"a{i}" for i in range(20))))
+        self.assertEqual(router.available(), expected)
         self.assertTrue(all(snapshot == tuple(sorted(snapshot)) for snapshot in snapshots))
         self.assertTrue(all(set(snapshot).issubset({f"a{i}" for i in range(20)}) for snapshot in snapshots))
 
