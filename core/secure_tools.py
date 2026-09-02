@@ -6,6 +6,7 @@ from copy import deepcopy
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
+from .security import SecurityBoundary
 
 
 class SecureCapabilityRegistry:
@@ -53,13 +54,14 @@ class SecureCapabilityRegistry:
 
 
 class SecureToolExecutor:
-    """Authenticated capability lookup followed by policy and output verification."""
+    """Authenticated capability lookup followed by security/policy authorization and output verification."""
 
-    def __init__(self, policy, verifier, crypto: CryptoIntegrity):
+    def __init__(self, policy, verifier, crypto: CryptoIntegrity, security=None):
         self.policy = policy
         self.verifier = verifier
-        self.capabilities = SecureCapabilityRegistry(crypto)
         self.crypto = crypto
+        self.security = security or SecurityBoundary(policy, verifier)
+        self.capabilities = SecureCapabilityRegistry(crypto)
         self._counter = 0
 
     def execute(self, action: ActionSpec):
@@ -81,11 +83,13 @@ class SecureToolExecutor:
             if not self.crypto.verify(authorization):
                 return None, VerificationResult(False, "tool_policy", "cryptographic_authorization_failure")
             try:
-                allowed = self.policy.allows(action)
+                security_decision = self.security.inspect(action)
             except Exception:
-                return None, VerificationResult(False, "tool_policy", "policy_evaluation_failure")
-            if type(allowed) is not bool or not allowed:
-                return None, VerificationResult(False, "tool_policy", "action_denied")
+                return None, VerificationResult(False, "tool_policy", "security_evaluation_failure")
+            if not hasattr(security_decision, "allowed") or type(security_decision.allowed) is not bool:
+                return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
+            if not security_decision.allowed:
+                return None, VerificationResult(False, "tool_policy", security_decision.reason)
             output = handler(action.target, deepcopy(dict(action.parameters)))
         except Exception as exc:
             return None, VerificationResult(False, "tool_execution", f"execution_failed:{type(exc).__name__}")
