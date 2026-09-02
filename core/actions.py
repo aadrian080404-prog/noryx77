@@ -1,4 +1,5 @@
 from dataclasses import dataclass, asdict
+from threading import Lock
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
@@ -19,6 +20,7 @@ class ActionGate:
         self.limits = limits
         self.crypto = crypto or CryptoIntegrity()
         self._authorization_counter = 0
+        self._authorization_lock = Lock()
 
     def authorize(self, action: ActionSpec, calls_used: int = 0, tool_calls_used: int = 0) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
@@ -34,10 +36,11 @@ class ActionGate:
         if calls_used >= self.limits.max_actions_per_task:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
         try:
-            envelope = self.crypto.sign("action_gate", asdict(action), self._authorization_counter)
-            self._authorization_counter += 1
-            if not self.crypto.verify(envelope):
-                return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
+            with self._authorization_lock:
+                envelope = self.crypto.sign("action_gate", asdict(action), self._authorization_counter)
+                self._authorization_counter += 1
+                if not self.crypto.verify(envelope):
+                    return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
         except Exception:
             return ActionDecision(False, "cryptographic authorization failure", VerificationResult(False, "action_gate", "authorization_integrity_failure"))
         try:
