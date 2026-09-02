@@ -62,7 +62,12 @@ class VerificationEngine:
         return VerificationResult(True, "state", "state_ok")
 
     def verify_pipeline(self, task: TaskSpec, output, state=None) -> tuple[VerificationResult, ...]:
-        results = [self.verify_task(task), self.verify_output(output, requirements=task.verification_requirements)]
+        """Verify the task before allowing any task-derived requirements to reach output verification."""
+        task_result = self.verify_task(task)
+        results = [task_result]
+        if not task_result.valid:
+            return tuple(results)
+        results.append(self.verify_output(output, requirements=task.verification_requirements))
         if state is not None:
             results.append(self.verify_state(state))
         return tuple(results)
