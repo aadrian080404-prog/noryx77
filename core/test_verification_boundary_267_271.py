@@ -50,10 +50,9 @@ class VerificationBoundaryAdversarialTests(unittest.TestCase):
     def test_attack_271_pipeline_rejects_spoofed_task_before_output_acceptance(self):
         spoofed = SpoofedTask("trusted-task", "analysis", "trusted objective", {}, verification_requirements=("string",))
         results = self.verifier.verify_pipeline(spoofed, "trusted-output")
+        self.assertEqual(len(results), 1)
         self.assertFalse(results[0].valid)
         self.assertEqual(results[0].reason, "invalid_task_spec")
-        self.assertFalse(results[1].valid)
-        self.assertEqual(results[1].reason, "unsupported_verification_requirement")
 
 
 if __name__ == "__main__":
