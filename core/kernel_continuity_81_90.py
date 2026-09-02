@@ -1,10 +1,4 @@
-"""Additional fail-closed controls for authenticated kernel continuity.
-
-These controls protect the continuity boundary itself: immutable stage order,
-unique records, monotonic sequences, session/task binding, and terminal
-finalization. They use the existing HMAC-SHA-256 primitive rather than a
-second cryptographic scheme.
-"""
+"""Additional fail-closed controls for authenticated kernel continuity."""
 
 from __future__ import annotations
 
@@ -48,14 +42,13 @@ class KernelContinuityPolicy:
         self.stage_order = stage_order
         self._sealed = False
 
-    def admit(self, records: Iterable[KernelContinuityRecord]) -> bool:
-        if self._sealed:
-            return False
+    def _admit_records(self, records: Iterable[KernelContinuityRecord]) -> bool:
         try:
             records = tuple(records)
             if len(records) != len(self.stage_order):
                 return False
             previous = ""
+            seen: set[str] = set()
             for index, (record, expected_stage) in enumerate(zip(records, self.stage_order), start=1):
                 if not isinstance(record, KernelContinuityRecord):
                     return False
@@ -63,12 +56,16 @@ class KernelContinuityPolicy:
                     return False
                 if record.sequence != index or record.previous_tag != previous:
                     return False
-                if len(record.tag) != 64 or not isinstance(record.tag, str):
+                if not isinstance(record.tag, str) or len(record.tag) != 64 or record.tag in seen:
                     return False
+                seen.add(record.tag)
                 previous = record.tag
             return True
         except Exception:
             return False
+
+    def admit(self, records: Iterable[KernelContinuityRecord]) -> bool:
+        return not self._sealed and self._admit_records(records)
 
     def seal(self, records: tuple[KernelContinuityRecord, ...]) -> ContinuitySeal:
         if not self.admit(records):
@@ -89,10 +86,8 @@ class KernelContinuityPolicy:
         return ContinuitySeal(self.session_id, self.task_id, len(records), chain[0], chain[-1], chain_digest, seal)
 
     def verify_seal(self, seal: ContinuitySeal, records: tuple[KernelContinuityRecord, ...]) -> bool:
-        if self._sealed and not isinstance(seal, ContinuitySeal):
-            return False
         try:
-            if not isinstance(seal, ContinuitySeal) or not self.admit(records):
+            if not isinstance(seal, ContinuitySeal) or not self._admit_records(records):
                 return False
             chain = tuple(record.tag for record in records)
             if (seal.session_id != self.session_id or seal.task_id != self.task_id
