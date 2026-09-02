@@ -2,7 +2,18 @@ from .agents import Agent
 
 
 class ResourceRouter:
-    """Selects registered agents without coupling orchestration to implementations."""
+    """Select registered agents through deterministic task-aware resource routing."""
+
+    MODEL_ORDER = ("micro", "small", "medium", "large", "frontier")
+    TASK_MODEL_HINTS = {
+        "simple": "micro",
+        "classification": "small",
+        "analysis": "medium",
+        "research": "large",
+        "reasoning": "large",
+        "planning": "large",
+        "frontier": "frontier",
+    }
 
     def __init__(self):
         self._agents: dict[str, Agent] = {}
@@ -17,6 +28,12 @@ class ResourceRouter:
             raise ValueError("agent_id required")
         if not callable(run):
             raise TypeError("invalid_agent")
+        model_class = getattr(agent, "model_class", "medium")
+        if not isinstance(model_class, str) or model_class not in ResourceRouter.MODEL_ORDER:
+            raise ValueError("invalid_model_class")
+        capabilities = getattr(agent, "capabilities", ())
+        if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
+            raise ValueError("invalid_capabilities")
         return agent_id
 
     def register(self, agent: Agent) -> None:
@@ -48,7 +65,6 @@ class ResourceRouter:
         return tuple(sorted(self._agents))
 
     def default_id(self) -> str:
-        """Return the sole deterministic route; fail closed when routing is ambiguous."""
         available = self.available()
         if len(available) != 1:
             raise LookupError("no unique default resource route")
@@ -56,21 +72,34 @@ class ResourceRouter:
 
     def route(self, preferred: str | None = None):
         if preferred is not None:
-            if not isinstance(preferred, str):
-                raise TypeError("invalid_preferred_agent_id")
-            if not preferred.strip():
+            if not isinstance(preferred, str) or not preferred.strip():
                 raise ValueError("invalid_preferred_agent_id")
             agent = self._agents.get(preferred)
             if agent is None:
                 raise LookupError("requested agent unavailable")
-            try:
-                registered_id = self._validate_agent(agent)
-            except (TypeError, ValueError) as exc:
-                raise LookupError("invalid_registered_agent") from exc
-            if registered_id != preferred:
+            self._validate_agent(agent)
+            if getattr(agent, "agent_id", None) != preferred:
                 raise LookupError("agent_identity_mismatch")
             return agent
         available = self.available()
         if len(available) == 1:
             return self._agents[available[0]]
         raise LookupError("no unambiguous resource route")
+
+    def route_for_task(self, task):
+        """Choose the strongest eligible model class for a task, deterministically."""
+        task_type = getattr(task, "task_type", None)
+        if not isinstance(task_type, str) or not task_type.strip():
+            raise ValueError("invalid_task_type")
+        required = self.TASK_MODEL_HINTS.get(task_type, "medium")
+        required_index = self.MODEL_ORDER.index(required)
+        candidates = []
+        for agent_id in self.available():
+            agent = self._agents[agent_id]
+            model_class = getattr(agent, "model_class", "medium")
+            if self.MODEL_ORDER.index(model_class) >= required_index:
+                candidates.append(agent)
+        if not candidates:
+            raise LookupError("no_resource_satisfies_task")
+        candidates.sort(key=lambda agent: (self.MODEL_ORDER.index(getattr(agent, "model_class", "medium")), getattr(agent, "agent_id", "")))
+        return candidates[0]
