@@ -1,3 +1,4 @@
+from copy import deepcopy
 from collections.abc import Mapping
 
 from .contracts import AgentResult, TaskSpec
@@ -67,7 +68,7 @@ class ProviderAgent(Agent):
         try:
             response = self.provider.execute(request_from_task(task))
         except Exception:
-            check = VerificationEngine().verify_output(None, requirements=task.verification_requirements, stage="result")
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         if not isinstance(response, ProviderResponse):
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
@@ -84,11 +85,15 @@ class ProviderAgent(Agent):
         if response.metadata is not None and not isinstance(response.metadata, Mapping):
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        output = response.output
-        output_check = self.verifier.verify_output(output, requirements=task.verification_requirements, stage="result")
+        try:
+            isolated_output = deepcopy(response.output)
+        except Exception as exc:
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
         if not output_check.valid:
-            return AgentResult(self.agent_id, task.task_id, "rejected", output, output_check)
-        return AgentResult(self.agent_id, task.task_id, "completed", output, output_check)
+            return AgentResult(self.agent_id, task.task_id, "rejected", isolated_output, output_check)
+        return AgentResult(self.agent_id, task.task_id, "completed", isolated_output, output_check)
 
 
 __all__ = ["Agent", "DeterministicAgent", "ProviderAgent"]
