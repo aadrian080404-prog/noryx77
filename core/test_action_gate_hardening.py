@@ -6,6 +6,7 @@ from .actions import ActionGate
 from .contracts import ActionSpec
 from .crypto import CryptoIntegrity
 from .limits import RuntimeLimits
+from .security_lockdown import SecurityLockdown
 
 
 class PermissivePolicy:
@@ -28,8 +29,8 @@ class ActionGateHardeningTests(unittest.TestCase):
     def test_authorization_envelope_binds_exact_action(self):
         gate = ActionGate(self.policy, self.security, self.limits, crypto=self.crypto)
         action = ActionSpec("a", "read", target="resource-a", parameters={"scope": "read"})
-        envelope = self.crypto.sign("action_gate", {"action": "a", "action_type": "read", "target": "resource-a", "parameters": {"scope": "read"}, "risk_class": "normal", "requires_authorization": False}, 0)
-        forged = replace(envelope, payload=self.crypto.canonical({"action": "a", "action_type": "write", "target": "resource-a", "parameters": {"scope": "write"}, "risk_class": "normal", "requires_authorization": False}))
+        envelope = self.crypto.sign("action_gate", {"action_id": "a", "action_type": "read", "target": "resource-a", "parameters": {"scope": "read"}, "risk_class": "normal", "requires_authorization": False}, 0)
+        forged = replace(envelope, payload=self.crypto.canonical({"action_id": "a", "action_type": "write", "target": "resource-a", "parameters": {"scope": "write"}, "risk_class": "normal", "requires_authorization": False}))
         self.assertFalse(self.crypto.verify(forged))
         decision = gate.authorize(action)
         self.assertTrue(decision.allowed)
@@ -92,6 +93,20 @@ class ActionGateHardeningTests(unittest.TestCase):
         self.assertTrue(all(decision.allowed for decision in decisions))
         self.assertEqual(gate_a._authorization_counter + gate_b._authorization_counter, 128)
         self.assertEqual(len(crypto._nonces.get("action_gate", set())), 128)
+
+    def test_high_confidence_integrity_failure_triggers_global_lockdown(self):
+        class FailingCrypto(CryptoIntegrity):
+            def verify(self, envelope, *, consume=True):
+                return False
+
+        crypto = FailingCrypto()
+        lockdown = SecurityLockdown(crypto, lambda proof: proof == b"admin", restricted_threshold=2, lockdown_threshold=5, emergency_threshold=8)
+        gate = ActionGate(self.policy, self.security, self.limits, crypto=crypto, lockdown=lockdown)
+        decision = gate.authorize(ActionSpec("attack", "read"))
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "authorization_integrity_failure")
+        self.assertEqual(lockdown.state.mode, SecurityLockdown.EMERGENCY)
+        self.assertFalse(lockdown.permits())
 
 
 if __name__ == "__main__":
