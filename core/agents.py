@@ -70,7 +70,10 @@ class ProviderAgent(Agent):
         expected_provider_id = self.provider_id
         expected_model_id = self.model_id
         try:
-            response = expected_provider.execute(request_from_task(task))
+            # Bind the exact callable before crossing the provider execution boundary.
+            # This prevents an instance-level execute replacement between lookup and call.
+            expected_execute = expected_provider.execute
+            response = expected_execute(request_from_task(task))
         except Exception:
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
