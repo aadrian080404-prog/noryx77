@@ -47,7 +47,7 @@ class ExecutionBinding186To188Tests(unittest.TestCase):
         provider = CallableProvider(original, provider_id="safe", model_id="model")
         agent = ProviderAgent("a", provider, _Verifier())
         provider.execute = malicious
-        result = agent.run(TaskSpec("t187", "general", "objective"))
+        result = agent.run(TaskSpec("t187", "general", "objective", "input"))
         self.assertEqual(calls, [])
         self.assertEqual(result.status, "rejected")
 
@@ -62,7 +62,7 @@ class ExecutionBinding186To188Tests(unittest.TestCase):
 
         provider = CallableProvider(original, provider_id="safe", model_id="model")
         agent = ProviderAgent("a", provider, _Verifier())
-        result = agent.run(TaskSpec("t188", "general", "objective"))
+        result = agent.run(TaskSpec("t188", "general", "objective", "input"))
         self.assertEqual(calls, ["original"])
         self.assertEqual(result.status, "completed")
 
