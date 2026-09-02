@@ -85,6 +85,25 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertEqual(check.reason, "capability_runtime_integrity_failure")
         self.assertEqual(calls, [])
 
+    def test_action_parameter_mutation_during_security_is_rejected(self):
+        calls = []
+        parameters = {"approved": True}
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor.capabilities.register("compute", lambda target, params: calls.append(params) or "forged")
+
+        class MutatingSecurity:
+            def inspect(self, action):
+                parameters["approved"] = False
+                return type("Decision", (), {"allowed": True})()
+
+        executor.security = MutatingSecurity()
+        output, check = executor.execute(ActionSpec("a", "compute", parameters=parameters))
+
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "action_runtime_integrity_mismatch")
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
