@@ -6,10 +6,14 @@ from .actions import ActionGate
 from .contracts import ActionSpec
 from .crypto import CryptoIntegrity
 from .limits import RuntimeLimits
-from .security import SecurityBoundary
 
 
 class PermissivePolicy:
+    def allows(self, action):
+        return True
+
+
+class PermissiveSecurity:
     def allows(self, action):
         return True
 
@@ -18,7 +22,7 @@ class ActionGateHardeningTests(unittest.TestCase):
     def setUp(self):
         self.crypto = CryptoIntegrity()
         self.policy = PermissivePolicy()
-        self.security = SecurityBoundary(self.policy, object())
+        self.security = PermissiveSecurity()
         self.limits = RuntimeLimits(max_actions_per_task=256, max_tool_calls_per_task=256)
 
     def test_authorization_envelope_binds_exact_action(self):
