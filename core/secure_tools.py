@@ -78,10 +78,26 @@ class SecureToolExecutor:
         self.capabilities = SecureCapabilityRegistry(crypto)
         self._counter = 0
 
+    def _action_digest(self, action: ActionSpec) -> str:
+        return self.crypto.digest(
+            "tool_action",
+            {
+                "action_id": action.action_id,
+                "action_type": action.action_type,
+                "target": action.target,
+                "parameters": dict(action.parameters),
+                "risk_class": action.risk_class,
+                "requires_authorization": action.requires_authorization,
+            },
+        )
+
     def execute(self, action: ActionSpec):
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
         try:
+            action_digest = self._action_digest(action)
+            action_target = action.target
+            action_parameters = deepcopy(dict(action.parameters))
             registered_risk = self.capabilities.risk(action.action_type)
             if registered_risk is None:
                 return None, VerificationResult(False, "tool_policy", "unknown_capability")
@@ -105,12 +121,14 @@ class SecureToolExecutor:
             if not security_decision.allowed:
                 return None, VerificationResult(False, "tool_policy", security_decision.reason)
             try:
+                if self._action_digest(action) != action_digest:
+                    return None, VerificationResult(False, "tool_policy", "action_runtime_integrity_mismatch")
                 current_handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
             except Exception:
                 return None, VerificationResult(False, "tool_policy", "capability_runtime_integrity_failure")
             if current_handler is not handler:
                 return None, VerificationResult(False, "tool_policy", "capability_runtime_identity_mismatch")
-            output = current_handler(action.target, deepcopy(dict(action.parameters)))
+            output = current_handler(action_target, action_parameters)
         except Exception as exc:
             return None, VerificationResult(False, "tool_execution", f"execution_failed:{type(exc).__name__}")
         try:
