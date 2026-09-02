@@ -10,7 +10,7 @@ class VerificationEngine:
     VALID_VERDICTS = {"unknown", "success", "failure"}
 
     def verify_task(self, task: TaskSpec) -> VerificationResult:
-        if not isinstance(task, TaskSpec):
+        if type(task) is not TaskSpec:
             return VerificationResult(False, "contract", "invalid_task_spec")
         if not task.is_well_formed():
             return VerificationResult(False, "contract", "malformed_task_spec")
@@ -22,9 +22,9 @@ class VerificationEngine:
 
     def verify_task_continuity(self, parent: TaskSpec, child: TaskSpec) -> VerificationResult:
         """Ensure derived tasks cannot silently change source-of-truth identity, risk, or verification requirements."""
-        if not isinstance(parent, TaskSpec) or not parent.is_well_formed():
+        if type(parent) is not TaskSpec or not parent.is_well_formed():
             return VerificationResult(False, "continuity", "invalid_parent_task")
-        if not isinstance(child, TaskSpec) or not child.is_well_formed():
+        if type(child) is not TaskSpec or not child.is_well_formed():
             return VerificationResult(False, "continuity", "invalid_child_task")
         if child.task_id == parent.task_id:
             return VerificationResult(False, "continuity", "child_identity_not_derived")
