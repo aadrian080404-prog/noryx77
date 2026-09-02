@@ -107,6 +107,7 @@ class SecureToolExecutor:
                 return None, VerificationResult(False, "tool_policy", "capability_risk_mismatch")
             handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
             with self._authorization_lock:
+                counter = self.crypto.next_counter("tool_execution")
                 authorization = self.crypto.sign(
                     "tool_execution",
                     {
@@ -116,7 +117,7 @@ class SecureToolExecutor:
                         "risk": action.risk_class,
                         "action_digest": action_digest,
                     },
-                    self._counter,
+                    counter,
                 )
                 self._counter += 1
                 if not self.crypto.verify(authorization):
