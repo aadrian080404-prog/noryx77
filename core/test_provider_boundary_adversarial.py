@@ -61,7 +61,7 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
             CallableProvider(lambda _request: "ok", provider_id="provider", model_id="   ")
         self.assertEqual(str(context.exception), "model_id_required")
 
-    def test_provider_response_subclass_preserves_explicit_identity_validation(self):
+    def test_provider_response_subclass_is_rejected_at_envelope_boundary(self):
         class ResponseSubclass(ProviderResponse):
             pass
 
@@ -75,8 +75,8 @@ class ProviderBoundaryAdversarialTests(unittest.TestCase):
         agent = ProviderAgent("agent", Provider(), VerificationEngine())
         task = TaskSpec("boundary-1", "analysis", "answer", {}, verification_requirements=("string",))
         result = agent.run(task)
-        self.assertEqual(result.status, "completed")
-        self.assertEqual(result.output, "ok")
+        self.assertEqual(result.status, "rejected")
+        self.assertEqual(result.verification.reason, "malformed_provider_response")
 
     def test_provider_identity_mutation_during_execution_fails_closed(self):
         class Provider:
