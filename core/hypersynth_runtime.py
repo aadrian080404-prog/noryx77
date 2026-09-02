@@ -18,7 +18,7 @@ from .router import ResourceRouter
 
 class HypersynthRuntime:
     """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider"):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = ()):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -29,7 +29,7 @@ class HypersynthRuntime:
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         if provider is not None:
-            self.router.register(ProviderAgent(agent_id, provider, self.verifier))
+            self.router.register(ProviderAgent(agent_id, provider, self.verifier, model_class=provider_model_class, capabilities=provider_capabilities))
         elif not self.router.available():
             self.router.register(DeterministicAgent(self.verifier))
         self.kernel = Hypersynth(
@@ -153,9 +153,9 @@ class HypersynthRuntime:
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status": "rejected", "phase":"verification", "verification": check, "audit": self.audit.snapshot()}
-        except Exception as exc:
+        except Exception:
             check = VerificationResult(False, "runtime", "controlled_runtime_failure")
-            self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__, reason=check.reason)
+            self.audit.record("hypersynth_failure", task_id=task_id, error="runtime_exception", reason=check.reason)
             return {"status": "rejected", "phase": "execution", "reason": check.reason, "verification": check, "audit": self.audit.snapshot()}
         result["audit"] = self.audit.snapshot()
         return result
