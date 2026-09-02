@@ -10,6 +10,8 @@ class Hypothesis:
     task_id: str
     statement: str
     basis: tuple[str, ...] = ()
+    context_version: int | None = None
+    context_source_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -25,7 +27,19 @@ class HypothesisEngine:
     def generate(self, task: TaskSpec, plan: Plan) -> tuple[Hypothesis, ...]:
         if not isinstance(task, TaskSpec) or not isinstance(plan, Plan) or not plan.steps:
             return ()
-        return tuple(Hypothesis(f"{task.task_id}:h{index}", task.task_id, step.objective, (step.step_id,)) for index, step in enumerate(plan.steps))
+        if plan.task_id != task.task_id:
+            return ()
+        return tuple(
+            Hypothesis(
+                f"{task.task_id}:h{index}",
+                task.task_id,
+                step.objective,
+                (step.step_id,),
+                plan.context_version,
+                plan.context_source_ids,
+            )
+            for index, step in enumerate(plan.steps)
+        )
 
     def verify(self, hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple) or not hypotheses:
@@ -38,7 +52,35 @@ class HypothesisEngine:
             ids.add(hypothesis.hypothesis_id)
             if hypothesis.task_id != task.task_id or not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip() or not hypothesis.basis: return VerificationResult(False, "hypothesis", "invalid_hypothesis")
             if any(not isinstance(item, str) or not item.strip() for item in hypothesis.basis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_basis")
+            if hypothesis.context_version is not None:
+                if isinstance(hypothesis.context_version, bool) or not isinstance(hypothesis.context_version, int) or hypothesis.context_version < 1:
+                    return VerificationResult(False, "hypothesis", "invalid_context_version")
+                if not isinstance(hypothesis.context_source_ids, tuple) or not hypothesis.context_source_ids or hypothesis.context_source_ids[0] != task.task_id:
+                    return VerificationResult(False, "hypothesis", "invalid_context_sources")
+                if any(not isinstance(source_id, str) or not source_id.strip() for source_id in hypothesis.context_source_ids):
+                    return VerificationResult(False, "hypothesis", "invalid_context_sources")
+            elif hypothesis.context_source_ids:
+                return VerificationResult(False, "hypothesis", "unexpected_context_binding")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
+
+    def verify_against_plan(self, hypotheses: tuple[Hypothesis, ...], plan: Plan, task: TaskSpec) -> VerificationResult:
+        """Verify that each hypothesis is bound to the exact verified planning context."""
+        if not isinstance(plan, Plan):
+            return VerificationResult(False, "hypothesis", "invalid_plan")
+        if plan.task_id != task.task_id:
+            return VerificationResult(False, "hypothesis", "plan_task_mismatch")
+        if not isinstance(hypotheses, tuple) or len(hypotheses) != len(plan.steps) or not hypotheses:
+            return VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch")
+        for hypothesis, step in zip(hypotheses, plan.steps):
+            if not isinstance(hypothesis, Hypothesis):
+                return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
+            if hypothesis.context_version != plan.context_version or hypothesis.context_source_ids != plan.context_source_ids:
+                return VerificationResult(False, "hypothesis", "hypothesis_context_mismatch")
+            if hypothesis.task_id != task.task_id or hypothesis.statement != step.objective:
+                return VerificationResult(False, "hypothesis", "hypothesis_plan_binding_mismatch")
+            if hypothesis.basis != (step.step_id,):
+                return VerificationResult(False, "hypothesis", "hypothesis_step_mismatch")
+        return VerificationResult(True, "hypothesis", "hypothesis_plan_binding_ok")
 
 
 class InternalSimulator:
