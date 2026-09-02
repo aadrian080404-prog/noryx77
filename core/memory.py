@@ -83,6 +83,33 @@ class MemoryStore:
                 result.append(deepcopy(item))
         return tuple(result)
 
+    def retrieve(self, *, source: str | None = None, kind: str | None = None, limit: int | None = None):
+        """Return authenticated memories matching explicit provenance filters.
+
+        Results are deterministic: higher-importance entries first, then memory_id.
+        The returned objects are deep copies, so retrieval cannot mutate storage.
+        """
+        if source is not None and not isinstance(source, str):
+            raise ValueError("memory source filter must be text")
+        if kind is not None and kind not in self.VALID_KINDS:
+            raise ValueError("unsupported memory kind")
+        if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
+            raise ValueError("memory retrieval limit must be a positive integer")
+
+        result = []
+        for memory_id, item in self._items.items():
+            if not self._integrity_ok(memory_id, item):
+                raise MemoryError("memory_integrity_failure")
+            if source is not None and item.source != source:
+                continue
+            if kind is not None and item.kind != kind:
+                continue
+            result.append(deepcopy(item))
+        result.sort(key=lambda item: (-float(item.importance), item.memory_id))
+        if limit is not None:
+            result = result[:limit]
+        return tuple(result)
+
     def delete(self, memory_id: str) -> bool:
         if not isinstance(memory_id, str):
             return False
