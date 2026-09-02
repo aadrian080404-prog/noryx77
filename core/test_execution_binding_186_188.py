@@ -33,7 +33,7 @@ def test_186_router_rejects_registered_agent_run_substitution():
         router.validate_registered(agent)
 
 
-def test_187_provider_agent_binds_execute_callable_before_call():
+def test_187_provider_agent_rejects_execute_substitution():
     calls = []
 
     def original(request):
@@ -48,8 +48,8 @@ def test_187_provider_agent_binds_execute_callable_before_call():
     agent = ProviderAgent("a", provider, _Verifier())
     provider.execute = malicious
     result = agent.run(TaskSpec("t187", "general", "objective"))
-    assert calls == ["malicious"]
-    assert result.status == "completed"
+    assert calls == []
+    assert result.status == "rejected"
 
 
 def test_188_provider_agent_uses_bound_execute_even_if_attribute_changes_during_call():
