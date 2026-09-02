@@ -173,6 +173,12 @@ class CrossChecker:
             verification = result.verification
             if verification is None or not verification.is_well_formed() or not verification.valid: return VerificationResult(False, "cross_check", "unverified_result")
             if result.output is None: return VerificationResult(False, "cross_check", "null_output")
+            if isinstance(result.output, (str, bytes)) and not result.output: return VerificationResult(False, "cross_check", "empty_output")
+            for requirement in task.verification_requirements:
+                if requirement == "string" and not isinstance(result.output, str):
+                    return VerificationResult(False, "cross_check", "output_requirement_mismatch")
+                if requirement != "string":
+                    return VerificationResult(False, "cross_check", "unsupported_output_requirement")
         result_task_ids = [result.task_id for result in results]
         if len(set(result_task_ids)) != len(result_task_ids): return VerificationResult(False, "cross_check", "duplicate_result_task")
         agent_ids = [result.agent_id for result in results]
