@@ -26,15 +26,18 @@ class SecurityLockdown:
     LOCKDOWN = "lockdown"
     EMERGENCY = "emergency"
 
-    def __init__(self, crypto: CryptoIntegrity, admin_authorizer: Callable[[bytes], bool], *, restricted_threshold: int = 4, lockdown_threshold: int = 7, emergency_threshold: int = 10):
+    def __init__(self, crypto: CryptoIntegrity, admin_authorizer: Callable[[bytes], bool], *, restricted_threshold: int = 4, lockdown_threshold: int = 7, emergency_threshold: int = 10, state_store=None):
         if not isinstance(crypto, CryptoIntegrity):
             raise TypeError("invalid_crypto_integrity")
         if not callable(admin_authorizer):
             raise TypeError("invalid_admin_authorizer")
         if not (isinstance(restricted_threshold, int) and isinstance(lockdown_threshold, int) and isinstance(emergency_threshold, int) and 0 < restricted_threshold < lockdown_threshold < emergency_threshold):
             raise ValueError("invalid_lockdown_thresholds")
+        if state_store is not None and not (callable(getattr(state_store, "load", None)) and callable(getattr(state_store, "save", None))):
+            raise TypeError("invalid_lockdown_state_store")
         self.crypto = crypto
         self._admin_authorizer = admin_authorizer
+        self._state_store = state_store
         self._restricted_threshold = restricted_threshold
         self._lockdown_threshold = lockdown_threshold
         self._emergency_threshold = emergency_threshold
@@ -44,11 +47,21 @@ class SecurityLockdown:
         self._generation = 0
         self._issued_challenges: set[bytes] = set()
         self._lock = Lock()
+        if self._state_store is not None:
+            persisted = self._state_store.load()
+            if persisted is not None:
+                self.restore_seal(persisted)
+            else:
+                self._state_store.save(self.export_seal())
 
     @property
     def state(self) -> LockdownState:
         with self._lock:
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
+
+    def _persist(self) -> None:
+        if self._state_store is not None:
+            self._state_store.save(self.export_seal())
 
     def record_incident(self, category: str, *, severity: int = 1) -> LockdownState:
         if not isinstance(category, str) or not category.strip():
@@ -65,7 +78,9 @@ class SecurityLockdown:
             elif self._score >= self._restricted_threshold:
                 self._mode = self.RESTRICTED
             self._generation += 1
-            return LockdownState(self._mode, self._score, self._incidents, self._generation)
+            state = LockdownState(self._mode, self._score, self._incidents, self._generation)
+        self._persist()
+        return state
 
     def permits(self, *, is_admin: bool = False) -> bool:
         with self._lock:
@@ -94,8 +109,6 @@ class SecurityLockdown:
             authorization_generation = self._generation
             authorization_mode = self._mode
 
-        # Never invoke attacker-/admin-controlled code while holding the lockdown mutex.
-        # The state is revalidated after the callback to close the authorization race.
         try:
             authorized = self._admin_authorizer(proof)
         except Exception as exc:
@@ -114,7 +127,9 @@ class SecurityLockdown:
             self._mode = self.NORMAL
             self._score = 0
             self._generation += 1
-            return LockdownState(self._mode, self._score, self._incidents, self._generation)
+            state = LockdownState(self._mode, self._score, self._incidents, self._generation)
+        self._persist()
+        return state
 
     def export_seal(self) -> dict:
         with self._lock:
