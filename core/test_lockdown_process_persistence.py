@@ -15,9 +15,17 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
     def test_new_runtime_reads_persisted_emergency_and_denies_execution(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
-            first = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path))
+            first = HypersynthRuntime(
+                crypto=CryptoIntegrity(KEY),
+                admin_authorizer=lambda proof: True,
+                lockdown_store=SQLiteLockdownStore(path),
+            )
             first.security_lockdown.record_incident("process_boundary", severity=10)
-            second = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path))
+            second = HypersynthRuntime(
+                crypto=CryptoIntegrity(KEY),
+                admin_authorizer=lambda proof: True,
+                lockdown_store=SQLiteLockdownStore(path),
+            )
             self.assertEqual(second.security_lockdown.state.mode, SecurityLockdown.EMERGENCY)
             self.assertFalse(second.security_lockdown.permits())
 
@@ -120,7 +128,12 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             normal_seal = first.export_lockdown_seal()
             first.security_lockdown.record_incident("replay", severity=10)
             with self.assertRaises(ValueError):
-                HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=SQLiteLockdownStore(path), lockdown_seal=normal_seal)
+                HypersynthRuntime(
+                    crypto=CryptoIntegrity(KEY),
+                    admin_authorizer=lambda proof: True,
+                    lockdown_store=SQLiteLockdownStore(path),
+                    lockdown_seal=normal_seal,
+                )
 
 
 class _FailingStore:
