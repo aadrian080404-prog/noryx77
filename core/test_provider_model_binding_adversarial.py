@@ -35,7 +35,7 @@ class ProviderModelBindingAdversarialTests(unittest.TestCase):
 
         self.assertEqual(result.status, "rejected")
         self.assertIsNotNone(result.verification)
-        self.assertEqual(result.verification.reason, "null_output")
+        self.assertEqual(result.verification.reason, "provider_identity_mismatch")
 
 
 if __name__ == "__main__":
