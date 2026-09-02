@@ -34,6 +34,7 @@ class CryptoEnvelopeBoundaryTests(unittest.TestCase):
             canonical.counter,
             canonical.payload,
             canonical.tag,
+            canonical.algorithm,
             canonical.version,
         )
         self.assertFalse(self.crypto.verify(spoofed))
