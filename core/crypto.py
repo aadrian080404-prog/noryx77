@@ -83,7 +83,12 @@ class CryptoIntegrity:
         return CryptoEnvelope(domain, nonce, counter, body, tag, self.ALGORITHM, self.VERSION)
 
     def verify(self, envelope: CryptoEnvelope, *, consume: bool = True) -> bool:
-        if not isinstance(envelope, CryptoEnvelope) or envelope.algorithm != self.ALGORITHM or envelope.version != self.VERSION:
+        # CryptoEnvelope is a security boundary.  A subclass can override
+        # attribute access and otherwise make a valid envelope appear different
+        # between checks, so only the canonical envelope type is admissible.
+        if type(envelope) is not CryptoEnvelope:
+            return False
+        if envelope.algorithm != self.ALGORITHM or envelope.version != self.VERSION:
             return False
         try:
             self._validate_domain(envelope.domain)
