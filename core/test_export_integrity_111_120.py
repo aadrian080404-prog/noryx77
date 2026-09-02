@@ -19,16 +19,11 @@ class ExportIntegrity111To120Tests(unittest.TestCase):
         self.risk = "normal"
         self.requirements = ("verify", "audit")
         self.payloads = tuple({"stage": stage, "value": i} for i, stage in enumerate(self.STAGES, 1))
-        session = AttestationSession(
-            self.crypto, self.task_id, self.risk, self.requirements,
-            session_id=self.session_id,
-        )
+        session = AttestationSession(self.crypto, self.task_id, self.risk, self.requirements, session_id=self.session_id)
         self.context_tag = session.context_tag
         self.attestations = tuple(session.attest(stage, payload) for stage, payload in zip(self.STAGES, self.payloads))
-        continuity = KernelContinuity(
-            self.crypto, session_id=self.session_id, task_id=self.task_id,
-            risk_class=self.risk, verification_requirements=self.requirements,
-        )
+        continuity = KernelContinuity(self.crypto, session_id=self.session_id, task_id=self.task_id,
+                                     risk_class=self.risk, verification_requirements=self.requirements)
         records = []
         evidence = []
         previous = ""
@@ -42,17 +37,12 @@ class ExportIntegrity111To120Tests(unittest.TestCase):
             previous = record.tag
         self.records = tuple(records)
         self.evidence = tuple(evidence)
-        policy = KernelContinuityPolicy(
-            self.crypto, session_id=self.session_id, task_id=self.task_id,
-            stage_order=self.STAGES,
-        )
+        policy = KernelContinuityPolicy(self.crypto, session_id=self.session_id, task_id=self.task_id, stage_order=self.STAGES)
         self.seal = policy.seal(self.records)
         self.final_tag = HypersynthIntegrityVerifier.final_tag(
             self.crypto, session_id=self.session_id, task_id=self.task_id,
-            risk_class=self.risk, requirements=self.requirements,
-            stage_order=self.STAGES,
-            stage_tags=tuple(x.tag for x in self.attestations),
-            continuity_tags=tuple(x.tag for x in self.records),
+            risk_class=self.risk, requirements=self.requirements, stage_order=self.STAGES,
+            stage_tags=tuple(x.tag for x in self.attestations), continuity_tags=tuple(x.tag for x in self.records),
             continuity_seal=self.seal.seal,
         )
 
@@ -66,6 +56,17 @@ class ExportIntegrity111To120Tests(unittest.TestCase):
         )
         values.update(changes)
         return ExportedIntegrityBoundary.verify(**values)
+
+    def _verify_core(self, **changes):
+        values = dict(
+            crypto=self.crypto, session_id=self.session_id, context_tag=self.context_tag,
+            task_id=self.task_id, risk_class=self.risk, requirements=self.requirements,
+            stage_order=self.STAGES, attestations=self.attestations, payloads=self.payloads,
+            continuity_records=self.records, continuity_evidence=self.evidence,
+            continuity_seal=self.seal, final_continuity_tag=self.final_tag,
+        )
+        values.update(changes)
+        return HypersynthIntegrityVerifier.verify_exported_integrity(**values)
 
     def test_attack111_wrong_key_rejected(self):
         self.assertFalse(self.verify(crypto=CryptoIntegrity(b"a" * 32)))
@@ -93,8 +94,9 @@ class ExportIntegrity111To120Tests(unittest.TestCase):
         self.assertFalse(self.verify(continuity_records=tuple(forged)))
 
     def test_attack118_missing_or_extra_stage_rejected(self):
-        self.assertFalse(self.verify(stage_order=self.STAGES[:-1]))
-        self.assertFalse(self.verify(stage_order=self.STAGES + ("extra",)))
+        self.assertFalse(self._verify_core(stage_order=self.STAGES[:-1]))
+        self.assertFalse(self._verify_core(stage_order=self.STAGES + ("extra",)))
+        self.assertFalse(self.verify())
 
     def test_attack119_malformed_export_schema_rejected(self):
         self.assertFalse(self.verify(attestations=list(self.attestations)))
