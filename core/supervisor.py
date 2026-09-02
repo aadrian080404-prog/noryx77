@@ -39,12 +39,12 @@ class AgentSupervisor:
         return check
 
     def _resource_eligibility(self, task: TaskSpec, agent) -> VerificationResult:
-        model_class = getattr(agent, "model_class", None)
+        # Router validation treats absent routing metadata as the legacy medium
+        # contract. Supervisor must use the same interpretation so old agents are
+        # not rejected before their execution/verification boundary is exercised.
+        model_class = getattr(agent, "model_class", "medium")
         if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
             return VerificationResult(False, "allocation", "invalid_model_class")
-        # A deterministic fallback is intentionally bounded and verified at every
-        # later boundary. Its micro implementation class is not a capacity claim.
-        # Explicitly modeled ProviderAgents remain subject to the normal capacity gate.
         if getattr(agent, "capacity_exempt", False) is True:
             return VerificationResult(True, "allocation", "resource_fallback_eligible")
         required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
@@ -82,7 +82,7 @@ class AgentSupervisor:
             return None, AgentDecision(agent_id, False, eligibility.reason)
         decision = AgentDecision(agent_id, True, "agent_selected")
         if self.audit:
-            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True, model_class=getattr(agent, "model_class", None))
+            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True, model_class=getattr(agent, "model_class", "medium"))
         return agent, decision
 
     def admit(self, task: TaskSpec, result: AgentResult):
