@@ -12,6 +12,9 @@ from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, Ver
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_kernel import AttestedHypersynthKernel
 from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
+from .export_acceptance_141_150 import AcceptanceReceipt, ExportAcceptanceController
+from .export_manifest_121_130 import ExportIntegrityManifest, IntegrityManifest
+from .export_manifest_boundary_131_140 import ExportManifestAcceptanceBoundary
 from .hypersynth_runtime import HypersynthRuntime
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
@@ -29,13 +32,15 @@ from .verification import VerificationEngine
 
 __all__ = [
     "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentResult", "AgentSupervisor", "AuditLog", "AttestationSession", "CapabilityAttestation",
-    "SecureCapabilityRegistry", "SecureToolExecutor", "ContextManager", "ContextSnapshot", "ContractViolation",
-    "CognitiveState", "CrossChecker", "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth",
-    "HypersynthAttestation", "HypersynthRuntime", "AttestedHypersynthKernel", "HypersynthIntegrityVerifier",
-    "Hypothesis", "HypothesisEngine", "InternalSimulator", "KernelContinuity", "KernelContinuityRecord",
-    "ContinuitySeal", "KernelContinuityPolicy", "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep",
-    "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
+    "AgentResult", "AgentSupervisor", "AcceptanceReceipt", "AuditLog", "AttestationSession",
+    "CapabilityAttestation", "SecureCapabilityRegistry", "SecureToolExecutor", "ContextManager",
+    "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker", "CryptoEnvelope",
+    "CryptoIntegrity", "DeterministicAgent", "ExportAcceptanceController", "ExportIntegrityManifest",
+    "ExportManifestAcceptanceBoundary", "Hypersynth", "HypersynthAttestation", "HypersynthRuntime",
+    "AttestedHypersynthKernel", "HypersynthIntegrityVerifier", "IntegrityManifest", "Hypothesis",
+    "HypothesisEngine", "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "ContinuitySeal",
+    "KernelContinuityPolicy", "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep", "Planner",
+    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
     "SecurityDecision", "SessionContext", "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer",
     "TaskSpec", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
