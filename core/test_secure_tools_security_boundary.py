@@ -193,6 +193,24 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertTrue(all(check.valid for _, check in results))
         self.assertEqual(executor._counter, 32)
 
+    def test_shared_crypto_across_executors_preserves_monotonic_counters(self):
+        executor_a = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor_b = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor_a.capabilities.register("compute", lambda target, params: target)
+        executor_b.capabilities.register("compute", lambda target, params: target)
+        actions = [ActionSpec(f"shared-{index}", "compute", target=str(index)) for index in range(64)]
+
+        def run(indexed):
+            index, action = indexed
+            return (executor_a if index % 2 == 0 else executor_b).execute(action)
+
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            results = list(pool.map(run, enumerate(actions)))
+
+        self.assertTrue(all(check.valid for _, check in results))
+        self.assertEqual(executor_a._counter + executor_b._counter, 64)
+        self.assertEqual(self.crypto._highest.get("tool_execution"), 63)
+
     def test_handler_cannot_mutate_original_action_parameters(self):
         parameters = {"nested": {"approved": True}}
         executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
