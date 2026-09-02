@@ -106,7 +106,13 @@ class SecureToolExecutor:
             handler = self.capabilities.resolve(action.action_type, risk_class=action.risk_class)
             authorization = self.crypto.sign(
                 "tool_execution",
-                {"action": action.action_id, "type": action.action_type, "target": action.target, "risk": action.risk_class},
+                {
+                    "action": action.action_id,
+                    "type": action.action_type,
+                    "target": action.target,
+                    "risk": action.risk_class,
+                    "action_digest": action_digest,
+                },
                 self._counter,
             )
             self._counter += 1
@@ -116,8 +122,19 @@ class SecureToolExecutor:
                 security_decision = self.security.inspect(action)
             except Exception:
                 return None, VerificationResult(False, "tool_policy", "security_evaluation_failure")
-            if not hasattr(security_decision, "allowed") or type(security_decision.allowed) is not bool:
+            if (
+                not hasattr(security_decision, "allowed")
+                or type(security_decision.allowed) is not bool
+                or not hasattr(security_decision, "reason")
+                or not isinstance(security_decision.reason, str)
+                or not security_decision.reason.strip()
+                or not hasattr(security_decision, "risk_class")
+                or not isinstance(security_decision.risk_class, str)
+                or not security_decision.risk_class.strip()
+            ):
                 return None, VerificationResult(False, "tool_policy", "malformed_security_decision")
+            if security_decision.risk_class != action.risk_class:
+                return None, VerificationResult(False, "tool_policy", "security_risk_mismatch")
             if not security_decision.allowed:
                 return None, VerificationResult(False, "tool_policy", security_decision.reason)
             try:
