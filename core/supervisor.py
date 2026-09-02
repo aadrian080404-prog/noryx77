@@ -12,6 +12,17 @@ class AgentDecision:
 
 class AgentSupervisor:
     """Supervises agent selection and result admission; it never bypasses verification."""
+    MODEL_ORDER = ("micro", "small", "medium", "large", "frontier")
+    TASK_MODEL_HINTS = {
+        "simple": "micro",
+        "classification": "small",
+        "analysis": "medium",
+        "research": "large",
+        "reasoning": "large",
+        "planning": "large",
+        "frontier": "frontier",
+    }
+
     def __init__(self, router, verifier, audit=None):
         self.router = router
         self.verifier = verifier
@@ -26,6 +37,15 @@ class AgentSupervisor:
         if not check.valid:
             return check
         return check
+
+    def _resource_eligibility(self, task: TaskSpec, agent) -> VerificationResult:
+        model_class = getattr(agent, "model_class", None)
+        if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
+            return VerificationResult(False, "allocation", "invalid_model_class")
+        required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
+        if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
+            return VerificationResult(False, "allocation", "resource_underpowered_for_task")
+        return VerificationResult(True, "allocation", "resource_task_eligible")
 
     def select(self, task: TaskSpec, preferred=None):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -52,9 +72,12 @@ class AgentSupervisor:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
         if getattr(agent, "agent_id", None) != agent_id:
             return None, AgentDecision(agent_id, False, "agent_identity_mismatch")
+        eligibility = self._resource_eligibility(task, agent)
+        if not eligibility.valid:
+            return None, AgentDecision(agent_id, False, eligibility.reason)
         decision = AgentDecision(agent_id, True, "agent_selected")
         if self.audit:
-            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True)
+            self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True, model_class=getattr(agent, "model_class", None))
         return agent, decision
 
     def admit(self, task: TaskSpec, result: AgentResult):
