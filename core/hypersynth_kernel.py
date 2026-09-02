@@ -203,6 +203,7 @@ class AttestedHypersynthKernel:
             continuity_seal=continuity_seal,
             final_continuity_tag=final_tag,
             context_tag=session.context_tag,
+            continuity_evidence=tuple(continuity_evidence),
         )
         if not exported_ok:
             return self._reject("verification", "independent_final_integrity_failure",
