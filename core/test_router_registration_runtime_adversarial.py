@@ -9,7 +9,8 @@ class RouterRegistrationRuntimeAdversarialTests(unittest.TestCase):
     def setUp(self):
         self.verifier = VerificationEngine()
         self.router = ResourceRouter()
-        self.agent = DeterministicAgent("trusted", self.verifier)
+        self.agent = DeterministicAgent(self.verifier)
+        self.agent.agent_id = "trusted"
         self.router.register(self.agent)
 
     def test_registered_agent_passes_runtime_revalidation(self):
@@ -26,15 +27,13 @@ class RouterRegistrationRuntimeAdversarialTests(unittest.TestCase):
             self.router.validate_registered(self.agent)
 
     def test_provider_binding_tampering_is_rejected_at_runtime(self):
-        original = getattr(self.agent, "provider", None)
         self.agent.provider = object()
-        if original is None:
-            self.assertNotEqual(id(self.agent.provider), id(original))
         with self.assertRaises(RuntimeError):
             self.router.validate_registered(self.agent)
 
     def test_replacement_object_is_rejected_at_runtime(self):
-        replacement = DeterministicAgent("trusted", self.verifier)
+        replacement = DeterministicAgent(self.verifier)
+        replacement.agent_id = "trusted"
         with self.assertRaises(LookupError):
             self.router.validate_registered(replacement)
 
