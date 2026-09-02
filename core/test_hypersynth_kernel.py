@@ -11,10 +11,14 @@ from core.attestation_session import AttestationSession
 
 
 class KernelPlanner:
-    def build(self, task):
-        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective),))
+    def build(self, task, context=None):
+        context_version = None if context is None else context.version
+        context_source_ids = () if context is None else context.source_ids
+        return Plan(task.task_id, (PlanStep(task.task_id + ":0", task.objective),), context_version, context_source_ids)
 
-    def verify(self, plan, task):
+    def verify(self, plan, task, context=None):
+        if context is not None and (plan.context_version != context.version or plan.context_source_ids != context.source_ids):
+            return VerificationResult(False, "planning", "plan_context_mismatch")
         return VerificationResult(True, "plan", "ok")
 
 
@@ -57,12 +61,11 @@ class AttestedKernelTests(unittest.TestCase):
         session = AttestationSession(attested.attestation.crypto, "tamper", "normal", ())
         payloads = [attested._payload(result, stage) for stage in attested.STAGE_ORDER]
         payloads[5] = {"agent": "forged-agent"}
-        # A completed run's attestation chain is bound to its original random session.
         self.assertFalse(session.verify(chain[5], "allocation", payloads[5], consume=False))
 
     def test_rejected_kernel_does_not_claim_attestation_success(self):
         class RejectingPlanner(KernelPlanner):
-            def verify(self, plan, task):
+            def verify(self, plan, task, context=None):
                 return VerificationResult(False, "planning", "planner_rejected")
 
         kernel = Hypersynth(self.verifier, self.router, planner=RejectingPlanner(), max_agents=1)
