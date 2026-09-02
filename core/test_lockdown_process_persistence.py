@@ -31,7 +31,7 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             self.assertEqual(second.security_lockdown.state.mode, SecurityLockdown.EMERGENCY)
             self.assertFalse(second.security_lockdown.permits())
 
-    def test_persisted_normal_state_requires_authoritative_store(self):
+    def test_persisted_generation_cannot_roll_back(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
             store = SQLiteLockdownStore(path)
@@ -45,6 +45,56 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             stale["payload"] = stale["payload"].replace(b'"generation":1', b'"generation":0')
             with self.assertRaises(ValueError):
                 store.save(stale)
+
+    def test_same_generation_writers_cannot_both_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lockdown.sqlite3"
+            first = SecurityLockdown(
+                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
+            )
+            second = SecurityLockdown(
+                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
+            )
+            self.assertEqual(first.state.generation, 0)
+            self.assertEqual(second.state.generation, 0)
+
+            first.record_incident("writer_a", severity=1)
+            with self.assertRaisesRegex(ValueError, "lockdown_store_conflict"):
+                second.record_incident("writer_b", severity=1)
+
+            self.assertEqual(first.state.generation, 1)
+            self.assertEqual(second.state.generation, 1)
+            self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
+            self.assertFalse(second.permits())
+            persisted = SQLiteLockdownStore(path).load()
+            self.assertEqual(persisted["payload"], first.export_seal()["payload"])
+
+    def test_same_generation_recovery_race_fails_closed_for_loser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lockdown.sqlite3"
+            bootstrap = SecurityLockdown(
+                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
+            )
+            bootstrap.record_incident("recovery_race", severity=10)
+
+            first = SecurityLockdown(
+                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
+            )
+            second = SecurityLockdown(
+                CryptoIntegrity(KEY), lambda proof: True, state_store=SQLiteLockdownStore(path)
+            )
+            first_proof = first.admin_challenge()
+            second_proof = second.admin_challenge()
+
+            first.recover(first_proof)
+            with self.assertRaisesRegex(PermissionError, "admin_recovery_denied"):
+                second.recover(second_proof)
+
+            self.assertEqual(first.state.mode, SecurityLockdown.NORMAL)
+            self.assertEqual(second.state.mode, SecurityLockdown.EMERGENCY)
+            self.assertFalse(second.permits())
+            persisted = SQLiteLockdownStore(path).load()
+            self.assertEqual(persisted["payload"], first.export_seal()["payload"])
 
     def test_forged_or_tampered_persistent_record_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
