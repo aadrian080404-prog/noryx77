@@ -91,11 +91,24 @@ class SecurityLockdown:
                 return LockdownState(self._mode, self._score, self._incidents, self._generation)
             if proof_id not in self._issued_challenges:
                 raise PermissionError("admin_recovery_denied")
-            try:
-                authorized = self._admin_authorizer(proof)
-            except Exception as exc:
-                raise PermissionError("admin_recovery_denied") from exc
-            if type(authorized) is not bool or not authorized:
+            authorization_generation = self._generation
+            authorization_mode = self._mode
+
+        # Never invoke attacker-/admin-controlled code while holding the lockdown mutex.
+        # The state is revalidated after the callback to close the authorization race.
+        try:
+            authorized = self._admin_authorizer(proof)
+        except Exception as exc:
+            raise PermissionError("admin_recovery_denied") from exc
+        if type(authorized) is not bool or not authorized:
+            raise PermissionError("admin_recovery_denied")
+
+        with self._lock:
+            if self._mode == self.NORMAL:
+                raise PermissionError("admin_recovery_denied")
+            if self._generation != authorization_generation or self._mode != authorization_mode:
+                raise PermissionError("admin_recovery_denied")
+            if proof_id not in self._issued_challenges:
                 raise PermissionError("admin_recovery_denied")
             self._issued_challenges.remove(proof_id)
             self._mode = self.NORMAL
