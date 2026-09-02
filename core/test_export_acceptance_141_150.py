@@ -47,7 +47,7 @@ class ExportAcceptance141To150Tests(unittest.TestCase):
             payloads=self.payloads, continuity_records=self.records, continuity_evidence=self.evidence,
             continuity_seal=self.seal, final_continuity_tag=self.final_tag)
         self.values = dict(
-            manifest=self.manifest, session_id=self.session_id, task_id=self.task_id, risk_class=self.risk,
+            session_id=self.session_id, task_id=self.task_id, risk_class=self.risk,
             requirements=self.requirements, stage_order=self.STAGES, attestations=self.attestations,
             payloads=self.payloads, continuity_records=self.records, continuity_evidence=self.evidence,
             continuity_seal=self.seal, final_continuity_tag=self.final_tag, context_tag=self.context_tag)
@@ -110,8 +110,10 @@ class ExportAcceptance141To150Tests(unittest.TestCase):
     def test_attack150_malformed_or_wrong_type_receipt_fails_closed(self):
         self.assertFalse(self.controller.verify_receipt("not-a-receipt", manifest_tag=self.manifest.tag,
                                                         session_id=self.session_id, task_id=self.task_id, risk_class=self.risk))
-        self.assertFalse(self.controller.verify_receipt(replace(self.manifest) if isinstance(self.manifest, AcceptanceReceipt) else AcceptanceReceipt("bad", 1, "x", 0, self.manifest.tag, self.session_id, self.task_id, self.risk, "0" * 64),
-                                                        manifest_tag=self.manifest.tag, session_id=self.session_id, task_id=self.task_id, risk_class=self.risk))
+        malformed = AcceptanceReceipt("bad", 1, "x", 0, self.manifest.tag,
+                                      self.session_id, self.task_id, self.risk, "0" * 64)
+        self.assertFalse(self.controller.verify_receipt(malformed, manifest_tag=self.manifest.tag,
+                                                        session_id=self.session_id, task_id=self.task_id, risk_class=self.risk))
 
 
 if __name__ == "__main__":
