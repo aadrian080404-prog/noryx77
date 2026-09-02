@@ -14,7 +14,8 @@ class SQLiteLockdownStore:
 
     The database records the highest accepted generation and refuses rollback. The
     cryptographic seal remains authoritative for authenticity; the database provides
-    cross-process continuity and monotonic rollback detection.
+    cross-process continuity, monotonic rollback detection, and compare-and-swap
+    protection against two runtimes committing different states from the same base.
     """
 
     def __init__(self, path: str | Path):
@@ -76,13 +77,22 @@ class SQLiteLockdownStore:
                 return None
             return self._decode(row[0])
 
-    def save(self, seal: dict) -> None:
+    def save(self, seal: dict, *, expected_generation: int | None = None) -> None:
         generation = self._generation(seal)
+        if expected_generation is not None and (
+            isinstance(expected_generation, bool)
+            or not isinstance(expected_generation, int)
+            or expected_generation < 0
+        ):
+            raise ValueError("invalid_expected_generation")
         encoded = self._encode(seal)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT generation FROM lockdown_state WHERE id = 1").fetchone()
-            if row is not None and generation < row[0]:
+            if expected_generation is not None:
+                if row is None or row[0] != expected_generation:
+                    raise ValueError("lockdown_store_conflict")
+            elif row is not None and generation < row[0]:
                 raise ValueError("lockdown_store_rollback")
             connection.execute(
                 "INSERT INTO lockdown_state(id, generation, seal) VALUES(1, ?, ?) "
