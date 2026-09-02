@@ -4,6 +4,8 @@ from .contracts import TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
 from .planning import Plan, PlanStep
 from .reasoning import Hypothesis, HypothesisEngine
+from .router import ResourceRouter
+from .verification import VerificationEngine
 
 
 class HypothesisContextBindingTests(unittest.TestCase):
@@ -64,6 +66,27 @@ class HypothesisContextBindingTests(unittest.TestCase):
         check = kernel._verify_hypothesis_integrity(hypotheses, plan, task)
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "runtime_binding_rejected")
+
+    def test_full_runtime_rejects_forged_hypothesis_context(self):
+        class ForgingEngine(HypothesisEngine):
+            def generate(self, task, plan):
+                hypotheses = super().generate(task, plan)
+                hypothesis = hypotheses[0]
+                forged = Hypothesis(
+                    hypothesis.hypothesis_id,
+                    hypothesis.task_id,
+                    hypothesis.statement,
+                    hypothesis.basis,
+                    hypothesis.context_version + 1,
+                    hypothesis.context_source_ids,
+                )
+                return (forged,)
+
+        runtime = Hypersynth(VerificationEngine(), ResourceRouter(), hypothesis_engine=ForgingEngine())
+        result = runtime.run(self.task())
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "hypothesis")
+        self.assertEqual(result["verification"].reason, "hypothesis_context_mismatch")
 
 
 if __name__ == "__main__":
