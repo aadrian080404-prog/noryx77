@@ -11,6 +11,7 @@ from .decomposition import Subtask, TaskDecomposer
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_kernel import AttestedHypersynthKernel
+from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
 from .hypersynth_runtime import HypersynthRuntime
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
@@ -31,10 +32,10 @@ __all__ = [
     "AgentResult", "AgentSupervisor", "AuditLog", "AttestationSession", "CapabilityAttestation",
     "SecureCapabilityRegistry", "SecureToolExecutor", "ContextManager", "ContextSnapshot", "ContractViolation",
     "CognitiveState", "CrossChecker", "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth",
-    "HypersynthAttestation", "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine",
-    "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "ContinuitySeal", "KernelContinuityPolicy",
-    "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine",
-    "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SessionContext",
-    "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer", "TaskSpec", "VerificationEngine",
-    "VerificationFailure", "VerificationResult",
+    "HypersynthAttestation", "HypersynthRuntime", "AttestedHypersynthKernel", "HypersynthIntegrityVerifier",
+    "Hypothesis", "HypothesisEngine", "InternalSimulator", "KernelContinuity", "KernelContinuityRecord",
+    "ContinuitySeal", "KernelContinuityPolicy", "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep",
+    "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
+    "SecurityDecision", "SessionContext", "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer",
+    "TaskSpec", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
