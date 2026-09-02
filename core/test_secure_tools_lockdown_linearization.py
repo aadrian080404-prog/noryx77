@@ -4,6 +4,7 @@ import unittest
 from .contracts import ActionSpec
 from .crypto import CryptoIntegrity
 from .secure_tools import SecureToolExecutor
+from .security import SecurityDecision
 from .security_lockdown import SecurityLockdown
 from .verification import VerificationEngine
 
@@ -15,7 +16,7 @@ class PermissivePolicy:
 
 class PermissiveSecurity:
     def inspect(self, action):
-        return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": action.risk_class})()
+        return SecurityDecision(True, "allowed", action.risk_class)
 
 
 class SecureToolLockdownLinearizationTests(unittest.TestCase):
@@ -40,7 +41,7 @@ class SecureToolLockdownLinearizationTests(unittest.TestCase):
             def inspect(self, action):
                 inspected.set()
                 release.wait(timeout=2)
-                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": action.risk_class})()
+                return SecurityDecision(True, "allowed", action.risk_class)
 
         executor.security = BlockingSecurity()
         action = ActionSpec("lockdown-race", "compute")
