@@ -56,9 +56,10 @@ class ProviderRuntimeTests(unittest.TestCase):
     def test_provider_metadata_is_not_allowed_to_change_output_identity(self):
         class BadProvider:
             provider_id = "good"
+            model_id = "good-model"
 
             def execute(self, request):
-                return ProviderResponse("ok", provider_id="other")
+                return ProviderResponse("ok", provider_id="other", model_id="good-model")
 
         runtime = HypersynthRuntime(provider=BadProvider())
         task = TaskSpec("provider-2", "analysis", "answer", {})
@@ -68,6 +69,7 @@ class ProviderRuntimeTests(unittest.TestCase):
     def test_malformed_provider_response_is_rejected(self):
         class MalformedProvider:
             provider_id = "malformed"
+            model_id = "malformed-model"
 
             def execute(self, request):
                 return {"output": "ok", "provider_id": "malformed"}
@@ -80,6 +82,7 @@ class ProviderRuntimeTests(unittest.TestCase):
     def test_malformed_provider_metadata_is_rejected(self):
         class MalformedProvider:
             provider_id = "malformed-meta"
+            model_id = "malformed-meta-model"
 
             def execute(self, request):
                 return ProviderResponse("ok", provider_id="malformed-meta", model_id=123, metadata={})
@@ -93,7 +96,7 @@ class ProviderRuntimeTests(unittest.TestCase):
         def execute(_request):
             raise RuntimeError("provider down")
 
-        runtime = HypersynthRuntime(provider=CallableProvider(execute, provider_id="failing"))
+        runtime = HypersynthRuntime(provider=CallableProvider(execute, provider_id="failing", model_id="failing-model"))
         task = TaskSpec("provider-3", "analysis", "answer", {})
         result = runtime.run(task)
         self.assertEqual(result["status"], "rejected")
