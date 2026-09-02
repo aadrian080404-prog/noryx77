@@ -7,6 +7,7 @@ from .audit import AuditLog
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
 from .hypersynth import Hypersynth
+from .hypersynth_kernel import AttestedHypersynthKernel
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
@@ -17,7 +18,7 @@ from .router import ResourceRouter
 
 
 class HypersynthRuntime:
-    """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
+    """Fail-closed facade that owns HYPERSYNTH execution, integrity, and runtime limits."""
     def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = ()):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
@@ -41,6 +42,10 @@ class HypersynthRuntime:
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
         )
+        # The runtime boundary exposes only the attested kernel. This keeps the
+        # nine-stage execution result cryptographically bound to the run before
+        # it leaves the runtime-owned admission checks below.
+        self.attested_kernel = AttestedHypersynthKernel(self.kernel)
 
     def _read_clock(self):
         """Read a finite monotonic timestamp; malformed or regressing clocks fail closed."""
@@ -104,6 +109,15 @@ class HypersynthRuntime:
             return VerificationResult(False, "runtime", "duplicate_kernel_result_task_id")
         if len(set(agent_ids)) != len(agent_ids):
             return VerificationResult(False, "runtime", "duplicate_kernel_result_agent_id")
+        attestations = result.get("attestations")
+        if not isinstance(attestations, tuple) or len(attestations) != len(AttestedHypersynthKernel.STAGE_ORDER):
+            return VerificationResult(False, "runtime", "missing_kernel_attestations")
+        if tuple(getattr(item, "stage", None) for item in attestations) != AttestedHypersynthKernel.STAGE_ORDER:
+            return VerificationResult(False, "runtime", "kernel_attestation_stage_order_mismatch")
+        if result.get("attestation_verified") is not True or result.get("final_integrity_verified") is not True:
+            return VerificationResult(False, "runtime", "kernel_integrity_not_verified")
+        if result.get("export_manifest_verified") is not True or result.get("continuity_verified") is not True:
+            return VerificationResult(False, "runtime", "kernel_export_integrity_not_verified")
         return VerificationResult(True, "runtime", "kernel_completion_contract_ok")
 
     def run(self, task):
@@ -132,7 +146,7 @@ class HypersynthRuntime:
                 check = VerificationResult(False, "limits", "objective_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
-            result = self.kernel.run(task)
+            result = self.attested_kernel.run(task)
             kernel_check = self._independent_kernel_result_contract(task, result)
             if not kernel_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=kernel_check.reason)
