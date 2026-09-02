@@ -71,11 +71,12 @@ class SecureCapabilityRegistry:
 class SecureToolExecutor:
     """Authenticated capability lookup followed by security/policy authorization and output verification."""
 
-    def __init__(self, policy, verifier, crypto: CryptoIntegrity, security=None):
+    def __init__(self, policy, verifier, crypto: CryptoIntegrity, security=None, lockdown=None):
         self.policy = policy
         self.verifier = verifier
         self.crypto = crypto
         self.security = security or SecurityBoundary(policy, verifier)
+        self.lockdown = lockdown
         self.capabilities = SecureCapabilityRegistry(crypto)
         self._counter = 0
         self._authorization_lock = Lock()
@@ -94,6 +95,12 @@ class SecureToolExecutor:
         )
 
     def execute(self, action: ActionSpec):
+        if self.lockdown is not None:
+            try:
+                if not self.lockdown.permits():
+                    return None, VerificationResult(False, "tool_policy", "global_lockdown")
+            except Exception:
+                return None, VerificationResult(False, "tool_policy", "lockdown_integrity_failure")
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
         try:
