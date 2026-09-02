@@ -2,7 +2,7 @@ import unittest
 
 from .contracts import TaskSpec
 from .hypersynth_runtime import HypersynthRuntime
-from .provider import CallableProvider, ProviderRequest, ProviderResponse
+from .provider import CallableProvider, ProviderRequest
 
 
 class HypersynthRuntimeProviderTests(unittest.TestCase):
@@ -23,6 +23,23 @@ class HypersynthRuntimeProviderTests(unittest.TestCase):
         self.assertEqual(calls, ["provider-research:0"])
         self.assertEqual(result["results"][0].output, "provider-output")
         self.assertEqual(runtime.router.get("provider").model_class, "large")
+
+    def test_provider_runtime_defaults_to_full_nine_stage_attested_execution(self):
+        provider = CallableProvider(lambda _request: "attested", provider_id="p", model_id="m")
+        runtime = HypersynthRuntime(provider=provider)
+        result = runtime.run(TaskSpec("provider-attested", "research", "analyze", "input"))
+
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["attestation_verified"])
+        self.assertTrue(result["continuity_verified"])
+        self.assertTrue(result["export_manifest_verified"])
+        self.assertTrue(result["final_integrity_verified"])
+        self.assertEqual(
+            tuple(item.stage for item in result["attestations"]),
+            runtime.attested_kernel.STAGE_ORDER,
+        )
+        self.assertEqual(len(result["attestations"]), 9)
+        self.assertEqual(len(result["continuity_records"]), 9)
 
     def test_provider_runtime_accepts_explicit_model_class_and_capabilities(self):
         provider = CallableProvider(lambda _request: "x", provider_id="p", model_id="m")
