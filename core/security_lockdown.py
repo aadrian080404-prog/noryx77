@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
-from threading import Lock
+from threading import RLock
 from typing import Callable
 import json
 
@@ -48,7 +49,7 @@ class SecurityLockdown:
         self._incidents = 0
         self._generation = 0
         self._issued_challenges: set[bytes] = set()
-        self._lock = Lock()
+        self._lock = RLock()
         if self._state_store is not None:
             persisted = self._state_store.load()
             if persisted is not None:
@@ -60,6 +61,20 @@ class SecurityLockdown:
     def state(self) -> LockdownState:
         with self._lock:
             return LockdownState(self._mode, self._score, self._incidents, self._generation)
+
+    @contextmanager
+    def execution_guard(self):
+        """Atomically authorize one final execution boundary against lockdown changes.
+
+        The lock is held across the final permit check and the caller's execution.
+        Concurrent incident transitions therefore linearize either before the action
+        or after it, never between the final check and the handler invocation.
+        RLock keeps same-thread containment reporting from deadlocking.
+        """
+        with self._lock:
+            if self._mode != self.NORMAL:
+                raise PermissionError("global_lockdown")
+            yield
 
     def _persist(self, *, expected_generation: int | None = None) -> None:
         if self._state_store is not None:
