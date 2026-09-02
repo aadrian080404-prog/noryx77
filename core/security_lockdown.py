@@ -72,7 +72,7 @@ class SecurityLockdown:
                 except TypeError as exc:
                     raise ValueError("lockdown_store_conflict") from exc
 
-    def _fail_closed_after_persistence_conflict(self) -> None:
+    def _fail_closed_after_persistence_failure(self) -> None:
         with self._lock:
             self._mode = self.EMERGENCY
             self._issued_challenges.clear()
@@ -96,9 +96,8 @@ class SecurityLockdown:
             state = LockdownState(self._mode, self._score, self._incidents, self._generation)
         try:
             self._persist(expected_generation=previous_generation)
-        except ValueError as exc:
-            if str(exc) == "lockdown_store_conflict":
-                self._fail_closed_after_persistence_conflict()
+        except Exception:
+            self._fail_closed_after_persistence_failure()
             raise
         return state
 
@@ -150,9 +149,9 @@ class SecurityLockdown:
             state = LockdownState(self._mode, self._score, self._incidents, self._generation)
         try:
             self._persist(expected_generation=authorization_generation)
-        except ValueError as exc:
-            if str(exc) == "lockdown_store_conflict":
-                self._fail_closed_after_persistence_conflict()
+        except Exception as exc:
+            self._fail_closed_after_persistence_failure()
+            if isinstance(exc, ValueError) and str(exc) == "lockdown_store_conflict":
                 raise PermissionError("admin_recovery_denied") from exc
             raise
         return state
