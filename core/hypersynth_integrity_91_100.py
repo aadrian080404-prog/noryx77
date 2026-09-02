@@ -74,6 +74,8 @@ class HypersynthIntegrityVerifier:
         risk_class: str,
         requirements: tuple[str, ...],
         stage_order: tuple[str, ...],
+        session_id: str | None = None,
+        context_tag: str | None = None,
     ) -> bool:
         try:
             if not isinstance(crypto, CryptoIntegrity):
@@ -83,6 +85,8 @@ class HypersynthIntegrityVerifier:
             if not isinstance(stage_order, tuple) or not stage_order:
                 return False
             if len(attestations) != len(payloads) or len(attestations) != len(stage_order):
+                return False
+            if (session_id is None) != (context_tag is None):
                 return False
             verifier = HypersynthAttestation(crypto)
             previous = ""
@@ -100,7 +104,14 @@ class HypersynthIntegrityVerifier:
                     or attestation.previous_tag != previous
                 ):
                     return False
-                if not verifier.verify_stage(attestation, payload):
+                verification_payload = payload
+                if session_id is not None:
+                    verification_payload = {
+                        "session_id": session_id,
+                        "context_tag": context_tag,
+                        "payload": payload,
+                    }
+                if not verifier.verify_stage(attestation, verification_payload):
                     return False
                 previous = attestation.tag
             return True
@@ -147,12 +158,14 @@ class HypersynthIntegrityVerifier:
         continuity_records: tuple[KernelContinuityRecord, ...],
         continuity_seal: ContinuitySeal,
         final_continuity_tag: str,
+        context_tag: str | None = None,
     ) -> bool:
         try:
             if not cls.verify_attestation_chain(
                 crypto, attestations, payloads,
                 task_id=task_id, risk_class=risk_class,
                 requirements=requirements, stage_order=stage_order,
+                session_id=session_id, context_tag=context_tag,
             ):
                 return False
             if not cls.verify_continuity_seal(
