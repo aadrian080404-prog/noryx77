@@ -1,6 +1,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+import json
 
 from .crypto import CryptoIntegrity
 from .hypersynth_runtime import HypersynthRuntime
@@ -8,6 +9,10 @@ from .lockdown_store import SQLiteLockdownStore
 from .security_lockdown import SecurityLockdown
 
 KEY = b"K" * 32
+
+
+def _seal_generation(seal):
+    return json.loads(seal["payload"].decode("utf-8"))["generation"]
 
 
 class LockdownProcessPersistenceTests(unittest.TestCase):
@@ -27,8 +32,10 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             store = SQLiteLockdownStore(path)
             first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             first.record_incident("first", severity=10)
-            newer = store.load(); stale = dict(newer); stale["payload"] = dict(newer["payload"]); stale["payload"]["generation"] = 0
-            with self.assertRaises(ValueError): store.save(stale, expected_generation=newer["payload"]["generation"])
+            newer = store.load(); stale = dict(newer); stale["payload"] = bytes(newer["payload"])
+            payload = json.loads(stale["payload"].decode("utf-8")); payload["generation"] = 0
+            stale["payload"] = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            with self.assertRaises(ValueError): store.save(stale, expected_generation=_seal_generation(newer))
 
     def test_same_generation_writers_cannot_both_commit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -37,8 +44,9 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             bootstrap = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             bootstrap.record_incident("bootstrap", severity=10)
             current = store.load(); first = dict(current); second = dict(current)
-            with self.assertRaises(ValueError): store.save(first, expected_generation=current["payload"]["generation"] - 1)
-            with self.assertRaises(ValueError): store.save(second, expected_generation=current["payload"]["generation"] - 1)
+            expected = _seal_generation(current) - 1
+            with self.assertRaises(ValueError): store.save(first, expected_generation=expected)
+            with self.assertRaises(ValueError): store.save(second, expected_generation=expected)
 
     def test_same_generation_recovery_race_fails_closed_for_loser(self):
         with tempfile.TemporaryDirectory() as directory:
