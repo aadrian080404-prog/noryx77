@@ -31,6 +31,20 @@ class AgentSupervisor:
             return check
         return check
 
+    @staticmethod
+    def _required_capabilities(task: TaskSpec) -> tuple[str, ...] | None:
+        constraints = getattr(task, "constraints", {})
+        if not hasattr(constraints, "get"):
+            return None
+        required = constraints.get("required_capabilities", ())
+        if not isinstance(required, tuple):
+            return None
+        if any(not isinstance(item, str) or not item.strip() for item in required):
+            return None
+        if len(set(required)) != len(required):
+            return None
+        return required
+
     def _resource_eligibility(self, task: TaskSpec, agent) -> VerificationResult:
         explicit_model = isinstance(getattr(agent, "__dict__", None), dict) and "model_class" in agent.__dict__
         model_class = getattr(agent, "model_class", "medium")
@@ -41,15 +55,22 @@ class AgentSupervisor:
         required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
         if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
             return VerificationResult(False, "allocation", "resource_underpowered_for_task")
+        required_capabilities = self._required_capabilities(task)
+        if required_capabilities is None:
+            if "required_capabilities" in getattr(task, "constraints", {}):
+                return VerificationResult(False, "allocation", "invalid_required_capabilities")
+            return VerificationResult(True, "allocation", "resource_task_eligible")
+        capabilities = getattr(agent, "capabilities", ())
+        if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
+            return VerificationResult(False, "allocation", "invalid_agent_capabilities")
+        if not set(required_capabilities).issubset(capabilities):
+            return VerificationResult(False, "allocation", "resource_missing_required_capability")
         return VerificationResult(True, "allocation", "resource_task_eligible")
 
     def _resolve_registered_agent(self, agent_id: str, agent):
         """Re-resolve through a router registration boundary when that contract exists."""
         resolver = getattr(self.router, "get", None)
         if resolver is None:
-            # Legacy routers predate the explicit registration lookup contract.
-            # Their route() result remains subject to the supervisor identity and
-            # verification gates below; ResourceRouter always takes the stronger path.
             return agent
         try:
             registered = resolver(agent_id)
@@ -60,12 +81,7 @@ class AgentSupervisor:
         return registered
 
     def validate_selected(self, task: TaskSpec, agent) -> VerificationResult:
-        """Revalidate the selected resource immediately before execution.
-
-        ResourceRouter exposes a stronger registration contract that checks object
-        identity plus the immutable registration metadata snapshot. Legacy routers
-        without that contract retain the existing identity/eligibility path.
-        """
+        """Revalidate the selected resource immediately before execution."""
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return VerificationResult(False, "allocation", "invalid_task_contract")
         agent_id = getattr(agent, "agent_id", None)
