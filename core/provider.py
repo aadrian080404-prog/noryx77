@@ -40,8 +40,8 @@ class CallableProvider:
             raise TypeError("provider_callable_required")
         if not isinstance(provider_id, str) or not provider_id.strip():
             raise ValueError("provider_id_required")
-        if not isinstance(model_id, str):
-            raise TypeError("model_id_invalid")
+        if not isinstance(model_id, str) or not model_id.strip():
+            raise ValueError("model_id_required")
         self._fn = fn
         self.provider_id = provider_id
         self.model_id = model_id
