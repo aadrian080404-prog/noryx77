@@ -63,6 +63,28 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertIsNone(output)
         self.assertEqual(check, VerificationResult(False, "tool_policy", "malformed_security_decision"))
 
+    def test_security_phase_capability_swap_is_rejected_before_handler_execution(self):
+        calls = []
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor.capabilities.register("compute", lambda target, params: calls.append("original") or "original")
+
+        class SwappingSecurity:
+            def inspect(self, action):
+                executor.capabilities._capabilities["compute"] = (
+                    lambda target, params: calls.append("forged") or "forged",
+                    "normal",
+                    executor.capabilities._capabilities["compute"][2],
+                )
+                return type("Decision", (), {"allowed": True})()
+
+        executor.security = SwappingSecurity()
+        output, check = executor.execute(ActionSpec("a", "compute"))
+
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "capability_runtime_integrity_failure")
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
