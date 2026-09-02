@@ -59,6 +59,40 @@ class AgentSupervisor:
             return None
         return registered
 
+    def validate_selected(self, task: TaskSpec, agent) -> VerificationResult:
+        """Revalidate the selected resource immediately before execution.
+
+        ResourceRouter exposes a stronger registration contract that checks object
+        identity plus the immutable registration metadata snapshot. Legacy routers
+        without that contract retain the existing identity/eligibility path.
+        """
+        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+            return VerificationResult(False, "allocation", "invalid_task_contract")
+        agent_id = getattr(agent, "agent_id", None)
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            return VerificationResult(False, "allocation", "invalid_agent_id")
+        validator = getattr(self.router, "validate_registered", None)
+        if callable(validator):
+            try:
+                validator(agent)
+            except LookupError:
+                return VerificationResult(False, "allocation", "agent_registration_mismatch")
+            except Exception:
+                return VerificationResult(False, "allocation", "agent_registration_runtime_failure")
+            try:
+                registered = self.router.get(agent_id)
+            except Exception:
+                return VerificationResult(False, "allocation", "agent_registration_runtime_failure")
+            if registered is not agent:
+                return VerificationResult(False, "allocation", "agent_registration_mismatch")
+        else:
+            if getattr(agent, "agent_id", None) != agent_id:
+                return VerificationResult(False, "allocation", "agent_identity_mismatch")
+        eligibility = self._resource_eligibility(task, agent)
+        if not eligibility.valid:
+            return eligibility
+        return VerificationResult(True, "allocation", "agent_runtime_revalidated")
+
     def select(self, task: TaskSpec, preferred=None):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return None, AgentDecision("", False, "invalid_task_contract")
