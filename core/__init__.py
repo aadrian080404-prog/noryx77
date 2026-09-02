@@ -13,6 +13,7 @@ from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_kernel import AttestedHypersynthKernel
 from .hypersynth_runtime import HypersynthRuntime
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
+from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .planning import Plan, PlanStep, Planner
@@ -31,8 +32,9 @@ __all__ = [
     "SecureCapabilityRegistry", "SecureToolExecutor", "ContextManager", "ContextSnapshot", "ContractViolation",
     "CognitiveState", "CrossChecker", "CryptoEnvelope", "CryptoIntegrity", "DeterministicAgent", "Hypersynth",
     "HypersynthAttestation", "HypersynthRuntime", "AttestedHypersynthKernel", "Hypothesis", "HypothesisEngine",
-    "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "MemoryStore", "NORYXError", "NORYXState",
-    "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits",
-    "SecurityBoundary", "SecurityDecision", "SessionContext", "SimulationResult", "StageAttestation", "Subtask",
-    "TaskDecomposer", "TaskSpec", "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "ContinuitySeal", "KernelContinuityPolicy",
+    "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine",
+    "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SessionContext",
+    "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer", "TaskSpec", "VerificationEngine",
+    "VerificationFailure", "VerificationResult",
 ]
