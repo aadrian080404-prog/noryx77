@@ -38,6 +38,7 @@ class CryptoIntegrity:
         self._master = bytes(key)
         self._highest: dict[str, int] = {}
         self._nonces: dict[str, set[str]] = {}
+        self._next_counters: dict[str, int] = {}
         self._state_lock = Lock()
 
     @staticmethod
@@ -74,6 +75,19 @@ class CryptoIntegrity:
             + b"\x00"
             + payload
         )
+
+    def next_counter(self, domain: str) -> int:
+        """Reserve a unique monotonic counter for a shared crypto domain."""
+        self._validate_domain(domain)
+        with self._state_lock:
+            next_counter = max(
+                self._next_counters.get(domain, 0),
+                self._highest.get(domain, -1) + 1,
+            )
+            if next_counter >= 2**64:
+                raise OverflowError("crypto_counter_exhausted")
+            self._next_counters[domain] = next_counter + 1
+            return next_counter
 
     def sign(self, domain: str, payload: Any, counter: int, nonce: str | None = None) -> CryptoEnvelope:
         self._validate_domain(domain)
@@ -116,6 +130,10 @@ class CryptoIntegrity:
                 return False
             seen.add(envelope.nonce)
             self._highest[envelope.domain] = envelope.counter
+            self._next_counters[envelope.domain] = max(
+                self._next_counters.get(envelope.domain, 0),
+                envelope.counter + 1,
+            )
         return True
 
     def digest(self, domain: str, payload: Any) -> str:
