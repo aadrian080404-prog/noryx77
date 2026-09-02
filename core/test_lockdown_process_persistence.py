@@ -96,6 +96,24 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             persisted = SQLiteLockdownStore(path).load()
             self.assertEqual(persisted["payload"], first.export_seal()["payload"])
 
+    def test_incident_persistence_failure_fails_closed(self):
+        lockdown = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=_FailingStore())
+        with self.assertRaisesRegex(OSError, "persistence_down"):
+            lockdown.record_incident("storage_failure", severity=1)
+        self.assertEqual(lockdown.state.mode, SecurityLockdown.EMERGENCY)
+        self.assertFalse(lockdown.permits())
+
+    def test_recovery_persistence_failure_fails_closed(self):
+        store = _FailingStore()
+        lockdown = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
+        lockdown.record_incident("bootstrap", severity=10)
+        store.fail_writes = True
+        proof = lockdown.admin_challenge()
+        with self.assertRaisesRegex(OSError, "persistence_down"):
+            lockdown.recover(proof)
+        self.assertEqual(lockdown.state.mode, SecurityLockdown.EMERGENCY)
+        self.assertFalse(lockdown.permits())
+
     def test_forged_or_tampered_persistent_record_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lockdown.sqlite3"
@@ -133,6 +151,20 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
                     lockdown_store=SQLiteLockdownStore(path),
                     lockdown_seal=normal_seal,
                 )
+
+
+class _FailingStore:
+    def __init__(self):
+        self.seal = None
+        self.fail_writes = False
+
+    def load(self):
+        return self.seal
+
+    def save(self, seal, *, expected_generation=None):
+        if self.fail_writes:
+            raise OSError("persistence_down")
+        self.seal = seal
 
 
 class _TamperedStore:
