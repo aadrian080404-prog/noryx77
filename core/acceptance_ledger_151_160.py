@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import hmac
 from typing import Iterable
 
-from .crypto import CryptoIntegrity
-from .export_acceptance_141_150 import AcceptanceReceipt
+from .crypto import CryptoEnvelope, CryptoIntegrity
+from .export_acceptance_141_150 import AcceptanceReceipt, ExportAcceptanceController
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ class AcceptanceLedgerRecord:
 
 
 class AcceptanceLedger:
-    """Fail-closed authenticated chain over accepted export receipts."""
+    """Fail-closed authenticated chain over cryptographically valid receipts."""
 
     DOMAIN = "hypersynth_acceptance_ledger"
     TAG_LENGTH = 64
@@ -39,18 +39,34 @@ class AcceptanceLedger:
     def records(self) -> tuple[AcceptanceLedgerRecord, ...]:
         return tuple(self._records)
 
+    def _verify_receipt_crypto(self, receipt: AcceptanceReceipt) -> bool:
+        if not isinstance(receipt, AcceptanceReceipt):
+            return False
+        if receipt.algorithm != ExportAcceptanceController.ALGORITHM or receipt.version != ExportAcceptanceController.VERSION:
+            return False
+        if receipt.counter != ExportAcceptanceController.COUNTER:
+            return False
+        if receipt.nonce != receipt.manifest_tag:
+            return False
+        payload = ExportAcceptanceController._receipt_payload(
+            nonce=receipt.nonce, manifest_tag=receipt.manifest_tag,
+            session_id=receipt.session_id, task_id=receipt.task_id,
+            risk_class=receipt.risk_class,
+        )
+        envelope = CryptoEnvelope(
+            ExportAcceptanceController.DOMAIN, receipt.nonce, receipt.counter,
+            self.crypto.canonical(payload), receipt.receipt_tag,
+            receipt.algorithm, receipt.version,
+        )
+        return self.crypto.verify(envelope, consume=False)
+
     def append(self, receipt: AcceptanceReceipt) -> AcceptanceLedgerRecord:
         if self._sealed:
             raise RuntimeError("ledger_sealed")
-        if not isinstance(receipt, AcceptanceReceipt):
-            raise TypeError("invalid_acceptance_receipt")
-        if not all(isinstance(x, str) and x.strip() for x in (
-            receipt.manifest_tag, receipt.receipt_tag, receipt.session_id,
-            receipt.task_id, receipt.risk_class
-        )):
-            raise ValueError("invalid_acceptance_receipt_identity")
-        if len(receipt.manifest_tag) != self.TAG_LENGTH or len(receipt.receipt_tag) != self.TAG_LENGTH:
-            raise ValueError("invalid_acceptance_receipt_tag")
+        if not self._verify_receipt_crypto(receipt):
+            raise ValueError("invalid_authenticated_receipt")
+        if any(item.manifest_tag == receipt.manifest_tag for item in self._records):
+            raise ValueError("duplicate_manifest_admission")
         sequence = len(self._records) + 1
         previous = self._records[-1].tag if self._records else ""
         material = {
@@ -84,6 +100,7 @@ class AcceptanceLedger:
             records = tuple(self._records if records is None else records)
             previous = ""
             seen: set[str] = set()
+            manifests: set[str] = set()
             for sequence, record in enumerate(records, 1):
                 if not isinstance(record, AcceptanceLedgerRecord):
                     return False
@@ -96,7 +113,7 @@ class AcceptanceLedger:
                     return False
                 if len(record.manifest_tag) != self.TAG_LENGTH or len(record.receipt_tag) != self.TAG_LENGTH or len(record.tag) != self.TAG_LENGTH:
                     return False
-                if record.tag in seen:
+                if record.tag in seen or record.manifest_tag in manifests:
                     return False
                 material = {
                     "sequence": sequence,
@@ -110,8 +127,7 @@ class AcceptanceLedger:
                 expected = self.crypto.digest(self.DOMAIN, material)
                 if not hmac.compare_digest(expected, record.tag):
                     return False
-                seen.add(record.tag)
-                previous = record.tag
+                seen.add(record.tag); manifests.add(record.manifest_tag); previous = record.tag
             return True
         except Exception:
             return False
