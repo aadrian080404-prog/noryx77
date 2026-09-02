@@ -5,21 +5,22 @@ from .actions import ActionGate
 from .agents import DeterministicAgent, ProviderAgent
 from .audit import AuditLog
 from .contracts import AgentResult, TaskSpec, VerificationResult
+from .crypto import CryptoIntegrity
 from .decomposition import TaskDecomposer
 from .hypersynth import Hypersynth
 from .hypersynth_kernel import AttestedHypersynthKernel
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
-from .provider import Provider
 from .security import SecurityBoundary
+from .security_lockdown import SecurityLockdown
 from .verification import VerificationEngine
 from .router import ResourceRouter
 
 
 class HypersynthRuntime:
     """Fail-closed facade that owns HYPERSYNTH execution, integrity, and runtime limits."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = ()):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = (), admin_authorizer=None, lockdown=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -27,7 +28,14 @@ class HypersynthRuntime:
         self.clock = clock or time.monotonic
         self.policy = PolicyEngine()
         self.security = SecurityBoundary(self.policy, self.verifier)
-        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.crypto = CryptoIntegrity()
+        if lockdown is not None and not isinstance(lockdown, SecurityLockdown):
+            raise TypeError("invalid_security_lockdown")
+        self.security_lockdown = lockdown or SecurityLockdown(
+            self.crypto,
+            admin_authorizer if admin_authorizer is not None else (lambda proof: False),
+        )
+        self.action_gate = ActionGate(self.policy, self.security, self.limits, crypto=self.crypto, lockdown=self.security_lockdown)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         if provider is not None:
             self.router.register(ProviderAgent(agent_id, provider, self.verifier, model_class=provider_model_class, capabilities=provider_capabilities))
@@ -123,6 +131,10 @@ class HypersynthRuntime:
     def run(self, task):
         task_id = getattr(task, "task_id", None)
         try:
+            if not self.security_lockdown.permits():
+                check = VerificationResult(False, "runtime", "global_lockdown")
+                self.audit.record("hypersynth_rejected", task_id=task_id, phase="security", reason=check.reason)
+                return {"status": "rejected", "phase": "security", "verification": check, "audit": self.audit.snapshot()}
             started = self._read_clock()
             self.audit.record("hypersynth_start", task_id=task_id)
             task_check = self.verifier.verify_task(task)
