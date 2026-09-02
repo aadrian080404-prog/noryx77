@@ -120,6 +120,8 @@ class HypersynthAttestation:
             body = self._stage_payload(attestation.task_id, attestation.stage, attestation.risk_class,
                                        attestation.verification_requirements, payload,
                                        attestation.sequence, attestation.previous_tag)
+            if not hmac.compare_digest(body["payload_digest"], attestation.payload_digest):
+                return False
             envelope = self.crypto.sign("hypersynth_stage", body, attestation.sequence, nonce=self._ATTESTATION_NONCE)
             if not hmac.compare_digest(envelope.tag, attestation.tag):
                 return False
