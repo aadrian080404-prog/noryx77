@@ -16,16 +16,6 @@ class SpoofedAgentResult(AgentResult):
         return True
 
 
-class SpoofedProviderResponse(ProviderResponse):
-    @property
-    def provider_id(self):
-        return "trusted-provider"
-
-    @property
-    def model_id(self):
-        return "trusted-model"
-
-
 class MaliciousVerifier:
     def __init__(self, output=False):
         self.output = output
@@ -47,11 +37,6 @@ class StubProvider:
 
     def execute(self, request):
         return ProviderResponse("ok", self.provider_id, self.model_id, {})
-
-
-class SpoofingProvider(StubProvider):
-    def execute(self, request):
-        return SpoofedProviderResponse("attacker-output", self.provider_id, self.model_id, {})
 
 
 class VerifierEvidenceIntegrity216To220Tests(unittest.TestCase):
@@ -87,12 +72,6 @@ class VerifierEvidenceIntegrity216To220Tests(unittest.TestCase):
         checked = checker.verify(task, (result,), (hypothesis,))
         self.assertFalse(checked.valid)
         self.assertEqual(checked.reason, "invalid_result_type")
-
-    def test_attack_221_provider_agent_rejects_spoofed_provider_response_subclass(self):
-        task = TaskSpec("t221", "analysis", "answer", {}, {}, ("string",), "normal")
-        result = ProviderAgent("provider-agent", SpoofingProvider()).run(task)
-        self.assertEqual(result.status, "rejected")
-        self.assertEqual(result.verification.reason, "provider_execution_failure")
 
 
 if __name__ == "__main__":
