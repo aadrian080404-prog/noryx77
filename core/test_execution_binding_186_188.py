@@ -1,8 +1,8 @@
 import unittest
 
 from .agents import ProviderAgent
-from .contracts import AgentResult, ProviderResponse, TaskSpec, VerificationResult
-from .provider import CallableProvider
+from .contracts import AgentResult, TaskSpec, VerificationResult
+from .provider import CallableProvider, ProviderResponse
 from .router import ResourceRouter
 
 
