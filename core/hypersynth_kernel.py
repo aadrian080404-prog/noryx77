@@ -12,6 +12,7 @@ from .hypersynth import Hypersynth
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
 from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
+from .export_manifest_121_130 import ExportIntegrityManifest, IntegrityManifest
 
 
 class AttestedHypersynthKernel:
@@ -147,13 +148,14 @@ class AttestedHypersynthKernel:
 
         chain = tuple(attestations)
         continuity_chain = tuple(continuity_records)
+        evidence = tuple(continuity_evidence)
         for stage, attestation, payload in zip(self.STAGE_ORDER, chain, payloads):
             if not session.verify(attestation, stage, payload, consume=True):
                 session.close()
                 return self._reject("verification", "attestation_session_verification_failure",
                                     attestations=chain, continuity_records=continuity_chain)
 
-        if not continuity.verify_chain(continuity_chain, tuple(continuity_evidence)):
+        if not continuity.verify_chain(continuity_chain, evidence):
             session.close()
             return self._reject("verification", "kernel_continuity_verification_failure",
                                 attestations=chain, continuity_records=continuity_chain)
@@ -188,7 +190,6 @@ class AttestedHypersynthKernel:
             continuity_tags=continuity_tags,
             continuity_seal=continuity_seal.seal,
         )
-        session.close()
 
         exported_ok = HypersynthIntegrityVerifier.verify_exported_integrity(
             self.attestation.crypto,
@@ -203,10 +204,50 @@ class AttestedHypersynthKernel:
             continuity_seal=continuity_seal,
             final_continuity_tag=final_tag,
             context_tag=session.context_tag,
-            continuity_evidence=tuple(continuity_evidence),
+            continuity_evidence=evidence,
         )
         if not exported_ok:
+            session.close()
             return self._reject("verification", "independent_final_integrity_failure",
+                                attestations=chain, continuity_records=continuity_chain)
+
+        try:
+            manifest = ExportIntegrityManifest.create(
+                self.attestation.crypto,
+                session_id=session.session_id,
+                task_id=task_id,
+                risk_class=risk_class,
+                requirements=requirements,
+                stage_order=self.STAGE_ORDER,
+                attestations=chain,
+                payloads=tuple(payloads),
+                continuity_records=continuity_chain,
+                continuity_evidence=evidence,
+                continuity_seal=continuity_seal,
+                final_continuity_tag=final_tag,
+            )
+            manifest_ok = ExportIntegrityManifest.verify(
+                self.attestation.crypto,
+                manifest,
+                session_id=session.session_id,
+                task_id=task_id,
+                risk_class=risk_class,
+                requirements=requirements,
+                stage_order=self.STAGE_ORDER,
+                attestations=chain,
+                payloads=tuple(payloads),
+                continuity_records=continuity_chain,
+                continuity_evidence=evidence,
+                continuity_seal=continuity_seal,
+                final_continuity_tag=final_tag,
+            )
+        except Exception:
+            session.close()
+            return self._reject("verification", "export_manifest_failure",
+                                attestations=chain, continuity_records=continuity_chain)
+        session.close()
+        if not manifest_ok:
+            return self._reject("verification", "export_manifest_verification_failure",
                                 attestations=chain, continuity_records=continuity_chain)
 
         return {
@@ -216,8 +257,14 @@ class AttestedHypersynthKernel:
             "attestation_session_id": session.session_id,
             "attestation_context_tag": session.context_tag,
             "continuity_records": continuity_chain,
+            "continuity_evidence": evidence,
             "continuity_verified": True,
             "continuity_seal": continuity_seal,
             "final_continuity_tag": final_tag,
+            "integrity_manifest": manifest,
+            "export_manifest_verified": True,
             "final_integrity_verified": True,
         }
+
+
+__all__ = ["AttestedHypersynthKernel"]
