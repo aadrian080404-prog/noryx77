@@ -14,6 +14,11 @@ class _Provider:
         return ProviderResponse("ok", provider_id=self.provider_id, model_id=self.model_id, metadata={})
 
 
+class _FailingProvider(_Provider):
+    def execute(self, _request):
+        raise RuntimeError("provider unavailable")
+
+
 class _WrongStageVerifier(VerificationEngine):
     def verify_task(self, _task):
         return VerificationResult(True, "result", "wrong_stage")
@@ -75,7 +80,7 @@ class VerifierStageAndDeterministic206To210Tests(unittest.TestCase):
         self.assertFalse(result.verification.valid)
 
     def test_attack_208_rejection_path_does_not_trust_valid_verification_of_null_output(self):
-        result = ProviderAgent("agent", _Provider(), _ValidNullVerifier()).run(self.task)
+        result = ProviderAgent("agent", _FailingProvider(), _ValidNullVerifier()).run(self.task)
         self.assertEqual(result.status, "rejected")
         self.assertIsInstance(result.verification, VerificationResult)
         self.assertFalse(result.verification.valid)
