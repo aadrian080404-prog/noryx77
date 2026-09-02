@@ -7,9 +7,10 @@ from .security_lockdown import SecurityLockdown
 class SecurityLockdownTests(unittest.TestCase):
     def setUp(self):
         self.crypto = CryptoIntegrity()
+        self.authorized = []
         self.lockdown = SecurityLockdown(
             self.crypto,
-            lambda proof: proof == b"admin-proof",
+            lambda proof: proof in self.authorized,
             restricted_threshold=3,
             lockdown_threshold=5,
             emergency_threshold=8,
@@ -37,11 +38,24 @@ class SecurityLockdownTests(unittest.TestCase):
             self.lockdown.recover(b"attacker")
         self.assertEqual(self.lockdown.state.mode, SecurityLockdown.LOCKDOWN)
 
-    def test_external_admin_authority_is_required_for_recovery(self):
+    def test_recovery_requires_issued_challenge_and_external_authority(self):
         self.lockdown.record_incident("tamper", severity=5)
-        state = self.lockdown.recover(b"admin-proof")
+        challenge = self.lockdown.admin_challenge()
+        with self.assertRaises(PermissionError):
+            self.lockdown.recover(b"attacker")
+        self.authorized.append(challenge)
+        state = self.lockdown.recover(challenge)
         self.assertEqual(state.mode, SecurityLockdown.NORMAL)
         self.assertTrue(self.lockdown.permits())
+
+    def test_recovery_challenge_is_single_use(self):
+        self.lockdown.record_incident("tamper", severity=5)
+        challenge = self.lockdown.admin_challenge()
+        self.authorized.append(challenge)
+        self.lockdown.recover(challenge)
+        self.lockdown.record_incident("tamper_again", severity=5)
+        with self.assertRaises(PermissionError):
+            self.lockdown.recover(challenge)
 
     def test_lockdown_seal_detects_tampering(self):
         self.lockdown.record_incident("tamper", severity=5)
@@ -54,7 +68,9 @@ class SecurityLockdownTests(unittest.TestCase):
     def test_stale_seal_cannot_rollback_state(self):
         self.lockdown.record_incident("tamper", severity=5)
         seal = self.lockdown.export_seal()
-        self.lockdown.recover(b"admin-proof")
+        challenge = self.lockdown.admin_challenge()
+        self.authorized.append(challenge)
+        self.lockdown.recover(challenge)
         self.lockdown.record_incident("critical", severity=10)
         with self.assertRaises(ValueError):
             self.lockdown.restore_seal(seal)
