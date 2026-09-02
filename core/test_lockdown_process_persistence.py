@@ -41,8 +41,10 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
 
             second = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             self.assertEqual(second.state, first.state)
+            stale = dict(seal)
+            stale["payload"] = stale["payload"].replace(b'"generation":1', b'"generation":0')
             with self.assertRaises(ValueError):
-                store.save({**seal, "payload": seal["payload"].replace(b'"generation":1', b'"generation":0')})
+                store.save(stale)
 
     def test_forged_or_tampered_persistent_record_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -53,9 +55,34 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             seal = first.export_seal()
             tampered = dict(seal)
             tampered["tag"] = "0" * 64
-            store.save(tampered) if False else None
             with self.assertRaises(ValueError):
                 SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=_TamperedStore(tampered))
+
+    def test_wrong_seal_domain_is_rejected_even_with_valid_authentication(self):
+        crypto = CryptoIntegrity(KEY)
+        lockdown = SecurityLockdown(crypto, lambda proof: True)
+        seal = lockdown.export_seal()
+        wrong_domain = crypto.sign("different_domain", {"x": 1}, crypto.next_counter("different_domain"))
+        forged_domain = dict(seal)
+        forged_domain.update({"domain": wrong_domain.domain, "nonce": wrong_domain.nonce, "counter": wrong_domain.counter, "payload": wrong_domain.payload, "tag": wrong_domain.tag})
+        with self.assertRaises(ValueError):
+            lockdown.restore_seal(forged_domain)
+
+    def test_runtime_rejects_seal_plus_persistent_store_to_block_replay_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lockdown.sqlite3"
+            store = SQLiteLockdownStore(path)
+            first = HypersynthRuntime(crypto=CryptoIntegrity(KEY), admin_authorizer=lambda proof: True, lockdown_store=store)
+            normal_seal = first.export_lockdown_seal()
+            first.security_lockdown.record_incident("replay", severity=10)
+
+            with self.assertRaises(ValueError):
+                HypersynthRuntime(
+                    crypto=CryptoIntegrity(KEY),
+                    admin_authorizer=lambda proof: True,
+                    lockdown_store=SQLiteLockdownStore(path),
+                    lockdown_seal=normal_seal,
+                )
 
 
 class _TamperedStore:
