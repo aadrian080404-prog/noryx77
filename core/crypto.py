@@ -39,18 +39,13 @@ class CryptoIntegrity:
         self._highest: dict[str, int] = {}
         self._nonces: dict[str, set[str]] = {}
         self._next_counters: dict[str, int] = {}
+        self._reserved_counters: dict[str, set[int]] = {}
         self._state_lock = Lock()
 
     @staticmethod
     def canonical(value: Any) -> bytes:
         try:
-            return json.dumps(
-                value,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-                allow_nan=False,
-            ).encode("utf-8")
+            return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
         except (TypeError, ValueError, UnicodeError) as exc:
             raise TypeError("non_canonical_crypto_payload") from exc
 
@@ -63,30 +58,17 @@ class CryptoIntegrity:
         return hmac.new(self._master, self._PREFIX + domain.encode("utf-8"), hashlib.sha256).digest()
 
     def _message(self, domain: str, nonce: str, counter: int, payload: bytes) -> bytes:
-        return (
-            self.VERSION.to_bytes(2, "big")
-            + self.ALGORITHM.encode("ascii")
-            + b"\x00"
-            + domain.encode("utf-8")
-            + b"\x00"
-            + counter.to_bytes(8, "big")
-            + b"\x00"
-            + nonce.encode("utf-8")
-            + b"\x00"
-            + payload
-        )
+        return self.VERSION.to_bytes(2, "big") + self.ALGORITHM.encode("ascii") + b"\x00" + domain.encode("utf-8") + b"\x00" + counter.to_bytes(8, "big") + b"\x00" + nonce.encode("utf-8") + b"\x00" + payload
 
     def next_counter(self, domain: str) -> int:
         """Reserve a unique monotonic counter for a shared crypto domain."""
         self._validate_domain(domain)
         with self._state_lock:
-            next_counter = max(
-                self._next_counters.get(domain, 0),
-                self._highest.get(domain, -1) + 1,
-            )
+            next_counter = max(self._next_counters.get(domain, 0), self._highest.get(domain, -1) + 1)
             if next_counter >= 2**64:
                 raise OverflowError("crypto_counter_exhausted")
             self._next_counters[domain] = next_counter + 1
+            self._reserved_counters.setdefault(domain, set()).add(next_counter)
             return next_counter
 
     def sign(self, domain: str, payload: Any, counter: int, nonce: str | None = None) -> CryptoEnvelope:
@@ -101,9 +83,7 @@ class CryptoIntegrity:
         return CryptoEnvelope(domain, nonce, counter, body, tag, self.ALGORITHM, self.VERSION)
 
     def verify(self, envelope: CryptoEnvelope, *, consume: bool = True) -> bool:
-        if not isinstance(envelope, CryptoEnvelope):
-            return False
-        if envelope.algorithm != self.ALGORITHM or envelope.version != self.VERSION:
+        if not isinstance(envelope, CryptoEnvelope) or envelope.algorithm != self.ALGORITHM or envelope.version != self.VERSION:
             return False
         try:
             self._validate_domain(envelope.domain)
@@ -119,21 +99,20 @@ class CryptoIntegrity:
             expected = hmac.new(self._domain_key(envelope.domain), self._message(envelope.domain, envelope.nonce, envelope.counter, envelope.payload), hashlib.sha256).hexdigest()
         except Exception:
             return False
-        if not hmac.compare_digest(expected, envelope.tag):
-            return False
-        if not consume:
-            return True
+        if not hmac.compare_digest(expected, envelope.tag) or not consume:
+            return hmac.compare_digest(expected, envelope.tag)
         with self._state_lock:
             seen = self._nonces.setdefault(envelope.domain, set())
             highest = self._highest.get(envelope.domain, -1)
-            if envelope.nonce in seen or envelope.counter <= highest:
+            reserved = self._reserved_counters.setdefault(envelope.domain, set())
+            if envelope.nonce in seen:
+                return False
+            if envelope.counter <= highest and envelope.counter not in reserved:
                 return False
             seen.add(envelope.nonce)
-            self._highest[envelope.domain] = envelope.counter
-            self._next_counters[envelope.domain] = max(
-                self._next_counters.get(envelope.domain, 0),
-                envelope.counter + 1,
-            )
+            reserved.discard(envelope.counter)
+            self._highest[envelope.domain] = max(highest, envelope.counter)
+            self._next_counters[envelope.domain] = max(self._next_counters.get(envelope.domain, 0), envelope.counter + 1)
         return True
 
     def digest(self, domain: str, payload: Any) -> str:
