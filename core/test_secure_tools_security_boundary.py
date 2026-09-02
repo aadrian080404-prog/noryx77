@@ -63,6 +63,44 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertIsNone(output)
         self.assertEqual(check, VerificationResult(False, "tool_policy", "malformed_security_decision"))
 
+    def test_malformed_security_reason_fails_closed(self):
+        class MalformedSecurity:
+            def inspect(self, action):
+                return type("Decision", (), {"allowed": False, "reason": 123, "risk_class": "normal"})()
+
+        executor = SecureToolExecutor(
+            self.policy,
+            self.verifier,
+            self.crypto,
+            security=MalformedSecurity(),
+        )
+        executor.capabilities.register("compute", lambda target, params: "must-not-run")
+
+        output, check = executor.execute(ActionSpec("a", "compute"))
+
+        self.assertIsNone(output)
+        self.assertEqual(check, VerificationResult(False, "tool_policy", "malformed_security_decision"))
+
+    def test_security_risk_mismatch_fails_closed(self):
+        class MaliciousSecurity:
+            def inspect(self, action):
+                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": "sensitive"})()
+
+        calls = []
+        executor = SecureToolExecutor(
+            self.policy,
+            self.verifier,
+            self.crypto,
+            security=MaliciousSecurity(),
+        )
+        executor.capabilities.register("compute", lambda target, params: calls.append(True) or "must-not-run")
+
+        output, check = executor.execute(ActionSpec("a", "compute", risk_class="normal"))
+
+        self.assertIsNone(output)
+        self.assertEqual(check, VerificationResult(False, "tool_policy", "security_risk_mismatch"))
+        self.assertEqual(calls, [])
+
     def test_security_phase_capability_swap_is_rejected_before_handler_execution(self):
         calls = []
         executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
@@ -75,7 +113,7 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
                     "normal",
                     executor.capabilities._capabilities["compute"][2],
                 )
-                return type("Decision", (), {"allowed": True})()
+                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": "normal"})()
 
         executor.security = SwappingSecurity()
         output, check = executor.execute(ActionSpec("a", "compute"))
@@ -94,10 +132,48 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         class MutatingSecurity:
             def inspect(self, action):
                 parameters["approved"] = False
-                return type("Decision", (), {"allowed": True})()
+                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": "normal"})()
 
         executor.security = MutatingSecurity()
         output, check = executor.execute(ActionSpec("a", "compute", parameters=parameters))
+
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "action_runtime_integrity_mismatch")
+        self.assertEqual(calls, [])
+
+    def test_nested_action_parameter_mutation_during_security_is_rejected(self):
+        calls = []
+        parameters = {"nested": {"approved": True}}
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor.capabilities.register("compute", lambda target, params: calls.append(params) or "forged")
+
+        class MutatingSecurity:
+            def inspect(self, action):
+                parameters["nested"]["approved"] = False
+                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": "normal"})()
+
+        executor.security = MutatingSecurity()
+        output, check = executor.execute(ActionSpec("a", "compute", parameters=parameters))
+
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "action_runtime_integrity_mismatch")
+        self.assertEqual(calls, [])
+
+    def test_action_requires_authorization_mutation_during_security_is_rejected(self):
+        calls = []
+        action = ActionSpec("a", "compute", requires_authorization=False)
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor.capabilities.register("compute", lambda target, params: calls.append(True) or "forged")
+
+        class MutatingSecurity:
+            def inspect(self, inspected):
+                object.__setattr__(inspected, "requires_authorization", True)
+                return type("Decision", (), {"allowed": True, "reason": "allowed", "risk_class": "normal"})()
+
+        executor.security = MutatingSecurity()
+        output, check = executor.execute(action)
 
         self.assertIsNone(output)
         self.assertFalse(check.valid)
