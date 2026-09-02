@@ -44,9 +44,15 @@ class AgentSupervisor:
         return VerificationResult(True, "allocation", "resource_task_eligible")
 
     def _resolve_registered_agent(self, agent_id: str, agent):
-        """Re-resolve the selected object through the router's registration boundary."""
+        """Re-resolve through a router registration boundary when that contract exists."""
+        resolver = getattr(self.router, "get", None)
+        if resolver is None:
+            # Legacy routers predate the explicit registration lookup contract.
+            # Their route() result remains subject to the supervisor identity and
+            # verification gates below; ResourceRouter always takes the stronger path.
+            return agent
         try:
-            registered = self.router.get(agent_id)
+            registered = resolver(agent_id)
         except Exception:
             return None
         if registered is not agent:
