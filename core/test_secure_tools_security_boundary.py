@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from .contracts import ActionSpec, VerificationResult
 from .crypto import CryptoIntegrity
@@ -179,6 +180,18 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "action_runtime_integrity_mismatch")
         self.assertEqual(calls, [])
+
+    def test_concurrent_execution_preserves_unique_authorization_counter(self):
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+        executor.capabilities.register("compute", lambda target, params: target)
+        actions = [ActionSpec(f"action-{index}", "compute", target=str(index)) for index in range(32)]
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(executor.execute, actions))
+
+        self.assertEqual([output for output, check in results], [str(index) for index in range(32)])
+        self.assertTrue(all(check.valid for _, check in results))
+        self.assertEqual(executor._counter, 32)
 
 
 if __name__ == "__main__":
