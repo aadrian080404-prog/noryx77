@@ -65,6 +65,30 @@ class ProviderRuntimeTests(unittest.TestCase):
         result = runtime.run(task)
         self.assertEqual(result["status"], "rejected")
 
+    def test_malformed_provider_response_is_rejected(self):
+        class MalformedProvider:
+            provider_id = "malformed"
+
+            def execute(self, request):
+                return {"output": "ok", "provider_id": "malformed"}
+
+        runtime = HypersynthRuntime(provider=MalformedProvider())
+        task = TaskSpec("provider-2b", "analysis", "answer", {})
+        result = runtime.run(task)
+        self.assertEqual(result["status"], "rejected")
+
+    def test_malformed_provider_metadata_is_rejected(self):
+        class MalformedProvider:
+            provider_id = "malformed-meta"
+
+            def execute(self, request):
+                return ProviderResponse("ok", provider_id="malformed-meta", model_id=123, metadata={})
+
+        runtime = HypersynthRuntime(provider=MalformedProvider())
+        task = TaskSpec("provider-2c", "analysis", "answer", {})
+        result = runtime.run(task)
+        self.assertEqual(result["status"], "rejected")
+
     def test_provider_exception_is_fail_closed(self):
         def execute(_request):
             raise RuntimeError("provider down")
