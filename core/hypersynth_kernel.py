@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hmac
 from dataclasses import asdict, is_dataclass
 from typing import Any
 
@@ -12,6 +11,7 @@ from .crypto import CryptoIntegrity
 from .hypersynth import Hypersynth
 from .kernel_continuity import KernelContinuity, KernelContinuityRecord
 from .kernel_continuity_81_90 import ContinuitySeal, KernelContinuityPolicy
+from .hypersynth_integrity_91_100 import HypersynthIntegrityVerifier
 
 
 class AttestedHypersynthKernel:
@@ -177,22 +177,34 @@ class AttestedHypersynthKernel:
 
         stage_tags = tuple(item.tag for item in chain)
         continuity_tags = tuple(item.tag for item in continuity_chain)
-        final_material = {
-            "session_id": session.session_id,
-            "task_id": task_id,
-            "risk_class": risk_class,
-            "verification_requirements": requirements,
-            "stage_order": self.STAGE_ORDER,
-            "stage_tags": stage_tags,
-            "continuity_tags": continuity_tags,
-            "continuity_seal": continuity_seal.seal,
-        }
-        final_tag = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
-        expected_final = self.attestation.crypto.digest("hypersynth_final_continuity", final_material)
-        final_verified = hmac.compare_digest(final_tag, expected_final)
+        final_tag = HypersynthIntegrityVerifier.final_tag(
+            self.attestation.crypto,
+            session_id=session.session_id,
+            task_id=task_id,
+            risk_class=risk_class,
+            requirements=requirements,
+            stage_order=self.STAGE_ORDER,
+            stage_tags=stage_tags,
+            continuity_tags=continuity_tags,
+            continuity_seal=continuity_seal.seal,
+        )
         session.close()
-        if not final_verified:
-            return self._reject("verification", "final_continuity_binding_failure",
+
+        exported_ok = HypersynthIntegrityVerifier.verify_exported_integrity(
+            self.attestation.crypto,
+            session_id=session.session_id,
+            task_id=task_id,
+            risk_class=risk_class,
+            requirements=requirements,
+            stage_order=self.STAGE_ORDER,
+            attestations=chain,
+            payloads=tuple(payloads),
+            continuity_records=continuity_chain,
+            continuity_seal=continuity_seal,
+            final_continuity_tag=final_tag,
+        )
+        if not exported_ok:
+            return self._reject("verification", "independent_final_integrity_failure",
                                 attestations=chain, continuity_records=continuity_chain)
 
         return {
@@ -205,4 +217,5 @@ class AttestedHypersynthKernel:
             "continuity_verified": True,
             "continuity_seal": continuity_seal,
             "final_continuity_tag": final_tag,
+            "final_integrity_verified": True,
         }
