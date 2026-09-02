@@ -7,6 +7,7 @@ import hmac
 import json
 import secrets
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any
 
 
@@ -37,6 +38,7 @@ class CryptoIntegrity:
         self._master = bytes(key)
         self._highest: dict[str, int] = {}
         self._nonces: dict[str, set[str]] = {}
+        self._state_lock = Lock()
 
     @staticmethod
     def canonical(value: Any) -> bytes:
@@ -107,12 +109,13 @@ class CryptoIntegrity:
             return False
         if not consume:
             return True
-        seen = self._nonces.setdefault(envelope.domain, set())
-        highest = self._highest.get(envelope.domain, -1)
-        if envelope.nonce in seen or envelope.counter <= highest:
-            return False
-        seen.add(envelope.nonce)
-        self._highest[envelope.domain] = envelope.counter
+        with self._state_lock:
+            seen = self._nonces.setdefault(envelope.domain, set())
+            highest = self._highest.get(envelope.domain, -1)
+            if envelope.nonce in seen or envelope.counter <= highest:
+                return False
+            seen.add(envelope.nonce)
+            self._highest[envelope.domain] = envelope.counter
         return True
 
     def digest(self, domain: str, payload: Any) -> str:
