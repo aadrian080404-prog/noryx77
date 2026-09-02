@@ -42,33 +42,25 @@ class Hypersynth:
         self.simulator = simulator or InternalSimulator()
         self.cross_checker = cross_checker or CrossChecker()
 
-    def _state(self, phase, task, context, confidence=0.0):
-        return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
-
+    def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
     def _reject(self, phase, task, check, **extra):
         self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason)
-        result = {"status": "rejected", "phase": phase, "verification": check}
-        result.update(extra)
-        return result
-
+        result = {"status": "rejected", "phase": phase, "verification": check}; result.update(extra); return result
     def _independent_task_contract(self, task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec): return VerificationResult(False, "contract", "invalid_task_spec")
         if not task.is_well_formed(): return VerificationResult(False, "contract", "malformed_task_spec")
         if task.risk_class not in {"normal", "sensitive", "high"}: return VerificationResult(False, "policy", "unsupported_risk_class")
         if any(requirement not in VALID_VERIFICATION_REQUIREMENTS for requirement in task.verification_requirements): return VerificationResult(False, "contract", "unsupported_verification_requirement")
         return VerificationResult(True, "contract", "independent_task_ok")
-
     def _independent_output_contract(self, output, requirements: tuple[str, ...], *, stage: str) -> VerificationResult:
         if not isinstance(requirements, tuple) or any(not isinstance(requirement, str) or requirement not in VALID_VERIFICATION_REQUIREMENTS for requirement in requirements): return VerificationResult(False, stage, "unsupported_verification_requirement")
         if output is None: return VerificationResult(False, stage, "null_output")
         if isinstance(output, (str, bytes)) and len(output) == 0: return VerificationResult(False, stage, "empty_output")
         if "string" in requirements and not isinstance(output, str): return VerificationResult(False, stage, "output_type_mismatch")
         return VerificationResult(True, stage, "independent_output_ok")
-
     def _independent_simulation_integrity(self, simulations: tuple[SimulationResult, ...], hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
         if not isinstance(simulations, tuple) or not simulations: return VerificationResult(False, "simulation", "no_simulations")
-        expected_ids = tuple(h.hypothesis_id for h in hypotheses)
-        actual_ids = tuple(getattr(item, "hypothesis_id", None) for item in simulations)
+        expected_ids = tuple(h.hypothesis_id for h in hypotheses); actual_ids = tuple(getattr(item, "hypothesis_id", None) for item in simulations)
         if actual_ids != expected_ids: return VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch")
         for item, hypothesis in zip(simulations, hypotheses):
             if not isinstance(item, SimulationResult): return VerificationResult(False, "simulation", "invalid_simulation_type")
@@ -79,18 +71,14 @@ class Hypersynth:
             expected_reason = "feasible" if expected_feasible else "invalid_hypothesis"
             if item.reason != expected_reason: return VerificationResult(False, "simulation", "simulation_reason_mismatch")
         return VerificationResult(True, "simulation", "independent_simulation_ok")
-
     def _checked_verification(self, check, *, stage: str, malformed_reason: str) -> VerificationResult:
         if not isinstance(check, VerificationResult) or not check.is_well_formed(): return VerificationResult(False, stage, malformed_reason)
         return check
-
     def _advance_phase(self, current_index, target_phase, task):
         if target_phase not in self.PHASES: return VerificationResult(False, "phase", "unknown_phase")
         target_index = self.PHASES.index(target_phase)
         if target_index != current_index + 1: return VerificationResult(False, "phase", "phase_order_violation")
-        self.audit.record("phase_entered", task_id=task.task_id, phase=target_phase, index=target_index)
-        return VerificationResult(True, "phase", "phase_order_ok")
-
+        self.audit.record("phase_entered", task_id=task.task_id, phase=target_phase, index=target_index); return VerificationResult(True, "phase", "phase_order_ok")
     def _verify_subtasks(self, task: TaskSpec, subtasks) -> VerificationResult:
         if not isinstance(subtasks, tuple) or not subtasks: return VerificationResult(False, "context", "invalid_subtask_collection")
         if len(subtasks) > self.max_agents: return VerificationResult(False, "context", "subtask_bounds_invalid")
@@ -103,14 +91,12 @@ class Hypersynth:
             if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type: return VerificationResult(False, "context", "subtask_task_type_mismatch")
             ids.add(subtask.subtask_id)
         return VerificationResult(True, "context", "subtasks_ok")
-
     def _verify_plan_integrity(self, plan: Plan, task: TaskSpec, context=None) -> VerificationResult:
         if not isinstance(plan, Plan) or plan.task_id != task.task_id: return VerificationResult(False, "planning", "plan_task_mismatch")
         if not isinstance(plan.steps, tuple) or not plan.steps or len(plan.steps) > min(self.max_steps, self.max_agents): return VerificationResult(False, "planning", "plan_bounds_invalid")
         if context is None:
             if plan.context_version is not None or plan.context_source_ids: return VerificationResult(False, "planning", "unexpected_context_binding")
-        else:
-            if plan.context_version != context.version or plan.context_source_ids != context.source_ids: return VerificationResult(False, "planning", "plan_context_mismatch")
+        elif plan.context_version != context.version or plan.context_source_ids != context.source_ids: return VerificationResult(False, "planning", "plan_context_mismatch")
         ids = set(); prefix = task.task_id + ":"
         for step in plan.steps:
             if not isinstance(step, PlanStep): return VerificationResult(False, "planning", "plan_step_type_invalid")
@@ -120,7 +106,6 @@ class Hypersynth:
             if step.risk_class != task.risk_class: return VerificationResult(False, "planning", "plan_step_risk_mismatch")
             ids.add(step.step_id)
         return VerificationResult(True, "planning", "plan_integrity_ok")
-
     def _verify_hypothesis_integrity(self, hypotheses: tuple[Hypothesis, ...], plan: Plan, task: TaskSpec) -> VerificationResult:
         if not isinstance(hypotheses, tuple) or len(hypotheses) != len(plan.steps) or not hypotheses: return VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch")
         ids = set()
@@ -135,7 +120,6 @@ class Hypersynth:
         try: binding_check = self.hypothesis_engine.verify_against_plan(hypotheses, plan, task)
         except Exception: return VerificationResult(False, "hypothesis", "hypothesis_plan_binding_failure")
         return self._checked_verification(binding_check, stage="hypothesis", malformed_reason="malformed_hypothesis_plan_binding")
-
     def _verify_agent_result(self, child: TaskSpec, agent, result: AgentResult) -> VerificationResult:
         if not isinstance(result, AgentResult): return VerificationResult(False, "agent_result", "invalid_agent_result")
         if not result.is_well_formed(): return VerificationResult(False, "agent_result", "malformed_agent_result")
@@ -152,11 +136,9 @@ class Hypersynth:
         if not result.verification.valid: return VerificationResult(False, "agent_result", "result_verification_failed")
         if result.verification.stage not in ("result", "agent_result", result.agent_id): return VerificationResult(False, "agent_result", "verification_identity_mismatch")
         return VerificationResult(True, "agent_result", "independent_result_verified")
-
     def _evidence_confidence(self, evidence: list[str], required: int) -> float:
         if required <= 0: return 0.0
         return min(1.0, max(0.0, len(evidence) / required))
-
     def run(self, task: TaskSpec):
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None)); evidence: list[str] = []; phase_index = 0
         independent_task_check = self._independent_task_contract(task)
@@ -177,7 +159,7 @@ class Hypersynth:
         if context.task_id != task.task_id or not context.source_ids or context.source_ids[0] != task.task_id: return self._reject("context", task, VerificationResult(False, "context", "context_identity_mismatch"))
         memory_items = context.values.get("memory", ())
         if not isinstance(memory_items, tuple) or tuple(getattr(item, "memory_id", None) for item in memory_items) != context.source_ids[1:]: return self._reject("context", task, VerificationResult(False, "context", "context_memory_provenance_mismatch"))
-        evidence.append("context_integrity");
+        evidence.append("context_integrity")
         if memory_items: evidence.append("memory_context_integrity")
         self.audit.record("context_acquired", task_id=task.task_id, version=context.version, memory_items=len(memory_items))
         phase_check = self._advance_phase(phase_index, "planning", task)
@@ -193,21 +175,22 @@ class Hypersynth:
         phase_check = self._advance_phase(phase_index, "hypothesis", task)
         if not phase_check.valid: return self._reject("hypothesis", task, phase_check)
         phase_index += 1
-        try: hypotheses = self.hypothesis_engine.generate(plan, task); hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
+        try: hypotheses = self.hypothesis_engine.generate(task, plan)
         except Exception: return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_generation_failure"))
+        hypothesis_check = self._verify_hypothesis_integrity(hypotheses, plan, task)
         if not hypothesis_check.valid: return self._reject("hypothesis", task, hypothesis_check)
         evidence.append("hypothesis_integrity")
         phase_check = self._advance_phase(phase_index, "simulation", task)
         if not phase_check.valid: return self._reject("simulation", task, phase_check)
         phase_index += 1
-        try: simulations = self.simulator.simulate(hypotheses, task)
+        try: simulations = self.simulator.simulate(task, hypotheses); simulation_check = self.simulator.verify(simulations)
         except Exception: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
-        simulation_check = self._independent_simulation_integrity(simulations, hypotheses, task)
+        simulation_check = self._checked_verification(simulation_check, stage="simulation", malformed_reason="malformed_simulation_verification")
         if not simulation_check.valid: return self._reject("simulation", task, simulation_check)
-        try: simulation_verification = self.simulator.verify(simulations, hypotheses, task)
-        except Exception: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_verification_failure"))
-        simulation_verification = self._checked_verification(simulation_verification, stage="simulation", malformed_reason="malformed_simulation_verification")
-        if not simulation_verification.valid: return self._reject("simulation", task, simulation_verification)
+        independent_simulation_check = self._independent_simulation_integrity(simulations, hypotheses, task)
+        if not independent_simulation_check.valid: return self._reject("simulation", task, independent_simulation_check)
+        expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses); actual_simulation_ids = tuple(s.hypothesis_id for s in simulations)
+        if actual_simulation_ids != expected_hypothesis_ids: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
         if len(simulations) != len(hypotheses): return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"))
         evidence.append("simulation_integrity"); self.audit.record("simulation_verified", task_id=task.task_id, count=len(simulations))
         phase_check = self._advance_phase(phase_index, "allocation", task)
@@ -222,14 +205,14 @@ class Hypersynth:
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
             continuity_check = self.verifier.verify_task_continuity(task, child); continuity_check = self._checked_verification(continuity_check, stage="continuity", malformed_reason="malformed_continuity_verification")
             if not continuity_check.valid: return self._reject("allocation", task, continuity_check)
-            selected = None; selection_failure = None
+            selected = None; selected_agent_id = None; selection_failure = None
             for offset in range(len(agents)):
                 agent_id = agents[(index + offset) % len(agents)]
                 try: candidate, decision = self.supervisor.select(child, preferred=agent_id)
                 except Exception: selection_failure = VerificationResult(False, "allocation", "agent_selection_failure"); continue
                 if decision.accepted and candidate is not None:
                     if getattr(candidate, "agent_id", None) != agent_id: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_identity_mismatch"))
-                    selected = candidate; break
+                    selected = candidate; selected_agent_id = agent_id; break
                 selection_failure = VerificationResult(False, "allocation", decision.reason)
             if selected is None: return self._reject("allocation", task, selection_failure or VerificationResult(False, "allocation", "no_eligible_agent"))
             assignments.append((selected, child, step))
@@ -249,8 +232,6 @@ class Hypersynth:
                 return self._reject("execution", task, runtime_check, results=tuple(results))
             self.audit.record("agent_runtime_revalidation", task_id=child.task_id, agent_id=getattr(agent, "agent_id", None), allowed=True, reason=runtime_check.reason)
             try:
-                # Atomic router-side validation + bound callable capture closes the final
-                # validation-to-attribute-lookup race at the actual execution boundary.
                 agent_run = self.router.resolve_execution(agent)
                 result = agent_run(child)
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
@@ -288,13 +269,11 @@ class Hypersynth:
             except Exception: self.audit.record("memory_write_failed", task_id=task.task_id)
         final_state = self._state("metacognition", task, context, confidence=confidence); self.audit.record("hypersynth_complete", task_id=task.task_id, status="completed", confidence=confidence, evidence_count=len(evidence))
         return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "audit": self.audit.snapshot()}
-
     def _decompose(self, task):
         try: subtasks = self.decomposer.decompose(task)
         except Exception: return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
         if not subtasks: return self._reject("context", task, VerificationResult(False, "decomposition", "no_subtasks"))
         return subtasks
-
     def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
         if not results: return VerificationResult(False, "consensus", "no_results")
         if any(r.status != "completed" for r in results): return VerificationResult(False, "consensus", "incomplete_result")
