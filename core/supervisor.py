@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from .contracts import TaskSpec, AgentResult, VerificationResult
 from .validation_requirements import VALID_VERIFICATION_REQUIREMENTS
+from .routing_policy import MODEL_ORDER, TASK_MODEL_HINTS
 
 
 @dataclass(frozen=True)
@@ -12,16 +13,8 @@ class AgentDecision:
 
 class AgentSupervisor:
     """Supervises agent selection and result admission; it never bypasses verification."""
-    MODEL_ORDER = ("micro", "small", "medium", "large", "frontier")
-    TASK_MODEL_HINTS = {
-        "simple": "micro",
-        "classification": "small",
-        "analysis": "medium",
-        "research": "large",
-        "reasoning": "large",
-        "planning": "large",
-        "frontier": "frontier",
-    }
+    MODEL_ORDER = MODEL_ORDER
+    TASK_MODEL_HINTS = TASK_MODEL_HINTS
 
     def __init__(self, router, verifier, audit=None):
         self.router = router
