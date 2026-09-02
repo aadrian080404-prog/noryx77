@@ -51,6 +51,14 @@ class ResourceRouter:
         if self._registration_snapshot(agent) != registered:
             raise RuntimeError("registered_agent_metadata_mutated")
 
+    def validate_registered(self, agent: Agent) -> None:
+        """Revalidate object identity and immutable registration metadata."""
+        agent_id = self._validate_agent(agent)
+        registered = self._agents.get(agent_id)
+        if registered is not agent:
+            raise LookupError("agent_registration_mismatch")
+        self._validate_registered_state(agent_id, agent)
+
     def register(self, agent: Agent) -> None:
         agent_id = self._validate_agent(agent)
         if agent_id in self._agents:
