@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from .contracts import AgentResult, TaskSpec
 from .provider import Provider, ProviderResponse, request_from_task
 from .verification import VerificationEngine
@@ -41,6 +43,12 @@ class ProviderAgent(Agent):
             raise ValueError("agent_id_required")
         if not callable(getattr(provider, "execute", None)):
             raise TypeError("provider_execute_required")
+        provider_id = getattr(provider, "provider_id", "")
+        model_id = getattr(provider, "model_id", "")
+        if not isinstance(provider_id, str) or not provider_id.strip():
+            raise ValueError("provider_id_required")
+        if not isinstance(model_id, str):
+            raise TypeError("model_id_invalid")
         if model_class not in ("micro", "small", "medium", "large", "frontier"):
             raise ValueError("invalid_model_class")
         if not isinstance(capabilities, tuple) or any(not isinstance(item, str) or not item.strip() for item in capabilities):
@@ -51,8 +59,8 @@ class ProviderAgent(Agent):
         self.model_class = model_class
         self.capabilities = capabilities
         self.capacity_exempt = False
-        self.provider_id = getattr(provider, "provider_id", "")
-        self.model_id = getattr(provider, "model_id", "")
+        self.provider_id = provider_id
+        self.model_id = model_id
 
     def run(self, task: TaskSpec) -> AgentResult:
         task_check = self.verifier.verify_task(task)
@@ -75,7 +83,7 @@ class ProviderAgent(Agent):
         if not isinstance(response.model_id, str):
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if response.metadata is not None and not hasattr(response.metadata, "items"):
+        if response.metadata is not None and not isinstance(response.metadata, Mapping):
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
         output = response.output
