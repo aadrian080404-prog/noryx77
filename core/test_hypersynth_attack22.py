@@ -5,14 +5,6 @@ from .hypersynth_runtime import HypersynthRuntime
 from .hypersynth import CognitiveState
 
 
-class ForgedKernel:
-    def __init__(self, result):
-        self.result = result
-
-    def run(self, task):
-        return self.result
-
-
 class Attack22Tests(unittest.TestCase):
     def task(self):
         return TaskSpec("attack22", "analysis", "perform objective", "input")
@@ -28,19 +20,11 @@ class Attack22Tests(unittest.TestCase):
             "results": (AgentResult(agent_id, task_id, "completed", "output", agent_verification),),
         }
 
-    def runtime_with(self, result):
-        runtime = HypersynthRuntime()
-        # Runtime admission now executes the attested wrapper, so the forged
-        # kernel must replace that boundary rather than the inner kernel.
-        runtime.attested_kernel = ForgedKernel(result)
-        return runtime
-
     def test_foreign_prefixed_result_task_id_is_rejected(self):
         result = self.valid_result(task_id="attack22:999")
-        runtime = self.runtime_with(result)
-        outcome = runtime.run(self.task())
-        self.assertEqual(outcome["status"], "rejected")
-        self.assertEqual(outcome["verification"].reason, "kernel_result_task_identity_mismatch")
+        outcome = HypersynthRuntime._independent_kernel_result_contract(self.task(), result)
+        self.assertFalse(outcome.valid)
+        self.assertEqual(outcome.reason, "kernel_result_task_identity_mismatch")
 
     def test_duplicate_result_task_identity_is_rejected(self):
         result = self.valid_result()
@@ -48,16 +32,16 @@ class Attack22Tests(unittest.TestCase):
             result["results"][0],
             AgentResult("second", "attack22:0", "completed", "output", VerificationResult(True, "agent_result", "ok")),
         )
-        runtime = self.runtime_with(result)
-        outcome = runtime.run(self.task())
-        self.assertEqual(outcome["status"], "rejected")
-        self.assertEqual(outcome["verification"].reason, "kernel_result_count_mismatch")
+        outcome = HypersynthRuntime._independent_kernel_result_contract(self.task(), result)
+        self.assertFalse(outcome.valid)
+        self.assertEqual(outcome.reason, "kernel_result_count_mismatch")
 
-    def test_exact_runtime_result_binding_is_accepted(self):
-        result = self.valid_result()
-        runtime = self.runtime_with(result)
+    def test_real_runtime_kernel_is_accepted(self):
+        runtime = HypersynthRuntime()
         outcome = runtime.run(self.task())
         self.assertEqual(outcome["status"], "completed")
+        self.assertTrue(outcome["attestation_verified"])
+        self.assertTrue(outcome["final_integrity_verified"])
 
 
 if __name__ == "__main__":
