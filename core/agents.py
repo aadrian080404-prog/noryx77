@@ -1,5 +1,5 @@
 from .contracts import AgentResult, TaskSpec
-from .provider import Provider, request_from_task
+from .provider import Provider, ProviderResponse, request_from_task
 from .verification import VerificationEngine
 
 
@@ -63,10 +63,22 @@ class ProviderAgent(Agent):
         except Exception:
             check = VerificationEngine().verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        if getattr(response, "provider_id", None) != getattr(self.provider, "provider_id", None):
+        if not isinstance(response, ProviderResponse):
             check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
-        output = getattr(response, "output", None)
+        if not isinstance(response.provider_id, str) or not response.provider_id.strip():
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        if response.provider_id != self.provider_id:
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        if not isinstance(response.model_id, str):
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        if response.metadata is not None and not hasattr(response.metadata, "items"):
+            check = self.verifier.verify_output(None, requirements=task.verification_requirements, stage="result")
+            return AgentResult(self.agent_id, task.task_id, "rejected", verification=check)
+        output = response.output
         output_check = self.verifier.verify_output(output, requirements=task.verification_requirements, stage="result")
         if not output_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", output, output_check)
