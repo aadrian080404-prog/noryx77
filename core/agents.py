@@ -26,16 +26,16 @@ class DeterministicAgent(Agent):
         self.verifier = verifier or VerificationEngine()
 
     def _rejected(self, task: TaskSpec, reason: str = "deterministic_verification_failure") -> AgentResult:
-        # Rejection evidence must come from this trusted boundary, not from the
-        # verifier that just failed or returned malformed evidence.
         return AgentResult(
             self.agent_id,
-            task.task_id,
+            task.task_id if type(task) is TaskSpec else "__invalid_task__",
             "rejected",
             verification=VerificationResult(False, "result", reason),
         )
 
     def run(self, task: TaskSpec) -> AgentResult:
+        if type(task) is not TaskSpec:
+            return self._rejected(task, "invalid_task_type")
         try:
             task_check = self.verifier.verify_task(task)
         except Exception:
@@ -106,16 +106,16 @@ class ProviderAgent(Agent):
         self._provider_execute_fingerprint = self._callable_fingerprint(provider.execute)
 
     def _rejected(self, task: TaskSpec, reason: str = "provider_execution_failure") -> AgentResult:
-        # Never promote verifier-supplied rejection evidence after a boundary
-        # failure. The rejection record is constructed locally and canonically.
         return AgentResult(
             self.agent_id,
-            task.task_id,
+            task.task_id if type(task) is TaskSpec else "__invalid_task__",
             "rejected",
             verification=VerificationResult(False, "result", reason),
         )
 
     def run(self, task: TaskSpec) -> AgentResult:
+        if type(task) is not TaskSpec:
+            return self._rejected(task, "invalid_task_type")
         try:
             task_check = self.verifier.verify_task(task)
         except Exception:
@@ -142,9 +142,6 @@ class ProviderAgent(Agent):
             return self._rejected(task)
         if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
             return self._rejected(task, "provider_binding_changed")
-        # ProviderResponse is a trusted envelope, not an extension point: a
-        # subclass can override attribute access after this boundary and must
-        # therefore never be accepted as a canonical response.
         if type(response) is not ProviderResponse:
             return self._rejected(task, "malformed_provider_response")
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
