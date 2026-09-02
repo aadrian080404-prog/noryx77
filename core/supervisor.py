@@ -39,14 +39,16 @@ class AgentSupervisor:
         return check
 
     def _resource_eligibility(self, task: TaskSpec, agent) -> VerificationResult:
-        # Router validation treats absent routing metadata as the legacy medium
-        # contract. Supervisor must use the same interpretation so old agents are
-        # not rejected before their execution/verification boundary is exercised.
+        # Capacity enforcement applies only when the agent explicitly publishes
+        # routing metadata on the instance. This preserves the pre-routing
+        # compatibility contract for legacy agents while keeping explicit model
+        # declarations enforceable and fail-closed.
+        explicit_model = isinstance(getattr(agent, "__dict__", None), dict) and "model_class" in agent.__dict__
         model_class = getattr(agent, "model_class", "medium")
         if not isinstance(model_class, str) or model_class not in self.MODEL_ORDER:
             return VerificationResult(False, "allocation", "invalid_model_class")
-        if getattr(agent, "capacity_exempt", False) is True:
-            return VerificationResult(True, "allocation", "resource_fallback_eligible")
+        if getattr(agent, "capacity_exempt", False) is True or not explicit_model:
+            return VerificationResult(True, "allocation", "resource_legacy_eligible")
         required = self.TASK_MODEL_HINTS.get(task.task_type, "medium")
         if self.MODEL_ORDER.index(model_class) < self.MODEL_ORDER.index(required):
             return VerificationResult(False, "allocation", "resource_underpowered_for_task")
