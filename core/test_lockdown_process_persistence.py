@@ -32,10 +32,10 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             store = SQLiteLockdownStore(path)
             first = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             first.record_incident("first", severity=10)
-            newer = store.load(); stale = dict(newer); stale["payload"] = bytes(newer["payload"])
-            payload = json.loads(stale["payload"].decode("utf-8")); payload["generation"] = 0
+            newer = store.load(); stale = dict(newer); payload = json.loads(bytes(newer["payload"]).decode("utf-8")); payload["generation"] = 0
             stale["payload"] = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-            with self.assertRaises(ValueError): store.save(stale, expected_generation=_seal_generation(newer))
+            with self.assertRaisesRegex(ValueError, "lockdown_store_rollback"):
+                store.save(stale, expected_generation=_seal_generation(newer))
 
     def test_same_generation_writers_cannot_both_commit(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -43,10 +43,14 @@ class LockdownProcessPersistenceTests(unittest.TestCase):
             store = SQLiteLockdownStore(path)
             bootstrap = SecurityLockdown(CryptoIntegrity(KEY), lambda proof: True, state_store=store)
             bootstrap.record_incident("bootstrap", severity=10)
-            current = store.load(); first = dict(current); second = dict(current)
-            expected = _seal_generation(current) - 1
-            with self.assertRaises(ValueError): store.save(first, expected_generation=expected)
-            with self.assertRaises(ValueError): store.save(second, expected_generation=expected)
+            current = store.load(); generation = _seal_generation(current)
+            first = dict(current); second = dict(current)
+            payload = json.loads(bytes(first["payload"]).decode("utf-8")); payload["reason"] = "writer_one"; first["payload"] = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            payload = json.loads(bytes(second["payload"]).decode("utf-8")); payload["reason"] = "writer_two"; second["payload"] = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            with self.assertRaisesRegex(ValueError, "lockdown_store_rollback"):
+                store.save(first, expected_generation=generation)
+            with self.assertRaisesRegex(ValueError, "lockdown_store_rollback"):
+                store.save(second, expected_generation=generation)
 
     def test_same_generation_recovery_race_fails_closed_for_loser(self):
         with tempfile.TemporaryDirectory() as directory:
