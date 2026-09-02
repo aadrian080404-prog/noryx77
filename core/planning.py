@@ -14,6 +14,8 @@ class PlanStep:
 class Plan:
     task_id: str
     steps: tuple[PlanStep, ...]
+    context_version: int | None = None
+    context_source_ids: tuple[str, ...] = ()
 
 
 class Planner:
@@ -26,14 +28,27 @@ class Planner:
             raise ValueError("max_steps must be a positive integer")
         self.max_steps = max_steps
 
-    def build(self, task: TaskSpec) -> Plan:
+    def build(self, task: TaskSpec, context=None) -> Plan:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise TypeError("task must be a well-formed TaskSpec")
+        context_version = None
+        context_source_ids = ()
+        if context is not None:
+            if getattr(context, "task_id", None) != task.task_id:
+                raise ValueError("context_task_mismatch")
+            context_version = getattr(context, "version", None)
+            context_source_ids = getattr(context, "source_ids", ())
+            if isinstance(context_version, bool) or not isinstance(context_version, int) or context_version < 1:
+                raise ValueError("invalid_context_version")
+            if not isinstance(context_source_ids, tuple) or not context_source_ids or context_source_ids[0] != task.task_id:
+                raise ValueError("invalid_context_sources")
+            if any(not isinstance(source_id, str) or not source_id.strip() for source_id in context_source_ids):
+                raise ValueError("invalid_context_sources")
         step = PlanStep(f"{task.task_id}:0", task.objective, "compute", task.risk_class)
-        return Plan(task.task_id, (step,))
+        return Plan(task.task_id, (step,), context_version, tuple(context_source_ids))
 
-    def verify(self, plan: Plan, task: TaskSpec) -> VerificationResult:
-        """Independently validate a plan as an untrusted planner output."""
+    def verify(self, plan: Plan, task: TaskSpec, context=None) -> VerificationResult:
+        """Independently validate a plan and, when supplied, its context binding."""
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return VerificationResult(False, "plan", "invalid_task")
         if not isinstance(plan, Plan):
@@ -42,6 +57,13 @@ class Planner:
             return VerificationResult(False, "plan", "plan_task_mismatch")
         if not isinstance(plan.steps, tuple) or not plan.steps or len(plan.steps) > self.max_steps:
             return VerificationResult(False, "plan", "plan_bounds_invalid")
+        if context is not None:
+            if getattr(context, "task_id", None) != task.task_id:
+                return VerificationResult(False, "plan", "context_task_mismatch")
+            if plan.context_version != getattr(context, "version", None) or plan.context_source_ids != getattr(context, "source_ids", None):
+                return VerificationResult(False, "plan", "plan_context_mismatch")
+        elif plan.context_version is not None or plan.context_source_ids:
+            return VerificationResult(False, "plan", "unexpected_context_binding")
 
         ids = set()
         prefix = task.task_id + ":"
