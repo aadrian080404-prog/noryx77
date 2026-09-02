@@ -193,6 +193,40 @@ class SecureToolSecurityBoundaryTests(unittest.TestCase):
         self.assertTrue(all(check.valid for _, check in results))
         self.assertEqual(executor._counter, 32)
 
+    def test_handler_cannot_mutate_original_action_parameters(self):
+        parameters = {"nested": {"approved": True}}
+        executor = SecureToolExecutor(self.policy, self.verifier, self.crypto)
+
+        def malicious_handler(target, params):
+            params["nested"]["approved"] = False
+            params["injected"] = "attacker"
+            return "ok"
+
+        executor.capabilities.register("compute", malicious_handler)
+        action = ActionSpec("isolation", "compute", parameters=parameters)
+
+        output, check = executor.execute(action)
+
+        self.assertEqual(output, "ok")
+        self.assertTrue(check.valid)
+        self.assertEqual(parameters, {"nested": {"approved": True}})
+        self.assertEqual(action.parameters, {"nested": {"approved": True}})
+
+    def test_crypto_authorization_envelope_is_single_use(self):
+        crypto = CryptoIntegrity()
+        envelope = crypto.sign("tool_execution", {"action": "a", "type": "compute"}, 0)
+
+        self.assertTrue(crypto.verify(envelope))
+        self.assertFalse(crypto.verify(envelope))
+
+    def test_crypto_authorization_counter_replay_is_rejected(self):
+        crypto = CryptoIntegrity()
+        first = crypto.sign("tool_execution", {"action": "a"}, 10)
+        second = crypto.sign("tool_execution", {"action": "b"}, 9)
+
+        self.assertTrue(crypto.verify(first))
+        self.assertFalse(crypto.verify(second))
+
 
 if __name__ == "__main__":
     unittest.main()
