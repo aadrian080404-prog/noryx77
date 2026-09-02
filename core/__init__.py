@@ -26,6 +26,7 @@ from .policy import PolicyEngine
 from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .security import SecurityBoundary, SecurityDecision
+from .security_lockdown import LockdownState, SecurityLockdown
 from .secure_tools import SecureCapabilityRegistry, SecureToolExecutor
 from .state import NORYXState
 from .supervisor import AgentSupervisor
@@ -40,8 +41,8 @@ __all__ = [
     "ExportManifestAcceptanceBoundary", "Hypersynth", "HypersynthAttestation", "HypersynthRuntime",
     "AttestedHypersynthKernel", "HypersynthIntegrityVerifier", "IntegrityManifest", "Hypothesis", "HypothesisEngine",
     "InternalSimulator", "KernelContinuity", "KernelContinuityRecord", "ContinuitySeal", "KernelContinuityPolicy",
-    "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine",
-    "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SessionContext",
+    "LockdownState", "MemoryStore", "NORYXError", "NORYXState", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine",
+    "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary", "SecurityDecision", "SecurityLockdown", "SessionContext",
     "SimulationResult", "StageAttestation", "Subtask", "TaskDecomposer", "TaskSpec", "VerificationEngine",
     "VerificationFailure", "VerificationResult",
 ]
