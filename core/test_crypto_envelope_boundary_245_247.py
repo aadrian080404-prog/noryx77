@@ -34,7 +34,6 @@ class CryptoEnvelopeBoundaryTests(unittest.TestCase):
             canonical.counter,
             canonical.payload,
             canonical.tag,
-            canonical.algorithm,
             canonical.version,
         )
         self.assertFalse(self.crypto.verify(spoofed))
@@ -58,6 +57,37 @@ class CryptoEnvelopeBoundaryTests(unittest.TestCase):
         self.assertIs(type(envelope), CryptoEnvelope)
         self.assertTrue(self.crypto.verify(envelope))
         self.assertFalse(self.crypto.verify(envelope))
+
+    def _tampered(self, **changes):
+        envelope = self.crypto.sign("test", {"value": 4}, 1, nonce="nonce-tamper")
+        for field, value in changes.items():
+            object.__setattr__(envelope, field, value)
+        return envelope
+
+    def test_attack_248_payload_tampering_is_detected(self):
+        self.assertFalse(self.crypto.verify(self._tampered(payload=b'{"value":999}'), consume=False))
+
+    def test_attack_249_tag_tampering_is_detected(self):
+        envelope = self.crypto.sign("test", {"value": 5}, 1, nonce="nonce-tag")
+        object.__setattr__(envelope, "tag", "0" * 64)
+        self.assertFalse(self.crypto.verify(envelope, consume=False))
+
+    def test_attack_250_domain_tampering_is_detected(self):
+        self.assertFalse(self.crypto.verify(self._tampered(domain="other"), consume=False))
+
+    def test_attack_251_nonce_tampering_is_detected(self):
+        self.assertFalse(self.crypto.verify(self._tampered(nonce="nonce-forged"), consume=False))
+
+    def test_attack_252_counter_tampering_is_detected(self):
+        self.assertFalse(self.crypto.verify(self._tampered(counter=2), consume=False))
+
+    def test_attack_253_algorithm_and_version_tampering_is_rejected(self):
+        envelope = self.crypto.sign("test", {"value": 6}, 1, nonce="nonce-meta")
+        object.__setattr__(envelope, "algorithm", "FORGED")
+        self.assertFalse(self.crypto.verify(envelope, consume=False))
+        object.__setattr__(envelope, "algorithm", self.crypto.ALGORITHM)
+        object.__setattr__(envelope, "version", 999)
+        self.assertFalse(self.crypto.verify(envelope, consume=False))
 
 
 if __name__ == "__main__":
