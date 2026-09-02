@@ -16,9 +16,10 @@ class MemoryItem:
 
 
 class MemoryStore:
-    """Deterministic bounded store with isolation and authenticated entries."""
+    """Deterministic bounded store with isolated, version-bound authentication."""
 
     VALID_KINDS = {"working", "local", "edge", "cloud", "long_term", "suspended"}
+    AUTH_SCHEMA_VERSION = 2
 
     def __init__(self, max_items: int = 10_000, crypto: CryptoIntegrity | None = None):
         if isinstance(max_items, bool) or not isinstance(max_items, int) or max_items < 1:
@@ -29,13 +30,14 @@ class MemoryStore:
         self._crypto = crypto or CryptoIntegrity()
         self._lock = RLock()
 
-    @staticmethod
-    def _payload(item: MemoryItem) -> dict[str, Any]:
+    @classmethod
+    def _payload(cls, item: MemoryItem) -> dict[str, Any]:
         # MemoryItem is a security boundary: subclasses may override attribute
         # access and therefore must never participate in authenticated encoding.
         if type(item) is not MemoryItem:
             raise TypeError("memory_item_must_be_canonical")
         return {
+            "auth_schema_version": cls.AUTH_SCHEMA_VERSION,
             "memory_id": item.memory_id,
             "content": deepcopy(item.content),
             "kind": item.kind,
@@ -65,8 +67,6 @@ class MemoryStore:
             if item.memory_id not in self._items and len(self._items) >= self.max_items:
                 raise MemoryError("memory_capacity_exceeded")
             stored = deepcopy(item)
-            # Authenticate before mutating the store. A serialization/crypto failure
-            # must not leave an unauthenticated item occupying state or capacity.
             tag = self._crypto.digest("memory", self._payload(stored))
             self._items[item.memory_id] = stored
             self._auth[item.memory_id] = tag
@@ -127,8 +127,6 @@ class MemoryStore:
             item = self._items.get(memory_id)
             if item is None:
                 return False
-            # Never silently destroy corrupted authenticated state: callers must
-            # observe the integrity failure instead of using deletion as a bypass.
             if not self._integrity_ok(memory_id, item):
                 raise MemoryError("memory_integrity_failure")
             del self._items[memory_id]
