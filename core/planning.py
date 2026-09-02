@@ -29,7 +29,7 @@ class Planner:
         self.max_steps = max_steps
 
     def build(self, task: TaskSpec, context=None) -> Plan:
-        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+        if type(task) is not TaskSpec or not task.is_well_formed():
             raise TypeError("task must be a well-formed TaskSpec")
         context_version = None
         context_source_ids = ()
@@ -49,9 +49,9 @@ class Planner:
 
     def verify(self, plan: Plan, task: TaskSpec, context=None) -> VerificationResult:
         """Independently validate a plan and, when supplied, its context binding."""
-        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+        if type(task) is not TaskSpec or not task.is_well_formed():
             return VerificationResult(False, "plan", "invalid_task")
-        if not isinstance(plan, Plan):
+        if type(plan) is not Plan:
             return VerificationResult(False, "plan", "invalid_plan_type")
         if not isinstance(plan.task_id, str) or not plan.task_id.strip() or plan.task_id != task.task_id:
             return VerificationResult(False, "plan", "plan_task_mismatch")
@@ -68,7 +68,7 @@ class Planner:
         ids = set()
         prefix = task.task_id + ":"
         for step in plan.steps:
-            if not isinstance(step, PlanStep):
+            if type(step) is not PlanStep:
                 return VerificationResult(False, "plan", "plan_step_type_invalid")
             if not isinstance(step.step_id, str) or not step.step_id.strip():
                 return VerificationResult(False, "plan", "plan_step_id_invalid")
