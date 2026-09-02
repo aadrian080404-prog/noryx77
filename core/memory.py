@@ -31,6 +31,10 @@ class MemoryStore:
 
     @staticmethod
     def _payload(item: MemoryItem) -> dict[str, Any]:
+        # MemoryItem is a security boundary: subclasses may override attribute
+        # access and therefore must never participate in authenticated encoding.
+        if type(item) is not MemoryItem:
+            raise TypeError("memory_item_must_be_canonical")
         return {
             "memory_id": item.memory_id,
             "content": deepcopy(item.content),
@@ -40,8 +44,8 @@ class MemoryStore:
         }
 
     def _validate(self, item: MemoryItem) -> None:
-        if not isinstance(item, MemoryItem) or not isinstance(item.memory_id, str) or not item.memory_id.strip():
-            raise ValueError("valid memory item with memory_id required")
+        if type(item) is not MemoryItem or not isinstance(item.memory_id, str) or not item.memory_id.strip():
+            raise ValueError("valid canonical memory item with memory_id required")
         if item.kind not in self.VALID_KINDS:
             raise ValueError("unsupported memory kind")
         if not isinstance(item.source, str):
