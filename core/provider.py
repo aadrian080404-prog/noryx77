@@ -47,14 +47,14 @@ class CallableProvider:
         self.model_id = model_id
 
     def execute(self, request: ProviderRequest) -> ProviderResponse:
-        if not isinstance(request, ProviderRequest):
+        if type(request) is not ProviderRequest:
             raise TypeError("invalid_provider_request")
         output = self._fn(request)
         return ProviderResponse(output=output, provider_id=self.provider_id, model_id=self.model_id, metadata={})
 
 
 def request_from_task(task: TaskSpec) -> ProviderRequest:
-    if not isinstance(task, TaskSpec) or not task.is_well_formed():
+    if type(task) is not TaskSpec or not task.is_well_formed():
         raise TypeError("task_must_be_well_formed")
     try:
         isolated_input = deepcopy(task.input)
