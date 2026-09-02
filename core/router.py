@@ -113,19 +113,38 @@ class ResourceRouter:
             return self._agents[available[0]]
         raise LookupError("no unambiguous resource route")
 
+    @staticmethod
+    def _required_capabilities(task) -> tuple[str, ...]:
+        constraints = getattr(task, "constraints", {})
+        if not hasattr(constraints, "get"):
+            raise ValueError("invalid_task_constraints")
+        required = constraints.get("required_capabilities", ())
+        if not isinstance(required, tuple):
+            raise ValueError("invalid_required_capabilities")
+        if any(not isinstance(item, str) or not item.strip() for item in required):
+            raise ValueError("invalid_required_capabilities")
+        if len(set(required)) != len(required):
+            raise ValueError("duplicate_required_capabilities")
+        return required
+
     def route_for_task(self, task):
-        """Choose the smallest model class that satisfies the task, deterministically."""
+        """Choose the smallest registered model satisfying model and capability requirements."""
         task_type = getattr(task, "task_type", None)
         if not isinstance(task_type, str) or not task_type.strip():
             raise ValueError("invalid_task_type")
         required = self.TASK_MODEL_HINTS.get(task_type, "medium")
         required_index = self.MODEL_ORDER.index(required)
+        required_capabilities = self._required_capabilities(task)
         candidates = []
         for agent_id in self.available():
             agent = self._agents[agent_id]
             model_class = getattr(agent, "model_class", "medium")
-            if self.MODEL_ORDER.index(model_class) >= required_index:
-                candidates.append(agent)
+            capabilities = getattr(agent, "capabilities", ())
+            if self.MODEL_ORDER.index(model_class) < required_index:
+                continue
+            if not set(required_capabilities).issubset(capabilities):
+                continue
+            candidates.append(agent)
         if not candidates:
             raise LookupError("no_resource_satisfies_task")
         candidates.sort(key=lambda agent: (self.MODEL_ORDER.index(getattr(agent, "model_class", "medium")), getattr(agent, "agent_id", "")))
