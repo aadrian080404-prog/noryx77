@@ -21,7 +21,7 @@ from .router import ResourceRouter
 
 class HypersynthRuntime:
     """Fail-closed facade that owns HYPERSYNTH execution, integrity, and runtime limits."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = (), admin_authorizer=None, lockdown=None, crypto=None, lockdown_seal=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, provider: Provider | None = None, agent_id: str = "provider", provider_model_class: str = "large", provider_capabilities: tuple[str, ...] = (), admin_authorizer=None, lockdown=None, crypto=None, lockdown_seal=None, lockdown_store=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -32,16 +32,16 @@ class HypersynthRuntime:
         self.crypto = crypto or CryptoIntegrity()
         if not isinstance(self.crypto, CryptoIntegrity):
             raise TypeError("invalid_crypto_integrity")
+        if lockdown is not None and lockdown_store is not None:
+            raise ValueError("lockdown_and_store_are_mutually_exclusive")
         if lockdown is not None and not isinstance(lockdown, SecurityLockdown):
             raise TypeError("invalid_security_lockdown")
         self.security_lockdown = lockdown or SecurityLockdown(
             self.crypto,
             admin_authorizer if admin_authorizer is not None else (lambda proof: False),
+            state_store=lockdown_store,
         )
         if lockdown_seal is not None:
-            # A reconstructed runtime must explicitly inherit the last
-            # authenticated lockdown state. Never silently fall back to a
-            # fresh volatile NORMAL state when a continuity seal is supplied.
             try:
                 self.security_lockdown.restore_seal(lockdown_seal)
             except Exception as exc:
@@ -61,9 +61,6 @@ class HypersynthRuntime:
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
         )
-        # The runtime boundary exposes only the attested kernel. This keeps the
-        # nine-stage execution result cryptographically bound to the run before
-        # it leaves the runtime-owned admission checks below.
         self.attested_kernel = AttestedHypersynthKernel(self.kernel)
 
     def export_lockdown_seal(self) -> dict:
