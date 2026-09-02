@@ -15,11 +15,13 @@ class ExplodingSimulator(InternalSimulator):
 
 
 class TwoStepPlanner(Planner):
-    def build(self, task):
+    def build(self, task, context=None):
+        version = None if context is None else context.version
+        sources = () if context is None else context.source_ids
         return Plan(task.task_id, (
             PlanStep(task.task_id + ":0", task.objective, "compute", task.risk_class),
             PlanStep(task.task_id + ":1", task.objective, "compute", task.risk_class),
-        ))
+        ), version, sources)
 
 
 class PartialFailureAgent(DeterministicAgent):
