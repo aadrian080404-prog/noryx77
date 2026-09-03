@@ -44,6 +44,29 @@ class SecurityContractTests(unittest.TestCase):
         decision = self.gate.authorize(ActionSpec("a", "compute"), calls_used=-1)
         self.assertFalse(decision.allowed)
 
+    def test_bound_action_requires_matching_execution(self):
+        action = ActionSpec("a", "compute", execution_id="exec-a")
+        decision = self.gate.authorize(action, execution_id="exec-a")
+        self.assertTrue(decision.allowed)
+
+    def test_bound_action_rejects_execution_transplant(self):
+        action = ActionSpec("a", "compute", execution_id="exec-a")
+        decision = self.gate.authorize(action, execution_id="exec-b")
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "execution_identity_mismatch")
+
+    def test_bound_action_cannot_fall_back_to_unbound_authorization(self):
+        action = ActionSpec("a", "compute", execution_id="exec-a")
+        decision = self.gate.authorize(action)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "execution_identity_required")
+
+    def test_invalid_expected_execution_is_denied(self):
+        action = ActionSpec("a", "compute", execution_id="exec-a")
+        decision = self.gate.authorize(action, execution_id=" ")
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "invalid_execution_identity")
+
     def test_policy_exception_fails_closed(self):
         class ExplodingPolicy:
             def allows(self, action):
