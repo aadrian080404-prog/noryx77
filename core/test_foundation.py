@@ -32,16 +32,16 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(router.route().agent_id, "deterministic")
 
     def test_memory_is_bounded_and_replaceable(self):
-        store = MemoryStore()
-        item = MemoryItem("m1", "hello", "working", "test", 0.8)
-        store.put(item)
-        self.assertEqual(store.get("m1"), item)
+        store = MemoryStore(max_items=2)
+        first = MemoryItem("m1", "hello", "working", "test", 0.8)
+        second = MemoryItem("m2", "world", "suspended", "test", 0.7)
+        store.put(first)
+        store.put(second)
+        self.assertEqual(store.get("m1"), first)
         replacement = MemoryItem("m1", "updated", "working", "test", 0.9)
         store.put(replacement)
         self.assertEqual(store.get("m1"), replacement)
+        with self.assertRaises(MemoryError):
+            store.put(MemoryItem("m3", "overflow", "working", "test", 0.5))
         self.assertTrue(store.delete("m1"))
         self.assertIsNone(store.get("m1"))
-
-
-if __name__ == "__main__":
-    unittest.main()
