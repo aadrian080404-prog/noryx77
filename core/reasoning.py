@@ -21,15 +21,12 @@ class SimulationResult:
 
 class HypothesisEngine:
     """Bounded, inspectable hypothesis generation; never exposes hidden reasoning traces."""
-
     def generate(self, task: TaskSpec, plan: Plan) -> tuple[Hypothesis, ...]:
-        if not isinstance(task, TaskSpec) or not isinstance(plan, Plan) or not plan.steps:
-            return ()
+        if not isinstance(task, TaskSpec) or not isinstance(plan, Plan) or not plan.steps: return ()
         return tuple(Hypothesis(f"{task.task_id}:h{index}", task.task_id, step.objective, (step.step_id,)) for index, step in enumerate(plan.steps))
 
     def verify(self, hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
-        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple) or not hypotheses:
-            return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
+        if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple) or not hypotheses: return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
         ids = set()
         for hypothesis in hypotheses:
             if not isinstance(hypothesis, Hypothesis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_type")
@@ -63,7 +60,7 @@ class InternalSimulator:
 
 
 class CrossChecker:
-    """Checks that verified agent results map one-to-one to declared plan steps."""
+    """Checks that verified agent results map one-to-one to plan steps and one execution."""
     def verify(self, task: TaskSpec, results: tuple[AgentResult, ...], hypotheses: tuple[Hypothesis, ...]) -> VerificationResult:
         if not isinstance(task, TaskSpec) or not isinstance(results, tuple) or not isinstance(hypotheses, tuple): return VerificationResult(False, "cross_check", "invalid_cross_check_inputs")
         if not results: return VerificationResult(False, "cross_check", "no_results")
@@ -78,6 +75,9 @@ class CrossChecker:
             verification = result.verification
             if verification is None or not verification.is_well_formed() or not verification.valid: return VerificationResult(False, "cross_check", "unverified_result")
             if result.output is None: return VerificationResult(False, "cross_check", "null_output")
+        execution_ids = [result.execution_id for result in results]
+        if len(set(execution_ids)) != 1: return VerificationResult(False, "cross_check", "execution_identity_mismatch")
+        if task.execution_id and execution_ids[0] != task.execution_id: return VerificationResult(False, "cross_check", "execution_identity_mismatch")
         result_task_ids = [result.task_id for result in results]
         if len(set(result_task_ids)) != len(result_task_ids): return VerificationResult(False, "cross_check", "duplicate_result_task")
         agent_ids = [result.agent_id for result in results]
