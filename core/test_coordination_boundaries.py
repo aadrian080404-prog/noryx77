@@ -90,6 +90,47 @@ class CoordinationBoundaryTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "agent_identity_untrusted")
 
+    def test_result_issued_before_revocation_is_rejected_after_revocation(self):
+        registry = IdentityRegistry()
+        identity, _ = AgentIdentityAuthority.generate("trusted")
+        registry.register(identity)
+        router = ResourceRouter(registry)
+        router.register(IdentityAgent("trusted", identity, self.verifier))
+        coordinator = AgentCoordinator(router, self.verifier)
+        result = IdentityAgent("trusted", identity, self.verifier).run(TaskSpec("t", "research", "analyze", "data", execution_id="exec-1"))
+        registry.revoke("trusted")
+        check = coordinator.verify_consensus((result,))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "agent_identity_untrusted")
+
+    def test_consensus_rejects_same_task_id_from_different_executions(self):
+        verified = VerificationResult(True, "agent_result", "verified")
+        results = (
+            AgentResult("agent-a", "t", "completed", "same", verified, "exec-a"),
+            AgentResult("agent-b", "t", "completed", "same", verified, "exec-b"),
+        )
+        check = self.coordinator.verify_consensus(results)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "execution_identity_mismatch")
+
+    def test_execute_rejects_revocation_during_agent_execution(self):
+        registry = IdentityRegistry()
+        identity, _ = AgentIdentityAuthority.generate("revoked-midflight")
+        registry.register(identity)
+
+        class RevokingAgent(IdentityAgent):
+            def run(self, task):
+                result = super().run(task)
+                registry.revoke(self.agent_id)
+                return result
+
+        router = ResourceRouter(registry)
+        router.register(RevokingAgent("revoked-midflight", identity, self.verifier))
+        coordinator = AgentCoordinator(router, self.verifier)
+        plan = Plan("t", (PlanStep("s1", "analyze", "compute", "normal"),))
+        with self.assertRaisesRegex(RuntimeError, "agent_identity_untrusted:revoked-midflight"):
+            coordinator.execute(self.task, plan)
+
 
 class IdentityAgent(Agent):
     def __init__(self, agent_id, identity, verifier):
@@ -99,7 +140,7 @@ class IdentityAgent(Agent):
 
     def run(self, task):
         check = self.verifier.verify_output("ok", stage="agent_result")
-        return AgentResult(self.agent_id, task.task_id, "completed", "ok", check)
+        return AgentResult(self.agent_id, task.task_id, "completed", "ok", check, task.execution_id)
 
 
 if __name__ == "__main__":
