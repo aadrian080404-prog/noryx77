@@ -5,6 +5,7 @@ from .agents import DeterministicAgent
 from .audit import AuditLog
 from .contracts import ActionSpec, TaskSpec
 from .decomposition import TaskDecomposer
+from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
@@ -26,6 +27,16 @@ class NORYXRuntime:
         self.router = ResourceRouter()
         self.router.register(DeterministicAgent(self.verifier))
         self.decomposer = TaskDecomposer()
+        # Keep the legacy runtime path intact while exposing the same bounded
+        # dependencies to the HYPERSYNTH runtime facade. This makes HYPERSYNTH
+        # an explicit execution mode of NORYX rather than a disconnected stack.
+        self.hypersynth = HypersynthRuntime(
+            verifier=self.verifier,
+            router=self.router,
+            audit=self.audit,
+            limits=self.limits,
+            memory=self.memory,
+        )
 
     def run(self, task: TaskSpec, agent_id: str = "deterministic"):
         started = time.monotonic()
@@ -106,3 +117,7 @@ class NORYXRuntime:
             self.audit.record("task_timeout", task_id=task.task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task.task_id}
         return {"status": "completed", "results": tuple(results), "audit": self.audit.snapshot()}
+
+    def run_hypersynth(self, task: TaskSpec):
+        """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
+        return self.hypersynth.run(task)
