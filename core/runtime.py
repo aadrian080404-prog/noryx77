@@ -99,6 +99,23 @@ class NORYXRuntime:
                 check = VerificationResult(False, "agent_result", "agent_identity_mismatch")
                 self.audit.record("agent_identity_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if not hasattr(result, "task_id") or result.task_id != child.task_id:
+                check = VerificationResult(False, "agent_result", "task_identity_mismatch")
+                self.audit.record("task_identity_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if not hasattr(result, "status") or result.status != "completed":
+                check = VerificationResult(False, "agent_result", "invalid_result_status")
+                self.audit.record("result_status_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if not hasattr(result, "verification") or result.verification is None or not result.verification.valid:
+                check = VerificationResult(False, "agent_result", "unverified_agent_result")
+                self.audit.record("result_verification_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if result.verification.stage != "agent_result":
+                check = VerificationResult(False, "agent_result", "verification_stage_mismatch")
+                self.audit.record("verification_stage_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+
             if deadline_exceeded():
                 self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": child.task_id}
@@ -118,8 +135,6 @@ class NORYXRuntime:
             )
             if not runtime_verification.valid:
                 return {"status": "rejected", "reason": "runtime_output_verification_failed", "verification": runtime_verification, "task_id": child.task_id}
-            if result.verification is None or not result.verification.valid:
-                return {"status": "rejected", "result": result}
 
             results.append(result)
             self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
