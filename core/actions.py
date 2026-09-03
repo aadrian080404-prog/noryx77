@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import hmac
 import json
@@ -109,6 +109,12 @@ class ActionGate:
             return ActionDecision(False, "execution identity required", VerificationResult(False, "action_gate", "execution_identity_required"))
         if self.limits.max_actions_per_task - calls_used <= 0:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
+
+        # A valid grant satisfies only the explicit authorization predicate.  The
+        # immutable action is never mutated; policy/security still evaluate every
+        # other constraint.  In particular, HIGH_RISK/unsupported action types
+        # remain denied even when a grant is present.
+        evaluation_action = action
         if action.requires_authorization:
             if self.authorization is None or execution_id is None or grant is None:
                 return ActionDecision(False, "authorization required", VerificationResult(False, "action_gate", "authorization_required"))
@@ -117,14 +123,16 @@ class ActionGate:
                     return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
+            evaluation_action = replace(action, requires_authorization=False)
+
         try:
-            policy_allowed = self.policy.allows(action)
+            policy_allowed = self.policy.allows(evaluation_action)
         except Exception:
             return ActionDecision(False, "policy evaluation failure", VerificationResult(False, "action_gate", "policy_evaluation_failure"))
         if not policy_allowed:
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
         try:
-            security_allowed = self.security.allows(action)
+            security_allowed = self.security.allows(evaluation_action)
         except Exception:
             return ActionDecision(False, "security evaluation failure", VerificationResult(False, "action_gate", "security_evaluation_failure"))
         if not security_allowed:
