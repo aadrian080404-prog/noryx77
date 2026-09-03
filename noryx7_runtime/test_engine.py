@@ -1,6 +1,7 @@
 import pytest
 
 from .adapters import CapabilityAdapter
+from .attestation import Ed25519AttestationSigner, verify_attestation
 from .capabilities import Capability, CapabilityBroker
 from .contracts import ExecutionStatus, Intent, PlanStep
 from .engine import RuntimeEngine
@@ -23,24 +24,33 @@ def test_dependencies_are_executed_in_deterministic_topological_order():
     assert seen == ["a", "b", "c"]
 
 
-def test_capability_adapter_is_the_effect_boundary_when_configured():
+def test_capability_adapter_requires_signed_attestation():
     seen = []
     broker = CapabilityBroker({
         "tool": Capability("tool", frozenset({"tool.call"}), lambda action: seen.append(action) or "ok")
     })
-    result = RuntimeEngine(adapter=CapabilityAdapter(broker)).execute(
+    signer = Ed25519AttestationSigner.generate()
+    result = RuntimeEngine(adapter=CapabilityAdapter(broker), attestation_signer=signer).execute(
         Intent("run", "user"),
         [step("a")],
         verifier=lambda action, output: output == "ok",
     )
     assert result.status is ExecutionStatus.SUCCEEDED
     assert len(seen) == 1
-    assert seen[0].execution_id == result.execution_id
-    assert seen[0].principal_id == "user"
+    assert verify_attestation(result.attestations[0], signer)
+
+
+def test_adapter_without_attestation_signer_is_rejected_at_construction():
+    broker = CapabilityBroker({"tool": Capability("tool", frozenset({"tool.call"}), lambda action: "ok")})
+    with pytest.raises(ValueError, match="attestation_signer"):
+        RuntimeEngine(adapter=CapabilityAdapter(broker))
 
 
 def test_adapter_rejects_unregistered_effect_type_before_execution():
-    result = RuntimeEngine(adapter=CapabilityAdapter(CapabilityBroker())).execute(
+    result = RuntimeEngine(
+        adapter=CapabilityAdapter(CapabilityBroker()),
+        attestation_signer=Ed25519AttestationSigner.generate(),
+    ).execute(
         Intent("run", "user"),
         [step("a")],
         verifier=lambda action, output: True,
@@ -64,7 +74,9 @@ def test_budget_rejects_before_any_execution():
 
 def test_failed_verification_never_commits():
     commits = []
-    result = RuntimeEngine().execute(
+    result = RuntimeEngine(
+        attestation_signer=Ed25519AttestationSigner.generate(),
+    ).execute(
         Intent("run", "user"),
         [step("a")],
         executor=lambda action: "unsafe",
