@@ -60,7 +60,17 @@ class AuthorizationGrantTests(unittest.TestCase):
     def test_tampered_signature_is_denied(self):
         action = self._action()
         grant = self.authority.issue(action, "exec-a")
-        tampered = type(grant)(grant.action_id, grant.action_type, grant.target, grant.execution_id, grant.nonce, grant.expires_at, "00" * 32)
+        tampered = type(grant)(
+            grant.action_id,
+            grant.action_type,
+            grant.target,
+            grant.execution_id,
+            grant.principal_id,
+            grant.principal_key_fingerprint,
+            grant.nonce,
+            grant.expires_at,
+            "00" * 32,
+        )
         decision = self.gate.authorize(action, execution_id="exec-a", grant=tampered)
         self.assertFalse(decision.allowed)
 
