@@ -108,11 +108,15 @@ class Hypersynth:
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
-            if self.action_gate is not None:
-                decision = self.action_gate.authorize(action, calls_used=index, execution_id=task.execution_id)
-                if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
-            try: result = agent.run(child)
-            except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
+            try:
+                if self.action_gate is not None:
+                    decision, result = self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
+                    if not decision.allowed:
+                        return self._reject("execution", task, decision.verification, results=tuple(results))
+                else:
+                    result = agent.run(child)
+            except Exception:
+                return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
