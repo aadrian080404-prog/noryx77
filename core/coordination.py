@@ -24,13 +24,12 @@ class AgentCoordinator:
             raise ValueError("invalid_plan")
         if not isinstance(plan.steps, tuple) or not plan.steps:
             raise ValueError("invalid_plan")
-        agents = self.router.available()
-        if not agents:
+        agent_ids = self.router.available()
+        if not agent_ids:
             raise LookupError("no agents available")
         assignments = []
         for index, step in enumerate(plan.steps[:self.max_agents]):
-            agent = agents[index % len(agents)]
-            agent_id = getattr(agent, "agent_id", None)
+            agent_id = agent_ids[index % len(agent_ids)]
             if not isinstance(agent_id, str) or not agent_id.strip():
                 raise ValueError("invalid_agent_id")
             if not isinstance(getattr(step, "step_id", None), str) or not step.step_id.strip():
@@ -44,7 +43,10 @@ class AgentCoordinator:
         assignments = self.assign(plan)
         results = []
         for assignment in assignments:
-            agent = self.router.route(assignment.agent_id)
+            try:
+                agent = self.router.route(assignment.agent_id)
+            except LookupError as exc:
+                raise LookupError(f"agent_unavailable:{assignment.agent_id}") from exc
             if agent is None:
                 raise LookupError(f"agent_unavailable:{assignment.agent_id}")
             step = next((s for s in plan.steps if s.step_id == assignment.step_id), None)
