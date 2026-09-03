@@ -42,7 +42,7 @@ class HypersynthVerifierBoundaryTests(unittest.TestCase):
     def test_planner_verifier_wrong_stage_is_rejected(self):
         class ForgedPlanVerifier(VerificationEngine):
             def verify_task(self, task):
-                return VerificationResult(True, "task", "verified")
+                return VerificationResult(True, "contract", "verified")
 
             def verify_output(self, output, *, stage="result"):
                 if stage == "hypersynth_result":
