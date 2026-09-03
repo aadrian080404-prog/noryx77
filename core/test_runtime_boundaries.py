@@ -23,6 +23,28 @@ class RuntimeBoundaryTests(unittest.TestCase):
         task = TaskSpec("", "compute", "test objective", "input")
         self.assertEqual(self.runtime.run(task)["status"], "rejected")
 
+    def test_non_task_fails_closed_before_field_access(self):
+        result = self.runtime.run(None)
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "controlled_runtime_failure")
+
+    def test_agent_exception_fails_closed(self):
+        class FailingAgent:
+            agent_id = "failing"
+            def run(self, task):
+                raise RuntimeError("boom")
+
+        from .router import ResourceRouter
+        router = ResourceRouter()
+        router.register(FailingAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        task = TaskSpec("t-exec", "compute", "short", "ok")
+        result = runtime.run(task, agent_id="failing")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "agent_execution_failure")
+        self.assertEqual(result["verification"].reason, "agent_execution_failure")
+
     def test_input_limit_is_enforced(self):
         runtime = NORYXRuntime(RuntimeLimits(max_input_chars=3))
         task = TaskSpec("t2", "compute", "test", "abcd")
