@@ -112,7 +112,7 @@ class Hypersynth:
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            admission = self.supervisor.admit(child, result)
+            admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
             if not admission.valid: return self._reject("verification", task, admission, results=tuple(results))
             if result.verification is None or not result.verification.valid: return self._reject("verification", task, VerificationResult(False, "agent_result", "missing_verification"), results=tuple(results))
             results.append(result)
