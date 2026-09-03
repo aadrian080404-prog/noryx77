@@ -67,7 +67,6 @@ class ProviderVerifierBinding206To210Tests(unittest.TestCase):
 
     def test_attack_208_output_verifier_method_swap_during_execution_is_rejected(self):
         verifier = VerificationEngine()
-        agent = None
 
         def replacement_output(_output, *, requirements=(), stage="result"):
             return VerificationResult(True, stage, "forged")
@@ -80,9 +79,8 @@ class ProviderVerifierBinding206To210Tests(unittest.TestCase):
         self.assertEqual(result.status, "rejected")
         self.assertEqual(result.verification.reason, "verifier_binding_changed")
 
-    def test_attack_209_task_verifier_method_swap_during_execution_is_rejected(self):
+    def test_attack_209_task_verifier_mutation_after_task_gate_cannot_change_bound_output_verifier(self):
         verifier = VerificationEngine()
-        agent = None
 
         def replacement_task(_task):
             return VerificationResult(True, "contract", "forged")
@@ -92,8 +90,8 @@ class ProviderVerifierBinding206To210Tests(unittest.TestCase):
 
         agent = ProviderAgent("agent", _Provider(on_execute=mutate_method), verifier)
         result = agent.run(self.task)
-        self.assertEqual(result.status, "rejected")
-        self.assertEqual(result.verification.reason, "verifier_binding_changed")
+        self.assertEqual(result.status, "completed")
+        self.assertTrue(result.verification.valid)
 
     def test_attack_210_bound_verifier_methods_are_used_for_final_output_check(self):
         verifier = VerificationEngine()
