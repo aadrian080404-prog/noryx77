@@ -63,6 +63,8 @@ class AgentCoordinator:
                 raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 raise RuntimeError(f"agent_result_unverified:{assignment.agent_id}")
+            if result.verification.stage != "agent_result":
+                raise RuntimeError(f"agent_result_verification_stage_mismatch:{assignment.agent_id}")
             output_check = self.verifier.verify_output(result.output, stage="agent_result")
             if not output_check.valid:
                 raise RuntimeError(f"agent_output_invalid:{assignment.agent_id}")
@@ -78,6 +80,8 @@ class AgentCoordinator:
             return VerificationResult(False, "consensus", "incomplete_result")
         if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results):
             return VerificationResult(False, "consensus", "unverified_result")
+        if any(r.verification.stage != "agent_result" for r in results):
+            return VerificationResult(False, "consensus", "verification_stage_mismatch")
         outputs = [r.output for r in results]
         if any(output != outputs[0] for output in outputs[1:]):
             return VerificationResult(False, "consensus", "agent_disagreement")
