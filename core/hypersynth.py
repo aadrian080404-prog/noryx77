@@ -4,7 +4,7 @@ from typing import Any
 from .audit import AuditLog
 from .context import ContextManager
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
-from .decomposition import TaskDecomposer
+from .decomposition import Subtask, TaskDecomposer
 from .planning import Planner
 from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
 from .supervisor import AgentSupervisor
@@ -164,9 +164,25 @@ class Hypersynth:
         return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "audit": self.audit.snapshot()}
 
     def _decompose(self, task):
-        try: subtasks = self.decomposer.decompose(task)
-        except Exception: return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
-        if not subtasks: return self._reject("context", task, VerificationResult(False, "decomposition", "no_subtasks"))
+        try:
+            subtasks = self.decomposer.decompose(task)
+        except Exception:
+            return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
+        if not isinstance(subtasks, tuple) or not subtasks:
+            return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_collection"))
+        seen = set()
+        for subtask in subtasks:
+            if not isinstance(subtask, Subtask):
+                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
+            if not isinstance(subtask.subtask_id, str) or not subtask.subtask_id.strip() or subtask.subtask_id in seen:
+                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            if not subtask.subtask_id.startswith(task.task_id + ":"):
+                return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
+            if not isinstance(subtask.objective, str) or not subtask.objective.strip():
+                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_objective"))
+            if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type:
+                return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
+            seen.add(subtask.subtask_id)
         return subtasks
 
     def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
