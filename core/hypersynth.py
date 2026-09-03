@@ -47,6 +47,10 @@ class Hypersynth:
         self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason)
         result = {"status": "rejected", "phase": phase, "verification": check}; result.update(extra); return result
 
+    @staticmethod
+    def _accepts_verification(check, stage: str) -> bool:
+        return isinstance(check, VerificationResult) and check.is_well_formed() and check.valid and check.stage == stage
+
     def _deadline_rejection(self, task, phase, deadline_check):
         if deadline_check is not None and deadline_check():
             return self._reject(phase, task, VerificationResult(False, "limits", "task_time_limit_exceeded"))
@@ -54,8 +58,13 @@ class Hypersynth:
 
     def run(self, task: TaskSpec, *, deadline_check=None):
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
-        task_check = self.verifier.verify_task(task)
-        if not task_check.valid: return self._reject("perception", task, task_check)
+        try:
+            task_check = self.verifier.verify_task(task)
+        except Exception:
+            return self._reject("perception", task, VerificationResult(False, "task", "task_verification_failure"))
+        if not self._accepts_verification(task_check, "task"):
+            check = task_check if isinstance(task_check, VerificationResult) and task_check.is_well_formed() else VerificationResult(False, "task", "invalid_task_verification")
+            return self._reject("perception", task, check)
         timeout = self._deadline_rejection(task, "perception", deadline_check)
         if timeout: return timeout
         subtasks = self._decompose(task)
@@ -68,20 +77,27 @@ class Hypersynth:
         if timeout: return timeout
         try: plan = self.planner.build(task); plan_check = self.planner.verify(plan, task)
         except Exception: plan_check, plan = VerificationResult(False, "planning", "planner_failure"), None
-        if not plan_check.valid: return self._reject("planning", task, plan_check)
+        if not self._accepts_verification(plan_check, "plan"):
+            check = plan_check if isinstance(plan_check, VerificationResult) and plan_check.is_well_formed() else VerificationResult(False, "plan", "invalid_plan_verification")
+            return self._reject("planning", task, check)
         if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
         self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
         timeout = self._deadline_rejection(task, "hypothesis", deadline_check)
         if timeout: return timeout
         try: hypotheses = self.hypothesis_engine.generate(task, plan); hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
         except Exception: return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
-        if not hypothesis_check.valid or len(hypotheses) != len(plan.steps): return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
+        if not self._accepts_verification(hypothesis_check, "hypothesis"):
+            check = hypothesis_check if isinstance(hypothesis_check, VerificationResult) and hypothesis_check.is_well_formed() else VerificationResult(False, "hypothesis", "invalid_hypothesis_verification")
+            return self._reject("hypothesis", task, check)
+        if len(hypotheses) != len(plan.steps): return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
         self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
         timeout = self._deadline_rejection(task, "simulation", deadline_check)
         if timeout: return timeout
         try: simulations = self.simulator.simulate(task, hypotheses); simulation_check = self.simulator.verify(simulations)
         except Exception: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
-        if not simulation_check.valid: return self._reject("simulation", task, simulation_check)
+        if not self._accepts_verification(simulation_check, "simulation"):
+            check = simulation_check if isinstance(simulation_check, VerificationResult) and simulation_check.is_well_formed() else VerificationResult(False, "simulation", "invalid_simulation_verification")
+            return self._reject("simulation", task, check)
         expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
         actual_simulation_ids = tuple(s.hypothesis_id for s in simulations)
         if actual_simulation_ids != expected_hypothesis_ids: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
@@ -126,8 +142,11 @@ class Hypersynth:
         timeout = self._deadline_rejection(task, "metacognition", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         final_output = results[-1].output
-        output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
-        if not output_check.valid: return self._reject("verification", task, output_check, results=tuple(results))
+        try: output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
+        except Exception: return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
+        if not self._accepts_verification(output_check, "hypersynth_result"):
+            check = output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification")
+            return self._reject("verification", task, check, results=tuple(results))
         metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
         if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid:
             check = metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result")
