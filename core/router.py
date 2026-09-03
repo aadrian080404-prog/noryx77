@@ -1,6 +1,7 @@
 from threading import RLock
 
 from .agents import Agent
+from .contracts import TaskSpec
 from .routing_policy import MODEL_ORDER, TASK_MODEL_HINTS
 
 
@@ -108,7 +109,7 @@ class ResourceRouter:
 
     @staticmethod
     def _required_capabilities(task) -> tuple[str, ...]:
-        constraints = getattr(task, "constraints", {})
+        constraints = task.constraints
         if not hasattr(constraints, "get"): raise ValueError("invalid_task_constraints")
         required = constraints.get("required_capabilities", ())
         if not isinstance(required, tuple): raise ValueError("invalid_required_capabilities")
@@ -117,8 +118,12 @@ class ResourceRouter:
         return required
 
     def route_for_task(self, task):
-        task_type = getattr(task, "task_type", None)
-        if not isinstance(task_type, str) or not task_type.strip(): raise ValueError("invalid_task_type")
+        # Routing is an execution admission boundary.  Accept only the exact
+        # immutable TaskSpec contract so hostile subclasses cannot spoof task
+        # type, constraints, or routing inputs through overridden attributes.
+        if type(task) is not TaskSpec or not task.is_well_formed():
+            raise ValueError("invalid_task_contract")
+        task_type = task.task_type
         required = self.TASK_MODEL_HINTS.get(task_type, "medium")
         required_index = self.MODEL_ORDER.index(required)
         required_capabilities = self._required_capabilities(task)
