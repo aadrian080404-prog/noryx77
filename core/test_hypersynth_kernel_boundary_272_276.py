@@ -3,6 +3,8 @@ import unittest
 from .contracts import TaskSpec
 from .hypersynth import Hypersynth
 from .hypersynth_kernel import AttestedHypersynthKernel
+from .router import ResourceRouter
+from .verification import VerificationEngine
 
 
 class SpoofedTask(TaskSpec):
@@ -18,7 +20,7 @@ class SpoofedTask(TaskSpec):
 
 class CountingKernel(Hypersynth):
     def __init__(self):
-        super().__init__()
+        super().__init__(VerificationEngine(), ResourceRouter())
         self.calls = 0
 
     def run(self, task):
