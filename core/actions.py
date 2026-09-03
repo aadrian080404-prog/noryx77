@@ -67,7 +67,7 @@ class AuthorizationAuthority:
         expires_at = float(self._clock()) + float(ttl)
         return AuthorizationGrant(action.action_id, action.action_type, action.target, execution_id, nonce, expires_at, self._sign(action, execution_id, nonce, expires_at))
 
-    def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
+    def _verify_unconsumed(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
         if not isinstance(grant, AuthorizationGrant) or not isinstance(execution_id, str) or not execution_id.strip():
             return False
         if grant.execution_id != execution_id or action.execution_id != execution_id:
@@ -79,6 +79,19 @@ class AuthorizationAuthority:
         if not hmac.compare_digest(grant.signature, self._sign(action, execution_id, grant.nonce, grant.expires_at)):
             return False
         if self._clock() >= grant.expires_at:
+            return False
+        return True
+
+    def verify(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
+        """Check grant authenticity/binding without consuming the one-shot capability."""
+        if not self._verify_unconsumed(action, execution_id, grant):
+            return False
+        with self._lock:
+            return grant.nonce not in self._used
+
+    def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
+        """Atomically consume a still-valid grant; safe under concurrent callers."""
+        if not self._verify_unconsumed(action, execution_id, grant):
             return False
         with self._lock:
             if grant.nonce in self._used:
@@ -110,19 +123,18 @@ class ActionGate:
         if self.limits.max_actions_per_task - calls_used <= 0:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
 
-        # A valid grant satisfies only the explicit authorization predicate.  The
-        # immutable action is never mutated; policy/security still evaluate every
-        # other constraint.  In particular, HIGH_RISK/unsupported action types
-        # remain denied even when a grant is present.
         evaluation_action = action
-        if action.requires_authorization:
+        authorization_pending = action.requires_authorization
+        if authorization_pending:
             if self.authorization is None or execution_id is None or grant is None:
                 return ActionDecision(False, "authorization required", VerificationResult(False, "action_gate", "authorization_required"))
             try:
-                if not self.authorization.consume(action, execution_id, grant):
+                if not self.authorization.verify(action, execution_id, grant):
                     return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
+            # The grant satisfies only the explicit authorization predicate.
+            # Keep the original immutable action for final atomic consumption.
             evaluation_action = replace(action, requires_authorization=False)
 
         try:
@@ -137,4 +149,14 @@ class ActionGate:
             return ActionDecision(False, "security evaluation failure", VerificationResult(False, "action_gate", "security_evaluation_failure"))
         if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
+
+        # Consume only after every other gate passes. This prevents a denied
+        # request from burning a valid capability, while the locked consume
+        # remains the single atomic replay boundary immediately before allow.
+        if authorization_pending:
+            try:
+                if not self.authorization.consume(action, execution_id, grant):
+                    return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
+            except Exception:
+                return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
         return ActionDecision(True, "allowed", VerificationResult(True, "action_gate", "authorized"))
