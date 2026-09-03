@@ -77,6 +77,9 @@ class AgentCoordinator:
             if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
             result = agent.run(child)
+            # Trust is live: an identity revoked while the agent executes must
+            # not be able to cross the result-admission boundary.
+            self._trusted_agent(assignment.agent_id)
             if not isinstance(result, AgentResult):
                 raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
