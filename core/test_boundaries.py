@@ -65,6 +65,26 @@ class FoundationBoundaryTests(unittest.TestCase):
         check = boundary.inspect(ActionSpec("a3", "publish", risk_class="high"))
         self.assertFalse(check.allowed)
 
+    def test_security_rejects_invalid_verifier_result(self):
+        class InvalidVerifier:
+            def verify_output(self, output, stage=None):
+                return object()
+
+        boundary = SecurityBoundary(self.policy, InvalidVerifier())
+        check = boundary.verify(ActionSpec("a3b", "publish"), "ok")
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "invalid_security_verification")
+
+    def test_security_rejects_wrong_verification_stage(self):
+        class WrongStageVerifier:
+            def verify_output(self, output, stage=None):
+                return VerificationResult(True, "agent_result", "forged")
+
+        boundary = SecurityBoundary(self.policy, WrongStageVerifier())
+        check = boundary.verify(ActionSpec("a3c", "publish"), "ok")
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "invalid_security_verification")
+
     def test_supervisor_rejects_wrong_task_result(self):
         router = ResourceRouter()
         router.register(DeterministicAgent(self.verifier))
