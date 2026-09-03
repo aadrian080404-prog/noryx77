@@ -1,4 +1,4 @@
-"""Cryptographic agent identity and signed attestation primitives."""
+"""Cryptographic agent identity, trust anchors, and signed attestation primitives."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ IDENTITY_VERSION: Final[int] = 1
 PUBLIC_KEY_SIZE: Final[int] = 32
 SIGNATURE_SIZE: Final[int] = 64
 MAX_ID_SIZE: Final[int] = 1024
+MAX_STATEMENT_SIZE: Final[int] = 16 * 1024 * 1024
 _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
 
 
@@ -52,7 +53,7 @@ class AgentAttestation:
             isinstance(self.identity, AgentIdentity)
             and self.identity.is_well_formed()
             and isinstance(self.statement, bytes)
-            and len(self.statement) <= 16 * 1024 * 1024
+            and len(self.statement) <= MAX_STATEMENT_SIZE
             and isinstance(self.signature, bytes)
             and len(self.signature) == SIGNATURE_SIZE
         )
@@ -67,7 +68,33 @@ def _identity_bytes(identity: AgentIdentity) -> bytes:
 def _attestation_message(identity: AgentIdentity, statement: bytes) -> bytes:
     if not isinstance(statement, bytes):
         raise TypeError("statement_must_be_bytes")
+    if len(statement) > MAX_STATEMENT_SIZE:
+        raise ValueError("statement_size_exceeded")
     return _identity_bytes(identity) + len(statement).to_bytes(8, "big") + statement
+
+
+class IdentityRegistry:
+    """Explicit trust-anchor registry mapping agent IDs to approved public keys."""
+
+    def __init__(self):
+        self._keys: dict[str, bytes] = {}
+
+    def register(self, identity: AgentIdentity) -> None:
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise ValueError("invalid_agent_identity")
+        if identity.agent_id in self._keys:
+            raise ValueError("agent_identity_already_registered")
+        self._keys[identity.agent_id] = bytes(identity.public_key)
+
+    def revoke(self, agent_id: str) -> None:
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("invalid_agent_id")
+        self._keys.pop(agent_id, None)
+
+    def is_trusted(self, identity: AgentIdentity) -> bool:
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            return False
+        return self._keys.get(identity.agent_id) == identity.public_key
 
 
 class AgentIdentityAuthority:
@@ -100,8 +127,10 @@ class AgentIdentityAuthority:
         return AgentAttestation(identity, bytes(statement), signature)
 
     @staticmethod
-    def verify(attestation: AgentAttestation) -> bool:
+    def verify(attestation: AgentAttestation, registry: IdentityRegistry | None = None) -> bool:
         if not isinstance(attestation, AgentAttestation) or not attestation.is_well_formed():
+            return False
+        if registry is not None and not registry.is_trusted(attestation.identity):
             return False
         try:
             Ed25519PublicKey.from_public_bytes(attestation.identity.public_key).verify(
@@ -113,5 +142,7 @@ class AgentIdentityAuthority:
             return False
 
     @staticmethod
-    def verify_identity(identity: AgentIdentity) -> bool:
-        return isinstance(identity, AgentIdentity) and identity.is_well_formed()
+    def verify_identity(identity: AgentIdentity, registry: IdentityRegistry | None = None) -> bool:
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            return False
+        return registry is None or registry.is_trusted(identity)
