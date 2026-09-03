@@ -41,6 +41,14 @@ class SecurityBoundary:
         if not decision.allowed:
             return VerificationResult(False, "security", decision.reason)
         try:
-            return self.verifier.verify_output(output, stage="security_result")
+            check = self.verifier.verify_output(output, stage="security_result")
         except Exception:
             return VerificationResult(False, "security", "verification_failure")
+        if (
+            not isinstance(check, VerificationResult)
+            or not check.is_well_formed()
+            or not check.valid
+            or check.stage != "security_result"
+        ):
+            return VerificationResult(False, "security", "invalid_security_verification")
+        return check
