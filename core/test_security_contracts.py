@@ -1,3 +1,4 @@
+import threading
 import unittest
 
 from .actions import ActionGate, AuthorizationAuthority
@@ -14,6 +15,13 @@ class SecurityContractTests(unittest.TestCase):
         policy = PolicyEngine()
         security = SecurityBoundary(policy, verifier)
         self.gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2))
+
+    def setUp_authorized_gate(self):
+        authority = AuthorizationAuthority(b"x" * 32)
+        verifier = VerificationEngine()
+        policy = PolicyEngine()
+        security = SecurityBoundary(policy, verifier)
+        return ActionGate(policy, security, RuntimeLimits(max_actions_per_task=100), authority), authority
 
     def test_malformed_action_denied(self):
         decision = self.gate.authorize(object())
@@ -36,11 +44,7 @@ class SecurityContractTests(unittest.TestCase):
         self.assertFalse(decision.allowed)
 
     def test_valid_grant_allows_exact_action_once(self):
-        authority = AuthorizationAuthority(b"x" * 32)
-        verifier = VerificationEngine()
-        policy = PolicyEngine()
-        security = SecurityBoundary(policy, verifier)
-        gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2), authority)
+        gate, authority = self.setUp_authorized_gate()
         action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-a")
         grant = authority.issue(action, "exec-a")
 
@@ -52,11 +56,7 @@ class SecurityContractTests(unittest.TestCase):
         self.assertEqual(second.verification.reason, "invalid_authorization_grant")
 
     def test_valid_grant_does_not_override_high_risk_policy(self):
-        authority = AuthorizationAuthority(b"x" * 32)
-        verifier = VerificationEngine()
-        policy = PolicyEngine()
-        security = SecurityBoundary(policy, verifier)
-        gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2), authority)
+        gate, authority = self.setUp_authorized_gate()
         action = ActionSpec("a", "publish", target="remote", requires_authorization=True, execution_id="exec-a")
         grant = authority.issue(action, "exec-a")
 
@@ -64,6 +64,27 @@ class SecurityContractTests(unittest.TestCase):
 
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.verification.reason, "policy")
+        self.assertTrue(authority.verify(action, "exec-a", grant), "policy denial must not burn the grant")
+
+    def test_grant_replay_is_single_winner_under_concurrency(self):
+        gate, authority = self.setUp_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-a")
+        grant = authority.issue(action, "exec-a")
+        results = []
+        lock = threading.Lock()
+
+        def attempt():
+            decision = gate.authorize(action, execution_id="exec-a", grant=grant)
+            with lock:
+                results.append(decision.allowed)
+
+        threads = [threading.Thread(target=attempt) for _ in range(64)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(sum(results), 1)
 
     def test_budget_boundary(self):
         action = ActionSpec("a", "compute")
