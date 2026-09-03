@@ -29,13 +29,15 @@ class AgentSupervisor:
             self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True)
         return agent, decision
 
-    def admit(self, task: TaskSpec, result: AgentResult):
+    def admit(self, task: TaskSpec, result: AgentResult, *, selected_agent_id: str | None = None):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return VerificationResult(False, "agent_result", "invalid_task_contract")
         if not isinstance(result, AgentResult):
             return VerificationResult(False, "agent_result", "invalid_agent_result")
         if not result.is_well_formed():
             return VerificationResult(False, "agent_result", "malformed_agent_result")
+        if selected_agent_id is not None and result.agent_id != selected_agent_id:
+            return VerificationResult(False, "agent_result", "agent_identity_mismatch")
         if result.task_id != task.task_id:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
@@ -49,4 +51,6 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "malformed_result_verification")
         if not result.verification.valid:
             return VerificationResult(False, "agent_result", "result_verification_failed")
+        if result.verification.stage != "agent_result":
+            return VerificationResult(False, "agent_result", "verification_stage_mismatch")
         return VerificationResult(True, "agent_result", "agent_result_ok")
