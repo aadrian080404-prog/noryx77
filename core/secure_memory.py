@@ -46,6 +46,7 @@ class EncryptedMemoryStore:
             "kind": item.kind,
             "source": item.source,
             "importance": float(item.importance),
+            "execution_id": item.execution_id,
         }
         try:
             return json.dumps(
@@ -68,12 +69,16 @@ class EncryptedMemoryStore:
             raise ValueError("invalid_persisted_memory_schema")
         if payload.get("memory_id") != record_id:
             raise ValueError("memory_identity_mismatch")
+        execution_id = payload.get("execution_id", "")
+        if not isinstance(execution_id, str) or len(execution_id.encode("utf-8")) > 256:
+            raise ValueError("invalid_persisted_memory")
         item = MemoryItem(
             memory_id=payload.get("memory_id", ""),
             content=payload.get("content"),
             kind=payload.get("kind", "working"),
             source=payload.get("source", ""),
             importance=payload.get("importance", 0.0),
+            execution_id=execution_id,
         )
         if not item.memory_id or not isinstance(item.kind, str) or not isinstance(item.source, str):
             raise ValueError("invalid_persisted_memory")
@@ -84,11 +89,17 @@ class EncryptedMemoryStore:
     def put(self, item: MemoryItem, *, key_id: str) -> None:
         self._store.put(item.memory_id, self._serialize(item), key_id=key_id)
 
-    def get(self, memory_id: str) -> MemoryItem | None:
+    def get(self, memory_id: str, *, execution_id: str | None = None) -> MemoryItem | None:
         plaintext = self._store.get(memory_id)
         if plaintext is None:
             return None
-        return self._deserialize(memory_id, plaintext)
+        item = self._deserialize(memory_id, plaintext)
+        if execution_id is not None:
+            if not isinstance(execution_id, str) or not execution_id.strip() or len(execution_id.encode("utf-8")) > 256:
+                return None
+            if not item.execution_id or item.execution_id != execution_id:
+                return None
+        return item
 
     def delete(self, memory_id: str) -> bool:
         return self._store.delete(memory_id)
