@@ -1,4 +1,5 @@
 import time
+from uuid import uuid4
 
 from .actions import ActionGate
 from .agents import DeterministicAgent
@@ -60,6 +61,7 @@ class NORYXRuntime:
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
 
+        execution_id = task.execution_id or uuid4().hex
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
@@ -83,7 +85,7 @@ class NORYXRuntime:
                 self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
-                             task.constraints, task.verification_requirements, task.risk_class)
+                             task.constraints, task.verification_requirements, task.risk_class, execution_id)
             action = ActionSpec("act:" + child.task_id, "compute", execution_id=child.execution_id, risk_class=child.risk_class)
             decision, result = self.action_gate.authorize_and_execute(
                 action,
@@ -100,8 +102,6 @@ class NORYXRuntime:
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
             output = result.output
 
-            # The runtime boundary accepts only the declared AgentResult contract;
-            # duck-typed objects must not be able to impersonate an agent result.
             if not result.is_well_formed():
                 check = VerificationResult(False, "agent_result", "malformed_agent_result")
                 self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
@@ -113,6 +113,10 @@ class NORYXRuntime:
             if result.task_id != child.task_id:
                 check = VerificationResult(False, "agent_result", "task_identity_mismatch")
                 self.audit.record("task_identity_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if result.execution_id != execution_id:
+                check = VerificationResult(False, "agent_result", "execution_identity_mismatch")
+                self.audit.record("execution_identity_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
             if result.status != "completed":
                 check = VerificationResult(False, "agent_result", "invalid_result_status")
