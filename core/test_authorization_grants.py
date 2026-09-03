@@ -17,8 +17,16 @@ class AuthorizationGrantTests(unittest.TestCase):
         security = SecurityBoundary(policy, VerificationEngine())
         self.gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=4), self.authority)
 
-    def _action(self, execution="exec-a", action_id="a"):
-        return ActionSpec(action_id, "compute", target="local", requires_authorization=True, execution_id=execution)
+    def _action(self, execution="exec-a", action_id="a", *, parameters=None, risk_class="normal"):
+        return ActionSpec(
+            action_id,
+            "compute",
+            target="local",
+            parameters={} if parameters is None else parameters,
+            risk_class=risk_class,
+            requires_authorization=True,
+            execution_id=execution,
+        )
 
     def test_valid_grant_allows_exact_action_once(self):
         action = self._action()
@@ -49,6 +57,33 @@ class AuthorizationGrantTests(unittest.TestCase):
         altered = ActionSpec("a", "compute", target="remote", requires_authorization=True, execution_id="exec-a")
         decision = self.gate.authorize(altered, execution_id="exec-a", grant=grant)
         self.assertFalse(decision.allowed)
+
+    def test_grant_cannot_cross_parameters(self):
+        action = self._action(parameters={"amount": 10, "target": "alice"})
+        grant = self.authority.issue(action, "exec-a")
+        altered = self._action(parameters={"amount": 1000, "target": "alice"})
+        decision = self.gate.authorize(altered, execution_id="exec-a", grant=grant)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "invalid_authorization_grant")
+
+    def test_grant_cannot_cross_risk_class(self):
+        action = self._action(risk_class="normal")
+        grant = self.authority.issue(action, "exec-a")
+        altered = self._action(risk_class="sensitive")
+        decision = self.gate.authorize(altered, execution_id="exec-a", grant=grant)
+        self.assertFalse(decision.allowed)
+
+    def test_noncanonical_action_parameters_cannot_receive_grant(self):
+        action = self._action(parameters={"payload": object()})
+        with self.assertRaises(ValueError):
+            self.authority.issue(action, "exec-a")
+
+    def test_valid_grant_allows_canonical_mapping_order(self):
+        action = self._action(parameters={"b": 2, "a": 1})
+        grant = self.authority.issue(action, "exec-a")
+        equivalent = self._action(parameters={"a": 1, "b": 2})
+        first = self.gate.authorize(equivalent, execution_id="exec-a", grant=grant)
+        self.assertTrue(first.allowed)
 
     def test_expired_grant_is_denied(self):
         action = self._action()
