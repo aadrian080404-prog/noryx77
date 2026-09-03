@@ -87,9 +87,6 @@ class AgentCoordinator:
         agent_ids = [r.agent_id for r in results]
         if len(set(agent_ids)) != len(agent_ids):
             return VerificationResult(False, "consensus", "duplicate_agent_identity")
-        task_ids = [r.task_id for r in results]
-        if len(set(task_ids)) != len(task_ids):
-            return VerificationResult(False, "consensus", "duplicate_task_identity")
         outputs = [r.output for r in results]
         if any(output != outputs[0] for output in outputs[1:]):
             return VerificationResult(False, "consensus", "agent_disagreement")
