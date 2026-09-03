@@ -18,7 +18,7 @@ class ForgingRouter:
 
 class SupervisorIdentityBoundaryTests(unittest.TestCase):
     def _task(self):
-        return TaskSpec("task-1", "search", "find information")
+        return TaskSpec("task-1", "search", "find information", "input")
 
     def test_select_rejects_router_agent_identity_substitution(self):
         supervisor = AgentSupervisor(ForgingRouter("forged"), VerificationEngine())
