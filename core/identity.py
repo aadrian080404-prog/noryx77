@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 from typing import Final
 
 from cryptography.exceptions import InvalidSignature
@@ -78,23 +79,27 @@ class IdentityRegistry:
 
     def __init__(self):
         self._keys: dict[str, bytes] = {}
+        self._lock = threading.RLock()
 
     def register(self, identity: AgentIdentity) -> None:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
-        if identity.agent_id in self._keys:
-            raise ValueError("agent_identity_already_registered")
-        self._keys[identity.agent_id] = bytes(identity.public_key)
+        with self._lock:
+            if identity.agent_id in self._keys:
+                raise ValueError("agent_identity_already_registered")
+            self._keys[identity.agent_id] = bytes(identity.public_key)
 
     def revoke(self, agent_id: str) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
-        self._keys.pop(agent_id, None)
+        with self._lock:
+            self._keys.pop(agent_id, None)
 
     def is_trusted(self, identity: AgentIdentity) -> bool:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             return False
-        return self._keys.get(identity.agent_id) == identity.public_key
+        with self._lock:
+            return self._keys.get(identity.agent_id) == identity.public_key
 
 
 class AgentIdentityAuthority:
