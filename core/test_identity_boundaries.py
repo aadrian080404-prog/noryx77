@@ -52,15 +52,12 @@ class IdentityBoundaryTests(unittest.TestCase):
             router.route("agent-a")
 
     def test_supervisor_rejects_untrusted_selected_identity(self):
-        router = ResourceRouter()
+        router = ResourceRouter(self.registry)
         attacker, _ = AgentIdentityAuthority.generate("attacker")
         forged = IdentityBoundAgent("agent-a", replace(self.identity, public_key=attacker.public_key), self.verifier)
-        router.register(forged)
-        supervisor = AgentSupervisor(router, self.verifier)
-        selected, decision = supervisor.select(self.task, "agent-a")
-        self.assertIsNone(selected)
-        self.assertFalse(decision.accepted)
-        self.assertEqual(decision.reason, "agent_identity_untrusted")
+        # The registry rejects the forged registration before selection.
+        with self.assertRaisesRegex(ValueError, "agent_identity_untrusted"):
+            router.register(forged)
 
     def test_supervisor_admit_rejects_result_from_unknown_agent(self):
         router = ResourceRouter(self.registry)
