@@ -7,6 +7,7 @@ import threading
 import time
 
 from .contracts import ActionSpec, VerificationResult
+from .identity import AgentIdentity, IdentityRegistry
 
 
 @dataclass(frozen=True)
@@ -18,56 +19,127 @@ class ActionDecision:
 
 @dataclass(frozen=True)
 class AuthorizationGrant:
-    """One-shot capability cryptographically bound to one exact action/execution."""
+    """One-shot capability bound to one exact action, execution and principal key."""
     action_id: str
     action_type: str
     target: str
     execution_id: str
+    principal_id: str
+    principal_key_fingerprint: str
     nonce: str
     expires_at: float
     signature: str
 
 
 class AuthorizationAuthority:
-    """Trusted issuer/verifier for short-lived, execution-bound action grants."""
-    def __init__(self, secret: bytes, *, clock=time.monotonic, max_ttl: float = 300.0):
+    """Trusted issuer/verifier for short-lived, execution- and identity-bound grants."""
+    def __init__(
+        self,
+        secret: bytes,
+        *,
+        clock=time.monotonic,
+        max_ttl: float = 300.0,
+        identity_registry: IdentityRegistry | None = None,
+    ):
         if not isinstance(secret, bytes) or len(secret) < 32:
             raise ValueError("authorization secret must be at least 32 bytes")
         if not callable(clock) or isinstance(max_ttl, bool) or not isinstance(max_ttl, (int, float)) or max_ttl <= 0:
             raise ValueError("invalid authorization configuration")
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise ValueError("invalid identity registry")
         self._secret = secret
         self._clock = clock
         self._max_ttl = float(max_ttl)
+        self._identity_registry = identity_registry
         self._used: set[str] = set()
         self._lock = threading.Lock()
 
     @staticmethod
-    def _payload(action: ActionSpec, execution_id: str, nonce: str, expires_at: float) -> bytes:
+    def _fingerprint(identity: AgentIdentity) -> str:
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise ValueError("invalid_agent_identity")
+        return hashlib.sha256(identity.public_key).hexdigest()
+
+    @staticmethod
+    def _payload(
+        action: ActionSpec,
+        execution_id: str,
+        principal_id: str,
+        principal_key_fingerprint: str,
+        nonce: str,
+        expires_at: float,
+    ) -> bytes:
         fields = {
             "action_id": action.action_id,
             "action_type": action.action_type,
             "target": action.target,
             "execution_id": execution_id,
+            "principal_id": principal_id,
+            "principal_key_fingerprint": principal_key_fingerprint,
             "nonce": nonce,
             "expires_at": expires_at,
         }
         return json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
-    def _sign(self, action: ActionSpec, execution_id: str, nonce: str, expires_at: float) -> str:
-        return hmac.new(self._secret, self._payload(action, execution_id, nonce, expires_at), hashlib.sha256).hexdigest()
+    def _sign(
+        self,
+        action: ActionSpec,
+        execution_id: str,
+        principal_id: str,
+        principal_key_fingerprint: str,
+        nonce: str,
+        expires_at: float,
+    ) -> str:
+        return hmac.new(
+            self._secret,
+            self._payload(action, execution_id, principal_id, principal_key_fingerprint, nonce, expires_at),
+            hashlib.sha256,
+        ).hexdigest()
 
-    def issue(self, action: ActionSpec, execution_id: str, *, ttl: float = 60.0) -> AuthorizationGrant:
+    def issue(
+        self,
+        action: ActionSpec,
+        execution_id: str,
+        *,
+        principal: AgentIdentity | None = None,
+        ttl: float = 60.0,
+    ) -> AuthorizationGrant:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             raise ValueError("invalid action")
         if not isinstance(execution_id, str) or not execution_id.strip() or len(execution_id.encode("utf-8")) > 256:
             raise ValueError("invalid execution identity")
         if not isinstance(ttl, (int, float)) or isinstance(ttl, bool) or ttl <= 0 or ttl > self._max_ttl:
             raise ValueError("invalid authorization ttl")
+        if self._identity_registry is not None:
+            if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
+                raise ValueError("untrusted_authorization_principal")
+        elif principal is not None and not isinstance(principal, AgentIdentity):
+            raise ValueError("invalid_authorization_principal")
+
+        principal_id = principal.agent_id if principal is not None else ""
+        fingerprint = self._fingerprint(principal) if principal is not None else ""
         nonce = secrets.token_urlsafe(32)
         expires_at = float(self._clock()) + float(ttl)
-        return AuthorizationGrant(action.action_id, action.action_type, action.target, execution_id, nonce, expires_at, self._sign(action, execution_id, nonce, expires_at))
+        signature = self._sign(action, execution_id, principal_id, fingerprint, nonce, expires_at)
+        return AuthorizationGrant(
+            action.action_id,
+            action.action_type,
+            action.target,
+            execution_id,
+            principal_id,
+            fingerprint,
+            nonce,
+            expires_at,
+            signature,
+        )
 
-    def _verify_unconsumed(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
+    def _verify_unconsumed(
+        self,
+        action: ActionSpec,
+        execution_id: str,
+        grant: AuthorizationGrant,
+        principal: AgentIdentity | None = None,
+    ) -> bool:
         if not isinstance(grant, AuthorizationGrant) or not isinstance(execution_id, str) or not execution_id.strip():
             return False
         if grant.execution_id != execution_id or action.execution_id != execution_id:
@@ -76,26 +148,65 @@ class AuthorizationAuthority:
             return False
         if not grant.nonce or not isinstance(grant.signature, str):
             return False
-        if not hmac.compare_digest(grant.signature, self._sign(action, execution_id, grant.nonce, grant.expires_at)):
+        if self._identity_registry is not None:
+            if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
+                return False
+        if principal is not None:
+            if not isinstance(principal, AgentIdentity) or not principal.is_well_formed():
+                return False
+            if grant.principal_id != principal.agent_id:
+                return False
+            if not hmac.compare_digest(grant.principal_key_fingerprint, self._fingerprint(principal)):
+                return False
+        elif grant.principal_id or grant.principal_key_fingerprint:
+            return False
+        expected = self._sign(
+            action,
+            execution_id,
+            grant.principal_id,
+            grant.principal_key_fingerprint,
+            grant.nonce,
+            grant.expires_at,
+        )
+        if not hmac.compare_digest(grant.signature, expected):
             return False
         if self._clock() >= grant.expires_at:
             return False
         return True
 
-    def verify(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
-        """Check grant authenticity/binding without consuming the one-shot capability."""
-        if not self._verify_unconsumed(action, execution_id, grant):
+    def verify(
+        self,
+        action: ActionSpec,
+        execution_id: str,
+        grant: AuthorizationGrant,
+        *,
+        principal: AgentIdentity | None = None,
+    ) -> bool:
+        """Check authenticity, current trust and binding without consuming the grant."""
+        if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
             return grant.nonce not in self._used
 
-    def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant) -> bool:
-        """Atomically consume a still-valid grant; safe under concurrent callers."""
-        if not self._verify_unconsumed(action, execution_id, grant):
+    def consume(
+        self,
+        action: ActionSpec,
+        execution_id: str,
+        grant: AuthorizationGrant,
+        *,
+        principal: AgentIdentity | None = None,
+    ) -> bool:
+        """Atomically consume a still-valid, currently trusted grant."""
+        if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
             if grant.nonce in self._used:
                 return False
+            # Re-check trust immediately before the replay decision. The registry
+            # itself is synchronized, so revocation cannot be observed halfway.
+            if self._identity_registry is not None:
+                if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
+                    return False
             self._used.add(grant.nonce)
             return True
 
@@ -108,7 +219,15 @@ class ActionGate:
         self.limits = limits
         self.authorization = authorization
 
-    def authorize(self, action: ActionSpec, calls_used: int = 0, *, execution_id: str | None = None, grant: AuthorizationGrant | None = None) -> ActionDecision:
+    def authorize(
+        self,
+        action: ActionSpec,
+        calls_used: int = 0,
+        *,
+        execution_id: str | None = None,
+        grant: AuthorizationGrant | None = None,
+        principal: AgentIdentity | None = None,
+    ) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
@@ -129,12 +248,10 @@ class ActionGate:
             if self.authorization is None or execution_id is None or grant is None:
                 return ActionDecision(False, "authorization required", VerificationResult(False, "action_gate", "authorization_required"))
             try:
-                if not self.authorization.verify(action, execution_id, grant):
+                if not self.authorization.verify(action, execution_id, grant, principal=principal):
                     return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
-            # The grant satisfies only the explicit authorization predicate.
-            # Keep the original immutable action for final atomic consumption.
             evaluation_action = replace(action, requires_authorization=False)
 
         try:
@@ -150,12 +267,9 @@ class ActionGate:
         if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
 
-        # Consume only after every other gate passes. This prevents a denied
-        # request from burning a valid capability, while the locked consume
-        # remains the single atomic replay boundary immediately before allow.
         if authorization_pending:
             try:
-                if not self.authorization.consume(action, execution_id, grant):
+                if not self.authorization.consume(action, execution_id, grant, principal=principal):
                     return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
