@@ -1,8 +1,10 @@
 import threading
 import unittest
+from dataclasses import replace
 
 from .actions import ActionGate, AuthorizationAuthority
 from .contracts import ActionSpec, TaskSpec
+from .identity import AgentIdentityAuthority, IdentityRegistry
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
 from .security import SecurityBoundary
@@ -22,6 +24,17 @@ class SecurityContractTests(unittest.TestCase):
         policy = PolicyEngine()
         security = SecurityBoundary(policy, verifier)
         return ActionGate(policy, security, RuntimeLimits(max_actions_per_task=100), authority), authority
+
+    def setUp_identity_authorized_gate(self):
+        registry = IdentityRegistry()
+        identity, _ = AgentIdentityAuthority.generate("agent-a")
+        registry.register(identity)
+        authority = AuthorizationAuthority(b"x" * 32, identity_registry=registry)
+        verifier = VerificationEngine()
+        policy = PolicyEngine()
+        security = SecurityBoundary(policy, verifier)
+        gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=100), authority)
+        return gate, authority, registry, identity
 
     def test_malformed_action_denied(self):
         decision = self.gate.authorize(object())
@@ -85,6 +98,98 @@ class SecurityContractTests(unittest.TestCase):
             thread.join()
 
         self.assertEqual(sum(results), 1)
+
+    def test_identity_bound_grant_allows_exact_principal_once(self):
+        gate, authority, registry, identity = self.setUp_identity_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=identity)
+
+        decision = gate.authorize(action, execution_id="exec-id", grant=grant, principal=identity)
+        self.assertTrue(decision.allowed)
+        self.assertFalse(gate.authorize(action, execution_id="exec-id", grant=grant, principal=identity).allowed)
+
+    def test_identity_bound_grant_rejects_different_principal(self):
+        gate, authority, registry, identity_a = self.setUp_identity_authorized_gate()
+        identity_b, _ = AgentIdentityAuthority.generate("agent-b")
+        registry.register(identity_b)
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=identity_a)
+
+        decision = gate.authorize(action, execution_id="exec-id", grant=grant, principal=identity_b)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "invalid_authorization_grant")
+
+    def test_revoked_identity_cannot_consume_unexpired_grant(self):
+        gate, authority, registry, identity = self.setUp_identity_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=identity)
+        registry.revoke(identity.agent_id)
+
+        decision = gate.authorize(action, execution_id="exec-id", grant=grant, principal=identity)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "invalid_authorization_grant")
+
+    def test_key_replacement_same_agent_id_cannot_use_old_grant(self):
+        gate, authority, registry, old_identity = self.setUp_identity_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=old_identity)
+        registry.revoke(old_identity.agent_id)
+        new_identity, _ = AgentIdentityAuthority.generate(old_identity.agent_id)
+        registry.register(new_identity)
+
+        decision = gate.authorize(action, execution_id="exec-id", grant=grant, principal=new_identity)
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "invalid_authorization_grant")
+
+    def test_tampered_principal_fingerprint_breaks_signature(self):
+        gate, authority, registry, identity = self.setUp_identity_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=identity)
+        tampered = replace(grant, principal_key_fingerprint="0" * 64)
+
+        decision = gate.authorize(action, execution_id="exec-id", grant=tampered, principal=identity)
+        self.assertFalse(decision.allowed)
+
+    def test_revoked_identity_blocks_all_concurrent_consumers(self):
+        gate, authority, registry, identity = self.setUp_identity_authorized_gate()
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-id")
+        grant = authority.issue(action, "exec-id", principal=identity)
+        registry.revoke(identity.agent_id)
+        results = []
+        lock = threading.Lock()
+
+        def attempt():
+            decision = gate.authorize(action, execution_id="exec-id", grant=grant, principal=identity)
+            with lock:
+                results.append(decision.allowed)
+
+        threads = [threading.Thread(target=attempt) for _ in range(64)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sum(results), 0)
+
+    def test_identity_registry_rejects_concurrent_duplicate_registration(self):
+        registry = IdentityRegistry()
+        identity, _ = AgentIdentityAuthority.generate("agent-a")
+        errors = []
+        lock = threading.Lock()
+
+        def register():
+            try:
+                registry.register(identity)
+            except ValueError as exc:
+                with lock:
+                    errors.append(str(exc))
+
+        threads = [threading.Thread(target=register) for _ in range(32)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertTrue(registry.is_trusted(identity))
+        self.assertEqual(len(errors), 31)
 
     def test_budget_boundary(self):
         action = ActionSpec("a", "compute")
