@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from uuid import uuid4
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .planning import Plan
 from .identity import AgentIdentity
@@ -9,10 +10,11 @@ class AgentAssignment:
     agent_id: str
     task_id: str
     step_id: str
+    execution_id: str = ""
 
 
 class AgentCoordinator:
-    """Coordinates bounded agent execution and only accepts verified results."""
+    """Coordinates bounded agent execution and only accepts verified, execution-bound results."""
     def __init__(self, router, verifier, max_agents: int = 2):
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1:
             raise ValueError("max_agents must be a positive integer")
@@ -20,11 +22,13 @@ class AgentCoordinator:
         self.verifier = verifier
         self.max_agents = max_agents
 
-    def assign(self, plan: Plan) -> tuple[AgentAssignment, ...]:
+    def assign(self, plan: Plan, execution_id: str = "") -> tuple[AgentAssignment, ...]:
         if not isinstance(plan, Plan) or not isinstance(plan.task_id, str) or not plan.task_id.strip():
             raise ValueError("invalid_plan")
         if not isinstance(plan.steps, tuple) or not plan.steps:
             raise ValueError("invalid_plan")
+        if not isinstance(execution_id, str) or len(execution_id.encode("utf-8")) > 256:
+            raise ValueError("invalid_execution_id")
         agent_ids = self.router.available()
         if not agent_ids:
             raise LookupError("no agents available")
@@ -35,7 +39,7 @@ class AgentCoordinator:
                 raise ValueError("invalid_agent_id")
             if not isinstance(getattr(step, "step_id", None), str) or not step.step_id.strip():
                 raise ValueError("invalid_step_id")
-            assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id))
+            assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id, execution_id))
         return tuple(assignments)
 
     def _trusted_agent(self, agent_id: str):
@@ -59,7 +63,8 @@ class AgentCoordinator:
     def execute(self, task: TaskSpec, plan: Plan) -> tuple[AgentResult, ...]:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
-        assignments = self.assign(plan)
+        execution_id = uuid4().hex
+        assignments = self.assign(plan, execution_id)
         results = []
         for assignment in assignments:
             agent = self._trusted_agent(assignment.agent_id)
@@ -67,7 +72,7 @@ class AgentCoordinator:
             if step is None:
                 raise ValueError("assignment_step_missing")
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
-                             task.constraints, task.verification_requirements, step.risk_class)
+                             task.constraints, task.verification_requirements, step.risk_class, execution_id)
             child_check = self.verifier.verify_task(child)
             if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
@@ -76,6 +81,8 @@ class AgentCoordinator:
                 raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
                 raise RuntimeError(f"agent_result_identity_mismatch:{assignment.agent_id}")
+            if result.execution_id != execution_id:
+                raise RuntimeError(f"agent_result_execution_mismatch:{assignment.agent_id}")
             if result.status != "completed":
                 raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
@@ -105,6 +112,9 @@ class AgentCoordinator:
         task_ids = [r.task_id for r in results]
         if len(set(task_ids)) != 1:
             return VerificationResult(False, "consensus", "task_identity_mismatch")
+        execution_ids = [r.execution_id for r in results]
+        if not execution_ids or any(not execution_id for execution_id in execution_ids) or len(set(execution_ids)) != 1:
+            return VerificationResult(False, "consensus", "execution_identity_mismatch")
         registry = getattr(self.router, "identity_registry", None)
         if registry is not None:
             for result in results:
