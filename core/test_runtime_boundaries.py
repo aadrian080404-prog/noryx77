@@ -1,10 +1,11 @@
 import unittest
 
 from .actions import ActionGate
-from .contracts import ActionSpec, TaskSpec
+from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
+from .router import ResourceRouter
 from .runtime import NORYXRuntime
 from .security import SecurityBoundary
 from .verification import VerificationEngine
@@ -34,7 +35,6 @@ class RuntimeBoundaryTests(unittest.TestCase):
             def run(self, task):
                 raise RuntimeError("boom")
 
-        from .router import ResourceRouter
         router = ResourceRouter()
         router.register(FailingAgent())
         runtime = NORYXRuntime()
@@ -44,6 +44,32 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["reason"], "agent_execution_failure")
         self.assertEqual(result["verification"].reason, "agent_execution_failure")
+
+    def test_legacy_runtime_rejects_forged_agent_identity(self):
+        class ForgingAgent:
+            agent_id = "real-agent"
+
+            def run(self, task):
+                return AgentResult(
+                    "forged-agent", task.task_id, "completed", "ok",
+                    VerificationResult(True, "agent_result", "ok"),
+                )
+
+        router = ResourceRouter()
+        router.register(ForgingAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        task = TaskSpec("legacy-identity-tamper", "compute", "short", "ok")
+        result = runtime.run(task, agent_id="real-agent")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "agent_identity_mismatch")
+        self.assertEqual(result["verification"].reason, "agent_identity_mismatch")
+
+    def test_unknown_agent_fails_closed(self):
+        task = TaskSpec("unknown-agent", "compute", "short", "ok")
+        result = self.runtime.run(task, agent_id="does-not-exist")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "agent_unavailable")
 
     def test_input_limit_is_enforced(self):
         runtime = NORYXRuntime(RuntimeLimits(max_input_chars=3))
@@ -68,10 +94,9 @@ class RuntimeBoundaryTests(unittest.TestCase):
         class LargeOutputAgent:
             agent_id = "large"
             def run(self, task):
-                from .contracts import AgentResult, VerificationResult
-                return AgentResult(self.agent_id, task.task_id, "completed", "x" * 20, VerificationResult(True, "agent_result", "ok"))
+                output = "x" * 20
+                return AgentResult(self.agent_id, task.task_id, "completed", output, VerificationResult(True, "agent_result", "ok"))
 
-        from .router import ResourceRouter
         router = ResourceRouter()
         router.register(LargeOutputAgent())
         runtime = HypersynthRuntime(router=router, limits=RuntimeLimits(max_output_chars=5))
@@ -84,11 +109,9 @@ class RuntimeBoundaryTests(unittest.TestCase):
         class StructuredOutputAgent:
             agent_id = "structured"
             def run(self, task):
-                from .contracts import AgentResult, VerificationResult
                 output = tuple(range(5))
                 return AgentResult(self.agent_id, task.task_id, "completed", output, VerificationResult(True, "agent_result", "ok"))
 
-        from .router import ResourceRouter
         router = ResourceRouter()
         router.register(StructuredOutputAgent())
         runtime = HypersynthRuntime(router=router, limits=RuntimeLimits(max_output_items=3))
@@ -106,14 +129,14 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
         class AdvancingAgent:
             agent_id = "advancing"
+
             def __init__(self, clock):
                 self.clock = clock
+
             def run(self, task):
-                from .contracts import AgentResult, VerificationResult
                 self.clock.now += 2.0
                 return AgentResult(self.agent_id, task.task_id, "completed", "ok", VerificationResult(True, "agent_result", "ok"))
 
-        from .router import ResourceRouter
         clock = FakeClock()
         router = ResourceRouter()
         router.register(AdvancingAgent(clock))
