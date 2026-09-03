@@ -4,10 +4,13 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 from uuid import uuid4
 
+from .adapters import ExecutionAdapter
+from .capabilities import CapabilityBroker
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
+from .scheduler import Scheduler
 
 
 Executor = Callable[[ActionEnvelope], Any]
@@ -16,7 +19,7 @@ Committer = Callable[[ActionEnvelope, Attestation, Any], None]
 
 
 def _canonical(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
 def _digest(value: Any) -> str:
@@ -33,11 +36,11 @@ class RuntimeResult:
 
 
 class RuntimeEngine:
-    """Small operational kernel for the future NORYX7 data plane.
+    """Operational kernel for the NORYX7 data plane.
 
-    The engine intentionally owns orchestration, not authority. A production
-    adapter is expected to put cryptographic authorization in front of its
-    executor and to perform privileged effects only after that authorization.
+    Planning is delegated to the deterministic scheduler. Effects may be
+    delegated to a capability-backed adapter; the legacy executor remains an
+    explicit test/compatibility seam and is never selected implicitly.
     """
 
     def __init__(
@@ -45,18 +48,28 @@ class RuntimeEngine:
         *,
         max_actions: int = 32,
         clock: Callable[[], float] = time.monotonic,
+        scheduler: Scheduler | None = None,
+        adapter: ExecutionAdapter | None = None,
     ) -> None:
-        if max_actions < 0:
-            raise ValueError("max_actions must be non-negative")
+        if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
+            raise ValueError("max_actions must be a non-negative integer")
+        if not callable(clock):
+            raise TypeError("clock must be callable")
+        if scheduler is not None and not isinstance(scheduler, Scheduler):
+            raise TypeError("scheduler must be a Scheduler")
+        if adapter is not None and not callable(getattr(adapter, "execute", None)):
+            raise TypeError("adapter must expose execute")
         self._max_actions = max_actions
         self._clock = clock
+        self._scheduler = scheduler or Scheduler()
+        self._adapter = adapter
 
     def execute(
         self,
         intent: Intent,
         steps: Sequence[PlanStep],
         *,
-        executor: Executor,
+        executor: Executor | None = None,
         verifier: Verifier,
         committer: Committer | None = None,
         timeout_seconds: float = 30.0,
@@ -64,7 +77,15 @@ class RuntimeEngine:
     ) -> RuntimeResult:
         if not isinstance(intent, Intent):
             raise TypeError("intent must be an Intent")
-        if timeout_seconds <= 0:
+        if not isinstance(steps, Sequence):
+            raise TypeError("steps must be a sequence")
+        if not callable(verifier):
+            raise TypeError("verifier must be callable")
+        if executor is not None and not callable(executor):
+            raise TypeError("executor must be callable")
+        if self._adapter is None and executor is None:
+            raise ValueError("an execution adapter or executor is required")
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         if len(steps) > self._max_actions:
             return RuntimeResult(execution_id or uuid4().hex, ExecutionStatus.REJECTED, (), (), "action_budget_exceeded")
@@ -76,7 +97,7 @@ class RuntimeEngine:
             max_actions=self._max_actions,
             status=ExecutionStatus.RUNNING,
         )
-        ordered = self._topological_order(steps)
+        ordered = tuple(item.step for item in self._scheduler.schedule(steps))
         attestations: list[Attestation] = []
         outputs: list[Any] = []
 
@@ -93,20 +114,21 @@ class RuntimeEngine:
                 parameters=dict(step.parameters),
                 nonce=uuid4().hex,
             )
-            action_digest = _digest({
-                "execution_id": envelope.execution_id,
-                "principal_id": envelope.principal_id,
-                "step_id": envelope.step_id,
-                "action_type": envelope.action_type,
-                "target": envelope.target,
-                "parameters": envelope.parameters,
-                "nonce": envelope.nonce,
-            })
-
             try:
-                output = executor(envelope)
+                action_digest = _digest({
+                    "execution_id": envelope.execution_id,
+                    "principal_id": envelope.principal_id,
+                    "step_id": envelope.step_id,
+                    "action_type": envelope.action_type,
+                    "target": envelope.target,
+                    "parameters": envelope.parameters,
+                    "nonce": envelope.nonce,
+                })
+                dispatch = self._adapter.execute if self._adapter is not None else executor
+                output = dispatch(envelope)
                 verified = bool(verifier(envelope, output))
-            except Exception as exc:  # fail closed at the runtime boundary
+                output_digest = _digest(output)
+            except Exception as exc:
                 return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
 
             attestation = Attestation(
@@ -115,12 +137,12 @@ class RuntimeEngine:
                 step_id=envelope.step_id,
                 agent_id="adapter",
                 action_digest=action_digest,
-                output_digest=_digest(output),
+                output_digest=output_digest,
                 verified=verified,
                 detail="verified" if verified else "verification_failed",
             )
-            attestations.append(attestation)
             if not verified:
+                attestations.append(attestation)
                 return RuntimeResult(context.execution_id, ExecutionStatus.REJECTED, tuple(attestations), tuple(outputs), "result_verification_failed")
 
             if committer is not None:
@@ -128,27 +150,11 @@ class RuntimeEngine:
                     committer(envelope, attestation, output)
                 except Exception as exc:
                     return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
+            attestations.append(attestation)
             outputs.append(output)
 
         return RuntimeResult(context.execution_id, ExecutionStatus.SUCCEEDED, tuple(attestations), tuple(outputs))
 
     @staticmethod
     def _topological_order(steps: Iterable[PlanStep]) -> tuple[PlanStep, ...]:
-        items = tuple(steps)
-        by_id = {step.step_id: step for step in items}
-        if len(by_id) != len(items):
-            raise ValueError("duplicate step id")
-        for step in items:
-            missing = [dep for dep in step.dependencies if dep not in by_id]
-            if missing:
-                raise ValueError(f"missing dependency: {missing[0]}")
-
-        ordered: list[PlanStep] = []
-        remaining = set(by_id)
-        while remaining:
-            ready = sorted(step_id for step_id in remaining if all(dep not in remaining for dep in by_id[step_id].dependencies))
-            if not ready:
-                raise ValueError("cyclic plan dependencies")
-            ordered.extend(by_id[step_id] for step_id in ready)
-            remaining.difference_update(ready)
-        return tuple(ordered)
+        return tuple(item.step for item in Scheduler().schedule(tuple(steps)))
