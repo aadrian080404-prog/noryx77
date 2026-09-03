@@ -3,6 +3,7 @@ import unittest
 from .agents import Agent, DeterministicAgent
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .coordination import AgentCoordinator
+from .identity import AgentIdentityAuthority, IdentityRegistry
 from .planning import Plan, PlanStep
 from .router import ResourceRouter
 from .verification import VerificationEngine
@@ -61,6 +62,44 @@ class CoordinationBoundaryTests(unittest.TestCase):
         check = self.coordinator.verify_consensus(results)
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "duplicate_agent_identity")
+
+    def test_consensus_rejects_unknown_agent_when_identity_registry_enabled(self):
+        registry = IdentityRegistry()
+        trusted, _ = AgentIdentityAuthority.generate("trusted")
+        registry.register(trusted)
+        router = ResourceRouter(registry)
+        router.register(IdentityAgent("trusted", trusted, self.verifier))
+        coordinator = AgentCoordinator(router, self.verifier)
+        verified = VerificationResult(True, "agent_result", "verified")
+        result = AgentResult("unknown", "t", "completed", "same", verified)
+        check = coordinator.verify_consensus((result,))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "agent_unavailable")
+
+    def test_consensus_rejects_revoked_agent(self):
+        registry = IdentityRegistry()
+        identity, _ = AgentIdentityAuthority.generate("trusted")
+        registry.register(identity)
+        router = ResourceRouter(registry)
+        router.register(IdentityAgent("trusted", identity, self.verifier))
+        coordinator = AgentCoordinator(router, self.verifier)
+        verified = VerificationResult(True, "agent_result", "verified")
+        result = AgentResult("trusted", "t", "completed", "same", verified)
+        registry.revoke("trusted")
+        check = coordinator.verify_consensus((result,))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "agent_identity_untrusted")
+
+
+class IdentityAgent(Agent):
+    def __init__(self, agent_id, identity, verifier):
+        self.agent_id = agent_id
+        self.identity = identity
+        self.verifier = verifier
+
+    def run(self, task):
+        check = self.verifier.verify_output("ok", stage="agent_result")
+        return AgentResult(self.agent_id, task.task_id, "completed", "ok", check)
 
 
 if __name__ == "__main__":
