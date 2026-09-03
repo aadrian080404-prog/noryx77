@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock
+from typing import Protocol
 
 from .contracts import Attestation
+
+
+class AttestationVerifier(Protocol):
+    def verify(self, attestation: Attestation, signature: bytes) -> bool:
+        ...
 
 
 @dataclass(frozen=True)
@@ -19,15 +25,24 @@ class JournalEntry:
 
 
 class StateJournal:
-    """Append-only commit boundary with identity and replay protection."""
+    """Append-only commit boundary with identity, authenticity and replay protection."""
 
-    def __init__(self, *, require_signatures: bool = True) -> None:
+    def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None) -> None:
         if not isinstance(require_signatures, bool):
             raise TypeError("require_signatures must be bool")
+        if require_signatures and verifier is None:
+            raise ValueError("signed journal requires an attestation verifier")
+        if verifier is not None and not callable(getattr(verifier, "verify", None)):
+            raise TypeError("verifier must expose verify")
         self._lock = RLock()
         self._entries: list[JournalEntry] = []
         self._keys: set[tuple[str, str]] = set()
         self._require_signatures = require_signatures
+        self._verifier = verifier
+
+    @property
+    def verifier(self) -> AttestationVerifier | None:
+        return self._verifier
 
     def append(self, attestation: Attestation) -> JournalEntry:
         if not isinstance(attestation, Attestation):
@@ -46,6 +61,13 @@ class StateJournal:
             raise ValueError("incomplete attestation")
         if self._require_signatures and (not isinstance(attestation.signature, bytes) or len(attestation.signature) != 64):
             raise PermissionError("cannot commit unsigned attestation")
+        if self._require_signatures:
+            try:
+                valid = bool(self._verifier.verify(attestation, attestation.signature))
+            except Exception as exc:
+                raise PermissionError("invalid attestation signature") from exc
+            if not valid:
+                raise PermissionError("invalid attestation signature")
         key = (attestation.execution_id, attestation.step_id)
         with self._lock:
             if key in self._keys:
