@@ -1,8 +1,9 @@
 import unittest
 
 from .agents import DeterministicAgent
-from .audit import AuditLog
+from .audit import AuditCheckpoint, AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
+from .crypto import InMemoryKeyProvider
 from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
@@ -161,6 +162,56 @@ class FoundationBoundaryTests(unittest.TestCase):
         audit.record("first")
         audit._digests[0] = "f" * 64
         self.assertFalse(audit.verify_integrity())
+
+    def test_audit_checkpoint_authenticates_chain_root(self):
+        provider = InMemoryKeyProvider({"audit-key": b"a" * 32})
+        audit = AuditLog()
+        audit.record("first", value=1)
+        checkpoint = audit.checkpoint(provider, key_id="audit-key")
+        self.assertIsInstance(checkpoint, AuditCheckpoint)
+        self.assertTrue(audit.verify_checkpoint(checkpoint, provider))
+
+    def test_audit_checkpoint_detects_event_tampering(self):
+        provider = InMemoryKeyProvider({"audit-key": b"a" * 32})
+        audit = AuditLog()
+        audit.record("first", value=1)
+        checkpoint = audit.checkpoint(provider, key_id="audit-key")
+        audit._events[0]["value"] = 2
+        self.assertFalse(audit.verify_checkpoint(checkpoint, provider))
+
+    def test_audit_checkpoint_detects_digest_rewrite(self):
+        provider = InMemoryKeyProvider({"audit-key": b"a" * 32})
+        audit = AuditLog()
+        audit.record("first")
+        checkpoint = audit.checkpoint(provider, key_id="audit-key")
+        audit._digests[0] = "b" * 64
+        self.assertFalse(audit.verify_checkpoint(checkpoint, provider))
+
+    def test_audit_checkpoint_rejects_wrong_key(self):
+        provider = InMemoryKeyProvider({"audit-key": b"a" * 32, "wrong-key": b"b" * 32})
+        audit = AuditLog()
+        audit.record("first")
+        checkpoint = audit.checkpoint(provider, key_id="audit-key")
+        forged = AuditCheckpoint(checkpoint.version, "wrong-key", checkpoint.digest, checkpoint.mac)
+        self.assertFalse(audit.verify_checkpoint(forged, provider))
+
+    def test_audit_checkpoint_rejects_malformed_checkpoint(self):
+        provider = InMemoryKeyProvider({"audit-key": b"a" * 32})
+        audit = AuditLog()
+        audit.record("first")
+        checkpoint = audit.checkpoint(provider, key_id="audit-key")
+        forged = AuditCheckpoint(2, checkpoint.key_id, checkpoint.digest, checkpoint.mac)
+        self.assertFalse(audit.verify_checkpoint(forged, provider))
+
+    def test_audit_checkpoint_fails_closed_on_provider_failure(self):
+        class BrokenProvider:
+            def get_key(self, key_id):
+                raise RuntimeError("provider unavailable")
+
+        audit = AuditLog()
+        audit.record("first")
+        with self.assertRaises(ValueError):
+            audit.checkpoint(BrokenProvider(), key_id="audit-key")
 
 if __name__ == "__main__":
     unittest.main()
