@@ -4,11 +4,11 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Iterable, Sequence
 from uuid import uuid4
 
 from .adapters import ExecutionAdapter
-from .capabilities import CapabilityBroker
+from .attestation import AttestationSigner, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
 from .scheduler import Scheduler
 
@@ -38,9 +38,9 @@ class RuntimeResult:
 class RuntimeEngine:
     """Operational kernel for the NORYX7 data plane.
 
-    Planning is delegated to the deterministic scheduler. Effects may be
-    delegated to a capability-backed adapter; the legacy executor remains an
-    explicit test/compatibility seam and is never selected implicitly.
+    Adapter-backed execution requires a cryptographic attestation signer so
+    committed results cannot be transplanted across executions, principals,
+    steps, agents, or action/output digests.
     """
 
     def __init__(
@@ -50,6 +50,7 @@ class RuntimeEngine:
         clock: Callable[[], float] = time.monotonic,
         scheduler: Scheduler | None = None,
         adapter: ExecutionAdapter | None = None,
+        attestation_signer: AttestationSigner | None = None,
     ) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
             raise ValueError("max_actions must be a non-negative integer")
@@ -59,10 +60,15 @@ class RuntimeEngine:
             raise TypeError("scheduler must be a Scheduler")
         if adapter is not None and not callable(getattr(adapter, "execute", None)):
             raise TypeError("adapter must expose execute")
+        if attestation_signer is not None and not callable(getattr(attestation_signer, "sign", None)):
+            raise TypeError("attestation_signer must expose sign")
+        if adapter is not None and attestation_signer is None:
+            raise ValueError("adapter-backed execution requires attestation_signer")
         self._max_actions = max_actions
         self._clock = clock
         self._scheduler = scheduler or Scheduler()
         self._adapter = adapter
+        self._attestation_signer = attestation_signer
 
     def execute(
         self,
@@ -97,7 +103,11 @@ class RuntimeEngine:
             max_actions=self._max_actions,
             status=ExecutionStatus.RUNNING,
         )
-        ordered = tuple(item.step for item in self._scheduler.schedule(steps))
+        try:
+            ordered = tuple(item.step for item in self._scheduler.schedule(steps))
+        except Exception as exc:
+            return RuntimeResult(context.execution_id, ExecutionStatus.REJECTED, (), (), type(exc).__name__)
+
         attestations: list[Attestation] = []
         outputs: list[Any] = []
 
@@ -128,22 +138,28 @@ class RuntimeEngine:
                 output = dispatch(envelope)
                 verified = bool(verifier(envelope, output))
                 output_digest = _digest(output)
+                agent_id = str(getattr(self._adapter, "agent_id", "adapter")) if self._adapter is not None else "executor"
+                attestation = Attestation(
+                    execution_id=envelope.execution_id,
+                    principal_id=envelope.principal_id,
+                    step_id=envelope.step_id,
+                    agent_id=agent_id,
+                    action_digest=action_digest,
+                    output_digest=output_digest,
+                    verified=verified,
+                    detail="verified" if verified else "verification_failed",
+                )
+                if self._attestation_signer is not None:
+                    attestation = signed_attestation(attestation, self._attestation_signer)
             except Exception as exc:
                 return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
 
-            attestation = Attestation(
-                execution_id=envelope.execution_id,
-                principal_id=envelope.principal_id,
-                step_id=envelope.step_id,
-                agent_id="adapter",
-                action_digest=action_digest,
-                output_digest=output_digest,
-                verified=verified,
-                detail="verified" if verified else "verification_failed",
-            )
             if not verified:
                 attestations.append(attestation)
                 return RuntimeResult(context.execution_id, ExecutionStatus.REJECTED, tuple(attestations), tuple(outputs), "result_verification_failed")
+
+            if self._adapter is not None and not attestation.signature:
+                return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), "unsigned_attestation")
 
             if committer is not None:
                 try:
