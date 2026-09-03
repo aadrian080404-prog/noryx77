@@ -19,6 +19,12 @@ class EncryptedMemoryStoreTests(unittest.TestCase):
         self.store.put(item, key_id="memory-key")
         self.assertEqual(self.store.get("m1"), item)
 
+    def test_bound_round_trip_preserves_execution(self):
+        item = MemoryItem("m1", {"secret": "value"}, execution_id="exec-A")
+        self.store.put(item, key_id="memory-key")
+        self.assertEqual(self.store.get("m1", execution_id="exec-A"), item)
+        self.assertIsNone(self.store.get("m1", execution_id="exec-B"))
+
     def test_snapshot_contains_ciphertext_only(self):
         item = MemoryItem("m1", {"secret": "value"}, kind="suspended")
         self.store.put(item, key_id="memory-key")
