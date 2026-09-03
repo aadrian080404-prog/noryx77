@@ -114,7 +114,6 @@ class Hypersynth:
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
             if not admission.valid: return self._reject("verification", task, admission, results=tuple(results))
-            if result.verification is None or not result.verification.valid: return self._reject("verification", task, VerificationResult(False, "agent_result", "missing_verification"), results=tuple(results))
             results.append(result)
             self.audit.record("agent_result_verified", task_id=child.task_id, agent_id=agent.agent_id)
         timeout = self._deadline_rejection(task, "verification", deadline_check)
@@ -130,7 +129,11 @@ class Hypersynth:
         output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
         if not output_check.valid: return self._reject("verification", task, output_check, results=tuple(results))
         metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
-        if not metacognitive_check.valid: return self._reject("metacognition", task, metacognitive_check, results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid:
+            check = metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result")
+            return self._reject("metacognition", task, check, results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        if metacognitive_check.stage != "metacognition":
+            return self._reject("metacognition", task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         self.audit.record("metacognition_verified", task_id=task.task_id, confidence=reflection.confidence)
         if self.memory is not None:
             try:
