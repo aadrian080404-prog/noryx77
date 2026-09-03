@@ -1,53 +1,62 @@
 # NORYX7
 
-NORYX7 is an experimental agentic AI architecture designed to coordinate models, memory, tools, reasoning, verification and autonomous task execution.
+NORYX7 is an experimental bounded agentic AI architecture for coordinating models, memory, tools, planning, reasoning, verification and autonomous task execution.
 
-## Objective
+## Current Foundation
 
-The goal of NORYX7 is not simply to create a larger AI model, but to create an environment and cognitive architecture in which existing AI models can operate more effectively.
+The `noryx7-foundation` branch now contains a concrete HYPERSYNTH cognitive-kernel implementation rather than only an architectural specification.
 
-## Core Architecture
+### HYPERSYNTH execution pipeline
 
-NORYX7 is designed around the following pipeline:
-
+```text
 INPUT
-→ PERCEPTION
-→ CONTEXT ACQUISITION
-→ STATE ENCODING
-→ TASK DECOMPOSITION
-→ RESOURCE ALLOCATION
-→ MODEL ROUTING
-→ PARALLEL PROCESSING
-→ MEMORY RETRIEVAL
-→ HYPOTHESIS GENERATION
-→ INTERNAL SIMULATION
-→ CROSS-CHECK
-→ VERIFICATION
-→ METACOGNITION
-→ SOLUTION SELECTION
-→ ACTION
-→ RESULT VERIFICATION
-→ MEMORY UPDATE
+  ↓
+PERCEPTION / CONTRACT VERIFICATION
+  ↓
+CONTEXT ACQUISITION
+  ↓
+TASK DECOMPOSITION
+  ↓
+PLANNING + PLAN VERIFICATION
+  ↓
+HYPOTHESIS GENERATION + VERIFICATION
+  ↓
+INTERNAL SIMULATION + VERIFICATION
+  ↓
+RESOURCE ALLOCATION
+  ↓
+ACTION GATE / POLICY / SECURITY
+  ↓
+AGENT EXECUTION
+  ↓
+RESULT ADMISSION + VERIFICATION
+  ↓
+CROSS-CHECK / CONSENSUS
+  ↓
+OUTPUT VERIFICATION
+  ↓
+METACOGNITION SUMMARY
+  ↓
+MEMORY UPDATE + AUDIT
+```
 
-## Initial Components
+## Safety properties
 
-* State Manager
-* Task Decomposer
-* Model Router
-* Memory System
-* Tool Manager
-* Hypothesis Engine
-* Verification System
-* Metacognition Layer
-* Action Manager
-* Benchmark System
+* bounded planner and runtime action budget;
+* explicit task, plan, action and result contracts;
+* deny-by-default policy/security boundaries;
+* fail-closed handling of routing, planning, decomposition and execution failures;
+* provenance checks linking agent results to planned steps;
+* consensus rejection on conflicting agent outputs;
+* audit events for major cognitive/runtime transitions;
+* deterministic acceptance tests for success and failure paths.
 
-## Development Principle
+## Development principle
 
-NORYX7 will initially use existing AI models rather than training a frontier model from scratch.
+NORYX7 initially uses existing AI models/agents behind explicit contracts instead of attempting to train a frontier model from scratch. HYPERSYNTH is the orchestration and verification kernel around those resources.
 
-The first objective is to experimentally determine whether the NORYX7 architecture can improve reliability, memory, planning, tool use and task completion compared with the same model operating without the NORYX7 architecture.
+The current implementation is an engineering prototype. A green test suite validates the implemented contracts; it does not by itself establish production readiness, frontier-model capability, or real-world autonomy.
 
 ## Version
 
-NORYX7 v0.1 – Experimental Prototype
+NORYX7 foundation — HYPERSYNTH kernel stage

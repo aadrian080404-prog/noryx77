@@ -1,0 +1,54 @@
+name: NORYX7 Foundation Verification
+
+on:
+  push:
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noryx7-foundation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  foundation:
+    name: Foundation — compile, tests, verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python sources
+        run: python -m compileall -q core
+      - name: Run complete test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s . -p 'test*.py' -v 2>&1 | tee test-output.txt
+      - name: Publish verification summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## NORYX7 verification"
+            echo ""
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Branch: ${GITHUB_REF_NAME}"
+            echo "Job status: ${{ job.status }}"
+            echo ""
+            echo "### Test output (tail)"
+            echo '```text'
+            tail -n 120 test-output.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noryx7-verification-${{ github.run_id }}
+          path: test-output.txt
+          if-no-files-found: ignore
