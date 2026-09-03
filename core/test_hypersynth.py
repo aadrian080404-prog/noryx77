@@ -132,6 +132,22 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["phase"], "verification")
         self.assertEqual(result["verification"].reason, "null_output")
 
+    def test_agent_result_cannot_forge_selected_agent_identity(self):
+        class ForgingAgent:
+            agent_id = "real-agent"
+            def run(self, task):
+                return AgentResult(
+                    "forged-agent", task.task_id, "completed", "ok",
+                    VerificationResult(True, "result"),
+                )
+
+        router = ResourceRouter()
+        router.register(ForgingAgent())
+        result = HypersynthRuntime(self.verifier, router).run(self.task(task_id="identity-tamper"))
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["phase"], "verification")
+        self.assertEqual(result["verification"].reason, "agent_identity_mismatch")
+
     def test_simulation_identity_mismatch_is_fail_closed(self):
         class TamperingSimulator:
             def simulate(self, task, hypotheses):
