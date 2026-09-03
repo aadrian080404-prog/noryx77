@@ -46,6 +46,10 @@ class HypersynthRuntime:
         try:
             # Validate the public runtime contract before touching task fields.
             task_check = self.verifier.verify_task(task)
+            if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
+                check = VerificationResult(False, "contract", "invalid_task_verification")
+                self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
+                return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             if not task_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=task_check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": task_check, "audit": self.audit.snapshot()}
@@ -62,12 +66,30 @@ class HypersynthRuntime:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             result = self.kernel.run(task, deadline_check=deadline_exceeded)
+            if not isinstance(result, dict):
+                check = VerificationResult(False, "runtime", "malformed_kernel_result")
+                self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
+                return {"status": "rejected", "phase": "execution", "verification": check, "audit": self.audit.snapshot()}
             if deadline_exceeded() and result.get("status") == "completed":
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                 return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
             if result.get("status") == "completed":
+                result_check = result.get("verification")
+                if (
+                    not isinstance(result_check, VerificationResult)
+                    or not result_check.is_well_formed()
+                    or not result_check.valid
+                    or result_check.stage != "hypersynth_result"
+                ):
+                    check = VerificationResult(False, "runtime", "invalid_kernel_verification")
+                    self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
+                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
                 output = result.get("results", ())
+                if not isinstance(output, tuple):
+                    check = VerificationResult(False, "runtime", "malformed_kernel_results")
+                    self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
+                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
                 if not self.limits.validate_count(len(output), self.limits.max_output_items):
                     check = VerificationResult(False, "limits", "output_item_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
