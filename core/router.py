@@ -1,14 +1,19 @@
 from .agents import Agent
 
+
 class ResourceRouter:
     """Selects registered agents without coupling orchestration to implementations."""
+
     def __init__(self):
         self._agents: dict[str, Agent] = {}
 
     def register(self, agent: Agent) -> None:
-        if not getattr(agent, "agent_id", None):
+        agent_id = getattr(agent, "agent_id", None)
+        if not isinstance(agent_id, str) or not agent_id:
             raise ValueError("agent_id required")
-        self._agents[agent.agent_id] = agent
+        if agent_id in self._agents:
+            raise ValueError("agent_id already registered")
+        self._agents[agent_id] = agent
 
     def get(self, agent_id: str):
         return self._agents.get(agent_id)
