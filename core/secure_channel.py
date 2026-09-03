@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
+from threading import Lock
 from typing import Final
 
 from cryptography.hazmat.primitives import hashes, hmac
@@ -59,7 +60,7 @@ class SecureFrame:
 
 
 class SecureChannel:
-    """Symmetric authenticated channel with replay defense and optional identity trust anchors."""
+    """Symmetric authenticated channel with replay defense and thread-safe sequence state."""
 
     def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str,
                  identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None,
@@ -90,6 +91,8 @@ class SecureChannel:
         self._identity_registry = identity_registry
         self._local_identity, self._peer_identity = local_identity, peer_identity
         self._send_sequence, self._last_received = 0, -1
+        self._send_lock = Lock()
+        self._receive_lock = Lock()
 
     def _require_live_trust(self) -> None:
         if self._identity_registry is None:
@@ -106,8 +109,6 @@ class SecureChannel:
             return b""
         local_fp = _identity_fingerprint(self._local_identity)
         peer_fp = _identity_fingerprint(self._peer_identity)
-        # Canonical pair binding is independent of endpoint perspective; direction
-        # remains a separate derivation component, preventing reflection.
         pair = b"".join(sorted((local_fp, peer_fp)))
         return _IDENTITY_BINDING_DOMAIN + pair
 
@@ -125,7 +126,6 @@ class SecureChannel:
             raise ValueError("channel_key_derivation_failed") from exc
 
     def _authenticated_data(self) -> bytes:
-        # This value must be identical from both endpoint perspectives.
         return _DOMAIN + PROTOCOL_VERSION.to_bytes(2, "big") + _field(self._session_id) + self._identity_binding()
 
     @staticmethod
@@ -139,35 +139,38 @@ class SecureChannel:
         return signer.finalize()
 
     def send(self, payload: bytes) -> SecureFrame:
-        self._require_live_trust()
         if not isinstance(payload, bytes):
             raise TypeError("payload_must_be_bytes")
         if len(payload) > MAX_FRAME_SIZE:
             raise ValueError("frame_size_exceeded")
-        if self._send_sequence > MAX_SEQUENCE:
-            raise ValueError("sequence_exhausted")
-        sequence = self._send_sequence
-        mac = self._mac(self._local_id, sequence, payload)
-        self._send_sequence += 1
-        return SecureFrame(self._local_id, self._session_id, sequence, bytes(payload), mac)
+        with self._send_lock:
+            self._require_live_trust()
+            if self._send_sequence > MAX_SEQUENCE:
+                raise ValueError("sequence_exhausted")
+            sequence = self._send_sequence
+            mac = self._mac(self._local_id, sequence, payload)
+            self._send_sequence += 1
+            return SecureFrame(self._local_id, self._session_id, sequence, bytes(payload), mac)
 
     def receive(self, frame: SecureFrame) -> bytes:
-        self._require_live_trust()
-        if not isinstance(frame, SecureFrame) or not frame.is_well_formed():
-            raise ValueError("invalid_secure_frame")
-        if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
-            raise ValueError("channel_identity_mismatch")
-        if frame.sequence <= self._last_received:
-            raise ValueError("replayed_frame")
-        try:
-            expected = self._mac(frame.sender_id, frame.sequence, frame.payload)
-        except Exception as exc:
-            raise ValueError("frame_authentication_failed") from exc
-        if not compare_digest(expected, frame.mac):
-            raise ValueError("frame_authentication_failed")
-        self._last_received = frame.sequence
-        return bytes(frame.payload)
+        with self._receive_lock:
+            self._require_live_trust()
+            if not isinstance(frame, SecureFrame) or not frame.is_well_formed():
+                raise ValueError("invalid_secure_frame")
+            if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
+                raise ValueError("channel_identity_mismatch")
+            if frame.sequence <= self._last_received:
+                raise ValueError("replayed_frame")
+            try:
+                expected = self._mac(frame.sender_id, frame.sequence, frame.payload)
+            except Exception as exc:
+                raise ValueError("frame_authentication_failed") from exc
+            if not compare_digest(expected, frame.mac):
+                raise ValueError("frame_authentication_failed")
+            self._last_received = frame.sequence
+            return bytes(frame.payload)
 
     @property
     def last_received_sequence(self) -> int:
-        return self._last_received
+        with self._receive_lock:
+            return self._last_received
