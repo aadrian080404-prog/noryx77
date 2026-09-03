@@ -27,8 +27,16 @@ class ActionGate:
         remaining = self.limits.max_actions_per_task - calls_used
         if remaining <= 0:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
-        if not self.policy.allows(action):
+        try:
+            policy_allowed = self.policy.allows(action)
+        except Exception:
+            return ActionDecision(False, "policy evaluation failure", VerificationResult(False, "action_gate", "policy_evaluation_failure"))
+        if not policy_allowed:
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
-        if not self.security.allows(action):
+        try:
+            security_allowed = self.security.allows(action)
+        except Exception:
+            return ActionDecision(False, "security evaluation failure", VerificationResult(False, "action_gate", "security_evaluation_failure"))
+        if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
         return ActionDecision(True, "allowed", VerificationResult(True, "action_gate", "authorized"))
