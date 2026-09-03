@@ -125,7 +125,8 @@ class SecureChannel:
             raise ValueError("channel_key_derivation_failed") from exc
 
     def _authenticated_data(self) -> bytes:
-        return self._encode(PROTOCOL_VERSION, self._local_id, self._session_id, 0, self._identity_binding())
+        # This value must be identical from both endpoint perspectives.
+        return _DOMAIN + PROTOCOL_VERSION.to_bytes(2, "big") + _field(self._session_id) + self._identity_binding()
 
     @staticmethod
     def _encode(version: int, sender_id: str, session_id: str, sequence: int, payload: bytes) -> bytes:
