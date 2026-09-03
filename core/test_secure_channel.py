@@ -10,14 +10,8 @@ from .secure_channel import MAX_FRAME_SIZE, MAX_SEQUENCE, SecureChannel
 class SecureChannelTests(unittest.TestCase):
     def setUp(self):
         self.provider = InMemoryKeyProvider({"channel": b"k" * KEY_SIZE})
-        self.sender = SecureChannel(
-            self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b",
-            session_id="session-1", direction="send",
-        )
-        self.receiver = SecureChannel(
-            self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a",
-            session_id="session-1", direction="send",
-        )
+        self.sender = SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send")
+        self.receiver = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="send")
 
     def test_round_trip(self):
         frame = self.sender.send(b"hello")
@@ -38,40 +32,34 @@ class SecureChannelTests(unittest.TestCase):
 
     def test_sender_identity_substitution_is_rejected(self):
         frame = self.sender.send(b"hello")
-        forged = replace(frame, sender_id="agent-c")
         with self.assertRaisesRegex(ValueError, "channel_identity_mismatch"):
-            self.receiver.receive(forged)
+            self.receiver.receive(replace(frame, sender_id="agent-c"))
 
     def test_session_substitution_is_rejected(self):
         frame = self.sender.send(b"hello")
-        forged = replace(frame, session_id="session-2")
         with self.assertRaisesRegex(ValueError, "channel_identity_mismatch"):
-            self.receiver.receive(forged)
+            self.receiver.receive(replace(frame, session_id="session-2"))
 
     def test_payload_tampering_is_rejected(self):
         frame = self.sender.send(b"hello")
-        forged = replace(frame, payload=b"hullo")
         with self.assertRaisesRegex(ValueError, "frame_authentication_failed"):
-            self.receiver.receive(forged)
+            self.receiver.receive(replace(frame, payload=b"hullo"))
 
     def test_mac_tampering_is_rejected(self):
         frame = self.sender.send(b"hello")
-        forged = replace(frame, mac=b"x" * len(frame.mac))
         with self.assertRaisesRegex(ValueError, "frame_authentication_failed"):
-            self.receiver.receive(forged)
+            self.receiver.receive(replace(frame, mac=b"x" * len(frame.mac)))
 
     def test_version_tampering_is_rejected(self):
         frame = self.sender.send(b"hello")
-        forged = replace(frame, version=2)
         with self.assertRaisesRegex(ValueError, "invalid_secure_frame"):
-            self.receiver.receive(forged)
+            self.receiver.receive(replace(frame, version=2))
 
     def test_wrong_key_is_rejected(self):
         other = InMemoryKeyProvider({"other": b"z" * KEY_SIZE})
         receiver = SecureChannel(other, key_id="other", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="send")
-        frame = self.sender.send(b"hello")
         with self.assertRaisesRegex(ValueError, "frame_authentication_failed"):
-            receiver.receive(frame)
+            receiver.receive(self.sender.send(b"hello"))
 
     def test_provider_failure_fails_closed(self):
         class BrokenProvider(KeyProvider):
@@ -97,9 +85,8 @@ class SecureChannelTests(unittest.TestCase):
 
     def test_directional_keys_do_not_reflect(self):
         receive_side = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="receive")
-        frame = self.sender.send(b"hello")
         with self.assertRaisesRegex(ValueError, "frame_authentication_failed"):
-            receive_side.receive(frame)
+            receive_side.receive(self.sender.send(b"hello"))
 
     def test_constructor_rejects_same_identity(self):
         with self.assertRaisesRegex(ValueError, "local_and_peer_id_must_differ"):
@@ -143,6 +130,17 @@ class SecureChannelTests(unittest.TestCase):
         registry.revoke("agent-b")
         with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
             SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=peer)
+
+    def test_revocation_blocks_existing_sender(self):
+        local, _ = AgentIdentityAuthority.generate("agent-a")
+        peer, _ = AgentIdentityAuthority.generate("agent-b")
+        registry = IdentityRegistry()
+        registry.register(local)
+        registry.register(peer)
+        sender = SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=peer)
+        registry.revoke("agent-a")
+        with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
+            sender.send(b"revoked")
 
 
 if __name__ == "__main__":
