@@ -1,3 +1,5 @@
+import unittest
+
 from .agents import DeterministicAgent
 from .contracts import ActionSpec, TaskSpec
 from .memory import MemoryItem, MemoryStore
@@ -7,34 +9,36 @@ from .runtime import NORYXRuntime
 from .verification import VerificationEngine
 
 
-def test_task_contract_and_runtime():
-    task = TaskSpec("t1", "research", "inspect", "input")
-    result = NORYXRuntime().run(task)
-    assert result["status"] == "completed"
-    assert result["result"].verification.valid
+class FoundationTests(unittest.TestCase):
+    def test_task_contract_and_runtime(self):
+        task = TaskSpec("t1", "research", "inspect", "input")
+        result = NORYXRuntime().run(task)
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["results"])
+        self.assertTrue(result["results"][-1].verification.valid)
+
+    def test_unknown_risk_is_rejected(self):
+        task = TaskSpec("t1", "x", "y", "z", risk_class="unknown")
+        self.assertFalse(VerificationEngine().verify_task(task).valid)
+
+    def test_policy_fails_closed_for_unknown_and_high_risk(self):
+        policy = PolicyEngine()
+        self.assertFalse(policy.evaluate(ActionSpec("a", "unknown")).get("allowed"))
+        self.assertFalse(policy.evaluate(ActionSpec("b", "financial")).get("allowed"))
+
+    def test_router_requires_explicit_route_when_ambiguous(self):
+        router = ResourceRouter()
+        router.register(DeterministicAgent())
+        self.assertEqual(router.route().agent_id, "deterministic")
+
+    def test_memory_is_bounded_and_replaceable(self):
+        store = MemoryStore()
+        item = MemoryItem("m1", "hello", "postit", "test", 0.8)
+        store.put(item)
+        self.assertEqual(store.get("m1"), item)
+        self.assertTrue(store.delete("m1"))
+        self.assertIsNone(store.get("m1"))
 
 
-def test_unknown_risk_is_rejected():
-    task = TaskSpec("t1", "x", "y", "z", risk_class="unknown")
-    assert not VerificationEngine().verify_task(task).valid
-
-
-def test_policy_fails_closed_for_unknown_and_high_risk():
-    policy = PolicyEngine()
-    assert not policy.evaluate(ActionSpec("a", "unknown")).get("allowed")
-    assert not policy.evaluate(ActionSpec("b", "financial")).get("allowed")
-
-
-def test_router_requires_explicit_route_when_ambiguous():
-    router = ResourceRouter()
-    router.register(DeterministicAgent())
-    assert router.route().agent_id == "deterministic"
-
-
-def test_memory_is_bounded_and_replaceable():
-    store = MemoryStore()
-    item = MemoryItem("m1", "hello", "postit", "test", 0.8)
-    store.put(item)
-    assert store.get("m1") == item
-    assert store.delete("m1")
-    assert store.get("m1") is None
+if __name__ == "__main__":
+    unittest.main()
