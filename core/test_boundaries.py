@@ -1,7 +1,7 @@
 import unittest
 
 from .agents import DeterministicAgent
-from .contracts import ActionSpec, AgentResult, TaskSpec
+from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
@@ -26,6 +26,38 @@ class FoundationBoundaryTests(unittest.TestCase):
         output, check = executor.execute(ActionSpec("a2", "search", target="ok"))
         self.assertEqual(output, "ok")
         self.assertTrue(check.valid)
+
+    def test_duplicate_tool_registration_is_rejected(self):
+        executor = ToolExecutor(self.policy, self.verifier)
+        executor.capabilities.register("search", lambda target, params: target)
+        with self.assertRaises(ValueError):
+            executor.capabilities.register("search", lambda target, params: "replacement")
+        output, check = executor.execute(ActionSpec("a2b", "search", target="original"))
+        self.assertEqual(output, "original")
+        self.assertTrue(check.valid)
+
+    def test_tool_policy_boundary_is_required(self):
+        class NoPolicy:
+            pass
+
+        executor = ToolExecutor(NoPolicy(), self.verifier)
+        executor.capabilities.register("search", lambda target, params: target)
+        output, check = executor.execute(ActionSpec("a2c", "search", target="should-not-run"))
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "policy_evaluation_failure")
+
+    def test_tool_policy_exception_fails_closed(self):
+        class ExplodingPolicy:
+            def allows(self, action):
+                raise RuntimeError("policy failure")
+
+        executor = ToolExecutor(ExplodingPolicy(), self.verifier)
+        executor.capabilities.register("search", lambda target, params: target)
+        output, check = executor.execute(ActionSpec("a2d", "search", target="should-not-run"))
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "policy_evaluation_failure")
 
     def test_security_blocks_high_risk_by_default(self):
         boundary = SecurityBoundary(self.policy, self.verifier)
