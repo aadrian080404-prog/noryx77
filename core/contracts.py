@@ -11,6 +11,7 @@ class TaskSpec:
     constraints: Mapping[str, Any] = field(default_factory=dict)
     verification_requirements: tuple[str, ...] = ()
     risk_class: str = "normal"
+    execution_id: str = ""
 
     def is_well_formed(self) -> bool:
         return (
@@ -21,6 +22,7 @@ class TaskSpec:
             and isinstance(self.verification_requirements, tuple)
             and all(isinstance(item, str) and bool(item.strip()) for item in self.verification_requirements)
             and isinstance(self.risk_class, str) and bool(self.risk_class.strip())
+            and isinstance(self.execution_id, str) and len(self.execution_id.encode("utf-8")) <= 256
         )
 
 
@@ -68,6 +70,7 @@ class AgentResult:
     status: str
     output: Any = None
     verification: VerificationResult | None = None
+    execution_id: str = ""
 
     def is_well_formed(self) -> bool:
         return (
@@ -75,4 +78,5 @@ class AgentResult:
             and isinstance(self.task_id, str) and bool(self.task_id.strip())
             and isinstance(self.status, str) and bool(self.status.strip())
             and (self.verification is None or isinstance(self.verification, VerificationResult))
+            and isinstance(self.execution_id, str) and len(self.execution_id.encode("utf-8")) <= 256
         )
