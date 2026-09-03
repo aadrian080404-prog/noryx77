@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from .audit import AuditLog
 from .context import ContextManager
@@ -54,7 +55,17 @@ class Hypersynth:
         if deadline_check is not None and deadline_check(): return self._reject(phase, task, VerificationResult(False, "limits", "task_time_limit_exceeded"))
         return None
 
+    @staticmethod
+    def _bind_execution(task: TaskSpec) -> TaskSpec:
+        """Every modern kernel run gets a fresh execution identity if the caller omitted one."""
+        if not isinstance(task, TaskSpec):
+            return task
+        if task.execution_id:
+            return task
+        return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
+
     def run(self, task: TaskSpec, *, deadline_check=None):
+        task = self._bind_execution(task)
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
         try: task_check = self.verifier.verify_task(task)
         except Exception: return self._reject("perception", task, VerificationResult(False, "contract", "task_verification_failure"))
@@ -160,6 +171,7 @@ class Hypersynth:
         if len({r.agent_id for r in results}) != len(results): return VerificationResult(False, "consensus", "duplicate_agent_result")
         if len({r.task_id for r in results}) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
         if any(r.execution_id != results[0].execution_id for r in results): return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        if not results[0].execution_id: return VerificationResult(False, "consensus", "missing_execution_identity")
         if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results): return VerificationResult(False, "consensus", "unverified_result")
         if any(r.verification.stage != "agent_result" for r in results): return VerificationResult(False, "consensus", "verification_stage_mismatch")
         outputs = [r.output for r in results]
