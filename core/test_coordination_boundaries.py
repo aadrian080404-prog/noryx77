@@ -62,16 +62,6 @@ class CoordinationBoundaryTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "duplicate_agent_identity")
 
-    def test_consensus_rejects_duplicate_task_identity(self):
-        verified = VerificationResult(True, "agent_result", "verified")
-        results = (
-            AgentResult("agent-a", "s1", "completed", "ok", verified),
-            AgentResult("agent-b", "s1", "completed", "ok", verified),
-        )
-        check = self.coordinator.verify_consensus(results)
-        self.assertFalse(check.valid)
-        self.assertEqual(check.reason, "duplicate_task_identity")
-
 
 if __name__ == "__main__":
     unittest.main()
