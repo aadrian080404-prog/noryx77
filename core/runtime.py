@@ -43,8 +43,6 @@ class NORYXRuntime:
         def deadline_exceeded() -> bool:
             return time.monotonic() > deadline
 
-        # Validate the task contract before dereferencing task fields. The legacy
-        # path must fail closed just like the bounded HYPERSYNTH path.
         try:
             task_check = self.verifier.verify_task(task)
         except Exception:
@@ -52,7 +50,7 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "controlled_runtime_failure", "task_id": task_id}
         self.audit.record("task_verification", task_id=task_id, valid=task_check.valid, reason=task_check.reason)
         if not task_check.valid:
-            return {"status": "rejected", "verification": task_check}
+            return {"status": "rejected", "reason": task_check.reason, "verification": task_check}
 
         if not self.limits.validate_input(task.input):
             result = {"status": "rejected", "reason": "input_limit_exceeded"}
