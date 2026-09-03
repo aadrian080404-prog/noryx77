@@ -33,9 +33,12 @@ class FoundationTests(unittest.TestCase):
 
     def test_memory_is_bounded_and_replaceable(self):
         store = MemoryStore()
-        item = MemoryItem("m1", "hello", "postit", "test", 0.8)
+        item = MemoryItem("m1", "hello", "working", "test", 0.8)
         store.put(item)
         self.assertEqual(store.get("m1"), item)
+        replacement = MemoryItem("m1", "updated", "working", "test", 0.9)
+        store.put(replacement)
+        self.assertEqual(store.get("m1"), replacement)
         self.assertTrue(store.delete("m1"))
         self.assertIsNone(store.get("m1"))
 
