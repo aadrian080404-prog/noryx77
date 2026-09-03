@@ -3,7 +3,7 @@ import unittest
 from .agents import DeterministicAgent
 from .audit import AuditCheckpoint, AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
-from .crypto import InMemoryKeyProvider
+from .crypto import InMemoryKeyProvider, KeyProvider
 from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
@@ -204,7 +204,7 @@ class FoundationBoundaryTests(unittest.TestCase):
         self.assertFalse(audit.verify_checkpoint(forged, provider))
 
     def test_audit_checkpoint_fails_closed_on_provider_failure(self):
-        class BrokenProvider:
+        class BrokenProvider(KeyProvider):
             def get_key(self, key_id):
                 raise RuntimeError("provider unavailable")
 
