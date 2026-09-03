@@ -87,12 +87,21 @@ class NORYXRuntime:
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class, execution_id)
             action = ActionSpec("act:" + child.task_id, "compute", execution_id=child.execution_id, risk_class=child.risk_class)
-            decision, result = self.action_gate.authorize_and_execute(
-                action,
-                lambda: agent.run(child),
-                calls_used=len(results),
-                execution_id=child.execution_id,
-            )
+            try:
+                decision, result = self.action_gate.authorize_and_execute(
+                    action,
+                    lambda: agent.run(child),
+                    calls_used=len(results),
+                    execution_id=child.execution_id,
+                )
+            except Exception as exc:
+                self.audit.record("action_gate_failure", task_id=child.task_id, reason=type(exc).__name__)
+                return {
+                    "status": "rejected",
+                    "reason": "action_gate_failure",
+                    "verification": VerificationResult(False, "action_gate", "action_gate_failure"),
+                    "task_id": child.task_id,
+                }
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return {"status": "rejected", "reason": decision.reason, "verification": decision.verification, "task_id": child.task_id}
