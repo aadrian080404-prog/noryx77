@@ -103,11 +103,7 @@ class RuntimeEngine:
             max_actions=self._max_actions,
             status=ExecutionStatus.RUNNING,
         )
-        try:
-            ordered = tuple(item.step for item in self._scheduler.schedule(steps))
-        except Exception as exc:
-            return RuntimeResult(context.execution_id, ExecutionStatus.REJECTED, (), (), type(exc).__name__)
-
+        ordered = tuple(item.step for item in self._scheduler.schedule(steps))
         attestations: list[Attestation] = []
         outputs: list[Any] = []
 
