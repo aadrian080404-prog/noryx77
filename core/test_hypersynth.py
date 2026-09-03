@@ -169,7 +169,7 @@ class HypersynthTests(unittest.TestCase):
 
     def test_metacognition_engine_accepts_complete_verified_pipeline(self):
         task = self.task()
-        plan = Plan((PlanStep("s1", "analyze", "compute", "normal"),))
+        plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
         hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
         simulations = (SimulationResult("t1:h0", True, "feasible"),)
         results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
@@ -180,7 +180,7 @@ class HypersynthTests(unittest.TestCase):
 
     def test_metacognition_engine_rejects_pipeline_count_mismatch(self):
         task = self.task()
-        plan = Plan((PlanStep("s1", "analyze", "compute", "normal"),))
+        plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
         hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
         check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, (), (), VerificationResult(True, "hypersynth_result"))
         self.assertFalse(check.valid)
