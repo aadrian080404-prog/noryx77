@@ -11,6 +11,15 @@ def step(step_id, deps=(), action_type="tool.call"):
     return PlanStep(step_id, action_type, "target", {"step": step_id}, tuple(deps))
 
 
+def capability_adapter(seen=None, agent_id="agent-1"):
+    return CapabilityAdapter(
+        CapabilityBroker({
+            "tool": Capability("tool", frozenset({"tool.call"}), lambda action: seen.append(action) if seen is not None else "ok")
+        }),
+        agent_id=agent_id,
+    )
+
+
 def test_dependencies_are_executed_in_deterministic_topological_order():
     seen = []
     engine = RuntimeEngine()
@@ -30,25 +39,25 @@ def test_capability_adapter_requires_signed_attestation():
         "tool": Capability("tool", frozenset({"tool.call"}), lambda action: seen.append(action) or "ok")
     })
     signer = Ed25519AttestationSigner.generate()
-    result = RuntimeEngine(adapter=CapabilityAdapter(broker), attestation_signer=signer).execute(
+    result = RuntimeEngine(adapter=CapabilityAdapter(broker, agent_id="agent-1"), attestation_signer=signer).execute(
         Intent("run", "user"),
         [step("a")],
         verifier=lambda action, output: output == "ok",
     )
     assert result.status is ExecutionStatus.SUCCEEDED
     assert len(seen) == 1
+    assert result.attestations[0].agent_id == "agent-1"
     assert verify_attestation(result.attestations[0], signer)
 
 
 def test_adapter_without_attestation_signer_is_rejected_at_construction():
-    broker = CapabilityBroker({"tool": Capability("tool", frozenset({"tool.call"}), lambda action: "ok")})
     with pytest.raises(ValueError, match="attestation_signer"):
-        RuntimeEngine(adapter=CapabilityAdapter(broker))
+        RuntimeEngine(adapter=capability_adapter())
 
 
 def test_adapter_rejects_unregistered_effect_type_before_execution():
     result = RuntimeEngine(
-        adapter=CapabilityAdapter(CapabilityBroker()),
+        adapter=CapabilityAdapter(CapabilityBroker(), agent_id="agent-1"),
         attestation_signer=Ed25519AttestationSigner.generate(),
     ).execute(
         Intent("run", "user"),
