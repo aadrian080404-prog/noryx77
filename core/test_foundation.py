@@ -31,6 +31,13 @@ class FoundationTests(unittest.TestCase):
         router.register(DeterministicAgent())
         self.assertEqual(router.route().agent_id, "deterministic")
 
+    def test_router_rejects_duplicate_agent_identity(self):
+        router = ResourceRouter()
+        router.register(DeterministicAgent())
+        with self.assertRaises(ValueError):
+            router.register(DeterministicAgent())
+        self.assertEqual(router.available(), ("deterministic",))
+
     def test_memory_is_bounded_and_replaceable(self):
         store = MemoryStore(max_items=2)
         first = MemoryItem("m1", "hello", "working", "test", 0.8)
