@@ -71,7 +71,7 @@ class FoundationBoundaryTests(unittest.TestCase):
                 return object()
 
         boundary = SecurityBoundary(self.policy, InvalidVerifier())
-        check = boundary.verify(ActionSpec("a3b", "publish"), "ok")
+        check = boundary.verify(ActionSpec("a3b", "search"), "ok")
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "invalid_security_verification")
 
@@ -81,7 +81,7 @@ class FoundationBoundaryTests(unittest.TestCase):
                 return VerificationResult(True, "agent_result", "forged")
 
         boundary = SecurityBoundary(self.policy, WrongStageVerifier())
-        check = boundary.verify(ActionSpec("a3c", "publish"), "ok")
+        check = boundary.verify(ActionSpec("a3c", "search"), "ok")
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "invalid_security_verification")
 
