@@ -3,7 +3,7 @@ import time
 from .actions import ActionGate
 from .agents import DeterministicAgent
 from .audit import AuditLog
-from .contracts import ActionSpec, TaskSpec, VerificationResult
+from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
 from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
@@ -98,19 +98,25 @@ class NORYXRuntime:
                 check = VerificationResult(False, "execution", "agent_execution_failure")
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
 
-            if not hasattr(result, "agent_id") or result.agent_id != agent.agent_id:
+            # The runtime boundary accepts only the declared AgentResult contract;
+            # duck-typed objects must not be able to impersonate an agent result.
+            if not isinstance(result, AgentResult) or not result.is_well_formed():
+                check = VerificationResult(False, "agent_result", "malformed_agent_result")
+                self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            if result.agent_id != agent.agent_id:
                 check = VerificationResult(False, "agent_result", "agent_identity_mismatch")
                 self.audit.record("agent_identity_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
-            if not hasattr(result, "task_id") or result.task_id != child.task_id:
+            if result.task_id != child.task_id:
                 check = VerificationResult(False, "agent_result", "task_identity_mismatch")
                 self.audit.record("task_identity_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
-            if not hasattr(result, "status") or result.status != "completed":
+            if result.status != "completed":
                 check = VerificationResult(False, "agent_result", "invalid_result_status")
                 self.audit.record("result_status_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
-            if not hasattr(result, "verification") or result.verification is None or not result.verification.valid:
+            if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 check = VerificationResult(False, "agent_result", "unverified_agent_result")
                 self.audit.record("result_verification_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
