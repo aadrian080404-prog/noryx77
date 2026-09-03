@@ -1,7 +1,5 @@
 import unittest
-
 from dataclasses import replace
-
 from .crypto import InMemoryKeyProvider, KEY_SIZE, KeyProvider
 from .identity import AgentIdentityAuthority, IdentityRegistry
 from .secure_channel import MAX_FRAME_SIZE, MAX_SEQUENCE, SecureChannel
@@ -92,7 +90,7 @@ class SecureChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "local_and_peer_id_must_differ"):
             SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-a", session_id="session-1", direction="send")
 
-    def test_trusted_identities_enable_channel(self):
+    def _trusted_channels(self):
         local, _ = AgentIdentityAuthority.generate("agent-a")
         peer, _ = AgentIdentityAuthority.generate("agent-b")
         registry = IdentityRegistry()
@@ -100,6 +98,10 @@ class SecureChannelTests(unittest.TestCase):
         registry.register(peer)
         sender = SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=peer)
         receiver = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="send", identity_registry=registry, local_identity=peer, peer_identity=local)
+        return registry, local, peer, sender, receiver
+
+    def test_trusted_identities_enable_channel(self):
+        _, _, _, sender, receiver = self._trusted_channels()
         self.assertEqual(receiver.receive(sender.send(b"trusted")), b"trusted")
 
     def test_channel_rejects_untrusted_peer_identity(self):
@@ -131,16 +133,14 @@ class SecureChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
             SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=peer)
 
-    def test_revocation_blocks_existing_sender(self):
-        local, _ = AgentIdentityAuthority.generate("agent-a")
-        peer, _ = AgentIdentityAuthority.generate("agent-b")
-        registry = IdentityRegistry()
-        registry.register(local)
-        registry.register(peer)
-        sender = SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=peer)
-        registry.revoke("agent-a")
+    def test_revocation_blocks_existing_channel_send_and_receive(self):
+        registry, _, _, sender, receiver = self._trusted_channels()
+        frame = sender.send(b"before-revocation")
+        registry.revoke("agent-b")
         with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
-            sender.send(b"revoked")
+            sender.send(b"after-revocation")
+        with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
+            receiver.receive(frame)
 
 
 if __name__ == "__main__":
