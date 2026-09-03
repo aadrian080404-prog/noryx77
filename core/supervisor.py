@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from .contracts import TaskSpec, AgentResult, VerificationResult
+from .identity import AgentIdentity
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class AgentSupervisor:
         if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid:
             reason = check.reason if isinstance(check, VerificationResult) and check.is_well_formed() else "invalid_task_verification"
             return None, AgentDecision("", False, reason)
+        agent_id = ""
         try:
             agent_id = preferred or self.router.default_id()
             agent = self.router.route(agent_id)
@@ -33,6 +35,11 @@ class AgentSupervisor:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
         if not isinstance(agent_id, str) or not agent_id or getattr(agent, "agent_id", None) != agent_id:
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_identity_mismatch")
+        registry = getattr(self.router, "identity_registry", None)
+        if registry is not None:
+            identity = getattr(agent, "identity", None)
+            if not isinstance(identity, AgentIdentity) or identity.agent_id != agent_id or not registry.is_trusted(identity):
+                return None, AgentDecision(agent_id, False, "agent_identity_untrusted")
         decision = AgentDecision(agent_id, True, "agent_selected")
         if self.audit:
             self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True)
@@ -47,6 +54,18 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "malformed_agent_result")
         if selected_agent_id is not None and result.agent_id != selected_agent_id:
             return VerificationResult(False, "agent_result", "agent_identity_mismatch")
+        if not isinstance(result.agent_id, str) or not result.agent_id.strip():
+            return VerificationResult(False, "agent_result", "agent_identity_mismatch")
+        agent = self.router.get(result.agent_id)
+        if agent is None:
+            return VerificationResult(False, "agent_result", "agent_unavailable")
+        if getattr(agent, "agent_id", None) != result.agent_id:
+            return VerificationResult(False, "agent_result", "agent_identity_mismatch")
+        registry = getattr(self.router, "identity_registry", None)
+        if registry is not None:
+            identity = getattr(agent, "identity", None)
+            if not isinstance(identity, AgentIdentity) or identity.agent_id != result.agent_id or not registry.is_trusted(identity):
+                return VerificationResult(False, "agent_result", "agent_identity_untrusted")
         if result.task_id != task.task_id:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
