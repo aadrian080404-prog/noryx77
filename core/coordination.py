@@ -42,6 +42,8 @@ class AgentCoordinator:
         try:
             agent = self.router.route(agent_id)
         except LookupError as exc:
+            if "agent_identity_untrusted" in str(exc):
+                raise RuntimeError(f"agent_identity_untrusted:{agent_id}") from exc
             raise LookupError(f"agent_unavailable:{agent_id}") from exc
         if agent is None:
             raise LookupError(f"agent_unavailable:{agent_id}")
@@ -100,6 +102,27 @@ class AgentCoordinator:
         agent_ids = [r.agent_id for r in results]
         if len(set(agent_ids)) != len(agent_ids):
             return VerificationResult(False, "consensus", "duplicate_agent_identity")
+        task_ids = [r.task_id for r in results]
+        if len(set(task_ids)) != 1:
+            return VerificationResult(False, "consensus", "task_identity_mismatch")
+        registry = getattr(self.router, "identity_registry", None)
+        if registry is not None:
+            for result in results:
+                try:
+                    agent = self.router.get(result.agent_id)
+                except Exception:
+                    return VerificationResult(False, "consensus", "agent_identity_verification_failure")
+                if agent is None:
+                    return VerificationResult(False, "consensus", "agent_unavailable")
+                if getattr(agent, "agent_id", None) != result.agent_id:
+                    return VerificationResult(False, "consensus", "agent_identity_mismatch")
+                identity = getattr(agent, "identity", None)
+                try:
+                    trusted = isinstance(identity, AgentIdentity) and identity.agent_id == result.agent_id and registry.is_trusted(identity)
+                except Exception:
+                    return VerificationResult(False, "consensus", "agent_identity_verification_failure")
+                if not trusted:
+                    return VerificationResult(False, "consensus", "agent_identity_untrusted")
         outputs = [r.output for r in results]
         if any(output != outputs[0] for output in outputs[1:]):
             return VerificationResult(False, "consensus", "agent_disagreement")
