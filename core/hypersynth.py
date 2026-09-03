@@ -8,6 +8,7 @@ from .decomposition import TaskDecomposer
 from .planning import Planner
 from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
 from .supervisor import AgentSupervisor
+from .metacognition import MetacognitionEngine
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class Hypersynth:
 
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
@@ -38,6 +39,7 @@ class Hypersynth:
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self.simulator = simulator or InternalSimulator()
         self.cross_checker = cross_checker or CrossChecker()
+        self.metacognition = metacognition or MetacognitionEngine()
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
 
@@ -127,13 +129,15 @@ class Hypersynth:
         final_output = results[-1].output
         output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
         if not output_check.valid: return self._reject("verification", task, output_check, results=tuple(results))
-        reflection = {"result_verified": True, "agents_used": tuple(r.agent_id for r in results), "steps_executed": len(results), "hypotheses_verified": len(hypotheses), "simulations_verified": len(simulations), "confidence": 1.0}
+        metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
+        if not metacognitive_check.valid: return self._reject("metacognition", task, metacognitive_check, results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        self.audit.record("metacognition_verified", task_id=task.task_id, confidence=reflection.confidence)
         if self.memory is not None:
             try:
                 from .memory import MemoryItem
                 self.memory.put(MemoryItem("task:" + task.task_id, final_output, kind="working", source=task.task_id, importance=0.5))
             except Exception: self.audit.record("memory_write_failed", task_id=task.task_id)
-        final_state = self._state("metacognition", task, context, confidence=1.0)
+        final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
         self.audit.record("hypersynth_complete", task_id=task.task_id, status="completed")
         return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "audit": self.audit.snapshot()}
 
