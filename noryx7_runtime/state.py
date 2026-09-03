@@ -44,6 +44,10 @@ class StateJournal:
     def verifier(self) -> AttestationVerifier | None:
         return self._verifier
 
+    @property
+    def require_signatures(self) -> bool:
+        return self._require_signatures
+
     def append(self, attestation: Attestation) -> JournalEntry:
         if not isinstance(attestation, Attestation):
             raise TypeError("attestation must be an Attestation")
