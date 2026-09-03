@@ -17,11 +17,11 @@ class CognitiveState:
     task_id: str
     context: Any = None
     confidence: float = 0.0
+    execution_id: str = ""
 
 
 class Hypersynth:
-    """Bounded cognitive kernel: perceive -> context -> plan -> reason -> allocate -> execute -> verify -> reflect."""
-
+    """Bounded cognitive kernel with one immutable execution identity per run."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
     def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None):
@@ -41,10 +41,11 @@ class Hypersynth:
         self.cross_checker = cross_checker or CrossChecker()
         self.metacognition = metacognition or MetacognitionEngine()
 
-    def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence)
+    def _state(self, phase, task, context, confidence=0.0):
+        return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
 
     def _reject(self, phase, task, check, **extra):
-        self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason)
+        self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason, execution_id=getattr(task, "execution_id", ""))
         result = {"status": "rejected", "phase": phase, "verification": check}; result.update(extra); return result
 
     @staticmethod
@@ -52,16 +53,13 @@ class Hypersynth:
         return isinstance(check, VerificationResult) and check.is_well_formed() and check.valid and check.stage == stage
 
     def _deadline_rejection(self, task, phase, deadline_check):
-        if deadline_check is not None and deadline_check():
-            return self._reject(phase, task, VerificationResult(False, "limits", "task_time_limit_exceeded"))
+        if deadline_check is not None and deadline_check(): return self._reject(phase, task, VerificationResult(False, "limits", "task_time_limit_exceeded"))
         return None
 
     def run(self, task: TaskSpec, *, deadline_check=None):
-        self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None))
-        try:
-            task_check = self.verifier.verify_task(task)
-        except Exception:
-            return self._reject("perception", task, VerificationResult(False, "contract", "task_verification_failure"))
+        self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
+        try: task_check = self.verifier.verify_task(task)
+        except Exception: return self._reject("perception", task, VerificationResult(False, "contract", "task_verification_failure"))
         if not self._accepts_verification(task_check, "contract"):
             check = task_check if isinstance(task_check, VerificationResult) and task_check.is_well_formed() else VerificationResult(False, "contract", "invalid_task_verification")
             return self._reject("perception", task, check)
@@ -72,7 +70,7 @@ class Hypersynth:
         timeout = self._deadline_rejection(task, "context", deadline_check)
         if timeout: return timeout
         context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
-        self.audit.record("context_acquired", task_id=task.task_id, version=context.version)
+        self.audit.record("context_acquired", task_id=task.task_id, version=context.version, execution_id=task.execution_id)
         timeout = self._deadline_rejection(task, "planning", deadline_check)
         if timeout: return timeout
         try: plan = self.planner.build(task); plan_check = self.planner.verify(plan, task)
@@ -81,7 +79,7 @@ class Hypersynth:
             check = plan_check if isinstance(plan_check, VerificationResult) and plan_check.is_well_formed() else VerificationResult(False, "plan", "invalid_plan_verification")
             return self._reject("planning", task, check)
         if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
-        self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps))
+        self.audit.record("plan_verified", task_id=task.task_id, steps=len(plan.steps), execution_id=task.execution_id)
         timeout = self._deadline_rejection(task, "hypothesis", deadline_check)
         if timeout: return timeout
         try: hypotheses = self.hypothesis_engine.generate(task, plan); hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
@@ -90,7 +88,7 @@ class Hypersynth:
             check = hypothesis_check if isinstance(hypothesis_check, VerificationResult) and hypothesis_check.is_well_formed() else VerificationResult(False, "hypothesis", "invalid_hypothesis_verification")
             return self._reject("hypothesis", task, check)
         if len(hypotheses) != len(plan.steps): return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
-        self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses))
+        self.audit.record("hypotheses_verified", task_id=task.task_id, count=len(hypotheses), execution_id=task.execution_id)
         timeout = self._deadline_rejection(task, "simulation", deadline_check)
         if timeout: return timeout
         try: simulations = self.simulator.simulate(task, hypotheses); simulation_check = self.simulator.verify(simulations)
@@ -98,11 +96,9 @@ class Hypersynth:
         if not self._accepts_verification(simulation_check, "simulation"):
             check = simulation_check if isinstance(simulation_check, VerificationResult) and simulation_check.is_well_formed() else VerificationResult(False, "simulation", "invalid_simulation_verification")
             return self._reject("simulation", task, check)
-        expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
-        actual_simulation_ids = tuple(s.hypothesis_id for s in simulations)
-        if actual_simulation_ids != expected_hypothesis_ids: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
+        if tuple(s.hypothesis_id for s in simulations) != tuple(h.hypothesis_id for h in hypotheses): return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
         if len(simulations) != len(hypotheses): return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"))
-        self.audit.record("simulation_verified", task_id=task.task_id, count=len(simulations))
+        self.audit.record("simulation_verified", task_id=task.task_id, count=len(simulations), execution_id=task.execution_id)
         timeout = self._deadline_rejection(task, "allocation", deadline_check)
         if timeout: return timeout
         assignments = []
@@ -110,7 +106,7 @@ class Hypersynth:
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
-            child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class)
+            child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
             try: selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
@@ -122,7 +118,7 @@ class Hypersynth:
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class)
             if self.action_gate is not None:
                 decision = self.action_gate.authorize(action, calls_used=index)
-                self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
+                self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason, execution_id=task.execution_id)
                 if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
             try: result = agent.run(child)
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
@@ -130,15 +126,15 @@ class Hypersynth:
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
             if not admission.valid: return self._reject("verification", task, admission, results=tuple(results))
+            if result.execution_id != task.execution_id: return self._reject("verification", task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
             results.append(result)
-            self.audit.record("agent_result_verified", task_id=child.task_id, agent_id=agent.agent_id)
+            self.audit.record("agent_result_verified", task_id=child.task_id, agent_id=agent.agent_id, execution_id=task.execution_id)
         timeout = self._deadline_rejection(task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
         if not cross_check.valid: return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
-        if len({r.task_id for r in results}) == 1:
-            consensus = self._verify_consensus(tuple(results))
-            if not consensus.valid: return self._reject("verification", task, consensus, results=tuple(results))
+        consensus = self._verify_consensus(tuple(results))
+        if not consensus.valid: return self._reject("verification", task, consensus, results=tuple(results))
         timeout = self._deadline_rejection(task, "metacognition", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         final_output = results[-1].output
@@ -151,56 +147,40 @@ class Hypersynth:
         if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid:
             check = metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result")
             return self._reject("metacognition", task, check, results=tuple(results), hypotheses=hypotheses, simulations=simulations)
-        if metacognitive_check.stage != "metacognition":
-            return self._reject("metacognition", task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
-        self.audit.record("metacognition_verified", task_id=task.task_id, confidence=reflection.confidence)
+        if metacognitive_check.stage != "metacognition": return self._reject("metacognition", task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        self.audit.record("metacognition_verified", task_id=task.task_id, confidence=reflection.confidence, execution_id=task.execution_id)
         if self.memory is not None:
             try:
                 from .memory import MemoryItem
                 self.memory.put(MemoryItem("task:" + task.task_id, final_output, kind="working", source=task.task_id, importance=0.5))
-            except Exception: self.audit.record("memory_write_failed", task_id=task.task_id)
+            except Exception: self.audit.record("memory_write_failed", task_id=task.task_id, execution_id=task.execution_id)
         final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
-        self.audit.record("hypersynth_complete", task_id=task.task_id, status="completed")
-        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "audit": self.audit.snapshot()}
+        self.audit.record("hypersynth_complete", task_id=task.task_id, status="completed", execution_id=task.execution_id)
+        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
 
     def _decompose(self, task):
-        try:
-            subtasks = self.decomposer.decompose(task)
-        except Exception:
-            return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
-        if not isinstance(subtasks, tuple) or not subtasks:
-            return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_collection"))
+        try: subtasks = self.decomposer.decompose(task)
+        except Exception: return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
+        if not isinstance(subtasks, tuple) or not subtasks: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_collection"))
         seen = set()
         for subtask in subtasks:
-            if not isinstance(subtask, Subtask):
-                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
-            if not isinstance(subtask.subtask_id, str) or not subtask.subtask_id.strip() or subtask.subtask_id in seen:
-                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
-            if not subtask.subtask_id.startswith(task.task_id + ":"):
-                return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
-            if not isinstance(subtask.objective, str) or not subtask.objective.strip():
-                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_objective"))
-            if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type:
-                return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
+            if not isinstance(subtask, Subtask): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
+            if not isinstance(subtask.subtask_id, str) or not subtask.subtask_id.strip() or subtask.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            if not subtask.subtask_id.startswith(task.task_id + ":"): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
+            if not isinstance(subtask.objective, str) or not subtask.objective.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_objective"))
+            if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type: return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
             seen.add(subtask.subtask_id)
         return subtasks
 
     def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
-        if not isinstance(results, tuple) or not results:
-            return VerificationResult(False, "consensus", "no_results")
-        if any(not isinstance(r, AgentResult) or not r.is_well_formed() for r in results):
-            return VerificationResult(False, "consensus", "malformed_result")
-        if any(r.status != "completed" for r in results):
-            return VerificationResult(False, "consensus", "incomplete_result")
-        if len({r.agent_id for r in results}) != len(results):
-            return VerificationResult(False, "consensus", "duplicate_agent_result")
-        if len({r.task_id for r in results}) != 1:
-            return VerificationResult(False, "consensus", "task_identity_mismatch")
-        if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results):
-            return VerificationResult(False, "consensus", "unverified_result")
-        if any(r.verification.stage != "agent_result" for r in results):
-            return VerificationResult(False, "consensus", "verification_stage_mismatch")
+        if not isinstance(results, tuple) or not results: return VerificationResult(False, "consensus", "no_results")
+        if any(not isinstance(r, AgentResult) or not r.is_well_formed() for r in results): return VerificationResult(False, "consensus", "malformed_result")
+        if any(r.status != "completed" for r in results): return VerificationResult(False, "consensus", "incomplete_result")
+        if len({r.agent_id for r in results}) != len(results): return VerificationResult(False, "consensus", "duplicate_agent_result")
+        if len({r.task_id for r in results}) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
+        if any(r.execution_id != results[0].execution_id for r in results): return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results): return VerificationResult(False, "consensus", "unverified_result")
+        if any(r.verification.stage != "agent_result" for r in results): return VerificationResult(False, "consensus", "verification_stage_mismatch")
         outputs = [r.output for r in results]
-        if any(output != outputs[0] for output in outputs[1:]):
-            return VerificationResult(False, "consensus", "agent_disagreement")
+        if any(output != outputs[0] for output in outputs[1:]): return VerificationResult(False, "consensus", "agent_disagreement")
         return VerificationResult(True, "consensus", "consensus_ok")
