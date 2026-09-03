@@ -138,8 +138,10 @@ class Hypersynth:
         if self.memory is not None:
             try:
                 from .memory import MemoryItem
-                self.memory.put(MemoryItem("task:" + task.task_id, final_output, kind="working", source=task.task_id, importance=0.5))
-            except Exception: pass
+                memory_key = "task:" + task.execution_id + ":" + task.task_id
+                self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=task.task_id, importance=0.5, execution_id=task.execution_id))
+            except Exception:
+                return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
         return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
 
