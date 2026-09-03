@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .planning import Plan
+from .identity import AgentIdentity
 
 
 @dataclass(frozen=True)
@@ -37,24 +38,36 @@ class AgentCoordinator:
             assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id))
         return tuple(assignments)
 
+    def _trusted_agent(self, agent_id: str):
+        try:
+            agent = self.router.route(agent_id)
+        except LookupError as exc:
+            raise LookupError(f"agent_unavailable:{agent_id}") from exc
+        if agent is None:
+            raise LookupError(f"agent_unavailable:{agent_id}")
+        if getattr(agent, "agent_id", None) != agent_id:
+            raise RuntimeError(f"agent_identity_mismatch:{agent_id}")
+        registry = getattr(self.router, "identity_registry", None)
+        if registry is not None:
+            identity = getattr(agent, "identity", None)
+            if not isinstance(identity, AgentIdentity) or identity.agent_id != agent_id or not registry.is_trusted(identity):
+                raise RuntimeError(f"agent_identity_untrusted:{agent_id}")
+        return agent
+
     def execute(self, task: TaskSpec, plan: Plan) -> tuple[AgentResult, ...]:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
         assignments = self.assign(plan)
         results = []
         for assignment in assignments:
-            try:
-                agent = self.router.route(assignment.agent_id)
-            except LookupError as exc:
-                raise LookupError(f"agent_unavailable:{assignment.agent_id}") from exc
-            if agent is None:
-                raise LookupError(f"agent_unavailable:{assignment.agent_id}")
+            agent = self._trusted_agent(assignment.agent_id)
             step = next((s for s in plan.steps if s.step_id == assignment.step_id), None)
             if step is None:
                 raise ValueError("assignment_step_missing")
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input,
                              task.constraints, task.verification_requirements, step.risk_class)
-            if not self.verifier.verify_task(child).valid:
+            child_check = self.verifier.verify_task(child)
+            if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
             result = agent.run(child)
             if not isinstance(result, AgentResult):
@@ -68,7 +81,7 @@ class AgentCoordinator:
             if result.verification.stage != "agent_result":
                 raise RuntimeError(f"agent_result_verification_stage_mismatch:{assignment.agent_id}")
             output_check = self.verifier.verify_output(result.output, stage="agent_result")
-            if not output_check.valid:
+            if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed() or not output_check.valid or output_check.stage != "agent_result":
                 raise RuntimeError(f"agent_output_invalid:{assignment.agent_id}")
             results.append(result)
         return tuple(results)
