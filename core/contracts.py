@@ -22,7 +22,7 @@ class TaskSpec:
             and isinstance(self.verification_requirements, tuple)
             and all(isinstance(item, str) and bool(item.strip()) for item in self.verification_requirements)
             and isinstance(self.risk_class, str) and bool(self.risk_class.strip())
-            and isinstance(self.execution_id, str) and 0 < len(self.execution_id.encode("utf-8")) <= 256
+            and isinstance(self.execution_id, str) and len(self.execution_id.encode("utf-8")) <= 256
         )
 
 
