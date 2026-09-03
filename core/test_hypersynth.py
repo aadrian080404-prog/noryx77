@@ -154,7 +154,7 @@ class HypersynthTests(unittest.TestCase):
             def run(self, task): raise RuntimeError("boom")
         router = ResourceRouter(); router.register(BrokenAgent())
         result = HypersynthRuntime(self.verifier, router).run(self.task(task_id="broken"))
-        self.assertEqual(result["status"], "rejected"); self.assertEqual(result["phase"], "execution"); self.assertEqual(result["verification"].reason, "agent_execution_failure")
+        self.assertEqual(result["status"], "rejected"); self.assertEqual(result["phase"], "execution"); self.assertEqual(result["verification"].reason, "execution_failure")
 
     def test_null_agent_output_is_rejected(self):
         class NullAgent:
