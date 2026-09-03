@@ -17,11 +17,18 @@ class AgentSupervisor:
         self.audit = audit
 
     def select(self, task: TaskSpec, preferred=None):
-        check = self.verifier.verify_task(task)
-        if not check.valid:
-            return None, AgentDecision("", False, check.reason)
-        agent_id = preferred or self.router.default_id()
-        agent = self.router.route(agent_id)
+        try:
+            check = self.verifier.verify_task(task)
+        except Exception:
+            return None, AgentDecision("", False, "task_verification_failure")
+        if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid:
+            reason = check.reason if isinstance(check, VerificationResult) and check.is_well_formed() else "invalid_task_verification"
+            return None, AgentDecision("", False, reason)
+        try:
+            agent_id = preferred or self.router.default_id()
+            agent = self.router.route(agent_id)
+        except Exception:
+            return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
         if agent is None:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
         decision = AgentDecision(agent_id, True, "agent_selected")
@@ -42,9 +49,16 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
             return VerificationResult(False, "agent_result", "agent_not_completed")
-        output_check = self.verifier.verify_output(result.output, stage="agent_result")
+        try:
+            output_check = self.verifier.verify_output(result.output, stage="agent_result")
+        except Exception:
+            return VerificationResult(False, "agent_result", "verification_failure")
+        if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed():
+            return VerificationResult(False, "agent_result", "invalid_output_verification")
         if not output_check.valid:
             return output_check
+        if output_check.stage != "agent_result":
+            return VerificationResult(False, "agent_result", "verification_stage_mismatch")
         if result.verification is None:
             return VerificationResult(False, "agent_result", "malformed_result_verification")
         if not result.verification.is_well_formed():
