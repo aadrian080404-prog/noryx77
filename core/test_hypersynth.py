@@ -188,11 +188,22 @@ class HypersynthTests(unittest.TestCase):
         plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
         hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
         simulations = (SimulationResult("t1:h0", True, "feasible"),)
-        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
+        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "agent_result")),)
         check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
         self.assertTrue(check.valid)
         self.assertEqual(check.reason, "reflection_ok")
         self.assertEqual(reflection.agents_used, ("agent-1",))
+
+    def test_metacognition_rejects_wrong_result_verification_stage(self):
+        task = self.task()
+        plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
+        hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
+        simulations = (SimulationResult("t1:h0", True, "feasible"),)
+        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
+        check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "result_verification_stage_mismatch")
+        self.assertIsNone(reflection)
 
     def test_metacognition_engine_rejects_pipeline_count_mismatch(self):
         task = self.task()
@@ -208,7 +219,7 @@ class HypersynthTests(unittest.TestCase):
         plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
         hypotheses = (Hypothesis("t1:h0", "t1", "forged-objective", ("s1",)),)
         simulations = (SimulationResult("t1:h0", True, "feasible"),)
-        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
+        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "agent_result")),)
         check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "hypothesis_plan_identity_mismatch")
@@ -229,8 +240,8 @@ class HypersynthTests(unittest.TestCase):
             SimulationResult("t1:h0", True, "feasible"),
         )
         results = (
-            AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),
-            AgentResult("agent-2", "s2", "completed", "ok", VerificationResult(True, "result")),
+            AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "agent_result")),
+            AgentResult("agent-2", "s2", "completed", "ok", VerificationResult(True, "agent_result")),
         )
         check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
         self.assertFalse(check.valid)
@@ -244,8 +255,8 @@ class HypersynthTests(unittest.TestCase):
             Hypothesis("t1:h1", "t1", "validate", ("s2",)),
         )
         results = (
-            AgentResult("agent-1", "s2", "completed", "ok", VerificationResult(True, "result")),
-            AgentResult("agent-2", "s1", "completed", "ok", VerificationResult(True, "result")),
+            AgentResult("agent-1", "s2", "completed", "ok", VerificationResult(True, "agent_result")),
+            AgentResult("agent-2", "s1", "completed", "ok", VerificationResult(True, "agent_result")),
         )
         check = self.kernel.cross_checker.verify(task, results, hypotheses)
         self.assertFalse(check.valid)
@@ -266,8 +277,8 @@ class HypersynthTests(unittest.TestCase):
             SimulationResult("t1:h1", True, "feasible"),
         )
         results = (
-            AgentResult("agent-1", "s2", "completed", "ok", VerificationResult(True, "result")),
-            AgentResult("agent-2", "s1", "completed", "ok", VerificationResult(True, "result")),
+            AgentResult("agent-1", "s2", "completed", "ok", VerificationResult(True, "agent_result")),
+            AgentResult("agent-2", "s1", "completed", "ok", VerificationResult(True, "agent_result")),
         )
         check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
         self.assertFalse(check.valid)
