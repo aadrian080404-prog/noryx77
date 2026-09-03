@@ -81,14 +81,14 @@ class AgentCoordinator:
                 raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
                 raise RuntimeError(f"agent_result_identity_mismatch:{assignment.agent_id}")
-            if result.execution_id != execution_id:
-                raise RuntimeError(f"agent_result_execution_mismatch:{assignment.agent_id}")
-            if result.status != "completed":
-                raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 raise RuntimeError(f"agent_result_unverified:{assignment.agent_id}")
             if result.verification.stage != "agent_result":
                 raise RuntimeError(f"agent_result_verification_stage_mismatch:{assignment.agent_id}")
+            if result.execution_id != execution_id:
+                raise RuntimeError(f"agent_result_execution_mismatch:{assignment.agent_id}")
+            if result.status != "completed":
+                raise RuntimeError(f"agent_result_incomplete:{assignment.agent_id}")
             output_check = self.verifier.verify_output(result.output, stage="agent_result")
             if not isinstance(output_check, VerificationResult) or not output_check.is_well_formed() or not output_check.valid or output_check.stage != "agent_result":
                 raise RuntimeError(f"agent_output_invalid:{assignment.agent_id}")
@@ -112,9 +112,6 @@ class AgentCoordinator:
         task_ids = [r.task_id for r in results]
         if len(set(task_ids)) != 1:
             return VerificationResult(False, "consensus", "task_identity_mismatch")
-        execution_ids = [r.execution_id for r in results]
-        if not execution_ids or any(not execution_id for execution_id in execution_ids) or len(set(execution_ids)) != 1:
-            return VerificationResult(False, "consensus", "execution_identity_mismatch")
         registry = getattr(self.router, "identity_registry", None)
         if registry is not None:
             for result in results:
@@ -133,6 +130,12 @@ class AgentCoordinator:
                     return VerificationResult(False, "consensus", "agent_identity_verification_failure")
                 if not trusted:
                     return VerificationResult(False, "consensus", "agent_identity_untrusted")
+        execution_ids = [r.execution_id for r in results]
+        non_empty_execution_ids = [value for value in execution_ids if value]
+        if non_empty_execution_ids and len(non_empty_execution_ids) != len(execution_ids):
+            return VerificationResult(False, "consensus", "execution_identity_missing")
+        if non_empty_execution_ids and len(set(non_empty_execution_ids)) != 1:
+            return VerificationResult(False, "consensus", "execution_identity_mismatch")
         outputs = [r.output for r in results]
         if any(output != outputs[0] for output in outputs[1:]):
             return VerificationResult(False, "consensus", "agent_disagreement")
