@@ -33,7 +33,12 @@ class SecurityBoundary:
             or not isinstance(policy_decision.get("allowed"), bool)
             or not policy_decision.get("allowed")
         ):
-            reason = policy_decision.get("reason", "policy_denied") if isinstance(policy_decision, dict) else "invalid_policy_decision"
+            if isinstance(policy_decision, dict):
+                reason = policy_decision.get("reason", "policy_denied")
+                if not isinstance(reason, str) or not reason.strip():
+                    reason = "invalid_policy_decision"
+            else:
+                reason = "invalid_policy_decision"
             return SecurityDecision(False, reason, action.risk_class)
         return SecurityDecision(True, "allowed", action.risk_class)
 
