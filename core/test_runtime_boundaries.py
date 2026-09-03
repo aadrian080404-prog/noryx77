@@ -75,6 +75,33 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["verification"].reason, "output_item_limit_exceeded")
 
+    def test_hypersynth_execution_deadline_is_propagated_into_kernel(self):
+        class FakeClock:
+            def __init__(self):
+                self.now = 0.0
+            def __call__(self):
+                return self.now
+
+        class AdvancingAgent:
+            agent_id = "advancing"
+            def __init__(self, clock):
+                self.clock = clock
+            def run(self, task):
+                from .contracts import AgentResult, VerificationResult
+                self.clock.now += 2.0
+                return AgentResult(self.agent_id, task.task_id, "completed", "ok", VerificationResult(True, "agent_result", "ok"))
+
+        from .router import ResourceRouter
+        clock = FakeClock()
+        router = ResourceRouter()
+        router.register(AdvancingAgent(clock))
+        runtime = HypersynthRuntime(router=router, limits=RuntimeLimits(max_task_seconds=1.0), clock=clock)
+        task = TaskSpec("t6", "compute", "short", "ok")
+        result = runtime.run(task)
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["verification"].reason, "task_time_limit_exceeded")
+        self.assertEqual(result["phase"], "execution")
+
     def test_top_level_runtime_exposes_bounded_hypersynth_mode(self):
         task = TaskSpec("hs1", "compute", "test objective", "input")
         result = self.runtime.run_hypersynth(task)
