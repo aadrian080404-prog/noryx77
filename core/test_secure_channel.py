@@ -123,6 +123,27 @@ class SecureChannelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "channel_identity_mismatch"):
             SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send", identity_registry=registry, local_identity=local, peer_identity=forged_peer)
 
+    def test_identity_key_substitution_changes_channel_key(self):
+        registry, local, peer, sender, _ = self._trusted_channels()
+        replacement, _ = AgentIdentityAuthority.generate("agent-b")
+        registry.revoke("agent-b")
+        registry.register(replacement)
+        receiver = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="send", identity_registry=registry, local_identity=replacement, peer_identity=local)
+        with self.assertRaisesRegex(ValueError, "frame_authentication_failed"):
+            receiver.receive(sender.send(b"identity-bound"))
+
+    def test_identity_binding_is_perspective_independent(self):
+        _, _, _, sender, receiver = self._trusted_channels()
+        self.assertEqual(sender._channel_key(), receiver._channel_key())
+
+    def test_identity_binding_rejects_swapped_peer_identity(self):
+        registry, local, peer, sender, _ = self._trusted_channels()
+        other, _ = AgentIdentityAuthority.generate("agent-c")
+        registry.register(other)
+        forged_receiver = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-c", session_id="session-1", direction="send", identity_registry=registry, local_identity=peer, peer_identity=other)
+        with self.assertRaisesRegex(ValueError, "channel_identity_mismatch"):
+            forged_receiver.receive(sender.send(b"swapped"))
+
     def test_revocation_blocks_channel_construction(self):
         local, _ = AgentIdentityAuthority.generate("agent-a")
         peer, _ = AgentIdentityAuthority.generate("agent-b")
