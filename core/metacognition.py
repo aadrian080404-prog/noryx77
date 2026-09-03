@@ -14,6 +14,12 @@ class MetacognitiveReflection:
     simulations_verified: int
     confidence: float
 
+    def __getitem__(self, key: str):
+        """Preserve the legacy mapping-style reflection API while exposing typed fields."""
+        if not isinstance(key, str) or not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
 
 class MetacognitionEngine:
     """Bounded final self-check over observable pipeline invariants; no hidden reasoning traces."""
@@ -42,6 +48,8 @@ class MetacognitionEngine:
         agents = tuple(result.agent_id for result in results)
         if len(set(agents)) != len(agents):
             return VerificationResult(False, "metacognition", "duplicate_agent_identity"), None
+        if any(not isinstance(simulation, SimulationResult) for simulation in simulations):
+            return VerificationResult(False, "metacognition", "invalid_simulation_type"), None
         if any(not simulation.feasible for simulation in simulations):
             return VerificationResult(False, "metacognition", "infeasible_simulation_present"), None
         reflection = MetacognitiveReflection(
