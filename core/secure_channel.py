@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from hmac import compare_digest
 from typing import Final
 
@@ -17,6 +18,7 @@ MAX_ID_SIZE: Final[int] = 1024
 PROTOCOL_VERSION: Final[int] = 1
 MAX_SEQUENCE: Final[int] = (1 << 64) - 1
 _DOMAIN: Final[bytes] = b"noryx7/secure-channel/v1/"
+_IDENTITY_BINDING_DOMAIN: Final[bytes] = b"noryx7/secure-channel/identity-binding/v1/"
 
 
 def _field(value: str) -> bytes:
@@ -24,6 +26,17 @@ def _field(value: str) -> bytes:
     if not encoded or len(encoded) > MAX_ID_SIZE:
         raise ValueError("channel_identity_size_exceeded")
     return len(encoded).to_bytes(4, "big") + encoded
+
+
+def _identity_fingerprint(identity: AgentIdentity) -> bytes:
+    if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+        raise ValueError("invalid_channel_identity")
+    return sha256(
+        _IDENTITY_BINDING_DOMAIN
+        + identity.version.to_bytes(2, "big")
+        + _field(identity.agent_id)
+        + identity.public_key
+    ).digest()
 
 
 @dataclass(frozen=True)
@@ -88,6 +101,16 @@ class SecureChannel:
         if self._local_identity.agent_id != self._local_id or self._peer_identity.agent_id != self._peer_id:
             raise ValueError("channel_identity_mismatch")
 
+    def _identity_binding(self) -> bytes:
+        if self._identity_registry is None:
+            return b""
+        local_fp = _identity_fingerprint(self._local_identity)
+        peer_fp = _identity_fingerprint(self._peer_identity)
+        # Canonical pair binding is independent of endpoint perspective; direction
+        # remains a separate derivation component, preventing reflection.
+        pair = b"".join(sorted((local_fp, peer_fp)))
+        return _IDENTITY_BINDING_DOMAIN + pair
+
     def _channel_key(self) -> bytes:
         try:
             root_key = self._provider.get_key(self._key_id)
@@ -96,9 +119,13 @@ class SecureChannel:
         if not isinstance(root_key, bytes) or len(root_key) != KEY_SIZE:
             raise ValueError("channel_key_required")
         try:
-            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=b"secure-channel/" + self._direction.encode("ascii"))
+            context = b"secure-channel/" + self._direction.encode("ascii") + self._identity_binding()
+            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=context)
         except Exception as exc:
             raise ValueError("channel_key_derivation_failed") from exc
+
+    def _authenticated_data(self) -> bytes:
+        return self._encode(PROTOCOL_VERSION, self._local_id, self._session_id, 0, self._identity_binding())
 
     @staticmethod
     def _encode(version: int, sender_id: str, session_id: str, sequence: int, payload: bytes) -> bytes:
@@ -106,6 +133,7 @@ class SecureChannel:
 
     def _mac(self, sender_id: str, sequence: int, payload: bytes) -> bytes:
         signer = hmac.HMAC(self._channel_key(), hashes.SHA256())
+        signer.update(self._authenticated_data())
         signer.update(self._encode(PROTOCOL_VERSION, sender_id, self._session_id, sequence, payload))
         return signer.finalize()
 
