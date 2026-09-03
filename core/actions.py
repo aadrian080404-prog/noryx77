@@ -17,13 +17,18 @@ class ActionGate:
         self.security = security
         self.limits = limits
 
-    def authorize(self, action: ActionSpec, calls_used: int = 0) -> ActionDecision:
+    def authorize(self, action: ActionSpec, calls_used: int = 0, *, execution_id: str | None = None) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
             return ActionDecision(False, "invalid call count", VerificationResult(False, "action_gate", "invalid_call_count"))
-        # calls_used counts actions already consumed. A new action requires
-        # strictly positive remaining capacity; equality means the budget is exhausted.
+        if execution_id is not None:
+            if not isinstance(execution_id, str) or not execution_id.strip() or len(execution_id.encode("utf-8")) > 256:
+                return ActionDecision(False, "invalid execution identity", VerificationResult(False, "action_gate", "invalid_execution_identity"))
+            if action.execution_id != execution_id:
+                return ActionDecision(False, "execution identity mismatch", VerificationResult(False, "action_gate", "execution_identity_mismatch"))
+        elif action.execution_id:
+            return ActionDecision(False, "execution identity required", VerificationResult(False, "action_gate", "execution_identity_required"))
         remaining = self.limits.max_actions_per_task - calls_used
         if remaining <= 0:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
