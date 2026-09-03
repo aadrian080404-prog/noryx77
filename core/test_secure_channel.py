@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from .crypto import InMemoryKeyProvider, KEY_SIZE, KeyProvider
 from .identity import AgentIdentityAuthority, IdentityRegistry
@@ -163,6 +164,21 @@ class SecureChannelTests(unittest.TestCase):
             sender.send(b"after-revocation")
         with self.assertRaisesRegex(ValueError, "channel_identity_untrusted"):
             receiver.receive(frame)
+
+    def test_concurrent_sends_produce_unique_monotonic_sequences(self):
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            frames = list(pool.map(lambda i: self.sender.send(str(i).encode()), range(64)))
+        sequences = sorted(frame.sequence for frame in frames)
+        self.assertEqual(sequences, list(range(64)))
+
+    def test_concurrent_receive_accepts_each_frame_once(self):
+        frames = [self.sender.send(str(i).encode()) for i in range(64)]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(self.receiver.receive, frames))
+        self.assertEqual(len(results), 64)
+        self.assertEqual(self.receiver.last_received_sequence, 63)
+        with self.assertRaisesRegex(ValueError, "replayed_frame"):
+            self.receiver.receive(frames[63])
 
 
 if __name__ == "__main__":
