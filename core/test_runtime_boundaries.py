@@ -26,7 +26,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
     def test_non_task_fails_closed_before_field_access(self):
         result = self.runtime.run(None)
         self.assertEqual(result["status"], "rejected")
-        self.assertEqual(result["reason"], "controlled_runtime_failure")
+        self.assertEqual(result["reason"], "invalid_task_spec")
 
     def test_agent_exception_fails_closed(self):
         class FailingAgent:
