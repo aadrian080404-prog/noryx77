@@ -60,6 +60,8 @@ class AgentSupervisor:
             return VerificationResult(False, "agent_result", "agent_identity_mismatch")
         if not isinstance(result.agent_id, str) or not result.agent_id.strip():
             return VerificationResult(False, "agent_result", "agent_identity_mismatch")
+        if task.execution_id and result.execution_id != task.execution_id:
+            return VerificationResult(False, "agent_result", "execution_identity_mismatch")
         agent = self.router.get(result.agent_id)
         if agent is None:
             return VerificationResult(False, "agent_result", "agent_unavailable")
