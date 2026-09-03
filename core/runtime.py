@@ -63,6 +63,9 @@ class NORYXRuntime:
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
+        except LookupError:
+            self.audit.record("routing_failure", task_id=task_id, error="agent_unavailable")
+            return {"status": "rejected", "reason": "agent_unavailable", "task_id": task_id}
         except Exception:
             self.audit.record("routing_failure", task_id=task_id, error="routing_failure")
             return {"status": "rejected", "reason": "routing_failure"}
