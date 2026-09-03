@@ -50,6 +50,28 @@ class SupervisorAdmissionTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "verification_stage_mismatch")
 
+    def test_output_verifier_exception_fails_closed(self):
+        class ExplodingVerifier(VerificationEngine):
+            def verify_output(self, output, stage=None):
+                raise RuntimeError("verification failure")
+
+        supervisor = AgentSupervisor(self.router, ExplodingVerifier())
+        result = AgentResult("agent", "t1", "completed", "ok", VerificationResult(True, "agent_result", "ok"))
+        check = supervisor.admit(self.task, result)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "verification_failure")
+
+    def test_output_verifier_contract_is_enforced(self):
+        class InvalidVerifier(VerificationEngine):
+            def verify_output(self, output, stage=None):
+                return object()
+
+        supervisor = AgentSupervisor(self.router, InvalidVerifier())
+        result = AgentResult("agent", "t1", "completed", "ok", VerificationResult(True, "agent_result", "ok"))
+        check = supervisor.admit(self.task, result)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "invalid_output_verification")
+
 
 if __name__ == "__main__":
     unittest.main()
