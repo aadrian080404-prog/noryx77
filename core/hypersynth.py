@@ -43,25 +43,18 @@ class Hypersynth:
         self.metacognition = metacognition or MetacognitionEngine()
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
-
     def _reject(self, phase, task, check, **extra):
         self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason, execution_id=getattr(task, "execution_id", ""))
         result = {"status": "rejected", "phase": phase, "verification": check}; result.update(extra); return result
-
     @staticmethod
     def _accepts_verification(check, stage: str) -> bool: return isinstance(check, VerificationResult) and check.is_well_formed() and check.valid and check.stage == stage
-
     def _deadline_rejection(self, task, phase, deadline_check):
         if deadline_check is not None and deadline_check(): return self._reject(phase, task, VerificationResult(False, "limits", "task_time_limit_exceeded"))
         return None
-
     @staticmethod
     def _bind_execution(task: TaskSpec) -> TaskSpec:
-        """Every modern kernel run gets a fresh execution identity if the caller omitted one."""
-        if not isinstance(task, TaskSpec):
-            return task
-        if task.execution_id:
-            return task
+        if not isinstance(task, TaskSpec): return task
+        if task.execution_id: return task
         return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
 
     def run(self, task: TaskSpec, *, deadline_check=None):
@@ -114,9 +107,9 @@ class Hypersynth:
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class)
+            action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
             if self.action_gate is not None:
-                decision = self.action_gate.authorize(action, calls_used=index)
+                decision = self.action_gate.authorize(action, calls_used=index, execution_id=task.execution_id)
                 if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
             try: result = agent.run(child)
             except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
