@@ -151,10 +151,21 @@ class Hypersynth:
         return subtasks
 
     def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
-        if not results: return VerificationResult(False, "consensus", "no_results")
-        if any(r.status != "completed" for r in results): return VerificationResult(False, "consensus", "incomplete_result")
-        if len({r.agent_id for r in results}) != len(results): return VerificationResult(False, "consensus", "duplicate_agent_result")
-        if any(r.verification is None or not r.verification.valid for r in results): return VerificationResult(False, "consensus", "unverified_result")
-        outputs = {repr(r.output) for r in results}
-        if len(outputs) > 1: return VerificationResult(False, "consensus", "agent_disagreement")
+        if not isinstance(results, tuple) or not results:
+            return VerificationResult(False, "consensus", "no_results")
+        if any(not isinstance(r, AgentResult) or not r.is_well_formed() for r in results):
+            return VerificationResult(False, "consensus", "malformed_result")
+        if any(r.status != "completed" for r in results):
+            return VerificationResult(False, "consensus", "incomplete_result")
+        if len({r.agent_id for r in results}) != len(results):
+            return VerificationResult(False, "consensus", "duplicate_agent_result")
+        if len({r.task_id for r in results}) != 1:
+            return VerificationResult(False, "consensus", "task_identity_mismatch")
+        if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results):
+            return VerificationResult(False, "consensus", "unverified_result")
+        if any(r.verification.stage != "agent_result" for r in results):
+            return VerificationResult(False, "consensus", "verification_stage_mismatch")
+        outputs = [r.output for r in results]
+        if any(output != outputs[0] for output in outputs[1:]):
+            return VerificationResult(False, "consensus", "agent_disagreement")
         return VerificationResult(True, "consensus", "consensus_ok")
