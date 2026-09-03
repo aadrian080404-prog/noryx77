@@ -106,7 +106,10 @@ class AuditLog:
             raise ValueError("invalid_key_id")
         if not self.verify_integrity():
             raise ValueError("audit_integrity_failed")
-        key = provider.get_key(key_id)
+        try:
+            key = provider.get_key(key_id)
+        except Exception as exc:
+            raise ValueError("audit_checkpoint_key_unavailable") from exc
         if not isinstance(key, bytes) or not key:
             raise ValueError("audit_checkpoint_key_required")
         payload = self._checkpoint_payload(self.digest())
@@ -128,5 +131,5 @@ class AuditLog:
             verifier.update(self._checkpoint_payload(checkpoint.digest))
             verifier.verify(checkpoint.mac)
             return True
-        except (KeyError, TypeError, ValueError, InvalidSignature):
+        except Exception:
             return False
