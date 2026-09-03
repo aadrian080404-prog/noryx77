@@ -187,6 +187,40 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(check.reason, "pipeline_count_mismatch")
         self.assertIsNone(reflection)
 
+    def test_metacognition_rejects_hypothesis_plan_identity_mismatch(self):
+        task = self.task()
+        plan = Plan("t1", (PlanStep("s1", "analyze", "compute", "normal"),))
+        hypotheses = (Hypothesis("t1:h0", "t1", "forged-objective", ("s1",)),)
+        simulations = (SimulationResult("t1:h0", True, "feasible"),)
+        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
+        check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "hypothesis_plan_identity_mismatch")
+        self.assertIsNone(reflection)
+
+    def test_metacognition_rejects_swapped_simulation_identity(self):
+        task = TaskSpec(task_id="t1", task_type="research", objective="analyze", input="data", risk_class="normal")
+        plan = Plan("t1", (
+            PlanStep("s1", "analyze", "compute", "normal"),
+            PlanStep("s2", "validate", "compute", "normal"),
+        ))
+        hypotheses = (
+            Hypothesis("t1:h0", "t1", "analyze", ("s1",)),
+            Hypothesis("t1:h1", "t1", "validate", ("s2",)),
+        )
+        simulations = (
+            SimulationResult("t1:h1", True, "feasible"),
+            SimulationResult("t1:h0", True, "feasible"),
+        )
+        results = (
+            AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),
+            AgentResult("agent-2", "s2", "completed", "ok", VerificationResult(True, "result")),
+        )
+        check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "simulation_hypothesis_identity_mismatch")
+        self.assertIsNone(reflection)
+
 
 if __name__ == "__main__":
     unittest.main()
