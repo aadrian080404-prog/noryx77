@@ -52,3 +52,24 @@ class FoundationTests(unittest.TestCase):
             store.put(MemoryItem("m3", "overflow", "working", "test", 0.5))
         self.assertTrue(store.delete("m1"))
         self.assertIsNone(store.get("m1"))
+
+    def test_memory_put_isolated_from_caller_mutation(self):
+        store = MemoryStore()
+        content = {"items": ["trusted"]}
+        store.put(MemoryItem("m1", content))
+        content["items"].append("tampered")
+        self.assertEqual(store.get("m1").content, {"items": ["trusted"]})
+
+    def test_memory_get_isolated_from_caller_mutation(self):
+        store = MemoryStore()
+        store.put(MemoryItem("m1", {"items": ["trusted"]}))
+        retrieved = store.get("m1")
+        retrieved.content["items"].append("tampered")
+        self.assertEqual(store.get("m1").content, {"items": ["trusted"]})
+
+    def test_memory_list_isolated_from_caller_mutation(self):
+        store = MemoryStore()
+        store.put(MemoryItem("m1", {"items": ["trusted"]}))
+        listed = store.list()
+        listed[0].content["items"].append("tampered")
+        self.assertEqual(store.get("m1").content, {"items": ["trusted"]})
