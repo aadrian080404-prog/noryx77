@@ -75,6 +75,21 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["verification"].reason, "output_item_limit_exceeded")
 
+    def test_top_level_runtime_exposes_bounded_hypersynth_mode(self):
+        task = TaskSpec("hs1", "compute", "test objective", "input")
+        result = self.runtime.run_hypersynth(task)
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["results"])
+        self.assertTrue(result["results"][-1].verification.valid)
+        self.assertIn("hypersynth_start", [event["event"] for event in result["audit"]])
+
+    def test_top_level_hypersynth_mode_uses_runtime_limits(self):
+        runtime = NORYXRuntime(RuntimeLimits(max_input_chars=3))
+        task = TaskSpec("hs2", "compute", "objective", "abcd")
+        result = runtime.run_hypersynth(task)
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["verification"].reason, "input_limit_exceeded")
+
 
 if __name__ == "__main__":
     unittest.main()
