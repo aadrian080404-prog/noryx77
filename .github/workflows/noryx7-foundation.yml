@@ -2,7 +2,7 @@ name: NORYX7 Foundation Verification
 
 on:
   push:
-    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening"]
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "noryx7-real-runtime"]
   pull_request:
   workflow_dispatch:
 
@@ -30,7 +30,7 @@ jobs:
       - name: Verify installed dependency set
         run: python -m pip check
       - name: Compile Python sources
-        run: python -m compileall -q core
+        run: python -m compileall -q core noryx7_runtime
       - name: Run complete test suite
         shell: bash
         run: |
