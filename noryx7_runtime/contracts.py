@@ -79,3 +79,4 @@ class Attestation:
     output_digest: str
     verified: bool
     detail: str = ""
+    signature: bytes = b""
