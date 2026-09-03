@@ -48,12 +48,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
     def test_legacy_runtime_rejects_forged_agent_identity(self):
         class ForgingAgent:
             agent_id = "real-agent"
-
             def run(self, task):
-                return AgentResult(
-                    "forged-agent", task.task_id, "completed", "ok",
-                    VerificationResult(True, "agent_result", "ok"),
-                )
+                return AgentResult("forged-agent", task.task_id, "completed", "ok", VerificationResult(True, "agent_result", "ok"))
 
         router = ResourceRouter()
         router.register(ForgingAgent())
@@ -64,6 +60,50 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["reason"], "agent_identity_mismatch")
         self.assertEqual(result["verification"].reason, "agent_identity_mismatch")
+
+    def test_legacy_runtime_rejects_forged_task_identity(self):
+        class ForgingAgent:
+            agent_id = "real-agent"
+            def run(self, task):
+                return AgentResult(self.agent_id, "forged-task", "completed", "ok", VerificationResult(True, "agent_result", "ok"))
+
+        router = ResourceRouter()
+        router.register(ForgingAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        task = TaskSpec("legacy-task-tamper", "compute", "short", "ok")
+        result = runtime.run(task, agent_id="real-agent")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "task_identity_mismatch")
+        self.assertEqual(result["verification"].reason, "task_identity_mismatch")
+
+    def test_legacy_runtime_rejects_incomplete_result_status(self):
+        class IncompleteAgent:
+            agent_id = "incomplete"
+            def run(self, task):
+                return AgentResult(self.agent_id, task.task_id, "processing", "ok", VerificationResult(True, "agent_result", "ok"))
+
+        router = ResourceRouter()
+        router.register(IncompleteAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        result = runtime.run(TaskSpec("legacy-status-tamper", "compute", "short", "ok"), agent_id="incomplete")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "invalid_result_status")
+
+    def test_legacy_runtime_rejects_wrong_verification_stage(self):
+        class ForgingAgent:
+            agent_id = "stage-forger"
+            def run(self, task):
+                return AgentResult(self.agent_id, task.task_id, "completed", "ok", VerificationResult(True, "runtime_result", "forged"))
+
+        router = ResourceRouter()
+        router.register(ForgingAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        result = runtime.run(TaskSpec("legacy-stage-tamper", "compute", "short", "ok"), agent_id="stage-forger")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "verification_stage_mismatch")
 
     def test_unknown_agent_fails_closed(self):
         task = TaskSpec("unknown-agent", "compute", "short", "ok")
@@ -129,10 +169,8 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
         class AdvancingAgent:
             agent_id = "advancing"
-
             def __init__(self, clock):
                 self.clock = clock
-
             def run(self, task):
                 self.clock.now += 2.0
                 return AgentResult(self.agent_id, task.task_id, "completed", "ok", VerificationResult(True, "agent_result", "ok"))
