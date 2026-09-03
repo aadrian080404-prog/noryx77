@@ -66,6 +66,9 @@ class NORYXRuntime:
         except Exception:
             self.audit.record("routing_failure", task_id=task_id, error="routing_failure")
             return {"status": "rejected", "reason": "routing_failure"}
+        if agent is None:
+            self.audit.record("routing_failure", task_id=task_id, error="agent_unavailable")
+            return {"status": "rejected", "reason": "agent_unavailable", "task_id": task_id}
 
         if len(subtasks) > self.limits.max_actions_per_task:
             self.audit.record("action_limit", task_id=task_id, allowed=False, reason="max_actions_per_task_exceeded")
@@ -92,6 +95,10 @@ class NORYXRuntime:
                 check = VerificationResult(False, "execution", "agent_execution_failure")
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
 
+            if not hasattr(result, "agent_id") or result.agent_id != agent.agent_id:
+                check = VerificationResult(False, "agent_result", "agent_identity_mismatch")
+                self.audit.record("agent_identity_failure", task_id=child.task_id, reason=check.reason)
+                return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
             if deadline_exceeded():
                 self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": child.task_id}
