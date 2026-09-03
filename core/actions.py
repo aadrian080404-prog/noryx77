@@ -61,14 +61,7 @@ class AuthorizationAuthority:
         return hashlib.sha256(identity.public_key).hexdigest()
 
     @staticmethod
-    def _payload(
-        action: ActionSpec,
-        execution_id: str,
-        principal_id: str,
-        principal_key_fingerprint: str,
-        nonce: str,
-        expires_at: float,
-    ) -> bytes:
+    def _payload(action: ActionSpec, execution_id: str, principal_id: str, principal_key_fingerprint: str, nonce: str, expires_at: float) -> bytes:
         fields = {
             "action_id": action.action_id,
             "action_type": action.action_type,
@@ -81,29 +74,10 @@ class AuthorizationAuthority:
         }
         return json.dumps(fields, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
-    def _sign(
-        self,
-        action: ActionSpec,
-        execution_id: str,
-        principal_id: str,
-        principal_key_fingerprint: str,
-        nonce: str,
-        expires_at: float,
-    ) -> str:
-        return hmac.new(
-            self._secret,
-            self._payload(action, execution_id, principal_id, principal_key_fingerprint, nonce, expires_at),
-            hashlib.sha256,
-        ).hexdigest()
+    def _sign(self, action: ActionSpec, execution_id: str, principal_id: str, principal_key_fingerprint: str, nonce: str, expires_at: float) -> str:
+        return hmac.new(self._secret, self._payload(action, execution_id, principal_id, principal_key_fingerprint, nonce, expires_at), hashlib.sha256).hexdigest()
 
-    def issue(
-        self,
-        action: ActionSpec,
-        execution_id: str,
-        *,
-        principal: AgentIdentity | None = None,
-        ttl: float = 60.0,
-    ) -> AuthorizationGrant:
+    def issue(self, action: ActionSpec, execution_id: str, *, principal: AgentIdentity | None = None, ttl: float = 60.0) -> AuthorizationGrant:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             raise ValueError("invalid action")
         if not isinstance(execution_id, str) or not execution_id.strip() or len(execution_id.encode("utf-8")) > 256:
@@ -115,31 +89,14 @@ class AuthorizationAuthority:
                 raise ValueError("untrusted_authorization_principal")
         elif principal is not None and not isinstance(principal, AgentIdentity):
             raise ValueError("invalid_authorization_principal")
-
         principal_id = principal.agent_id if principal is not None else ""
         fingerprint = self._fingerprint(principal) if principal is not None else ""
         nonce = secrets.token_urlsafe(32)
         expires_at = float(self._clock()) + float(ttl)
         signature = self._sign(action, execution_id, principal_id, fingerprint, nonce, expires_at)
-        return AuthorizationGrant(
-            action.action_id,
-            action.action_type,
-            action.target,
-            execution_id,
-            principal_id,
-            fingerprint,
-            nonce,
-            expires_at,
-            signature,
-        )
+        return AuthorizationGrant(action.action_id, action.action_type, action.target, execution_id, principal_id, fingerprint, nonce, expires_at, signature)
 
-    def _verify_unconsumed(
-        self,
-        action: ActionSpec,
-        execution_id: str,
-        grant: AuthorizationGrant,
-        principal: AgentIdentity | None = None,
-    ) -> bool:
+    def _verify_unconsumed(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity | None = None) -> bool:
         if not isinstance(grant, AuthorizationGrant) or not isinstance(execution_id, str) or not execution_id.strip():
             return False
         if grant.execution_id != execution_id or action.execution_id != execution_id:
@@ -160,55 +117,56 @@ class AuthorizationAuthority:
                 return False
         elif grant.principal_id or grant.principal_key_fingerprint:
             return False
-        expected = self._sign(
-            action,
-            execution_id,
-            grant.principal_id,
-            grant.principal_key_fingerprint,
-            grant.nonce,
-            grant.expires_at,
-        )
+        expected = self._sign(action, execution_id, grant.principal_id, grant.principal_key_fingerprint, grant.nonce, grant.expires_at)
         if not hmac.compare_digest(grant.signature, expected):
             return False
         if self._clock() >= grant.expires_at:
             return False
         return True
 
-    def verify(
-        self,
-        action: ActionSpec,
-        execution_id: str,
-        grant: AuthorizationGrant,
-        *,
-        principal: AgentIdentity | None = None,
-    ) -> bool:
+    def verify(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, *, principal: AgentIdentity | None = None) -> bool:
         """Check authenticity, current trust and binding without consuming the grant."""
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
             return grant.nonce not in self._used
 
-    def consume(
-        self,
-        action: ActionSpec,
-        execution_id: str,
-        grant: AuthorizationGrant,
-        *,
-        principal: AgentIdentity | None = None,
-    ) -> bool:
+    def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, *, principal: AgentIdentity | None = None) -> bool:
         """Atomically consume a still-valid, currently trusted grant."""
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
             if grant.nonce in self._used:
                 return False
-            # Re-check trust immediately before the replay decision. The registry
-            # itself is synchronized, so revocation cannot be observed halfway.
             if self._identity_registry is not None:
                 if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
                     return False
             self._used.add(grant.nonce)
             return True
+
+    def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
+        """Linearize grant consumption and dispatch against identity revocation.
+
+        The registry lock is held for the actual dispatch, so a concurrent revoke
+        either linearizes before the action (dispatch is rejected) or after it
+        (dispatch is the winning operation). This removes the authorize->dispatch
+        TOCTOU window for identity-bound grants.
+        """
+        if not callable(executor) or self._identity_registry is None:
+            return False, None
+        if not self._verify_unconsumed(action, execution_id, grant, principal):
+            return False, None
+        with self._lock:
+            if grant.nonce in self._used:
+                return False, None
+            with self._identity_registry._lock:
+                if not self._identity_registry.is_trusted(principal):
+                    return False, None
+                self._used.add(grant.nonce)
+                try:
+                    return True, executor()
+                except Exception:
+                    return True, None
 
 
 class ActionGate:
@@ -219,15 +177,7 @@ class ActionGate:
         self.limits = limits
         self.authorization = authorization
 
-    def authorize(
-        self,
-        action: ActionSpec,
-        calls_used: int = 0,
-        *,
-        execution_id: str | None = None,
-        grant: AuthorizationGrant | None = None,
-        principal: AgentIdentity | None = None,
-    ) -> ActionDecision:
+    def authorize(self, action: ActionSpec, calls_used: int = 0, *, execution_id: str | None = None, grant: AuthorizationGrant | None = None, principal: AgentIdentity | None = None) -> ActionDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return ActionDecision(False, "invalid action contract", VerificationResult(False, "action_gate", "invalid_action_contract"))
         if isinstance(calls_used, bool) or not isinstance(calls_used, int) or calls_used < 0:
@@ -241,7 +191,6 @@ class ActionGate:
             return ActionDecision(False, "execution identity required", VerificationResult(False, "action_gate", "execution_identity_required"))
         if self.limits.max_actions_per_task - calls_used <= 0:
             return ActionDecision(False, "action budget exceeded", VerificationResult(False, "action_gate", "budget"))
-
         evaluation_action = action
         authorization_pending = action.requires_authorization
         if authorization_pending:
@@ -253,7 +202,6 @@ class ActionGate:
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
             evaluation_action = replace(action, requires_authorization=False)
-
         try:
             policy_allowed = self.policy.allows(evaluation_action)
         except Exception:
@@ -266,7 +214,6 @@ class ActionGate:
             return ActionDecision(False, "security evaluation failure", VerificationResult(False, "action_gate", "security_evaluation_failure"))
         if not security_allowed:
             return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security"))
-
         if authorization_pending:
             try:
                 if not self.authorization.consume(action, execution_id, grant, principal=principal):
@@ -274,3 +221,35 @@ class ActionGate:
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
         return ActionDecision(True, "allowed", VerificationResult(True, "action_gate", "authorized"))
+
+    def authorize_and_execute(self, action: ActionSpec, executor, calls_used: int = 0, *, execution_id: str | None = None, grant: AuthorizationGrant | None = None, principal: AgentIdentity | None = None) -> tuple[ActionDecision, object | None]:
+        """Atomically gate and dispatch an identity-bound authorized action."""
+        if not isinstance(action, ActionSpec) or not action.is_well_formed():
+            return self.authorize(action, calls_used, execution_id=execution_id, grant=grant, principal=principal), None
+        if not callable(executor):
+            return ActionDecision(False, "invalid executor", VerificationResult(False, "action_gate", "invalid_executor")), None
+        authorization_pending = action.requires_authorization
+        if not authorization_pending:
+            decision = self.authorize(action, calls_used, execution_id=execution_id, grant=grant, principal=principal)
+            if not decision.allowed:
+                return decision, None
+            try:
+                return decision, executor()
+            except Exception:
+                return ActionDecision(False, "execution failure", VerificationResult(False, "action_gate", "execution_failure")), None
+        if self.authorization is None or execution_id is None or grant is None or principal is None:
+            return self.authorize(action, calls_used, execution_id=execution_id, grant=grant, principal=principal), None
+        evaluation_action = replace(action, requires_authorization=False)
+        try:
+            if not self.authorization.verify(action, execution_id, grant, principal=principal):
+                return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant")), None
+            if not self.policy.allows(evaluation_action):
+                return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy")), None
+            if not self.security.allows(evaluation_action):
+                return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security")), None
+            consumed, result = self.authorization.consume_and_execute(action, execution_id, grant, principal, executor)
+            if not consumed:
+                return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant")), None
+            return ActionDecision(True, "allowed", VerificationResult(True, "action_gate", "authorized")), result
+        except Exception:
+            return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure")), None
