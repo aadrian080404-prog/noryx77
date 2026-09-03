@@ -65,6 +65,16 @@ class FoundationBoundaryTests(unittest.TestCase):
         check = boundary.inspect(ActionSpec("a3", "publish", risk_class="high"))
         self.assertFalse(check.allowed)
 
+    def test_security_rejects_non_boolean_policy_authorization(self):
+        class ForgedPolicy:
+            def evaluate(self, action):
+                return {"allowed": "false", "reason": "forged"}
+
+        boundary = SecurityBoundary(ForgedPolicy(), self.verifier)
+        check = boundary.inspect(ActionSpec("a3a", "search"))
+        self.assertFalse(check.allowed)
+        self.assertEqual(check.reason, "forged")
+
     def test_security_rejects_invalid_verifier_result(self):
         class InvalidVerifier:
             def verify_output(self, output, stage=None):
