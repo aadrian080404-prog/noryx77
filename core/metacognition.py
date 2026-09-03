@@ -61,6 +61,8 @@ class MetacognitionEngine:
             return VerificationResult(False, "metacognition", "incomplete_result_set"), None
         if any(result.verification is None or not result.verification.valid for result in results):
             return VerificationResult(False, "metacognition", "unverified_result_set"), None
+        if any(result.verification.stage != "agent_result" for result in results):
+            return VerificationResult(False, "metacognition", "result_verification_stage_mismatch"), None
         result_task_ids = tuple(result.task_id for result in results)
         if len(set(result_task_ids)) != len(result_task_ids):
             return VerificationResult(False, "metacognition", "duplicate_result_task_identity"), None
