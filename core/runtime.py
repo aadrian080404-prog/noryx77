@@ -84,23 +84,25 @@ class NORYXRuntime:
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class)
-            action = ActionSpec("act:" + child.task_id, "compute", risk_class=child.risk_class)
-            decision = self.action_gate.authorize(action, calls_used=len(results))
+            action = ActionSpec("act:" + child.task_id, "compute", execution_id=child.execution_id, risk_class=child.risk_class)
+            decision, result = self.action_gate.authorize_and_execute(
+                action,
+                lambda: agent.run(child),
+                calls_used=len(results),
+                execution_id=child.execution_id,
+            )
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
-                return {"status": "rejected", "verification": decision.verification}
-
-            try:
-                result = agent.run(child)
-                output = result.output
-            except Exception as exc:
-                self.audit.record("execution_failure", task_id=child.task_id, error=type(exc).__name__, reason="agent_execution_failure")
-                check = VerificationResult(False, "execution", "agent_execution_failure")
+                return {"status": "rejected", "reason": decision.reason, "verification": decision.verification, "task_id": child.task_id}
+            if not isinstance(result, AgentResult):
+                check = VerificationResult(False, "execution", "malformed_agent_result")
+                self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
+            output = result.output
 
             # The runtime boundary accepts only the declared AgentResult contract;
             # duck-typed objects must not be able to impersonate an agent result.
-            if not isinstance(result, AgentResult) or not result.is_well_formed():
+            if not result.is_well_formed():
                 check = VerificationResult(False, "agent_result", "malformed_agent_result")
                 self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
