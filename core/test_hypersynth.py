@@ -58,8 +58,8 @@ class HypersynthTests(unittest.TestCase):
         from .coordination import AgentCoordinator
         coordinator = AgentCoordinator(self.router, self.verifier)
         results = (
-            AgentResult("a", "t", "completed", "one", VerificationResult(True, "result", "agent_result")),
-            AgentResult("b", "t", "completed", "two", VerificationResult(True, "result", "agent_result")),
+            AgentResult("a", "t", "completed", "one", VerificationResult(True, "agent_result", "verified")),
+            AgentResult("b", "t", "completed", "two", VerificationResult(True, "agent_result", "verified")),
         )
         check = coordinator.verify_consensus(results)
         self.assertFalse(check.valid)
