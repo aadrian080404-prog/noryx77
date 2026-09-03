@@ -1,6 +1,7 @@
 import unittest
 
 from .agents import DeterministicAgent
+from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .policy import PolicyEngine
 from .router import ResourceRouter
@@ -72,6 +73,27 @@ class FoundationBoundaryTests(unittest.TestCase):
         supervisor = AgentSupervisor(router, self.verifier)
         check = supervisor.admit(task, result)
         self.assertFalse(check.valid)
+
+    def test_audit_rejects_empty_event(self):
+        audit = AuditLog()
+        with self.assertRaises(ValueError):
+            audit.record("   ")
+
+    def test_audit_record_is_mutation_isolated(self):
+        audit = AuditLog()
+        payload = {"nested": ["original"]}
+        returned = audit.record("test", payload=payload)
+        payload["nested"].append("caller-change")
+        returned["payload"]["nested"].append("return-change")
+        snapshot = audit.snapshot()
+        self.assertEqual(snapshot[0]["payload"]["nested"], ["original"])
+
+    def test_audit_snapshot_is_mutation_isolated(self):
+        audit = AuditLog()
+        audit.record("test", payload={"nested": ["original"]})
+        snapshot = audit.snapshot()
+        snapshot[0]["payload"]["nested"].append("caller-change")
+        self.assertEqual(audit.snapshot()[0]["payload"]["nested"], ["original"])
 
 if __name__ == "__main__":
     unittest.main()
