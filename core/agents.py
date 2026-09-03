@@ -116,8 +116,12 @@ class ProviderAgent(Agent):
     def run(self, task: TaskSpec) -> AgentResult:
         if type(task) is not TaskSpec:
             return self._rejected(task, "invalid_task_type")
+
+        expected_verifier = self.verifier
         try:
-            task_check = self.verifier.verify_task(task)
+            expected_verify_task = expected_verifier.verify_task
+            expected_verify_output = expected_verifier.verify_output
+            task_check = expected_verify_task(task)
         except Exception:
             return self._rejected(task, "provider_task_verification_failure")
         if (
@@ -128,6 +132,13 @@ class ProviderAgent(Agent):
             return self._rejected(task, "malformed_task_verification")
         if not task_check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=task_check)
+
+        if self.verifier is not expected_verifier:
+            return self._rejected(task, "verifier_binding_changed")
+        if self._callable_fingerprint(getattr(expected_verifier, "verify_task", None)) != self._callable_fingerprint(expected_verify_task):
+            return self._rejected(task, "verifier_binding_changed")
+        if self._callable_fingerprint(getattr(expected_verifier, "verify_output", None)) != self._callable_fingerprint(expected_verify_output):
+            return self._rejected(task, "verifier_binding_changed")
 
         expected_provider = self.provider
         expected_provider_id = self.provider_id
@@ -142,6 +153,10 @@ class ProviderAgent(Agent):
             return self._rejected(task)
         if self.provider is not expected_provider or self.provider_id != expected_provider_id or self.model_id != expected_model_id:
             return self._rejected(task, "provider_binding_changed")
+        if self.verifier is not expected_verifier:
+            return self._rejected(task, "verifier_binding_changed")
+        if self._callable_fingerprint(getattr(expected_verifier, "verify_output", None)) != self._callable_fingerprint(expected_verify_output):
+            return self._rejected(task, "verifier_binding_changed")
         if type(response) is not ProviderResponse:
             return self._rejected(task, "malformed_provider_response")
         if not isinstance(response.provider_id, str) or not response.provider_id.strip():
@@ -159,7 +174,7 @@ class ProviderAgent(Agent):
         except Exception:
             return self._rejected(task)
         try:
-            output_check = self.verifier.verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
+            output_check = expected_verify_output(isolated_output, requirements=task.verification_requirements, stage="result")
         except Exception:
             return self._rejected(task, "provider_output_verification_failure")
         if (
