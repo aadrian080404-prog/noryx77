@@ -68,6 +68,10 @@ class HypersynthRuntime:
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
                 final_output = output[-1].output if output else None
+                if not self.limits.validate_output_items(final_output):
+                    check = VerificationResult(False, "limits", "output_item_limit_exceeded")
+                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
                 if not self.limits.validate_output(final_output):
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
