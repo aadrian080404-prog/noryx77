@@ -37,14 +37,19 @@ class HypersynthRuntime:
     def run(self, task):
         task_id = getattr(task, "task_id", None)
         started = self.clock()
+        deadline = started + self.limits.max_task_seconds
         self.audit.record("hypersynth_start", task_id=task_id)
+
+        def deadline_exceeded():
+            return self.clock() > deadline
+
         try:
             # Validate the public runtime contract before touching task fields.
             task_check = self.verifier.verify_task(task)
             if not task_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=task_check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": task_check, "audit": self.audit.snapshot()}
-            if self.clock() - started > self.limits.max_task_seconds:
+            if deadline_exceeded():
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
@@ -56,13 +61,13 @@ class HypersynthRuntime:
                 check = VerificationResult(False, "limits", "objective_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
-            result = self.kernel.run(task)
-            if self.clock() - started > self.limits.max_task_seconds:
+            result = self.kernel.run(task, deadline_check=deadline_exceeded)
+            if deadline_exceeded() and result.get("status") == "completed":
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                 return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
-            output = result.get("results", ())
             if result.get("status") == "completed":
+                output = result.get("results", ())
                 if not self.limits.validate_count(len(output), self.limits.max_output_items):
                     check = VerificationResult(False, "limits", "output_item_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
