@@ -39,6 +39,19 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["results"][0].execution_id, "exec-1")
         self.assertEqual(result["state"].execution_id, "exec-1")
 
+    def test_missing_execution_id_gets_fresh_run_binding(self):
+        task = self.task()
+        first = self.kernel.run(task)
+        second = self.kernel.run(task)
+        self.assertEqual(first["status"], "completed")
+        self.assertEqual(second["status"], "completed")
+        self.assertTrue(first["execution_id"])
+        self.assertTrue(second["execution_id"])
+        self.assertNotEqual(first["execution_id"], second["execution_id"])
+        self.assertEqual(task.execution_id, "")
+        self.assertEqual(first["results"][0].execution_id, first["execution_id"])
+        self.assertEqual(second["results"][0].execution_id, second["execution_id"])
+
     def test_child_execution_id_is_propagated(self):
         seen = []
         class CapturingAgent(Agent):
@@ -71,6 +84,15 @@ class HypersynthTests(unittest.TestCase):
         self.assertFalse(result.valid)
         self.assertEqual(result.reason, "execution_identity_mismatch")
 
+    def test_consensus_rejects_all_missing_execution_identity(self):
+        verified = VerificationResult(True, "agent_result", "verified")
+        result = self.kernel._verify_consensus((
+            AgentResult("a", "t1", "completed", "same", verified, ""),
+            AgentResult("b", "t1", "completed", "same", verified, ""),
+        ))
+        self.assertFalse(result.valid)
+        self.assertEqual(result.reason, "missing_execution_identity")
+
     def test_invalid_task_is_rejected_before_planning(self):
         result = self.kernel.run(self.task(objective=""))
         self.assertEqual(result["status"], "rejected")
@@ -85,7 +107,7 @@ class HypersynthTests(unittest.TestCase):
     def test_disagreement_is_fail_closed(self):
         from .coordination import AgentCoordinator
         coordinator = AgentCoordinator(self.router, self.verifier)
-        results = (AgentResult("a", "t", "completed", "one", VerificationResult(True, "agent_result", "verified")), AgentResult("b", "t", "completed", "two", VerificationResult(True, "agent_result", "verified")))
+        results = (AgentResult("a", "t", "completed", "one", VerificationResult(True, "agent_result")), AgentResult("b", "t", "completed", "two", VerificationResult(True, "agent_result")))
         check = coordinator.verify_consensus(results)
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "agent_disagreement")
