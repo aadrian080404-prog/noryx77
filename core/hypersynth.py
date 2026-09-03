@@ -61,9 +61,9 @@ class Hypersynth:
         try:
             task_check = self.verifier.verify_task(task)
         except Exception:
-            return self._reject("perception", task, VerificationResult(False, "task", "task_verification_failure"))
-        if not self._accepts_verification(task_check, "task"):
-            check = task_check if isinstance(task_check, VerificationResult) and task_check.is_well_formed() else VerificationResult(False, "task", "invalid_task_verification")
+            return self._reject("perception", task, VerificationResult(False, "contract", "task_verification_failure"))
+        if not self._accepts_verification(task_check, "contract"):
+            check = task_check if isinstance(task_check, VerificationResult) and task_check.is_well_formed() else VerificationResult(False, "contract", "invalid_task_verification")
             return self._reject("perception", task, check)
         timeout = self._deadline_rejection(task, "perception", deadline_check)
         if timeout: return timeout
