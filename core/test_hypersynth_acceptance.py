@@ -39,14 +39,14 @@ class EchoAgent(Agent):
 
     def run(self, task):
         output = task.objective
-        return AgentResult(self.agent_id, task.task_id, "completed", output, self.verifier.verify_output(output, stage="agent_result"))
+        return AgentResult(self.agent_id, task.task_id, "completed", output, self.verifier.verify_output(output, stage="agent_result"), task.execution_id)
 
 
 class NullAgent(Agent):
     agent_id = "null"
 
     def run(self, task):
-        return AgentResult(self.agent_id, task.task_id, "completed", None, None)
+        return AgentResult(self.agent_id, task.task_id, "completed", None, None, task.execution_id)
 
 
 class HypersynthAcceptanceTests(unittest.TestCase):
