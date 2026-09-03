@@ -39,12 +39,31 @@ class MetacognitionEngine:
             return VerificationResult(False, "metacognition", "invalid_reflection_collection"), None
         if not isinstance(final_verification, VerificationResult) or not final_verification.valid:
             return VerificationResult(False, "metacognition", "final_verification_failed"), None
-        if not plan.steps or len(plan.steps) != len(hypotheses) or len(hypotheses) != len(simulations) or len(simulations) != len(results):
+        if plan.task_id != task.task_id or not plan.steps:
+            return VerificationResult(False, "metacognition", "plan_identity_mismatch"), None
+        if len(plan.steps) != len(hypotheses) or len(hypotheses) != len(simulations) or len(simulations) != len(results):
             return VerificationResult(False, "metacognition", "pipeline_count_mismatch"), None
+        plan_step_ids = tuple(step.step_id for step in plan.steps)
+        if any(not isinstance(step.step_id, str) or not step.step_id.strip() for step in plan.steps):
+            return VerificationResult(False, "metacognition", "invalid_plan_step_identity"), None
+        if len(set(plan_step_ids)) != len(plan_step_ids):
+            return VerificationResult(False, "metacognition", "duplicate_plan_step_identity"), None
+        for hypothesis, step in zip(hypotheses, plan.steps):
+            if not isinstance(hypothesis, Hypothesis):
+                return VerificationResult(False, "metacognition", "invalid_hypothesis_type"), None
+            if hypothesis.task_id != task.task_id or hypothesis.statement != step.objective or hypothesis.basis != (step.step_id,):
+                return VerificationResult(False, "metacognition", "hypothesis_plan_identity_mismatch"), None
+        expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
+        actual_simulation_ids = tuple(simulation.hypothesis_id for simulation in simulations if isinstance(simulation, SimulationResult))
+        if len(actual_simulation_ids) != len(simulations) or actual_simulation_ids != expected_hypothesis_ids:
+            return VerificationResult(False, "metacognition", "simulation_hypothesis_identity_mismatch"), None
         if any(not isinstance(result, AgentResult) or result.status != "completed" for result in results):
             return VerificationResult(False, "metacognition", "incomplete_result_set"), None
         if any(result.verification is None or not result.verification.valid for result in results):
             return VerificationResult(False, "metacognition", "unverified_result_set"), None
+        result_task_ids = tuple(result.task_id for result in results)
+        if len(set(result_task_ids)) != len(result_task_ids) or set(result_task_ids) != set(plan_step_ids):
+            return VerificationResult(False, "metacognition", "result_plan_identity_mismatch"), None
         agents = tuple(result.agent_id for result in results)
         if len(set(agents)) != len(agents):
             return VerificationResult(False, "metacognition", "duplicate_agent_identity"), None
