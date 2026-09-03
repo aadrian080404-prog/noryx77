@@ -58,6 +58,23 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "rejected")
         self.assertEqual(result["verification"].reason, "output_limit_exceeded")
 
+    def test_hypersynth_structured_output_item_limit_is_enforced(self):
+        class StructuredOutputAgent:
+            agent_id = "structured"
+            def run(self, task):
+                from .contracts import AgentResult, VerificationResult
+                output = tuple(range(5))
+                return AgentResult(self.agent_id, task.task_id, "completed", output, VerificationResult(True, "agent_result", "ok"))
+
+        from .router import ResourceRouter
+        router = ResourceRouter()
+        router.register(StructuredOutputAgent())
+        runtime = HypersynthRuntime(router=router, limits=RuntimeLimits(max_output_items=3))
+        task = TaskSpec("t5", "compute", "short", "ok")
+        result = runtime.run(task)
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["verification"].reason, "output_item_limit_exceeded")
+
 
 if __name__ == "__main__":
     unittest.main()
