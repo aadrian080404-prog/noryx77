@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives import hashes, hmac
 from .crypto import KEY_SIZE, KeyProvider, derive_subkey
 from .identity import AgentIdentity, IdentityRegistry
 
-
 MAC_SIZE: Final[int] = 32
 MAX_FRAME_SIZE: Final[int] = 16 * 1024 * 1024
 MAX_ID_SIZE: Final[int] = 1024
@@ -29,8 +28,6 @@ def _field(value: str) -> bytes:
 
 @dataclass(frozen=True)
 class SecureFrame:
-    """A versioned, authenticated frame carrying one ordered payload."""
-
     sender_id: str
     session_id: str
     sequence: int
@@ -81,6 +78,16 @@ class SecureChannel:
         self._local_identity, self._peer_identity = local_identity, peer_identity
         self._send_sequence, self._last_received = 0, -1
 
+    def _require_live_trust(self) -> None:
+        if self._identity_registry is None:
+            return
+        if not isinstance(self._local_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._local_identity):
+            raise ValueError("channel_identity_untrusted")
+        if not isinstance(self._peer_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._peer_identity):
+            raise ValueError("channel_identity_untrusted")
+        if self._local_identity.agent_id != self._local_id or self._peer_identity.agent_id != self._peer_id:
+            raise ValueError("channel_identity_mismatch")
+
     def _channel_key(self) -> bytes:
         try:
             root_key = self._provider.get_key(self._key_id)
@@ -103,32 +110,24 @@ class SecureChannel:
         return signer.finalize()
 
     def send(self, payload: bytes) -> SecureFrame:
+        self._require_live_trust()
         if not isinstance(payload, bytes):
             raise TypeError("payload_must_be_bytes")
         if len(payload) > MAX_FRAME_SIZE:
             raise ValueError("frame_size_exceeded")
         if self._send_sequence > MAX_SEQUENCE:
             raise ValueError("sequence_exhausted")
-        if self._identity_registry is not None:
-            if not isinstance(self._local_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._local_identity):
-                raise ValueError("channel_identity_untrusted")
-            if self._local_identity.agent_id != self._local_id:
-                raise ValueError("channel_identity_mismatch")
         sequence = self._send_sequence
         mac = self._mac(self._local_id, sequence, payload)
         self._send_sequence += 1
         return SecureFrame(self._local_id, self._session_id, sequence, bytes(payload), mac)
 
     def receive(self, frame: SecureFrame) -> bytes:
+        self._require_live_trust()
         if not isinstance(frame, SecureFrame) or not frame.is_well_formed():
             raise ValueError("invalid_secure_frame")
         if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
             raise ValueError("channel_identity_mismatch")
-        if self._identity_registry is not None:
-            if not isinstance(self._peer_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._peer_identity):
-                raise ValueError("channel_identity_untrusted")
-            if self._peer_identity.agent_id != frame.sender_id:
-                raise ValueError("channel_identity_mismatch")
         if frame.sequence <= self._last_received:
             raise ValueError("replayed_frame")
         try:
