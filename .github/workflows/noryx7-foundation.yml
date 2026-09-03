@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
