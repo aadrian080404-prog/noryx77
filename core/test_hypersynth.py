@@ -7,8 +7,10 @@ from .hypersynth import Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .memory import MemoryStore
+from .metacognition import MetacognitionEngine
+from .planning import Plan, PlanStep
 from .policy import PolicyEngine
-from .reasoning import InternalSimulator, SimulationResult
+from .reasoning import Hypothesis, InternalSimulator, SimulationResult
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
@@ -35,7 +37,9 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["phase"], "metacognition")
         self.assertTrue(result["verification"].valid)
-        self.assertEqual(result["reflection"]["steps_executed"], 1)
+        self.assertTrue(result["reflection"].result_verified)
+        self.assertEqual(result["reflection"].steps_executed, 1)
+        self.assertEqual(result["reflection"].confidence, 1.0)
         self.assertEqual(result["context"].version, 1)
         self.assertIsNotNone(self.memory.get("task:t1"))
 
@@ -162,6 +166,26 @@ class HypersynthTests(unittest.TestCase):
         self.assertEqual(simulator.verify((SimulationResult("", True, "feasible"),)).reason, "invalid_hypothesis_id")
         self.assertEqual(simulator.verify((SimulationResult("t1:h0", True, ""),)).reason, "invalid_simulation_reason")
         self.assertEqual(simulator.verify((SimulationResult("t1:h0", 1, "feasible"),)).reason, "invalid_feasibility_flag")
+
+    def test_metacognition_engine_accepts_complete_verified_pipeline(self):
+        task = self.task()
+        plan = Plan((PlanStep("s1", "analyze", "compute", "normal"),))
+        hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
+        simulations = (SimulationResult("t1:h0", True, "feasible"),)
+        results = (AgentResult("agent-1", "s1", "completed", "ok", VerificationResult(True, "result")),)
+        check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, simulations, results, VerificationResult(True, "hypersynth_result"))
+        self.assertTrue(check.valid)
+        self.assertEqual(check.reason, "reflection_ok")
+        self.assertEqual(reflection.agents_used, ("agent-1",))
+
+    def test_metacognition_engine_rejects_pipeline_count_mismatch(self):
+        task = self.task()
+        plan = Plan((PlanStep("s1", "analyze", "compute", "normal"),))
+        hypotheses = (Hypothesis("t1:h0", "t1", "analyze", ("s1",)),)
+        check, reflection = MetacognitionEngine().reflect(task, plan, hypotheses, (), (), VerificationResult(True, "hypersynth_result"))
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "pipeline_count_mismatch")
+        self.assertIsNone(reflection)
 
 
 if __name__ == "__main__":
