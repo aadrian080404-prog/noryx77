@@ -2,12 +2,16 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+from .actions import ActionGate, ActionSpec
 from .audit import AuditLog
 from .context import ContextManager
-from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
+from .contracts import AgentResult, TaskSpec, VerificationResult
 from .decomposition import Subtask, TaskDecomposer
+from .limits import RuntimeLimits
 from .planning import Planner
+from .policy import PolicyEngine
 from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
+from .security import SecurityBoundary
 from .supervisor import AgentSupervisor
 from .metacognition import MetacognitionEngine
 
@@ -33,6 +37,11 @@ class Hypersynth:
         self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
         self.context_manager = context_manager or ContextManager()
+        if action_gate is None:
+            policy = PolicyEngine()
+            security = SecurityBoundary(policy, verifier)
+            action_gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=bounded_steps))
+        if not isinstance(action_gate, ActionGate): raise ValueError("invalid_action_gate")
         self.action_gate = action_gate
         self.audit = audit or AuditLog()
         self.supervisor = supervisor or AgentSupervisor(router, verifier, audit=self.audit)
@@ -109,18 +118,16 @@ class Hypersynth:
             if timeout: return dict(timeout, results=tuple(results))
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
             try:
-                if self.action_gate is not None:
-                    decision, result = self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
-                    if not decision.allowed:
-                        return self._reject("execution", task, decision.verification, results=tuple(results))
-                else:
-                    result = agent.run(child)
+                decision, result = self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
+                if not decision.allowed:
+                    return self._reject("execution", task, decision.verification, results=tuple(results))
             except Exception:
                 return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
             if not admission.valid: return self._reject("verification", task, admission, results=tuple(results))
+            if not isinstance(result, AgentResult): return self._reject("verification", task, VerificationResult(False, "agent_result", "malformed_agent_result"), results=tuple(results))
             if result.execution_id != task.execution_id: return self._reject("verification", task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
             results.append(result)
         timeout = self._deadline_rejection(task, "verification", deadline_check)
