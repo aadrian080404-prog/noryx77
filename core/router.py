@@ -60,6 +60,34 @@ class ResourceRouter:
             self._validate_registered_state(agent_id, agent)
             return getattr(agent, "run")
 
+    def _select_for_task_locked(self, task: TaskSpec):
+        """Select and validate a task resource while the router lock is held."""
+        task_type = task.task_type
+        required = self.TASK_MODEL_HINTS.get(task_type, "medium")
+        required_index = self.MODEL_ORDER.index(required)
+        required_capabilities = self._required_capabilities(task)
+        candidates = []
+        for agent_id, agent in self._agents.items():
+            self._validate_agent(agent)
+            self._validate_registered_state(agent_id, agent)
+            model_class = getattr(agent, "model_class", "medium")
+            capabilities = getattr(agent, "capabilities", ())
+            if self.MODEL_ORDER.index(model_class) < required_index: continue
+            if not set(required_capabilities).issubset(capabilities): continue
+            candidates.append(agent)
+        if not candidates: raise LookupError("no_resource_satisfies_task")
+        candidates.sort(key=lambda agent: (self.MODEL_ORDER.index(getattr(agent, "model_class", "medium")), getattr(agent, "agent_id", "")))
+        return candidates[0]
+
+    def resolve_for_task(self, task: TaskSpec):
+        """Atomically select a registered task resource and capture its run callable."""
+        if type(task) is not TaskSpec or not task.is_well_formed():
+            raise ValueError("invalid_task_contract")
+        with self._lock:
+            agent = self._select_for_task_locked(task)
+            self._validate_registered_state(agent.agent_id, agent)
+            return agent, getattr(agent, "run")
+
     def register(self, agent: Agent) -> None:
         agent_id = self._validate_agent(agent)
         snapshot = self._registration_snapshot(agent)
@@ -123,20 +151,5 @@ class ResourceRouter:
         # type, constraints, or routing inputs through overridden attributes.
         if type(task) is not TaskSpec or not task.is_well_formed():
             raise ValueError("invalid_task_contract")
-        task_type = task.task_type
-        required = self.TASK_MODEL_HINTS.get(task_type, "medium")
-        required_index = self.MODEL_ORDER.index(required)
-        required_capabilities = self._required_capabilities(task)
         with self._lock:
-            candidates = []
-            for agent_id, agent in self._agents.items():
-                self._validate_agent(agent)
-                self._validate_registered_state(agent_id, agent)
-                model_class = getattr(agent, "model_class", "medium")
-                capabilities = getattr(agent, "capabilities", ())
-                if self.MODEL_ORDER.index(model_class) < required_index: continue
-                if not set(required_capabilities).issubset(capabilities): continue
-                candidates.append(agent)
-            if not candidates: raise LookupError("no_resource_satisfies_task")
-            candidates.sort(key=lambda agent: (self.MODEL_ORDER.index(getattr(agent, "model_class", "medium")), getattr(agent, "agent_id", "")))
-            return candidates[0]
+            return self._select_for_task_locked(task)
