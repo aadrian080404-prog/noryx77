@@ -45,6 +45,27 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["reason"], "agent_execution_failure")
         self.assertEqual(result["verification"].reason, "agent_execution_failure")
 
+    def test_legacy_runtime_rejects_non_contract_agent_result(self):
+        class ForgingAgent:
+            agent_id = "real-agent"
+            def run(self, task):
+                return type("FakeResult", (), {
+                    "agent_id": self.agent_id,
+                    "task_id": task.task_id,
+                    "status": "completed",
+                    "output": "ok",
+                    "verification": VerificationResult(True, "agent_result", "ok"),
+                })()
+
+        router = ResourceRouter()
+        router.register(ForgingAgent())
+        runtime = NORYXRuntime()
+        runtime.router = router
+        task = TaskSpec("legacy-contract-tamper", "compute", "short", "ok")
+        result = runtime.run(task, agent_id="real-agent")
+        self.assertEqual(result["status"], "rejected")
+        self.assertEqual(result["reason"], "malformed_agent_result")
+
     def test_legacy_runtime_rejects_forged_agent_identity(self):
         class ForgingAgent:
             agent_id = "real-agent"
