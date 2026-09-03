@@ -206,6 +206,11 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertEqual(result["verification"].reason, "task_time_limit_exceeded")
         self.assertEqual(result["phase"], "execution")
 
+    def test_runtime_limits_reject_non_finite_deadlines(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(ValueError):
+                RuntimeLimits(max_task_seconds=value)
+
     def test_top_level_runtime_exposes_bounded_hypersynth_mode(self):
         task = TaskSpec("hs1", "compute", "test objective", "input")
         result = self.runtime.run_hypersynth(task)
