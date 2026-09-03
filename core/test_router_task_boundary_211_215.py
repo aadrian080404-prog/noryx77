@@ -6,13 +6,12 @@ from .router import ResourceRouter
 
 
 class SpoofedTask(TaskSpec):
-    @property
-    def task_type(self):
-        return "planning"
-
-    @property
-    def constraints(self):
-        return {"required_capabilities": ("forged",)}
+    def __getattribute__(self, name):
+        if name == "task_type":
+            return "planning"
+        if name == "constraints":
+            return {"required_capabilities": ("forged",)}
+        return super().__getattribute__(name)
 
 
 class RouterTaskBoundaryTests(unittest.TestCase):
