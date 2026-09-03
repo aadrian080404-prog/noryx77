@@ -29,6 +29,10 @@ class AgentSupervisor:
         try:
             agent_id = preferred or self.router.default_id()
             agent = self.router.route(agent_id)
+        except LookupError as exc:
+            if "agent_identity_untrusted" in str(exc):
+                return None, AgentDecision(agent_id, False, "agent_identity_untrusted")
+            return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
         except Exception:
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
         if agent is None:
