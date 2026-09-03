@@ -31,6 +31,8 @@ class AgentSupervisor:
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
         if agent is None:
             return None, AgentDecision(agent_id, False, "agent_unavailable")
+        if not isinstance(agent_id, str) or not agent_id or getattr(agent, "agent_id", None) != agent_id:
+            return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_identity_mismatch")
         decision = AgentDecision(agent_id, True, "agent_selected")
         if self.audit:
             self.audit.record("agent_selection", task_id=task.task_id, agent_id=agent_id, accepted=True)
