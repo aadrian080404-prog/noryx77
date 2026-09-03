@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from uuid import uuid4
-from .contracts import AgentResult, TaskSpec, VerificationResult
+from .actions import ActionGate
+from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .planning import Plan
 from .identity import AgentIdentity
+from .limits import RuntimeLimits
+from .policy import PolicyEngine
+from .security import SecurityBoundary
 
 
 @dataclass(frozen=True)
@@ -14,13 +18,20 @@ class AgentAssignment:
 
 
 class AgentCoordinator:
-    """Coordinates bounded agent execution and only accepts verified, execution-bound results."""
-    def __init__(self, router, verifier, max_agents: int = 2):
+    """Coordinates bounded agent execution and only accepts verified, gated, execution-bound results."""
+    def __init__(self, router, verifier, max_agents: int = 2, action_gate=None):
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1:
             raise ValueError("max_agents must be a positive integer")
         self.router = router
         self.verifier = verifier
         self.max_agents = max_agents
+        if action_gate is None:
+            policy = PolicyEngine()
+            security = SecurityBoundary(policy, verifier)
+            action_gate = ActionGate(policy, security, RuntimeLimits())
+        if not isinstance(action_gate, ActionGate):
+            raise ValueError("invalid_action_gate")
+        self.action_gate = action_gate
 
     def assign(self, plan: Plan, execution_id: str = "") -> tuple[AgentAssignment, ...]:
         if not isinstance(plan, Plan) or not isinstance(plan.task_id, str) or not plan.task_id.strip():
@@ -76,12 +87,25 @@ class AgentCoordinator:
             child_check = self.verifier.verify_task(child)
             if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
-            result = agent.run(child)
+            action = ActionSpec(
+                "act:" + child.task_id,
+                "compute",
+                risk_class=child.risk_class,
+                execution_id=execution_id,
+            )
+            decision, result = self.action_gate.authorize_and_execute(
+                action,
+                lambda: agent.run(child),
+                calls_used=len(results),
+                execution_id=execution_id,
+            )
+            if not decision.allowed:
+                raise RuntimeError(f"action_gate_denied:{assignment.agent_id}:{decision.verification.reason}")
+            if not isinstance(result, AgentResult):
+                raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             # Trust is live: an identity revoked while the agent executes must
             # not be able to cross the result-admission boundary.
             self._trusted_agent(assignment.agent_id)
-            if not isinstance(result, AgentResult):
-                raise RuntimeError(f"invalid_agent_result:{assignment.agent_id}")
             if result.task_id != child.task_id or result.agent_id != assignment.agent_id:
                 raise RuntimeError(f"agent_result_identity_mismatch:{assignment.agent_id}")
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
