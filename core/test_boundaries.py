@@ -109,6 +109,11 @@ class FoundationBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             audit.record("   ")
 
+    def test_audit_rejects_non_serializable_evidence(self):
+        audit = AuditLog()
+        with self.assertRaises(ValueError):
+            audit.record("test", payload={"bad": object()})
+
     def test_audit_record_is_mutation_isolated(self):
         audit = AuditLog()
         payload = {"nested": ["original"]}
@@ -124,6 +129,38 @@ class FoundationBoundaryTests(unittest.TestCase):
         snapshot = audit.snapshot()
         snapshot[0]["payload"]["nested"].append("caller-change")
         self.assertEqual(audit.snapshot()[0]["payload"]["nested"], ["original"])
+
+    def test_audit_integrity_accepts_untampered_chain(self):
+        audit = AuditLog()
+        audit.record("first", value=1)
+        audit.record("second", value=2)
+        self.assertTrue(audit.verify_integrity())
+        self.assertEqual(len(audit.digest()), 64)
+
+    def test_audit_integrity_detects_payload_tampering(self):
+        audit = AuditLog()
+        audit.record("first", payload={"value": 1})
+        audit._events[0]["payload"]["value"] = 99
+        self.assertFalse(audit.verify_integrity())
+
+    def test_audit_integrity_detects_removal_and_reordering(self):
+        audit = AuditLog()
+        audit.record("first")
+        audit.record("second")
+        audit._events.pop(0)
+        self.assertFalse(audit.verify_integrity())
+
+        audit = AuditLog()
+        audit.record("first")
+        audit.record("second")
+        audit._events.reverse()
+        self.assertFalse(audit.verify_integrity())
+
+    def test_audit_integrity_detects_digest_tampering(self):
+        audit = AuditLog()
+        audit.record("first")
+        audit._digests[0] = "f" * 64
+        self.assertFalse(audit.verify_integrity())
 
 if __name__ == "__main__":
     unittest.main()
