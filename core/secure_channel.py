@@ -40,39 +40,20 @@ class SecureFrame:
 
     def is_well_formed(self) -> bool:
         return (
-            isinstance(self.sender_id, str)
-            and bool(self.sender_id.strip())
-            and len(self.sender_id.encode("utf-8")) <= MAX_ID_SIZE
-            and isinstance(self.session_id, str)
-            and bool(self.session_id.strip())
-            and len(self.session_id.encode("utf-8")) <= MAX_ID_SIZE
-            and isinstance(self.sequence, int)
-            and not isinstance(self.sequence, bool)
-            and 0 <= self.sequence <= MAX_SEQUENCE
-            and isinstance(self.payload, bytes)
-            and len(self.payload) <= MAX_FRAME_SIZE
-            and isinstance(self.mac, bytes)
-            and len(self.mac) == MAC_SIZE
-            and self.version == PROTOCOL_VERSION
+            isinstance(self.sender_id, str) and bool(self.sender_id.strip()) and len(self.sender_id.encode("utf-8")) <= MAX_ID_SIZE
+            and isinstance(self.session_id, str) and bool(self.session_id.strip()) and len(self.session_id.encode("utf-8")) <= MAX_ID_SIZE
+            and isinstance(self.sequence, int) and not isinstance(self.sequence, bool) and 0 <= self.sequence <= MAX_SEQUENCE
+            and isinstance(self.payload, bytes) and len(self.payload) <= MAX_FRAME_SIZE
+            and isinstance(self.mac, bytes) and len(self.mac) == MAC_SIZE and self.version == PROTOCOL_VERSION
         )
 
 
 class SecureChannel:
     """Symmetric authenticated channel with replay defense and optional identity trust anchors."""
 
-    def __init__(
-        self,
-        provider: KeyProvider,
-        *,
-        key_id: str,
-        local_id: str,
-        peer_id: str,
-        session_id: str,
-        direction: str,
-        identity_registry: IdentityRegistry | None = None,
-        local_identity: AgentIdentity | None = None,
-        peer_identity: AgentIdentity | None = None,
-    ):
+    def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str,
+                 identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None,
+                 peer_identity: AgentIdentity | None = None):
         if not isinstance(provider, KeyProvider):
             raise ValueError("key_provider_required")
         for name, value in (("key_id", key_id), ("local_id", local_id), ("peer_id", peer_id), ("session_id", session_id), ("direction", direction)):
@@ -84,8 +65,7 @@ class SecureChannel:
             raise ValueError("local_and_peer_id_must_differ")
         if direction not in {"send", "receive"}:
             raise ValueError("invalid_direction")
-        identity_args = (identity_registry, local_identity, peer_identity)
-        if any(value is not None for value in identity_args):
+        if any(value is not None for value in (identity_registry, local_identity, peer_identity)):
             if not isinstance(identity_registry, IdentityRegistry):
                 raise ValueError("identity_registry_required")
             if not isinstance(local_identity, AgentIdentity) or not isinstance(peer_identity, AgentIdentity):
@@ -94,17 +74,12 @@ class SecureChannel:
                 raise ValueError("channel_identity_mismatch")
             if not identity_registry.is_trusted(local_identity) or not identity_registry.is_trusted(peer_identity):
                 raise ValueError("channel_identity_untrusted")
-        self._provider = provider
-        self._key_id = key_id
-        self._local_id = local_id
-        self._peer_id = peer_id
-        self._session_id = session_id
-        self._direction = direction
+        self._provider, self._key_id = provider, key_id
+        self._local_id, self._peer_id = local_id, peer_id
+        self._session_id, self._direction = session_id, direction
         self._identity_registry = identity_registry
-        self._local_identity = local_identity
-        self._peer_identity = peer_identity
-        self._send_sequence = 0
-        self._last_received = -1
+        self._local_identity, self._peer_identity = local_identity, peer_identity
+        self._send_sequence, self._last_received = 0, -1
 
     def _channel_key(self) -> bytes:
         try:
@@ -114,7 +89,7 @@ class SecureChannel:
         if not isinstance(root_key, bytes) or len(root_key) != KEY_SIZE:
             raise ValueError("channel_key_required")
         try:
-            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=(b"secure-channel/" + self._direction.encode("ascii")))
+            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=b"secure-channel/" + self._direction.encode("ascii"))
         except Exception as exc:
             raise ValueError("channel_key_derivation_failed") from exc
 
@@ -134,6 +109,11 @@ class SecureChannel:
             raise ValueError("frame_size_exceeded")
         if self._send_sequence > MAX_SEQUENCE:
             raise ValueError("sequence_exhausted")
+        if self._identity_registry is not None:
+            if not isinstance(self._local_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._local_identity):
+                raise ValueError("channel_identity_untrusted")
+            if self._local_identity.agent_id != self._local_id:
+                raise ValueError("channel_identity_mismatch")
         sequence = self._send_sequence
         mac = self._mac(self._local_id, sequence, payload)
         self._send_sequence += 1
