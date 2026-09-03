@@ -44,6 +44,26 @@ class SecurityContractTests(unittest.TestCase):
         decision = self.gate.authorize(ActionSpec("a", "compute"), calls_used=-1)
         self.assertFalse(decision.allowed)
 
+    def test_policy_exception_fails_closed(self):
+        class ExplodingPolicy:
+            def allows(self, action):
+                raise RuntimeError("policy backend failure")
+
+        gate = ActionGate(ExplodingPolicy(), object(), RuntimeLimits())
+        decision = gate.authorize(ActionSpec("a", "compute"))
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "policy_evaluation_failure")
+
+    def test_security_exception_fails_closed(self):
+        class ExplodingSecurity:
+            def allows(self, action):
+                raise RuntimeError("security backend failure")
+
+        gate = ActionGate(PolicyEngine(), ExplodingSecurity(), RuntimeLimits())
+        decision = gate.authorize(ActionSpec("a", "compute"))
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "security_evaluation_failure")
+
 
 class TaskContractTests(unittest.TestCase):
     def test_invalid_risk_is_rejected(self):
