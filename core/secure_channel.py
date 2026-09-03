@@ -1,4 +1,4 @@
-"""Authenticated session framing with strict identity and replay protection."""
+"""Authenticated session framing with strict cryptographic identity and replay protection."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Final
 from cryptography.hazmat.primitives import hashes, hmac
 
 from .crypto import KEY_SIZE, KeyProvider, derive_subkey
+from .identity import AgentIdentity, IdentityRegistry
 
 
 MAC_SIZE: Final[int] = 32
@@ -57,7 +58,7 @@ class SecureFrame:
 
 
 class SecureChannel:
-    """Symmetric authenticated channel with identity binding and monotonic replay defense."""
+    """Symmetric authenticated channel with replay defense and optional identity trust anchors."""
 
     def __init__(
         self,
@@ -68,6 +69,9 @@ class SecureChannel:
         peer_id: str,
         session_id: str,
         direction: str,
+        identity_registry: IdentityRegistry | None = None,
+        local_identity: AgentIdentity | None = None,
+        peer_identity: AgentIdentity | None = None,
     ):
         if not isinstance(provider, KeyProvider):
             raise ValueError("key_provider_required")
@@ -80,12 +84,25 @@ class SecureChannel:
             raise ValueError("local_and_peer_id_must_differ")
         if direction not in {"send", "receive"}:
             raise ValueError("invalid_direction")
+        identity_args = (identity_registry, local_identity, peer_identity)
+        if any(value is not None for value in identity_args):
+            if not isinstance(identity_registry, IdentityRegistry):
+                raise ValueError("identity_registry_required")
+            if not isinstance(local_identity, AgentIdentity) or not isinstance(peer_identity, AgentIdentity):
+                raise ValueError("channel_identities_required")
+            if local_identity.agent_id != local_id or peer_identity.agent_id != peer_id:
+                raise ValueError("channel_identity_mismatch")
+            if not identity_registry.is_trusted(local_identity) or not identity_registry.is_trusted(peer_identity):
+                raise ValueError("channel_identity_untrusted")
         self._provider = provider
         self._key_id = key_id
         self._local_id = local_id
         self._peer_id = peer_id
         self._session_id = session_id
         self._direction = direction
+        self._identity_registry = identity_registry
+        self._local_identity = local_identity
+        self._peer_identity = peer_identity
         self._send_sequence = 0
         self._last_received = -1
 
@@ -97,25 +114,13 @@ class SecureChannel:
         if not isinstance(root_key, bytes) or len(root_key) != KEY_SIZE:
             raise ValueError("channel_key_required")
         try:
-            return derive_subkey(
-                root_key,
-                salt=self._session_id.encode("utf-8"),
-                context=(b"secure-channel/" + self._direction.encode("ascii")),
-            )
+            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=(b"secure-channel/" + self._direction.encode("ascii")))
         except Exception as exc:
             raise ValueError("channel_key_derivation_failed") from exc
 
     @staticmethod
     def _encode(version: int, sender_id: str, session_id: str, sequence: int, payload: bytes) -> bytes:
-        return (
-            _DOMAIN
-            + version.to_bytes(2, "big")
-            + _field(sender_id)
-            + _field(session_id)
-            + sequence.to_bytes(8, "big")
-            + len(payload).to_bytes(8, "big")
-            + payload
-        )
+        return _DOMAIN + version.to_bytes(2, "big") + _field(sender_id) + _field(session_id) + sequence.to_bytes(8, "big") + len(payload).to_bytes(8, "big") + payload
 
     def _mac(self, sender_id: str, sequence: int, payload: bytes) -> bytes:
         signer = hmac.HMAC(self._channel_key(), hashes.SHA256())
@@ -139,6 +144,11 @@ class SecureChannel:
             raise ValueError("invalid_secure_frame")
         if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
             raise ValueError("channel_identity_mismatch")
+        if self._identity_registry is not None:
+            if not isinstance(self._peer_identity, AgentIdentity) or not self._identity_registry.is_trusted(self._peer_identity):
+                raise ValueError("channel_identity_untrusted")
+            if self._peer_identity.agent_id != frame.sender_id:
+                raise ValueError("channel_identity_mismatch")
         if frame.sequence <= self._last_received:
             raise ValueError("replayed_frame")
         try:
