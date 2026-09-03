@@ -19,7 +19,7 @@ class IdentityBoundAgent(Agent):
 
     def run(self, task):
         check = self.verifier.verify_output("ok", stage="agent_result")
-        return AgentResult(self.agent_id, task.task_id, "completed", "ok", check)
+        return AgentResult(self.agent_id, task.task_id, "completed", "ok", check, task.execution_id)
 
 
 class IdentityBoundaryTests(unittest.TestCase):
@@ -70,6 +70,18 @@ class IdentityBoundaryTests(unittest.TestCase):
         self.assertFalse(check.valid)
         self.assertEqual(check.reason, "agent_unavailable")
 
+    def test_supervisor_rejects_cross_execution_result_transplant(self):
+        router = ResourceRouter(self.registry)
+        router.register(self.agent)
+        supervisor = AgentSupervisor(router, self.verifier)
+        old_task = replace(self.task, execution_id="execution-old")
+        new_task = replace(self.task, execution_id="execution-new")
+        result = AgentResult("agent-a", "t", "completed", "ok", VerificationResult(True, "agent_result"), "execution-old")
+        check = supervisor.admit(new_task, result)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "execution_identity_mismatch")
+        self.assertTrue(supervisor.admit(old_task, result).valid)
+
     def test_coordinator_rejects_revoked_agent_before_execution(self):
         router = ResourceRouter(self.registry)
         router.register(self.agent)
@@ -85,6 +97,7 @@ class IdentityBoundaryTests(unittest.TestCase):
         results = coordinator.execute(self.task, self.plan)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].agent_id, "agent-a")
+        self.assertTrue(results[0].execution_id)
 
 
 if __name__ == "__main__":
