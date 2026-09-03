@@ -1,6 +1,6 @@
 import unittest
 
-from .actions import ActionGate
+from .actions import ActionGate, AuthorizationAuthority
 from .contracts import ActionSpec, TaskSpec
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
@@ -34,6 +34,36 @@ class SecurityContractTests(unittest.TestCase):
     def test_authorization_flag_denied(self):
         decision = self.gate.authorize(ActionSpec("a", "compute", requires_authorization=True))
         self.assertFalse(decision.allowed)
+
+    def test_valid_grant_allows_exact_action_once(self):
+        authority = AuthorizationAuthority(b"x" * 32)
+        verifier = VerificationEngine()
+        policy = PolicyEngine()
+        security = SecurityBoundary(policy, verifier)
+        gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2), authority)
+        action = ActionSpec("a", "compute", target="local", requires_authorization=True, execution_id="exec-a")
+        grant = authority.issue(action, "exec-a")
+
+        first = gate.authorize(action, execution_id="exec-a", grant=grant)
+        second = gate.authorize(action, execution_id="exec-a", grant=grant)
+
+        self.assertTrue(first.allowed)
+        self.assertFalse(second.allowed)
+        self.assertEqual(second.verification.reason, "invalid_authorization_grant")
+
+    def test_valid_grant_does_not_override_high_risk_policy(self):
+        authority = AuthorizationAuthority(b"x" * 32)
+        verifier = VerificationEngine()
+        policy = PolicyEngine()
+        security = SecurityBoundary(policy, verifier)
+        gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2), authority)
+        action = ActionSpec("a", "publish", target="remote", requires_authorization=True, execution_id="exec-a")
+        grant = authority.issue(action, "exec-a")
+
+        decision = gate.authorize(action, execution_id="exec-a", grant=grant)
+
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.verification.reason, "policy")
 
     def test_budget_boundary(self):
         action = ActionSpec("a", "compute")
