@@ -61,6 +61,23 @@ def test_journal_rejects_signature_from_different_key_at_commit():
         journal.append(make_attestation(other))
 
 
+def test_registry_commit_rejects_substituted_key_fingerprint():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signer = Ed25519AttestationSigner(private_key)
+    journal = StateJournal(verifier=signer, identity_registry=registry)
+    forged = make_attestation(signer)
+    forged = forged.__class__(
+        execution_id=forged.execution_id, principal_id=forged.principal_id, step_id=forged.step_id,
+        agent_id=forged.agent_id, agent_key_fingerprint="f" * 64,
+        action_digest=forged.action_digest, output_digest=forged.output_digest,
+        verified=forged.verified, detail=forged.detail, signature=b"x" * 64,
+    )
+    with pytest.raises(PermissionError, match="fingerprint"):
+        journal.append(forged)
+
+
 def test_recovery_rejects_tampered_signed_entry():
     signer = Ed25519AttestationSigner.generate()
     journal = StateJournal(verifier=signer)
