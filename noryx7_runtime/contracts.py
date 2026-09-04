@@ -82,3 +82,4 @@ class Attestation:
     detail: str = ""
     signature: bytes = b""
     previous_attestation_digest: str = "0" * 64
+    runtime_id: str = ""
