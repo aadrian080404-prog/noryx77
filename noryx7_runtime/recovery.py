@@ -39,11 +39,14 @@ class RuntimeRecovery:
         previous_sequence = -1
         previous_digest = "0" * 64
         seen_steps = set()
+        first = True
         for entry in entries:
             if not isinstance(entry, JournalEntry):
                 raise RecoveryError("invalid journal entry")
             if entry.step_id in seen_steps:
                 raise RecoveryError("duplicate committed step")
+            if first and entry.sequence != 0:
+                raise RecoveryError("journal sequence is not strictly increasing")
             if entry.sequence <= previous_sequence:
                 raise RecoveryError("journal sequence is not strictly increasing")
             if runtime_id is not None and entry.runtime_id != runtime_id:
@@ -94,6 +97,7 @@ class RuntimeRecovery:
             previous_digest = attestation_digest(attestation)
             previous_sequence = entry.sequence
             seen_steps.add(entry.step_id)
+            first = False
 
     @staticmethod
     def _verify_with_identity(identity, attestation, signature, verifier):
