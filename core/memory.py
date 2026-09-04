@@ -33,11 +33,9 @@ class MemoryStore:
             return False
         return len(execution_id.encode("utf-8")) <= cls.MAX_EXECUTION_ID_BYTES
 
-    def put(self, item: MemoryItem) -> None:
+    def _validate_item(self, item: MemoryItem) -> None:
         if not isinstance(item, MemoryItem) or not isinstance(item.memory_id, str) or not item.memory_id:
             raise ValueError("valid memory item with memory_id required")
-        if item.memory_id not in self._items and len(self._items) >= self.max_items:
-            raise MemoryError("memory_capacity_exceeded")
         if item.kind not in self.VALID_KINDS:
             raise ValueError("unsupported memory kind")
         if not isinstance(item.source, str):
@@ -48,6 +46,22 @@ class MemoryStore:
             raise ValueError("memory importance must be numeric")
         if not 0.0 <= float(item.importance) <= 1.0:
             raise ValueError("memory importance must be between 0 and 1")
+
+    def put(self, item_or_id, content=None, *, execution_id: str | None = None) -> None:
+        """Store a MemoryItem; retain the legacy id/content form as a safe adapter."""
+        if isinstance(item_or_id, MemoryItem):
+            if content is not None or execution_id is not None:
+                raise TypeError("MemoryItem form does not accept content or execution_id")
+            item = item_or_id
+        else:
+            if not isinstance(item_or_id, str) or not item_or_id:
+                raise ValueError("valid memory item with memory_id required")
+            if execution_id is None:
+                execution_id = ""
+            item = MemoryItem(item_or_id, content, execution_id=execution_id)
+        self._validate_item(item)
+        if item.memory_id not in self._items and len(self._items) >= self.max_items:
+            raise MemoryError("memory_capacity_exceeded")
         try:
             isolated = deepcopy(item)
         except Exception as exc:
