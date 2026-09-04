@@ -7,6 +7,7 @@ from typing import Protocol
 
 from core.identity import IdentityRegistry
 
+from .attestation import attestation_digest
 from .contracts import Attestation
 
 
@@ -26,6 +27,7 @@ class JournalEntry:
     action_digest: str
     output_digest: str
     signature: bytes
+    previous_attestation_digest: str = "0" * 64
 
 
 class StateJournal:
@@ -61,6 +63,10 @@ class StateJournal:
     def require_signatures(self) -> bool:
         return self._require_signatures
 
+    @property
+    def identity_registry(self) -> IdentityRegistry | None:
+        return self._identity_registry
+
     def append(self, attestation: Attestation) -> JournalEntry:
         self._validate_attestation(attestation)
         if self._identity_registry is not None:
@@ -86,6 +92,9 @@ class StateJournal:
         with self._lock:
             if key in self._keys:
                 raise ValueError("duplicate execution step")
+            previous = self._previous_digest_locked(attestation.execution_id)
+            if attestation.previous_attestation_digest != previous:
+                raise ValueError("attestation chain link mismatch")
             entry = JournalEntry(
                 sequence=len(self._entries),
                 execution_id=attestation.execution_id,
@@ -96,10 +105,34 @@ class StateJournal:
                 action_digest=attestation.action_digest,
                 output_digest=attestation.output_digest,
                 signature=attestation.signature,
+                previous_attestation_digest=attestation.previous_attestation_digest,
             )
             self._entries.append(entry)
             self._keys.add(key)
             return entry
+
+    def _previous_digest_locked(self, execution_id: str) -> str:
+        for entry in reversed(self._entries):
+            if entry.execution_id == execution_id:
+                return self._entry_digest(entry)
+        return "0" * 64
+
+    @staticmethod
+    def _entry_digest(entry: JournalEntry) -> str:
+        attestation = Attestation(
+            execution_id=entry.execution_id,
+            principal_id=entry.principal_id,
+            step_id=entry.step_id,
+            agent_id=entry.agent_id,
+            agent_key_fingerprint=entry.agent_key_fingerprint,
+            action_digest=entry.action_digest,
+            output_digest=entry.output_digest,
+            verified=True,
+            detail="verified",
+            signature=entry.signature,
+            previous_attestation_digest=entry.previous_attestation_digest,
+        )
+        return attestation_digest(attestation)
 
     @staticmethod
     def _validate_attestation(attestation: Attestation) -> None:
@@ -113,12 +146,13 @@ class StateJournal:
             attestation.agent_key_fingerprint,
             attestation.action_digest,
             attestation.output_digest,
+            attestation.previous_attestation_digest,
         )
         if any(not isinstance(value, str) or not value for value in fields):
             raise ValueError("incomplete attestation")
         if not attestation.verified:
             raise PermissionError("cannot commit unverified result")
-        for digest in (attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest):
+        for digest in fields[4:]:
             if len(digest) != 64:
                 raise ValueError("attestation digest must be SHA-256 hex")
             try:
