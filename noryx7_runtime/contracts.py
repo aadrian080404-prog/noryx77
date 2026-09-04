@@ -83,3 +83,5 @@ class Attestation:
     signature: bytes = b""
     previous_attestation_digest: str = "0" * 64
     runtime_id: str = ""
+    provenance_digest: str = ""
+    provenance_seal: bytes = b""
