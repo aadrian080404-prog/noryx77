@@ -7,7 +7,7 @@ class TaskSpec:
     task_id: str
     task_type: str
     objective: str
-    input: Any
+    input: Any = None
     constraints: Mapping[str, Any] = field(default_factory=dict)
     verification_requirements: tuple[str, ...] = ()
     risk_class: str = "normal"
