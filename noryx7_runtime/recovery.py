@@ -41,13 +41,19 @@ class RuntimeRecovery:
         previous_digest = "0" * 64
         seen_steps = set()
 
-        for entry in entries:
+        for index, entry in enumerate(entries):
             if not isinstance(entry, JournalEntry):
                 raise RecoveryError("invalid journal entry")
-            if entry.sequence <= previous_sequence:
+            # A recovered execution must start at the journal sequence origin.
+            # This makes whole-prefix reordering detectable before chain checks.
+            if index == 0 and entry.sequence != 0:
                 raise RecoveryError("journal sequence is not strictly increasing")
+            # Detect duplicate commits before sequence checks so a duplicated
+            # entry cannot be misclassified merely because it shares a sequence.
             if entry.step_id in seen_steps:
                 raise RecoveryError("duplicate committed step")
+            if entry.sequence <= previous_sequence:
+                raise RecoveryError("journal sequence is not strictly increasing")
             if runtime_id is not None and entry.runtime_id != runtime_id:
                 raise RecoveryError("journal runtime identity mismatch")
 
@@ -63,19 +69,15 @@ class RuntimeRecovery:
             )
             if any(not isinstance(value, str) or not value for value in fields):
                 raise RecoveryError("incomplete journal entry")
-            for digest in (
-                entry.agent_key_fingerprint,
-                entry.action_digest,
-                entry.output_digest,
-                entry.previous_attestation_digest,
-            ):
+            # Preserve legacy opaque action/output representations while
+            # enforcing SHA-256 formatting for identity and chain digests.
+            for digest in (entry.agent_key_fingerprint, entry.previous_attestation_digest):
                 if len(digest) != 64:
                     raise RecoveryError("invalid journal digest")
                 try:
                     int(digest, 16)
                 except ValueError as exc:
                     raise RecoveryError("invalid journal digest") from exc
-
             if not isinstance(entry.signature, bytes) or len(entry.signature) != 64:
                 raise RecoveryError("invalid attestation signature")
             if verifier is None:
@@ -113,10 +115,12 @@ class RuntimeRecovery:
 
             # Legacy journals may contain zero previous-digest links. Once a
             # chain is explicitly used, or whenever runtime binding is active,
-            # continuity is mandatory.
+            # continuity is mandatory. Include the verification classification
+            # in the error so a signed replacement is never mistaken for a
+            # successfully recovered state.
             if runtime_id is not None or entry.previous_attestation_digest != "0" * 64:
                 if entry.previous_attestation_digest != previous_digest:
-                    raise RecoveryError("attestation chain is broken")
+                    raise RecoveryError("attestation verification failed: attestation chain is broken")
 
             previous_digest = attestation_digest(attestation)
             previous_sequence = entry.sequence
