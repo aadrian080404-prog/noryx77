@@ -12,6 +12,7 @@ from core.identity import AgentIdentity, IdentityRegistry
 from .adapters import ExecutionAdapter
 from .attestation import AttestationSigner, attestation_digest, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
+from .lifecycle import ExecutionLifecycle
 from .scheduler import Scheduler
 
 
@@ -87,6 +88,18 @@ class RuntimeEngine:
     def runtime_id(self) -> str:
         return self._runtime_id
 
+    @staticmethod
+    def _result(
+        lifecycle: ExecutionLifecycle,
+        status: ExecutionStatus,
+        attestations: Sequence[Attestation],
+        outputs: Sequence[Any],
+        error: str | None = None,
+    ) -> RuntimeResult:
+        """Make lifecycle state authoritative for every externally visible result."""
+        final = lifecycle.transition(status)
+        return RuntimeResult(final.execution_id, final.status, tuple(attestations), tuple(outputs), error)
+
     def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
         dispatch = self._adapter.execute if self._adapter is not None else executor
         if dispatch is None:
@@ -129,11 +142,13 @@ class RuntimeEngine:
             raise ValueError("an execution adapter or executor is required")
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
-        if len(steps) > self._max_actions:
-            return RuntimeResult(execution_id or uuid4().hex, ExecutionStatus.REJECTED, (), (), "action_budget_exceeded")
 
+        lifecycle = ExecutionLifecycle(execution_id or uuid4().hex, intent.principal_id)
+        if len(steps) > self._max_actions:
+            return self._result(lifecycle, ExecutionStatus.REJECTED, (), (), "action_budget_exceeded")
+        lifecycle = lifecycle.transition(ExecutionStatus.RUNNING)
         context = ExecutionContext(
-            execution_id=execution_id or uuid4().hex,
+            execution_id=lifecycle.execution_id,
             principal_id=intent.principal_id,
             deadline_monotonic=self._clock() + timeout_seconds,
             max_actions=self._max_actions,
@@ -146,7 +161,7 @@ class RuntimeEngine:
 
         for step in ordered:
             if self._clock() > context.deadline_monotonic:
-                return RuntimeResult(context.execution_id, ExecutionStatus.CANCELLED, tuple(attestations), tuple(outputs), "deadline_exceeded")
+                return self._result(lifecycle, ExecutionStatus.CANCELLED, attestations, outputs, "deadline_exceeded")
 
             envelope = ActionEnvelope(
                 execution_id=context.execution_id,
@@ -194,26 +209,26 @@ class RuntimeEngine:
                 if self._attestation_signer is not None:
                     attestation = signed_attestation(attestation, self._attestation_signer)
             except Exception as exc:
-                return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
+                return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
 
             if not verified:
                 attestations.append(attestation)
-                return RuntimeResult(context.execution_id, ExecutionStatus.REJECTED, tuple(attestations), tuple(outputs), "result_verification_failed")
+                return self._result(lifecycle, ExecutionStatus.REJECTED, attestations, outputs, "result_verification_failed")
 
             if self._adapter is not None and not attestation.signature:
-                return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), "unsigned_attestation")
+                return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, "unsigned_attestation")
 
             if committer is not None:
                 try:
                     committer(envelope, attestation, output)
                 except Exception as exc:
-                    return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
+                    return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
             attestations.append(attestation)
             outputs.append(output)
             if attestation.signature:
                 previous_attestation_digest = attestation_digest(attestation)
 
-        return RuntimeResult(context.execution_id, ExecutionStatus.SUCCEEDED, tuple(attestations), tuple(outputs))
+        return self._result(lifecycle, ExecutionStatus.SUCCEEDED, attestations, outputs)
 
     @staticmethod
     def _topological_order(steps: Iterable[PlanStep]) -> tuple[PlanStep, ...]:
