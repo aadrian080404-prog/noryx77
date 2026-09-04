@@ -98,27 +98,28 @@ class ModelFabric:
         if not isinstance(request, ModelRequest): raise TypeError("invalid_model_request")
         return self._request_digest(request)
     @staticmethod
-    def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate]) -> str:
-        return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates)})
+    def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate], selected_model: str, request_digest: str) -> str:
+        return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates), "selected_model": selected_model, "request_digest": request_digest})
     def result_digest(self, request: ModelRequest, result: FabricResult) -> str:
         """Return the verified, deterministic result-envelope digest."""
         if not self.verify_result(request, result): raise ValueError("invalid_fabric_result")
-        return self._result_envelope_digest(result.output, result.candidates)
+        return self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
     def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
         if self._binding_key is None: return output_digest
         payload = f"{self._runtime_id or ''}:{request_digest}:{output_digest}:{selected_model}".encode("utf-8")
         return hmac.new(self._binding_key, payload, hashlib.sha256).hexdigest()
     def verify_result(self, request: ModelRequest, result: FabricResult) -> bool:
-        if not isinstance(result, FabricResult): return False
+        if not isinstance(request, ModelRequest) or not isinstance(result, FabricResult): return False
         if self._runtime_id is not None and result.runtime_id != self._runtime_id: return False
-        if result.request_digest != self._request_digest(request) or not result.candidates: return False
+        expected_request_digest = self._request_digest(request)
+        if result.request_digest != expected_request_digest or not result.candidates: return False
         names: set[str] = set()
         for candidate in result.candidates:
             if not isinstance(candidate, ModelCandidate) or not isinstance(candidate.name, str) or not candidate.name or candidate.name in names: return False
             if _digest(candidate.output) != candidate.output_digest or candidate.latency_ms < 0 or candidate.cost < 0: return False
             names.add(candidate.name)
         if result.selected_model not in names: return False
-        expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates)
+        expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
         if self._binding_key is None:
             return hmac.compare_digest(result.result_mac, expected_envelope_digest)
         expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
@@ -138,7 +139,7 @@ class ModelFabric:
         elif synthesizer is not None:
             output = synthesizer(tuple(candidates)); selected_model, confidence = candidates[0].name, 0.0
         else: output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
-        request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates)
+        request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest)
         result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model))
         if not self.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
         return result
