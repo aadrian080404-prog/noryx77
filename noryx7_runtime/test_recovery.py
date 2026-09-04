@@ -1,19 +1,33 @@
+import hashlib
+
 import pytest
 
+from .attestation import Ed25519AttestationSigner, signed_attestation
 from .contracts import Attestation
 from .recovery import RecoveryError, RuntimeRecovery
 from .state import JournalEntry, StateJournal
 
 
-def attestation(execution="exec", step="a"):
-    return Attestation(execution, "user", step, "adapter", f"a-{step}", f"o-{step}", True)
+def attestation(signer, execution="exec", step="a", principal="user"):
+    return signed_attestation(Attestation(
+        execution_id=execution,
+        principal_id=principal,
+        step_id=step,
+        agent_id="adapter",
+        agent_key_fingerprint=hashlib.sha256(signer.public_key_bytes).hexdigest(),
+        action_digest=(step + "a")[:64].ljust(64, "a"),
+        output_digest=(step + "o")[:64].ljust(64, "b"),
+        verified=True,
+        detail="verified",
+    ), signer)
 
 
 def test_recovery_returns_only_committed_execution_entries():
-    journal = StateJournal()
-    journal.append(attestation("one", "a"))
-    journal.append(attestation("two", "b"))
-    journal.append(attestation("one", "c"))
+    signer = Ed25519AttestationSigner.generate()
+    journal = StateJournal(verifier=signer)
+    journal.append(attestation(signer, "one", "a"))
+    journal.append(attestation(signer, "two", "b"))
+    journal.append(attestation(signer, "one", "c"))
 
     recovered = RuntimeRecovery(journal).recover("one")
     assert [entry.step_id for entry in recovered] == ["a", "c"]
@@ -21,25 +35,29 @@ def test_recovery_returns_only_committed_execution_entries():
 
 
 def test_recovery_rejects_duplicate_step_commits():
-    journal = StateJournal()
-    journal._entries.extend([
-        JournalEntry(0, "exec", "a", "digest-a", "output-a"),
-        JournalEntry(1, "exec", "a", "digest-a2", "output-a2"),
-    ])
+    signer = Ed25519AttestationSigner.generate()
+    journal = StateJournal(verifier=signer)
+    first = journal.append(attestation(signer, "exec", "a"))
+    duplicate = JournalEntry(
+        1, first.execution_id, first.principal_id, first.step_id, first.agent_id,
+        first.agent_key_fingerprint, first.action_digest, first.output_digest, first.signature,
+    )
+    journal._entries.append(duplicate)
     with pytest.raises(RecoveryError, match="duplicate committed step"):
         RuntimeRecovery(journal).recover("exec")
 
 
 def test_recovery_rejects_non_monotonic_sequence():
-    journal = StateJournal()
-    journal._entries.extend([
-        JournalEntry(4, "exec", "a", "digest-a", "output-a"),
-        JournalEntry(3, "exec", "b", "digest-b", "output-b"),
-    ])
+    signer = Ed25519AttestationSigner.generate()
+    journal = StateJournal(verifier=signer)
+    first = journal.append(attestation(signer, "exec", "a"))
+    second = journal.append(attestation(signer, "exec", "b"))
+    journal._entries = [second, first]
     with pytest.raises(RecoveryError, match="strictly increasing"):
         RuntimeRecovery(journal).recover("exec")
 
 
 def test_recovery_rejects_invalid_execution_id():
+    signer = Ed25519AttestationSigner.generate()
     with pytest.raises(ValueError, match="invalid execution identity"):
-        RuntimeRecovery(StateJournal()).recover("")
+        RuntimeRecovery(StateJournal(verifier=signer)).recover("")
