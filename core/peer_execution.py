@@ -77,6 +77,7 @@ class PeerExecutionCoordinator:
             second.agent_id,
             "independently challenge the peer output before consensus",
             revision=0,
+            target_output=second.output,
         )
         collaboration = self.collaboration.admit_consensus(task, first, second, evidence)
         if collaboration.valid:
@@ -104,6 +105,7 @@ class PeerExecutionCoordinator:
                 proposed.challenge,
                 revision=revision,
                 previous_evidence_digest=previous_digest,
+                target_output=current_second.output,
             )
             collaboration = self.collaboration.admit_consensus(task, current_first, current_second, evidence)
             if collaboration.valid:
