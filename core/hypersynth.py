@@ -14,6 +14,7 @@ from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
 from .security import SecurityBoundary
 from .supervisor import AgentSupervisor
 from .metacognition import MetacognitionEngine
+from .provenance import ProvenanceContext, canonical_digest, seal_provenance, verify_provenance
 
 
 @dataclass(frozen=True)
@@ -26,13 +27,17 @@ class CognitiveState:
 
 
 class Hypersynth:
-    """Bounded cognitive kernel with one immutable execution identity per run."""
+    """Bounded cognitive kernel with immutable execution and optional cryptographic provenance."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, provenance_key=None, runtime_id=""):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
+        if provenance_key is not None and (not isinstance(provenance_key, bytes) or len(provenance_key) < 32): raise ValueError("provenance key must contain at least 32 bytes")
+        if not isinstance(runtime_id, str) or len(runtime_id.encode("utf-8")) > 256: raise ValueError("invalid runtime_id")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
+        self.provenance_key = bytes(provenance_key) if provenance_key is not None else None
+        self.runtime_id = runtime_id
         bounded_steps = min(max_steps, max_agents)
         self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
@@ -66,6 +71,20 @@ class Hypersynth:
         if task.execution_id: return task
         return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
 
+    def _provenance_start(self, task, route_digest=""):
+        if self.provenance_key is None: return None
+        principal_id = task.constraints.get("principal_id", "") if hasattr(task.constraints, "get") else ""
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            raise ValueError("missing_provenance_principal")
+        runtime_id = self.runtime_id or task.constraints.get("runtime_id", "")
+        if not runtime_id: raise ValueError("missing_provenance_runtime")
+        memory_digest = canonical_digest(tuple(self.memory.list(execution_id=task.execution_id))) if self.memory is not None else canonical_digest(())
+        return ProvenanceContext(runtime_id, task.execution_id, principal_id, memory_digest, route_digest or canonical_digest(()), canonical_digest(task))
+
+    def _provenance_verify(self, context):
+        if context is None: return True
+        return verify_provenance(context, seal_provenance(context, self.provenance_key), self.provenance_key)
+
     def run(self, task: TaskSpec, *, deadline_check=None):
         task = self._bind_execution(task)
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
@@ -76,7 +95,8 @@ class Hypersynth:
             return self._reject("perception", task, check)
         timeout = self._deadline_rejection(task, "perception", deadline_check)
         if timeout: return timeout
-        subtasks = self._decompose(task)
+        try: subtasks = self._decompose(task)
+        except Exception: return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_failure"))
         if isinstance(subtasks, dict): return subtasks
         timeout = self._deadline_rejection(task, "context", deadline_check)
         if timeout: return timeout
@@ -112,6 +132,12 @@ class Hypersynth:
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
             assignments.append((selected, child, step))
+        try:
+            route_digest = canonical_digest(tuple((child.task_id, agent.agent_id, step.action_type, step.risk_class) for agent, child, step in assignments))
+            provenance = self._provenance_start(task, route_digest)
+            if provenance is not None and not self._provenance_verify(provenance): return self._reject("allocation", task, VerificationResult(False, "provenance", "provenance_seal_failure"))
+        except Exception as exc:
+            return self._reject("allocation", task, VerificationResult(False, "provenance", str(exc)))
         results = []
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
@@ -119,10 +145,8 @@ class Hypersynth:
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
             try:
                 decision, result = self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
-                if not decision.allowed:
-                    return self._reject("execution", task, decision.verification, results=tuple(results))
-            except Exception:
-                return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
+                if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
+            except Exception: return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
@@ -143,6 +167,12 @@ class Hypersynth:
         try: output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
         except Exception: return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
         if not self._accepts_verification(output_check, "hypersynth_result"): return self._reject("verification", task, output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification"), results=tuple(results))
+        if provenance is not None:
+            try:
+                provenance = provenance.bind_result(final_output)
+                provenance_seal = seal_provenance(provenance, self.provenance_key)
+                if not verify_provenance(provenance, provenance_seal, self.provenance_key): return self._reject("verification", task, VerificationResult(False, "provenance", "result_provenance_failure"), results=tuple(results))
+            except Exception: return self._reject("verification", task, VerificationResult(False, "provenance", "result_provenance_failure"), results=tuple(results))
         metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
         if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid: return self._reject("metacognition", task, metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         if metacognitive_check.stage != "metacognition": return self._reject("metacognition", task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
@@ -151,10 +181,11 @@ class Hypersynth:
                 from .memory import MemoryItem
                 memory_key = "task:" + task.execution_id + ":" + task.task_id
                 self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=task.task_id, importance=0.5, execution_id=task.execution_id))
-            except Exception:
-                return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+            except Exception: return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
-        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
+        response = {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
+        if provenance is not None: response["provenance"] = provenance; response["provenance_seal"] = provenance_seal
+        return response
 
     def _decompose(self, task):
         try: subtasks = self.decomposer.decompose(task)
