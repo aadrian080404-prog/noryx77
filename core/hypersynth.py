@@ -92,16 +92,18 @@ class Hypersynth:
         constraints = task.constraints if hasattr(task.constraints, "get") else {}
         capabilities = constraints.get("required_capabilities", ()); preferred = constraints.get("preferred_capabilities", ()); tools = constraints.get("tools", ())
         raw_max_cost = constraints.get("max_cost"); raw_max_latency = constraints.get("max_latency_ms"); raw_min_models = constraints.get("min_models", 1); raw_max_models = constraints.get("max_models", self.max_agents)
-        try: min_models = int(raw_min_models); max_models = int(raw_max_models)
-        except (TypeError, ValueError): raise ValueError("invalid model fan-out")
+        if isinstance(raw_min_models, bool) or isinstance(raw_max_models, bool) or not isinstance(raw_min_models, int) or not isinstance(raw_max_models, int): raise ValueError("invalid model fan-out")
+        min_models = raw_min_models; max_models = raw_max_models
         min_models = max(1, min(self.max_agents, min_models)); max_models = max(min_models, min(self.max_agents, max_models))
         if raw_max_cost is not None and (not isinstance(raw_max_cost, (int, float)) or isinstance(raw_max_cost, bool) or raw_max_cost < 0): raise ValueError("invalid model cost limit")
         if raw_max_latency is not None and (not isinstance(raw_max_latency, (int, float)) or isinstance(raw_max_latency, bool) or raw_max_latency <= 0): raise ValueError("invalid model latency limit")
-        request = ModelRequest(prompt=step.objective, required_capabilities=frozenset(capabilities), preferred_capabilities=frozenset(preferred), max_cost=raw_max_cost, max_latency_ms=raw_max_latency, min_models=min_models, max_models=max_models, tools=tuple(tools), runtime_id=self.runtime_id)
+        if not isinstance(task.execution_id, str) or not task.execution_id.strip(): raise ValueError("missing model execution identity")
+        request = ModelRequest(prompt=step.objective, required_capabilities=frozenset(capabilities), preferred_capabilities=frozenset(preferred), max_cost=raw_max_cost, max_latency_ms=raw_max_latency, min_models=min_models, max_models=max_models, tools=tuple(tools), runtime_id=self.runtime_id, execution_id=task.execution_id)
         fabric = self.model_fabric
         class FabricAgent(Agent):
             def __init__(self): super().__init__("model-fabric"); self.last_fabric_result = None
             def run(self, child):
+                if child.execution_id != request.execution_id: raise RuntimeError("model_execution_identity_mismatch")
                 result = fabric.execute(request)
                 if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
                 self.last_fabric_result = result
@@ -112,6 +114,7 @@ class Hypersynth:
     def _verify_model_binding(self, result, request, fabric_result):
         if self.model_fabric is None or request is None: return VerificationResult(True, "agent_result", "model_binding_not_applicable")
         if fabric_result is None or not self.model_fabric.verify_result(request, fabric_result): return VerificationResult(False, "agent_result", "model_result_integrity_failure")
+        if not isinstance(result, AgentResult) or result.execution_id != request.execution_id: return VerificationResult(False, "agent_result", "model_execution_identity_mismatch")
         expected_request = self.model_fabric.request_digest(request)
         expected_result = self.model_fabric.result_digest(request, fabric_result)
         if result.model_request_digest != expected_request: return VerificationResult(False, "agent_result", "model_request_digest_mismatch")
