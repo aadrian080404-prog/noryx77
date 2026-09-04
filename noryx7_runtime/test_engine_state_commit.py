@@ -24,11 +24,15 @@ def test_engine_commits_verified_attestation_to_state_journal():
     assert entries[0].runtime_id == "runtime-test"
 
 
+class RejectingVerifier:
+    def verify(self, attestation, signature):
+        return False
+
+
 def test_state_commit_failure_cannot_report_success():
     signer = Ed25519AttestationSigner.generate()
-    verifier = Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes)
-    journal = StateJournal(verifier=verifier, runtime_id="runtime-test")
-    engine = RuntimeEngine(runtime_id="runtime-other", state_journal=journal, attestation_signer=signer)
+    journal = StateJournal(verifier=RejectingVerifier(), runtime_id="runtime-test")
+    engine = RuntimeEngine(runtime_id="runtime-test", state_journal=journal, attestation_signer=signer)
 
     result = engine.execute(
         Intent("run", "user"),
@@ -38,5 +42,5 @@ def test_state_commit_failure_cannot_report_success():
     )
 
     assert result.status is ExecutionStatus.FAILED
-    assert result.error == "ValueError"
+    assert result.error == "PermissionError"
     assert journal.snapshot() == ()
