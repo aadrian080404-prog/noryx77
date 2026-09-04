@@ -80,7 +80,11 @@ class Hypersynth:
         runtime_id = self.runtime_id or task.constraints.get("runtime_id", "")
         if not runtime_id: raise ValueError("missing_provenance_runtime")
         memory_digest = canonical_digest(tuple(self.memory.list(execution_id=task.execution_id))) if self.memory is not None else canonical_digest(())
-        return ProvenanceContext(runtime_id, task.execution_id, principal_id, memory_digest, route_digest or canonical_digest(()), canonical_digest(task))
+        if not route_digest:
+            route_digest = canonical_digest(())
+        elif not (isinstance(route_digest, str) and len(route_digest) == 64 and all(c in "0123456789abcdef" for c in route_digest)):
+            route_digest = canonical_digest(route_digest)
+        return ProvenanceContext(runtime_id, task.execution_id, principal_id, memory_digest, route_digest, canonical_digest(task))
 
     def _provenance_verify(self, context): return context is None or verify_provenance(context, seal_provenance(context, self.provenance_key), self.provenance_key)
 
@@ -107,17 +111,7 @@ class Hypersynth:
             raise ValueError("invalid model cost limit")
         if raw_max_latency is not None and (not isinstance(raw_max_latency, (int, float)) or isinstance(raw_max_latency, bool) or raw_max_latency <= 0):
             raise ValueError("invalid model latency limit")
-        request = ModelRequest(
-            prompt=step.objective,
-            required_capabilities=frozenset(capabilities),
-            preferred_capabilities=frozenset(preferred),
-            max_cost=raw_max_cost,
-            max_latency_ms=raw_max_latency,
-            min_models=min_models,
-            max_models=max_models,
-            tools=tuple(tools),
-            runtime_id=self.runtime_id,
-        )
+        request = ModelRequest(prompt=step.objective, required_capabilities=frozenset(capabilities), preferred_capabilities=frozenset(preferred), max_cost=raw_max_cost, max_latency_ms=raw_max_latency, min_models=min_models, max_models=max_models, tools=tuple(tools), runtime_id=self.runtime_id)
         fabric = self.model_fabric
         class FabricAgent(Agent):
             def __init__(self):
@@ -204,12 +198,9 @@ class Hypersynth:
             results.append(result)
             if provenance is not None and request is not None:
                 fabric_result = getattr(agent, "last_fabric_result", None)
-                if fabric_result is None or not self.model_fabric.verify_result(request, fabric_result):
-                    return self._reject("verification", task, VerificationResult(False, "provenance", "model_result_integrity_failure"), results=tuple(results))
-                try:
-                    provenance = provenance.bind_model(fabric_result.request_digest, fabric_result)
-                except Exception:
-                    return self._reject("verification", task, VerificationResult(False, "provenance", "model_provenance_binding_failure"), results=tuple(results))
+                if fabric_result is None or not self.model_fabric.verify_result(request, fabric_result): return self._reject("verification", task, VerificationResult(False, "provenance", "model_result_integrity_failure"), results=tuple(results))
+                try: provenance = provenance.bind_model(fabric_result.request_digest, fabric_result)
+                except Exception: return self._reject("verification", task, VerificationResult(False, "provenance", "model_provenance_binding_failure"), results=tuple(results))
         timeout = self._deadline_rejection(task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
@@ -242,12 +233,12 @@ class Hypersynth:
         seen = set()
         for item in result:
             if not isinstance(item, Subtask): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
-            if not isinstance(item.subtask_id, str) or not item.subtask_id.strip() or not item.subtask_id.startswith(task.task_id + ":"):
-                return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
-            if item.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "duplicate_subtask_identity"))
+            if not isinstance(item.subtask_id, str) or not item.subtask_id.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            if not item.subtask_id.startswith(task.task_id + ":"): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
+            if item.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
             seen.add(item.subtask_id)
-            if item.task_type != task.task_type or not isinstance(item.objective, str) or not item.objective.strip():
-                return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_contract_mismatch"))
+            if item.task_type != task.task_type: return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
+            if not isinstance(item.objective, str) or not item.objective.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_objective_invalid"))
         return result
 
     def _verify_consensus(self, results):
@@ -257,7 +248,9 @@ class Hypersynth:
         if len(agent_ids) != len(set(agent_ids)): return VerificationResult(False, "consensus", "duplicate_agent_result")
         if any(result.status != "completed" for result in results): return VerificationResult(False, "consensus", "incomplete_result")
         execution_ids = {result.execution_id for result in results}
-        if "" in execution_ids: return VerificationResult(False, "consensus", "missing_execution_identity")
+        if "" in execution_ids:
+            if len(execution_ids) == 1: return VerificationResult(False, "consensus", "missing_execution_identity")
+            return VerificationResult(False, "consensus", "execution_identity_mismatch")
         if len(execution_ids) != 1: return VerificationResult(False, "consensus", "execution_identity_mismatch")
         task_ids = {result.task_id for result in results}
         if len(task_ids) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
