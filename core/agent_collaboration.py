@@ -24,6 +24,7 @@ class CollaborationEvidence:
     challenge: str
     revision: int = 0
     seal: str = ""
+    previous_evidence_digest: str = ""
 
     def canonical_bytes(self) -> bytes:
         payload = {
@@ -36,6 +37,7 @@ class CollaborationEvidence:
             "verification_digest": self.verification_digest,
             "challenge": self.challenge,
             "revision": self.revision,
+            "previous_evidence_digest": self.previous_evidence_digest,
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
@@ -48,6 +50,7 @@ class CollaborationEvidence:
             and self._valid_digest(self.output_digest)
             and self._valid_digest(self.verification_digest)
             and (not self.seal or self._valid_digest(self.seal))
+            and (not self.previous_evidence_digest or self._valid_digest(self.previous_evidence_digest))
         )
 
     @staticmethod
@@ -91,7 +94,16 @@ class PeerCollaboration:
     def _evidence_id(self, evidence: CollaborationEvidence) -> str:
         return self._digest({"canonical": evidence.canonical_bytes().hex(), "seal": evidence.seal})
 
-    def evidence(self, task: TaskSpec, source: AgentResult, target_agent_id: str, challenge: str, revision: int = 0) -> CollaborationEvidence:
+    def evidence(
+        self,
+        task: TaskSpec,
+        source: AgentResult,
+        target_agent_id: str,
+        challenge: str,
+        revision: int = 0,
+        *,
+        previous_evidence_digest: str = "",
+    ) -> CollaborationEvidence:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
         if task.execution_id != self.execution_id or not isinstance(source, AgentResult) or not source.is_well_formed():
@@ -104,6 +116,12 @@ class PeerCollaboration:
             raise ValueError("invalid_challenge")
         if isinstance(revision, bool) or not isinstance(revision, int) or not 0 <= revision <= 32:
             raise ValueError("invalid_revision")
+        if previous_evidence_digest and not CollaborationEvidence._valid_digest(previous_evidence_digest):
+            raise ValueError("invalid_previous_evidence_digest")
+        if revision == 0 and previous_evidence_digest:
+            raise ValueError("unexpected_previous_evidence_digest")
+        if revision > 0 and not previous_evidence_digest:
+            raise ValueError("missing_previous_evidence_digest")
         verification = source.verification
         if not isinstance(verification, VerificationResult) or not verification.is_well_formed() or not verification.valid:
             raise ValueError("unverified_source_result")
@@ -117,6 +135,8 @@ class PeerCollaboration:
             self._digest(verification),
             challenge,
             revision,
+            "",
+            previous_evidence_digest,
         )
         seal = hmac.new(self._seal_key, self._DOMAIN + evidence.canonical_bytes(), sha256).hexdigest()
         return CollaborationEvidence(**{**evidence.__dict__, "seal": seal})
@@ -127,6 +147,10 @@ class PeerCollaboration:
         if not isinstance(task, TaskSpec) or task.execution_id != self.execution_id:
             return False
         if evidence.runtime_id != self.runtime_id or evidence.execution_id != self.execution_id or evidence.task_id != task.task_id:
+            return False
+        if evidence.revision == 0 and evidence.previous_evidence_digest:
+            return False
+        if evidence.revision > 0 and not evidence.previous_evidence_digest:
             return False
         expected = hmac.new(self._seal_key, self._DOMAIN + evidence.canonical_bytes(), sha256).hexdigest()
         return hmac.compare_digest(expected, evidence.seal)
