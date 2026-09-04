@@ -15,8 +15,8 @@ def attestation(signer, execution="exec", step="a", principal="user"):
         step_id=step,
         agent_id="adapter",
         agent_key_fingerprint=hashlib.sha256(signer.public_key_bytes).hexdigest(),
-        action_digest=(step + "a")[:64].ljust(64, "a"),
-        output_digest=(step + "o")[:64].ljust(64, "b"),
+        action_digest=hashlib.sha256((execution + ":" + step + ":action").encode()).hexdigest(),
+        output_digest=hashlib.sha256((execution + ":" + step + ":output").encode()).hexdigest(),
         verified=True,
         detail="verified",
     ), signer)
