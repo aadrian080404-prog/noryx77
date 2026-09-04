@@ -39,22 +39,17 @@ def _validate_attestation(attestation: Attestation) -> None:
     if not isinstance(attestation, Attestation):
         raise TypeError("attestation must be an Attestation")
     fields = (
-        attestation.execution_id,
-        attestation.principal_id,
-        attestation.step_id,
-        attestation.agent_id,
-        attestation.agent_key_fingerprint,
-        attestation.action_digest,
-        attestation.output_digest,
-        attestation.previous_attestation_digest,
+        attestation.execution_id, attestation.principal_id, attestation.step_id,
+        attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest,
+        attestation.output_digest, attestation.previous_attestation_digest,
     )
     if any(not isinstance(value, str) or not value for value in fields):
         raise ValueError("attestation identity and digests are required")
     if not isinstance(attestation.runtime_id, str):
         raise ValueError("runtime_id must be a string")
-    # Identity fingerprints and chain links are cryptographic SHA-256 values.
-    # Action/output fields are opaque content digests in the legacy API and may
-    # be supplied by adapters using a different digest representation.
+    # Identity fingerprints and chain links are SHA-256 values. Action/output
+    # digests are legacy opaque representations, but retain the fixed-width
+    # contract so malformed values still fail closed.
     for digest in (attestation.agent_key_fingerprint, attestation.previous_attestation_digest):
         if len(digest) != 64:
             raise ValueError("attestation digest must be SHA-256 hex")
@@ -62,6 +57,9 @@ def _validate_attestation(attestation: Attestation) -> None:
             int(digest, 16)
         except ValueError as exc:
             raise ValueError("attestation digest is not hexadecimal") from exc
+    for digest in (attestation.action_digest, attestation.output_digest):
+        if len(digest) != 64:
+            raise ValueError("attestation digest must be 64 characters")
     if not isinstance(attestation.verified, bool) or not isinstance(attestation.detail, str):
         raise ValueError("invalid attestation fields")
 
@@ -69,16 +67,11 @@ def attestation_digest(attestation) -> str:
     if not isinstance(attestation, Attestation):
         try:
             attestation = Attestation(
-                execution_id=attestation.execution_id,
-                principal_id=attestation.principal_id,
-                step_id=attestation.step_id,
-                agent_id=attestation.agent_id,
+                execution_id=attestation.execution_id, principal_id=attestation.principal_id,
+                step_id=attestation.step_id, agent_id=attestation.agent_id,
                 agent_key_fingerprint=attestation.agent_key_fingerprint,
-                action_digest=attestation.action_digest,
-                output_digest=attestation.output_digest,
-                verified=True,
-                detail="verified",
-                signature=attestation.signature,
+                action_digest=attestation.action_digest, output_digest=attestation.output_digest,
+                verified=True, detail="verified", signature=attestation.signature,
                 previous_attestation_digest=attestation.previous_attestation_digest,
                 runtime_id=getattr(attestation, "runtime_id", ""),
             )
@@ -92,26 +85,21 @@ def attestation_digest(attestation) -> str:
 @dataclass(frozen=True)
 class Ed25519AttestationSigner:
     private_key: object
-
     def __post_init__(self) -> None:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         if not isinstance(self.private_key, Ed25519PrivateKey):
             raise TypeError("private_key must be an Ed25519 private key")
-
     @classmethod
     def generate(cls):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         return cls(Ed25519PrivateKey.generate())
-
     @property
     def public_key_bytes(self) -> bytes:
         from cryptography.hazmat.primitives import serialization
         return self.private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-
     def sign(self, attestation):
         _validate_attestation(attestation)
         return self.private_key.sign(_message(attestation))
-
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
         if not isinstance(signature, bytes) or len(signature) != 64:
@@ -125,19 +113,16 @@ class Ed25519AttestationSigner:
 @dataclass(frozen=True)
 class Ed25519AttestationVerifier:
     public_key: object
-
     def __post_init__(self) -> None:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
         if not isinstance(self.public_key, Ed25519PublicKey):
             raise TypeError("public_key must be an Ed25519 public key")
-
     @classmethod
     def from_public_key_bytes(cls, public_key):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
         if not isinstance(public_key, bytes) or len(public_key) != 32:
             raise ValueError("public_key must be 32 bytes")
         return cls(Ed25519PublicKey.from_public_bytes(public_key))
-
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
         if not isinstance(signature, bytes) or len(signature) != 64:
@@ -151,11 +136,9 @@ class Ed25519AttestationVerifier:
 @dataclass(frozen=True)
 class IdentityBoundAttestationVerifier:
     registry: IdentityRegistry
-
     def __post_init__(self):
         if not isinstance(self.registry, IdentityRegistry):
             raise TypeError("registry must be an IdentityRegistry")
-
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
         try:
@@ -165,7 +148,6 @@ class IdentityBoundAttestationVerifier:
             ))
         except Exception:
             return False
-
     @staticmethod
     def _verify_with_identity(identity: AgentIdentity, attestation, signature):
         if hashlib.sha256(identity.public_key).hexdigest() != attestation.agent_key_fingerprint:
