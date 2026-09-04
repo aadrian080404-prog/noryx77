@@ -23,6 +23,24 @@ def test_independent_peer_evidence_is_sealed_and_admitted():
     assert pair.admit_consensus(t, first, second, evidence).valid
 
 
+def test_evidence_digest_is_public_and_stable():
+    t = task(); pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    second = result("agent-b")
+    evidence = pair.evidence(t, result("agent-a"), "agent-b", "challenge", target_output=second.output, target_verification=second.verification)
+    digest = pair.evidence_digest(evidence)
+    assert isinstance(digest, str) and len(digest) == 64
+    assert digest == pair.evidence_digest(evidence)
+
+
+def test_evidence_digest_rejects_malformed_evidence():
+    t = task(); pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    second = result("agent-b")
+    evidence = pair.evidence(t, result("agent-a"), "agent-b", "challenge", target_output=second.output, target_verification=second.verification)
+    malformed = type(evidence)(**{**evidence.__dict__, "seal": "bad"})
+    with pytest.raises(ValueError, match="invalid_collaboration_evidence"):
+        pair.evidence_digest(malformed)
+
+
 def test_admitted_evidence_cannot_be_replayed():
     t = task(); pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
     first, second = result("agent-a"), result("agent-b")
@@ -93,7 +111,7 @@ def test_revision_evidence_is_bound_to_the_initial_disagreement():
     first, second = result("agent-a", "one"), result("agent-b", "two")
     initial = pair.evidence(t, first, "agent-b", "resolve disagreement", target_output=second.output, target_verification=second.verification)
     assert not pair.admit_consensus(t, first, second, initial).valid
-    initial_id = pair._evidence_id(initial)
+    initial_id = pair.evidence_digest(initial)
     revised_first, revised_second = result("agent-a", "resolved"), result("agent-b", "resolved")
     revision = pair.evidence(t, revised_first, "agent-b", "re-evaluate after challenge", revision=1, previous_evidence_digest=initial_id, target_output=revised_second.output, target_verification=revised_second.verification)
     assert pair.verify_evidence(revision, task=t)
@@ -106,7 +124,7 @@ def test_revision_cannot_follow_an_initial_consensus():
     initial = pair.evidence(t, first, second.agent_id, "initial", target_output=second.output, target_verification=second.verification)
     assert pair.admit_consensus(t, first, second, initial).valid
     revised_second = result("agent-b", "changed")
-    revision = pair.evidence(t, result("agent-a", "changed"), "agent-b", "invalid follow-up", revision=1, previous_evidence_digest=pair._evidence_id(initial), target_output=revised_second.output, target_verification=revised_second.verification)
+    revision = pair.evidence(t, result("agent-a", "changed"), "agent-b", "invalid follow-up", revision=1, previous_evidence_digest=pair.evidence_digest(initial), target_output=revised_second.output, target_verification=revised_second.verification)
     assert not pair.verify_evidence(revision, task=t)
 
 
@@ -115,7 +133,7 @@ def test_revision_cannot_skip_a_round():
     first, second = result("agent-a", "one"), result("agent-b", "two")
     initial = pair.evidence(t, first, second.agent_id, "initial", target_output=second.output, target_verification=second.verification)
     assert not pair.admit_consensus(t, first, second, initial).valid
-    skipped = pair.evidence(t, result("agent-a", "three"), "agent-b", "skip", revision=2, previous_evidence_digest=pair._evidence_id(initial), target_output="three", target_verification=second.verification)
+    skipped = pair.evidence(t, result("agent-a", "three"), "agent-b", "skip", revision=2, previous_evidence_digest=pair.evidence_digest(initial), target_output="three", target_verification=second.verification)
     assert not pair.verify_evidence(skipped, task=t)
 
 
@@ -124,7 +142,7 @@ def test_revision_cannot_switch_peer_pair():
     first, second = result("agent-a", "one"), result("agent-b", "two")
     initial = pair.evidence(t, first, second.agent_id, "initial", target_output=second.output, target_verification=second.verification)
     assert not pair.admit_consensus(t, first, second, initial).valid
-    forged = pair.evidence(t, result("agent-a", "resolved"), "agent-c", "switch peer", revision=1, previous_evidence_digest=pair._evidence_id(initial), target_output="resolved", target_verification=second.verification)
+    forged = pair.evidence(t, result("agent-a", "resolved"), "agent-c", "switch peer", revision=1, previous_evidence_digest=pair.evidence_digest(initial), target_output="resolved", target_verification=second.verification)
     assert not pair.verify_evidence(forged, task=t)
 
 
@@ -135,5 +153,5 @@ def test_invalid_peer_result_does_not_poison_revision_chain():
     bad_second = AgentResult("agent-b", t.task_id, "completed", "two", VerificationResult(False, "agent_result", "bad"), t.execution_id)
     rejected = pair.admit_consensus(t, first, bad_second, initial)
     assert not rejected.valid
-    revision = pair.evidence(t, result("agent-a", "resolved"), "agent-b", "retry", revision=1, previous_evidence_digest=pair._evidence_id(initial), target_output="resolved", target_verification=second.verification)
+    revision = pair.evidence(t, result("agent-a", "resolved"), "agent-b", "retry", revision=1, previous_evidence_digest=pair.evidence_digest(initial), target_output="resolved", target_verification=second.verification)
     assert not pair.verify_evidence(revision, task=t)
