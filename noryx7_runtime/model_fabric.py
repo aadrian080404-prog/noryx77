@@ -152,11 +152,29 @@ class ModelFabric:
         candidates.sort(key=lambda candidate: candidate.name)
         if len(candidates) < request.min_models: raise RuntimeError("model ensemble could not satisfy minimum quorum")
         if verifier is not None:
-            scored = sorted(((max(0.0, min(1.0, float(verifier(c.name, c.output)))), c) for c in candidates), key=lambda x: (-x[0], x[1].name)); confidence, winner = scored[0]; output = winner.output if synthesizer is None else synthesizer(tuple(c for _, c in scored)); selected_model = winner.name
+            scored_rows = []
+            for candidate in candidates:
+                try:
+                    score = verifier(candidate.name, candidate.output)
+                except Exception as exc:
+                    raise RuntimeError("model_verification_failure") from exc
+                if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
+                    raise RuntimeError("model_verification_failure")
+                score = max(0.0, min(1.0, float(score)))
+                scored_rows.append((score, candidate))
+            scored = sorted(scored_rows, key=lambda x: (-x[0], x[1].name))
+            confidence, winner = scored[0]; output = winner.output if synthesizer is None else synthesizer(tuple(c for _, c in scored)); selected_model = winner.name
         elif synthesizer is not None:
-            output = synthesizer(tuple(candidates)); selected_model, confidence = candidates[0].name, 0.0
+            try:
+                output = synthesizer(tuple(candidates))
+            except Exception as exc:
+                raise RuntimeError("model_synthesis_failure") from exc
+            selected_model, confidence = candidates[0].name, 0.0
         else: output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
-        request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest)
-        result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model))
+        try:
+            request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest)
+            result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError("model_result_integrity_failure") from exc
         if not self.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
         return result
