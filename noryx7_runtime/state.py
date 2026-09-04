@@ -4,6 +4,7 @@ import hashlib
 from dataclasses import dataclass
 from threading import RLock
 from typing import Protocol
+from uuid import uuid4
 
 from core.identity import IdentityRegistry
 
@@ -28,12 +29,13 @@ class JournalEntry:
     output_digest: str
     signature: bytes
     previous_attestation_digest: str = "0" * 64
+    runtime_id: str = ""
 
 
 class StateJournal:
-    """Append-only commit boundary with authenticity and atomic identity trust."""
+    """Append-only commit boundary with authenticity and runtime continuity."""
 
-    def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None, identity_registry: IdentityRegistry | None = None) -> None:
+    def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None, identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None) -> None:
         if not isinstance(require_signatures, bool):
             raise TypeError("require_signatures must be bool")
         if require_signatures and verifier is None:
@@ -42,6 +44,8 @@ class StateJournal:
             raise TypeError("verifier must expose verify")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
             raise TypeError("identity_registry must be an IdentityRegistry")
+        if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id):
+            raise ValueError("runtime_id must be a non-empty string")
         self._lock = RLock()
         self._entries: list[JournalEntry] = []
         self._keys: set[tuple[str, str]] = set()
@@ -49,6 +53,7 @@ class StateJournal:
         self._require_signatures = require_signatures
         self._verifier = verifier
         self._identity_registry = identity_registry
+        self._runtime_id = runtime_id
 
     @property
     def verifier(self) -> AttestationVerifier | None:
@@ -62,8 +67,14 @@ class StateJournal:
     def identity_registry(self) -> IdentityRegistry | None:
         return self._identity_registry
 
+    @property
+    def runtime_id(self) -> str | None:
+        return self._runtime_id
+
     def append(self, attestation: Attestation) -> JournalEntry:
         self._validate_attestation(attestation)
+        if self._runtime_id is not None and attestation.runtime_id != self._runtime_id:
+            raise PermissionError("attestation runtime identity mismatch")
         if self._identity_registry is not None:
             return self._identity_registry.with_trusted_identity(
                 attestation.agent_id,
@@ -88,11 +99,11 @@ class StateJournal:
             existing_principal = self._principals.get(attestation.execution_id)
             if existing_principal is not None and existing_principal != attestation.principal_id:
                 raise PermissionError("execution principal mismatch")
-            if key in self._keys:
-                raise ValueError("duplicate execution step")
             previous = self._previous_digest_locked(attestation.execution_id)
             if attestation.previous_attestation_digest != previous:
                 raise ValueError("attestation chain link mismatch")
+            if key in self._keys:
+                raise ValueError("duplicate execution step")
             entry = JournalEntry(
                 sequence=len(self._entries),
                 execution_id=attestation.execution_id,
@@ -104,6 +115,7 @@ class StateJournal:
                 output_digest=attestation.output_digest,
                 signature=attestation.signature,
                 previous_attestation_digest=attestation.previous_attestation_digest,
+                runtime_id=attestation.runtime_id,
             )
             self._entries.append(entry)
             self._keys.add(key)
@@ -130,6 +142,7 @@ class StateJournal:
             detail="verified",
             signature=entry.signature,
             previous_attestation_digest=entry.previous_attestation_digest,
+            runtime_id=entry.runtime_id,
         )
         return attestation_digest(attestation)
 
@@ -150,6 +163,8 @@ class StateJournal:
             raise ValueError("incomplete attestation")
         if not attestation.verified:
             raise PermissionError("cannot commit unverified result")
+        if not isinstance(attestation.runtime_id, str):
+            raise ValueError("runtime_id must be a string")
         for digest in (attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.previous_attestation_digest):
             if len(digest) != 64:
                 raise ValueError("attestation digest must be SHA-256 hex")
