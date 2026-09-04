@@ -113,3 +113,57 @@ def test_revision_evidence_is_bound_to_the_initial_disagreement():
     )
     assert pair.verify_evidence(revision, task=t)
     assert pair.admit_consensus(t, revised_first, revised_second, revision).valid
+
+
+def test_revision_cannot_skip_a_round():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    first, second = result("agent-a", "one"), result("agent-b", "two")
+    initial = pair.evidence(t, first, second.agent_id, "initial", revision=0)
+    assert not pair.admit_consensus(t, first, second, initial).valid
+    initial_id = pair._evidence_id(initial)
+    skipped = pair.evidence(
+        t,
+        result("agent-a", "three"),
+        "agent-b",
+        "skip",
+        revision=2,
+        previous_evidence_digest=initial_id,
+    )
+    assert not pair.verify_evidence(skipped, task=t)
+
+
+def test_revision_cannot_switch_peer_pair():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    first, second = result("agent-a", "one"), result("agent-b", "two")
+    initial = pair.evidence(t, first, second.agent_id, "initial", revision=0)
+    assert not pair.admit_consensus(t, first, second, initial).valid
+    forged = pair.evidence(
+        t,
+        result("agent-a", "resolved"),
+        "agent-c",
+        "switch peer",
+        revision=1,
+        previous_evidence_digest=pair._evidence_id(initial),
+    )
+    assert not pair.verify_evidence(forged, task=t)
+
+
+def test_invalid_peer_result_does_not_poison_revision_chain():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    first, second = result("agent-a", "one"), result("agent-b", "two")
+    initial = pair.evidence(t, first, second.agent_id, "initial", revision=0)
+    bad_second = AgentResult("agent-b", t.task_id, "completed", "two", VerificationResult(False, "agent_result", "bad"), t.execution_id)
+    rejected = pair.admit_consensus(t, first, bad_second, initial)
+    assert not rejected.valid
+    revision = pair.evidence(
+        t,
+        result("agent-a", "resolved"),
+        "agent-b",
+        "retry",
+        revision=1,
+        previous_evidence_digest=pair._evidence_id(initial),
+    )
+    assert not pair.verify_evidence(revision, task=t)
