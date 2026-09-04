@@ -151,3 +151,33 @@ def test_revocation_is_linearized_against_attestation_commit():
     assert len(result) == 1
     assert not registry.is_trusted(identity)
     assert len(journal.snapshot()) == 1
+
+
+def test_recovery_rejects_revoked_identity_even_when_signature_is_valid():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signer = Ed25519AttestationSigner(private_key)
+    verifier = IdentityBoundAttestationVerifier(registry)
+    journal = StateJournal(verifier=verifier, identity_registry=registry)
+    journal.append(make_attestation(signer))
+    registry.revoke("agent-1")
+    with pytest.raises(RecoveryError, match="attestation verification failed"):
+        RuntimeRecovery(journal).recover("exec-1")
+
+
+def test_recovery_rejects_current_key_replacement_even_with_old_valid_signature():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    replacement, replacement_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signer = Ed25519AttestationSigner(private_key)
+    verifier = IdentityBoundAttestationVerifier(registry)
+    journal = StateJournal(verifier=verifier, identity_registry=registry)
+    journal.append(make_attestation(signer))
+    registry.revoke("agent-1")
+    registry.register(replacement)
+    assert replacement.public_key != identity.public_key
+    with pytest.raises(RecoveryError, match="attestation verification failed"):
+        RuntimeRecovery(journal).recover("exec-1")
+    assert replacement_key is not None
