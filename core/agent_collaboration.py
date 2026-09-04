@@ -85,7 +85,7 @@ class PeerCollaboration:
         self._seal_key = bytes(seal_key)
         self.max_rounds = max_rounds
         self._admitted_evidence: set[str] = set()
-        self._chain_evidence: set[str] = set()
+        self._chain_evidence: dict[str, CollaborationEvidence] = {}
         self._admitted_lock = Lock()
 
     @staticmethod
@@ -156,7 +156,18 @@ class PeerCollaboration:
             if not evidence.previous_evidence_digest:
                 return False
             with self._admitted_lock:
-                if evidence.previous_evidence_digest not in self._chain_evidence:
+                previous = self._chain_evidence.get(evidence.previous_evidence_digest)
+                if previous is None:
+                    return False
+                if previous.revision + 1 != evidence.revision:
+                    return False
+                if (
+                    previous.runtime_id != evidence.runtime_id
+                    or previous.execution_id != evidence.execution_id
+                    or previous.task_id != evidence.task_id
+                    or previous.source_agent_id != evidence.source_agent_id
+                    or previous.target_agent_id != evidence.target_agent_id
+                ):
                     return False
         expected = hmac.new(self._seal_key, self._DOMAIN + evidence.canonical_bytes(), sha256).hexdigest()
         return hmac.compare_digest(expected, evidence.seal)
@@ -164,13 +175,6 @@ class PeerCollaboration:
     def admit_consensus(self, task: TaskSpec, first: AgentResult, second: AgentResult, evidence: CollaborationEvidence) -> VerificationResult:
         if not self.verify_evidence(evidence, task=task):
             return VerificationResult(False, "collaboration", "evidence_integrity_failure")
-        evidence_id = self._evidence_id(evidence)
-        with self._admitted_lock:
-            if evidence_id in self._chain_evidence:
-                return VerificationResult(False, "collaboration", "evidence_replay_rejected")
-            if len(self._chain_evidence) >= self._MAX_CHAIN_EVIDENCE:
-                return VerificationResult(False, "collaboration", "evidence_chain_limit")
-            self._chain_evidence.add(evidence_id)
         if not isinstance(first, AgentResult) or not isinstance(second, AgentResult):
             return VerificationResult(False, "collaboration", "invalid_peer_result")
         if first.agent_id == second.agent_id:
@@ -190,10 +194,19 @@ class PeerCollaboration:
             return VerificationResult(False, "collaboration", "evidence_output_mismatch")
         if evidence.verification_digest != self._digest(first.verification):
             return VerificationResult(False, "collaboration", "evidence_verification_mismatch")
-        if self._digest(first.output) != self._digest(second.output):
-            return VerificationResult(False, "collaboration", "peer_disagreement_requires_resolution")
 
+        evidence_id = self._evidence_id(evidence)
+        disagreement = self._digest(first.output) != self._digest(second.output)
         with self._admitted_lock:
+            if evidence_id in self._chain_evidence:
+                return VerificationResult(False, "collaboration", "evidence_replay_rejected")
+            if len(self._chain_evidence) >= self._MAX_CHAIN_EVIDENCE:
+                return VerificationResult(False, "collaboration", "evidence_chain_limit")
+            # Store every valid, sealed protocol step (including disagreement) so
+            # a bounded revision can bind cryptographically to the exact prior step.
+            self._chain_evidence[evidence_id] = evidence
+            if disagreement:
+                return VerificationResult(False, "collaboration", "peer_disagreement_requires_resolution")
             if len(self._admitted_evidence) >= self._MAX_ADMITTED_EVIDENCE:
                 return VerificationResult(False, "collaboration", "evidence_admission_limit")
             self._admitted_evidence.add(evidence_id)
