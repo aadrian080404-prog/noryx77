@@ -35,11 +35,11 @@ class Hypersynth:
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         if provenance_key is not None and (not isinstance(provenance_key, bytes) or len(provenance_key) < 32): raise ValueError("provenance key must contain at least 32 bytes")
         if not isinstance(runtime_id, str) or len(runtime_id.encode("utf-8")) > 256: raise ValueError("invalid runtime_id")
-        if model_fabric is not None and getattr(model_fabric, "runtime_id", None) != runtime_id: raise ValueError("model_fabric runtime identity mismatch")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
         self.provenance_key = bytes(provenance_key) if provenance_key is not None else None
         self.runtime_id = runtime_id
         self.model_fabric = model_fabric
+        if self.model_fabric is not None and self.runtime_id and getattr(self.model_fabric, "runtime_id", None) != self.runtime_id: raise ValueError("model_fabric runtime identity mismatch")
         bounded_steps = min(max_steps, max_agents)
         self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
@@ -82,9 +82,36 @@ class Hypersynth:
         memory_digest = canonical_digest(tuple(self.memory.list(execution_id=task.execution_id))) if self.memory is not None else canonical_digest(())
         return ProvenanceContext(runtime_id, task.execution_id, principal_id, memory_digest, route_digest or canonical_digest(()), canonical_digest(task))
 
-    def _provenance_verify(self, context):
-        if context is None: return True
-        return verify_provenance(context, seal_provenance(context, self.provenance_key), self.provenance_key)
+    def _provenance_verify(self, context): return context is None or verify_provenance(context, seal_provenance(context, self.provenance_key), self.provenance_key)
+
+    def _model_agent(self, task, step):
+        if self.model_fabric is None: return None
+        from .agents import Agent
+        from noryx7_runtime.model_fabric import ModelRequest
+        constraints = task.constraints if hasattr(task.constraints, "get") else {}
+        capabilities = constraints.get("required_capabilities", ())
+        preferred = constraints.get("preferred_capabilities", ())
+        tools = constraints.get("tools", ())
+        request = ModelRequest(
+            prompt=step.objective,
+            required_capabilities=tuple(capabilities),
+            preferred_capabilities=tuple(preferred),
+            max_cost=constraints.get("max_cost", float("inf")),
+            max_latency_ms=constraints.get("max_latency_ms", 0),
+            min_models=max(1, min(self.max_agents, int(constraints.get("min_models", 1)))),
+            max_models=max(1, min(self.max_agents, int(constraints.get("max_models", self.max_agents)))),
+            tools=tuple(tools),
+            runtime_id=self.runtime_id,
+        )
+        fabric = self.model_fabric
+        class FabricAgent(Agent):
+            def __init__(self): super().__init__("model-fabric")
+            def run(self, child):
+                result = fabric.execute(request)
+                if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
+                verification = VerificationResult(True, "agent_result", "model_fabric_verified")
+                return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id)
+        return FabricAgent()
 
     def run(self, task: TaskSpec, *, deadline_check=None):
         task = self._bind_execution(task)
@@ -124,12 +151,15 @@ class Hypersynth:
         timeout = self._deadline_rejection(task, "allocation", deadline_check)
         if timeout: return timeout
         agents = self.router.available()
+        if self.model_fabric is not None: agents = tuple(agents) + ("model-fabric",)
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
         for index, step in enumerate(plan.steps):
-            agent_id = "model_fabric" if self.model_fabric is not None else agents[index % len(agents)]
+            agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
-            try: selected, decision = self.supervisor.select(child, preferred=agent_id)
+            try:
+                if agent_id == "model-fabric": selected = self._model_agent(task, step); decision = type("Decision", (), {"accepted": selected is not None, "reason": "model_fabric_selected"})()
+                else: selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
             assignments.append((selected, child, step))
@@ -137,8 +167,7 @@ class Hypersynth:
             route_digest = canonical_digest(tuple((child.task_id, agent.agent_id, step.action_type, step.risk_class) for agent, child, step in assignments))
             provenance = self._provenance_start(task, route_digest)
             if provenance is not None and not self._provenance_verify(provenance): return self._reject("allocation", task, VerificationResult(False, "provenance", "provenance_seal_failure"))
-        except Exception as exc:
-            return self._reject("allocation", task, VerificationResult(False, "provenance", str(exc)))
+        except Exception as exc: return self._reject("allocation", task, VerificationResult(False, "provenance", str(exc)))
         results = []
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
@@ -168,10 +197,10 @@ class Hypersynth:
         try: output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
         except Exception: return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
         if not self._accepts_verification(output_check, "hypersynth_result"): return self._reject("verification", task, output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification"), results=tuple(results))
+        provenance_seal = None
         if provenance is not None:
             try:
-                provenance = provenance.bind_result(final_output)
-                provenance_seal = seal_provenance(provenance, self.provenance_key)
+                provenance = provenance.bind_result(final_output); provenance_seal = seal_provenance(provenance, self.provenance_key)
                 if not verify_provenance(provenance, provenance_seal, self.provenance_key): return self._reject("verification", task, VerificationResult(False, "provenance", "result_provenance_failure"), results=tuple(results))
             except Exception: return self._reject("verification", task, VerificationResult(False, "provenance", "result_provenance_failure"), results=tuple(results))
         metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
