@@ -103,12 +103,12 @@ class ModelFabric:
         if not isinstance(request, ModelRequest): raise TypeError("invalid_model_request")
         return self._request_digest(request)
     @staticmethod
-    def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate], selected_model: str, request_digest: str) -> str:
-        return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates), "selected_model": selected_model, "request_digest": request_digest})
+    def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate], selected_model: str, request_digest: str, confidence: float, degraded: bool) -> str:
+        return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates), "selected_model": selected_model, "confidence": confidence, "degraded": degraded, "request_digest": request_digest})
     def result_digest(self, request: ModelRequest, result: FabricResult) -> str:
         """Return the verified, deterministic result-envelope digest."""
         if not self.verify_result(request, result): raise ValueError("invalid_fabric_result")
-        return self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
+        return self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest, result.confidence, result.degraded)
     def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
         if self._binding_key is None: return output_digest
         payload = f"{self._runtime_id or ''}:{request_digest}:{output_digest}:{selected_model}".encode("utf-8")
@@ -134,7 +134,7 @@ class ModelFabric:
             names.add(candidate.name)
         if result.selected_model not in names: return False
         try:
-            expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
+            expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest, result.confidence, result.degraded)
         except (TypeError, ValueError, OverflowError):
             return False
         if self._binding_key is None:
@@ -172,7 +172,7 @@ class ModelFabric:
             selected_model, confidence = candidates[0].name, 0.0
         else: output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
         try:
-            request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest)
+            request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest, confidence, len(candidates) < len(selected))
             result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model))
         except (TypeError, ValueError, OverflowError) as exc:
             raise RuntimeError("model_result_integrity_failure") from exc
