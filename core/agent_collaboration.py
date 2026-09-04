@@ -99,7 +99,10 @@ class PeerCollaboration:
         encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=True).encode()
         return sha256(encoded).hexdigest()
 
-    def _evidence_id(self, evidence: CollaborationEvidence) -> str:
+    def evidence_digest(self, evidence: CollaborationEvidence) -> str:
+        """Return the stable identifier used to chain collaboration evidence."""
+        if not isinstance(evidence, CollaborationEvidence) or not evidence.is_well_formed():
+            raise ValueError("invalid_collaboration_evidence")
         return self._digest({"canonical": evidence.canonical_bytes().hex(), "seal": evidence.seal})
 
     def evidence(self, task: TaskSpec, source: AgentResult, target_agent_id: str, challenge: str, revision: int = 0, *, previous_evidence_digest: str = "", target_output: Any = None, target_verification: VerificationResult | None = None) -> CollaborationEvidence:
@@ -148,7 +151,7 @@ class PeerCollaboration:
         if evidence.verification_digest != self._digest(first.verification): return VerificationResult(False, "collaboration", "evidence_verification_mismatch")
         if evidence.target_output_digest != self._digest(second.output): return VerificationResult(False, "collaboration", "evidence_target_output_mismatch")
         if evidence.target_verification_digest != self._digest(second.verification): return VerificationResult(False, "collaboration", "evidence_target_verification_mismatch")
-        evidence_id = self._evidence_id(evidence)
+        evidence_id = self.evidence_digest(evidence)
         disagreement = self._digest(first.output) != self._digest(second.output)
         with self._admitted_lock:
             if evidence_id in self._chain_evidence: return VerificationResult(False, "collaboration", "evidence_replay_rejected")
