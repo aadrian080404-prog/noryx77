@@ -95,7 +95,6 @@ def test_revocation_before_runtime_dispatch_fails_closed():
     registry.revoke("agent-1")
     called = []
     signer = Ed25519AttestationSigner(private_key)
-    engine = object.__new__(RuntimeEngine)
     with pytest.raises(PermissionError, match="adapter identity"):
         RuntimeEngine(
             adapter=capability_adapter(called, agent_id="agent-1"),
@@ -147,8 +146,7 @@ def test_revocation_cannot_interleave_with_effect_dispatch():
 
     revoker = threading.Thread(target=revoke)
     revoker.start()
-    time.sleep(0.05)
-    assert not revoke_done.is_set()
+    assert not revoke_done.wait(0.1)
     release.set()
     worker.join(2)
     revoker.join(2)
