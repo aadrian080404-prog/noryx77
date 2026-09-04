@@ -24,7 +24,7 @@ def test_adapter_resolves_exactly_one_capability():
     broker = CapabilityBroker({
         "memory": Capability("memory", frozenset({"read"}), lambda item: seen.append(item) or "ok")
     })
-    adapter = CapabilityAdapter(broker)
+    adapter = CapabilityAdapter(broker, agent_id="agent-1")
 
     assert adapter.execute(envelope()) == "ok"
     assert len(seen) == 1
@@ -34,7 +34,7 @@ def test_adapter_rejects_missing_identity_before_capability_resolution():
     broker = CapabilityBroker({
         "memory": Capability("memory", frozenset({"read"}), lambda item: "unsafe")
     })
-    adapter = CapabilityAdapter(broker)
+    adapter = CapabilityAdapter(broker, agent_id="agent-1")
 
     with pytest.raises(PermissionError):
         adapter.execute(envelope(principal_id=""))
@@ -45,7 +45,7 @@ def test_adapter_fails_closed_when_capability_is_ambiguous():
         "one": Capability("one", frozenset({"read"}), lambda item: "one"),
         "two": Capability("two", frozenset({"read"}), lambda item: "two"),
     })
-    adapter = CapabilityAdapter(broker)
+    adapter = CapabilityAdapter(broker, agent_id="agent-1")
 
     with pytest.raises(LookupError):
         adapter.execute(envelope())
