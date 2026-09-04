@@ -1,8 +1,15 @@
 import hashlib
+from dataclasses import dataclass
 
 import pytest
 
 from .provenance import ProvenanceContext, canonical_digest, seal_provenance, verify_provenance
+
+
+@dataclass(frozen=True)
+class FabricLikeResult:
+    request_digest: str
+    output: str
 
 
 def context(**overrides):
@@ -53,6 +60,33 @@ def test_model_binding_is_part_of_provenance_digest():
     assert bound.model_request_digest == request_digest
     assert bound.model_result_digest == canonical_digest({"output": "answer", "selected_model": "reasoner"})
     assert original.digest() != bound.digest()
+
+
+def test_model_binding_can_use_authenticated_result_digest():
+    original = context()
+    request_digest = canonical_digest({"request": "model"})
+    authenticated_result_digest = "a" * 64
+    bound = original.bind_model(
+        request_digest,
+        FabricLikeResult(request_digest=request_digest, output="answer"),
+        result_digest=authenticated_result_digest,
+    )
+    assert bound.model_request_digest == request_digest
+    assert bound.model_result_digest == authenticated_result_digest
+
+
+def test_model_binding_rejects_result_from_different_request():
+    original = context()
+    request_a = canonical_digest({"request": "a"})
+    request_b = canonical_digest({"request": "b"})
+    with pytest.raises(ValueError, match="model request digest mismatch"):
+        original.bind_model(request_a, FabricLikeResult(request_digest=request_b, output="answer"), result_digest="a" * 64)
+
+
+def test_model_binding_rejects_malformed_authenticated_result_digest():
+    request_digest = canonical_digest({"request": "model"})
+    with pytest.raises(ValueError, match="invalid model result digest"):
+        context().bind_model(request_digest, {"output": "answer"}, result_digest="bad")
 
 
 def test_model_binding_tampering_breaks_seal():
