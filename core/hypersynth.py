@@ -122,9 +122,7 @@ class Hypersynth:
                 if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
                 self.last_fabric_result = result
                 verification = VerificationResult(True, "agent_result", "model_fabric_verified")
-                return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id, request_digest=request_digest, model_result_digest=model_result_digest)
-        request_digest = canonical_digest(request)
-        model_result_digest = ""
+                return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id)
         return FabricAgent(), request
 
     def run(self, task: TaskSpec, *, deadline_check=None):
@@ -212,23 +210,53 @@ class Hypersynth:
             if not consensus.valid: return self._reject("verification", task, consensus, results=tuple(results))
         timeout = self._deadline_rejection(task, "metacognition", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
-        reflection = self.metacognition.reflect(task, tuple(results), context, hypotheses)
-        if not isinstance(reflection, CognitiveState) or reflection.task_id != task.task_id: return self._reject("metacognition", task, VerificationResult(False, "metacognition", "invalid_reflection"), results=tuple(results))
-        output_check = VerificationResult(True, "hypersynth_result", "hypersynth_output_verified")
-        self._persist_memory(task, results[-1].output if results else None, reflection)
-        if provenance is not None and not self._provenance_verify(provenance): return self._reject("verification", task, VerificationResult(False, "provenance", "provenance_final_seal_failure"), results=tuple(results))
-        return {"status": "completed", "phase": "metacognition", "state": reflection, "results": tuple(results), "verification": output_check, "verified": True}
+        final_output = results[-1].output
+        try: output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
+        except Exception: return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
+        if not self._accepts_verification(output_check, "hypersynth_result"): return self._reject("verification", task, output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification"), results=tuple(results))
+        provenance_seal = None
+        if provenance is not None:
+            try: provenance = provenance.bind_result(final_output); provenance_seal = seal_provenance(provenance, self.provenance_key)
+            except Exception: return self._reject("verification", task, VerificationResult(False, "provenance", "provenance_binding_failure"), results=tuple(results))
+            if not verify_provenance(provenance, provenance_seal, self.provenance_key): return self._reject("verification", task, VerificationResult(False, "provenance", "provenance_seal_failure"), results=tuple(results))
+        reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
+        if not reflection[0].valid: return self._reject("metacognition", task, reflection[0], results=tuple(results))
+        self._persist_memory(task, final_output, reflection[1])
+        self.audit.record("hypersynth_completed", task_id=task.task_id, execution_id=task.execution_id)
+        return {"status": "completed", "phase": "metacognition", "execution_id": task.execution_id, "state": self._state("metacognition", task, context, reflection[1].confidence), "results": tuple(results), "hypotheses": hypotheses, "simulations": simulations, "reflection": reflection[1], "provenance": provenance, "provenance_seal": provenance_seal, "verification": output_check, "verified": True, "audit": self.audit.snapshot()}
 
     def _decompose(self, task):
         result = self.decomposer.decompose(task)
-        if not isinstance(result, tuple) or not result or len(result) > self.max_agents: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_decomposition"))
-        for subtask in result:
-            if not isinstance(subtask, Subtask) or not subtask.is_well_formed() or subtask.parent_task_id != task.task_id or subtask.risk_class != task.risk_class: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask"))
+        if isinstance(result, dict): return result
+        if not isinstance(result, tuple): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_collection"))
+        if not result or len(result) > self.max_steps: return self._reject("context", task, VerificationResult(False, "decomposition", "decomposition_limit_exceeded"))
+        seen = set()
+        for item in result:
+            if not isinstance(item, Subtask): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
+            if not isinstance(item.subtask_id, str) or not item.subtask_id.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            if not item.subtask_id.startswith(task.task_id + ":"): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
+            if item.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            seen.add(item.subtask_id)
+            if item.task_type != task.task_type: return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
+            if not isinstance(item.objective, str) or not item.objective.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_objective_invalid"))
         return result
 
-    @staticmethod
-    def _verify_consensus(results):
-        if len(results) < 2: return VerificationResult(True, "consensus", "single_agent_path")
+    def _verify_consensus(self, results):
+        if not results: return VerificationResult(False, "consensus", "no_results")
+        if any(not isinstance(result, AgentResult) or not result.is_well_formed() for result in results): return VerificationResult(False, "consensus", "malformed_agent_result")
+        agent_ids = [result.agent_id for result in results]
+        if len(agent_ids) != len(set(agent_ids)): return VerificationResult(False, "consensus", "duplicate_agent_result")
+        if any(result.status != "completed" for result in results): return VerificationResult(False, "consensus", "incomplete_result")
+        execution_ids = {result.execution_id for result in results}
+        if "" in execution_ids:
+            if len(execution_ids) == 1: return VerificationResult(False, "consensus", "missing_execution_identity")
+            return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        if len(execution_ids) != 1: return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        task_ids = {result.task_id for result in results}
+        if len(task_ids) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
+        for result in results:
+            if not isinstance(result.verification, VerificationResult) or not result.verification.is_well_formed() or not result.verification.valid: return VerificationResult(False, "consensus", "unverified_result")
+            if result.verification.stage != "agent_result": return VerificationResult(False, "consensus", "verification_stage_mismatch")
         outputs = {repr(result.output) for result in results}
         if len(outputs) != 1: return VerificationResult(False, "consensus", "agent_disagreement")
         return VerificationResult(True, "consensus", "consensus_verified")
