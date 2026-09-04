@@ -122,7 +122,7 @@ class Hypersynth:
                 if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
                 self.last_fabric_result = result
                 verification = VerificationResult(True, "agent_result", "model_fabric_verified")
-                return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id)
+                return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id, fabric.request_digest(request), fabric.result_digest(request, result))
         return FabricAgent(), request
 
     def run(self, task: TaskSpec, *, deadline_check=None):
