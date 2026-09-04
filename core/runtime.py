@@ -3,7 +3,7 @@ import time
 from uuid import uuid4
 
 from .actions import ActionGate
-from .agents import DeterministicAgent
+from .agents import DeterministicAgent, ModelFabricAgent
 from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
@@ -14,11 +14,12 @@ from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
+from noryx7_runtime.model_fabric import ModelFabric
 
 class NORYXRuntime:
     """Controlled runtime: validate -> decompose -> route -> execute -> limit -> verify -> audit."""
 
-    def __init__(self, limits: RuntimeLimits | None = None):
+    def __init__(self, limits: RuntimeLimits | None = None, model_fabric: ModelFabric | None = None):
         self.limits = limits or RuntimeLimits()
         self.runtime_id = uuid4().hex
         self._provenance_key = secrets.token_bytes(32)
@@ -30,6 +31,11 @@ class NORYXRuntime:
         self.audit = AuditLog()
         self.router = ResourceRouter()
         self.router.register(DeterministicAgent(self.verifier))
+        if model_fabric is not None:
+            if model_fabric.runtime_id != self.runtime_id:
+                raise ValueError("model_fabric runtime identity mismatch")
+            self.router.register(ModelFabricAgent(model_fabric, self.verifier))
+        self.model_fabric = model_fabric
         self.decomposer = TaskDecomposer()
         self.hypersynth = HypersynthRuntime(
             verifier=self.verifier,
@@ -39,6 +45,7 @@ class NORYXRuntime:
             memory=self.memory,
             runtime_id=self.runtime_id,
             provenance_key=self._provenance_key,
+            model_fabric=model_fabric,
         )
 
     def run(self, task: TaskSpec, agent_id: str = "deterministic"):
