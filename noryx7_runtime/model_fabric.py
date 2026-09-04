@@ -122,11 +122,15 @@ class ModelFabric:
         if len(result.candidates) < 1 or len(result.candidates) > len(self._models): return False
         expected_request_digest = self._request_digest(request)
         if result.request_digest != expected_request_digest or not result.candidates: return False
+        model_by_name = {model.name: model for model in self._models}
         names: set[str] = set()
         for candidate in result.candidates:
             if not isinstance(candidate, ModelCandidate) or not isinstance(candidate.name, str) or not candidate.name or candidate.name in names: return False
+            model = model_by_name.get(candidate.name)
+            if model is None: return False
             if isinstance(candidate.latency_ms, bool) or not isinstance(candidate.latency_ms, (int, float)) or not math.isfinite(candidate.latency_ms) or candidate.latency_ms < 0: return False
             if isinstance(candidate.cost, bool) or not isinstance(candidate.cost, (int, float)) or not math.isfinite(candidate.cost) or candidate.cost < 0: return False
+            if candidate.cost != model.cost_per_call: return False
             if not isinstance(candidate.output_digest, str) or len(candidate.output_digest) != 64 or any(ch not in "0123456789abcdef" for ch in candidate.output_digest): return False
             try:
                 if _digest(candidate.output) != candidate.output_digest: return False
