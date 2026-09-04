@@ -78,6 +78,7 @@ def test_hypersynth_model_binding_rejects_output_swap():
 def test_hypersynth_model_binding_rejects_stale_fabric_result_for_new_request():
     kernel, fabric, task, agent, request, result = _run_model()
     from noryx7_runtime.model_fabric import ModelRequest
+
     stale = agent.last_fabric_result
     forged_request = ModelRequest(
         prompt="attacker-request",
@@ -90,12 +91,9 @@ def test_hypersynth_model_binding_rejects_stale_fabric_result_for_new_request():
         tools=request.tools,
         runtime_id=request.runtime_id,
     )
-    forged_result = replace(
-        result,
-        model_request_digest=fabric.request_digest(forged_request),
-        model_result_digest=fabric.result_digest(forged_request, stale),
-    )
-    check = kernel._verify_model_binding(forged_result, forged_request, stale)
+    with pytest.raises(ValueError):
+        fabric.result_digest(forged_request, stale)
+    check = kernel._verify_model_binding(result, forged_request, stale)
     assert not check.valid
     assert check.reason == "model_result_integrity_failure"
 
