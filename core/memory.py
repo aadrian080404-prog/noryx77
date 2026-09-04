@@ -103,10 +103,24 @@ class MemoryStore:
         except Exception as exc:
             raise RuntimeError("memory isolation failure") from exc
 
-    def delete(self, memory_id: str) -> bool:
+    def delete(self, memory_id: str, *, execution_id: str | None = None) -> bool:
+        """Delete only within the supplied execution boundary when the record is bound."""
         if not isinstance(memory_id, str):
             return False
-        return self._items.pop(memory_id, None) is not None
+        item = self._items.get(memory_id)
+        if item is None:
+            return False
+        if item.execution_id:
+            if execution_id is None or not self._valid_execution_id(execution_id, allow_empty=False):
+                return False
+            if item.execution_id != execution_id:
+                return False
+        elif execution_id is not None:
+            if not self._valid_execution_id(execution_id, allow_empty=False):
+                return False
+            return False
+        del self._items[memory_id]
+        return True
 
     def __len__(self) -> int:
         return len(self._items)
