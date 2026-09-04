@@ -1,5 +1,7 @@
 import pytest
 
+from core.identity import AgentIdentityAuthority, IdentityRegistry
+
 from .adapters import CapabilityAdapter
 from .attestation import Ed25519AttestationSigner, verify_attestation
 from .capabilities import Capability, CapabilityBroker
@@ -48,6 +50,39 @@ def test_capability_adapter_requires_signed_attestation():
     assert len(seen) == 1
     assert result.attestations[0].agent_id == "agent-1"
     assert verify_attestation(result.attestations[0], signer)
+    assert len(result.attestations[0].agent_key_fingerprint) == 64
+
+
+def test_identity_bound_adapter_requires_registered_signing_key():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signer = Ed25519AttestationSigner(private_key)
+    result = RuntimeEngine(
+        adapter=capability_adapter(agent_id="agent-1"),
+        attestation_signer=signer,
+        identity_registry=registry,
+    ).execute(
+        Intent("run", "user"), [step("a")], verifier=lambda action, output: True
+    )
+    assert result.status is ExecutionStatus.SUCCEEDED
+    registry.revoke("agent-1")
+    assert not registry.is_trusted(identity)
+
+
+def test_identity_bound_adapter_rejects_replaced_public_key():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    replacement, replacement_key = AgentIdentityAuthority.generate("agent-1")
+    signer = Ed25519AttestationSigner(replacement_key)
+    with pytest.raises(PermissionError, match="adapter identity"):
+        RuntimeEngine(
+            adapter=capability_adapter(agent_id="agent-1"),
+            attestation_signer=signer,
+            identity_registry=registry,
+        )
+    assert private_key is not None and replacement.public_key != identity.public_key
 
 
 def test_adapter_without_attestation_signer_is_rejected_at_construction():
