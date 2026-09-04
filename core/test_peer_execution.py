@@ -9,7 +9,7 @@ KEY = b"p" * 32
 
 
 def task(execution="exec-peer"):
-    return TaskSpec("task-peer", "analysis", "solve", execution_id=execution)
+    return TaskSpec("task-peer", "analysis", "solve", "input", execution_id=execution)
 
 
 def result(agent_id, output="same", execution="exec-peer"):
