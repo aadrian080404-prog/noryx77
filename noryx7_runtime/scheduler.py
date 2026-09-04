@@ -19,6 +19,11 @@ class Scheduler:
         by_id = {step.step_id: step for step in steps}
         if len(by_id) != len(steps):
             raise ValueError("duplicate step id")
+        known = set(by_id)
+        for step in steps:
+            unknown = set(step.dependencies) - known
+            if unknown:
+                raise ValueError("unknown step dependency")
         remaining = set(by_id)
         result: list[ScheduledStep] = []
         while remaining:
