@@ -8,7 +8,7 @@ KEY = b"k" * 32
 
 
 def task(execution="exec-1"):
-    return TaskSpec("task-1", "analysis", "solve", execution_id=execution)
+    return TaskSpec("task-1", "analysis", "solve", "input", execution_id=execution)
 
 
 def result(agent, output="answer", execution="exec-1"):
@@ -61,5 +61,5 @@ def test_evidence_cannot_be_retargeted_to_different_task():
     t = task()
     pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
     evidence = pair.evidence(t, result("agent-a"), "agent-b", "challenge")
-    other = TaskSpec("task-2", "analysis", "other", execution_id=t.execution_id)
+    other = TaskSpec("task-2", "analysis", "other", "input", execution_id=t.execution_id)
     assert not pair.verify_evidence(evidence, task=other)
