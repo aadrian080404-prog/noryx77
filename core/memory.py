@@ -60,7 +60,10 @@ class MemoryStore:
                 execution_id = ""
             item = MemoryItem(item_or_id, content, execution_id=execution_id)
         self._validate_item(item)
-        if item.memory_id not in self._items and len(self._items) >= self.max_items:
+        existing = self._items.get(item.memory_id)
+        if existing is not None and existing.execution_id != item.execution_id:
+            raise ValueError("memory_id_execution_collision")
+        if existing is None and len(self._items) >= self.max_items:
             raise MemoryError("memory_capacity_exceeded")
         try:
             isolated = deepcopy(item)
