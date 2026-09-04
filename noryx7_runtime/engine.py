@@ -50,6 +50,7 @@ class RuntimeEngine:
         adapter: ExecutionAdapter | None = None,
         attestation_signer: AttestationSigner | None = None,
         identity_registry: IdentityRegistry | None = None,
+        runtime_id: str | None = None,
     ) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
             raise ValueError("max_actions must be a non-negative integer")
@@ -65,6 +66,8 @@ class RuntimeEngine:
             raise ValueError("adapter-backed execution requires attestation_signer")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
             raise TypeError("identity_registry must be an IdentityRegistry")
+        if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id):
+            raise ValueError("runtime_id must be a non-empty string")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes):
@@ -78,6 +81,11 @@ class RuntimeEngine:
         self._adapter = adapter
         self._attestation_signer = attestation_signer
         self._identity_registry = identity_registry
+        self._runtime_id = runtime_id or uuid4().hex
+
+    @property
+    def runtime_id(self) -> str:
+        return self._runtime_id
 
     def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
         dispatch = self._adapter.execute if self._adapter is not None else executor
@@ -96,9 +104,6 @@ class RuntimeEngine:
                 raise PermissionError("adapter identity key mismatch")
             return dispatch(envelope)
 
-        # Hold the identity trust-anchor lock through the bounded dispatch. This
-        # gives revoke-vs-dispatch a single linearization point: either the
-        # effect starts before revocation, or revocation wins and no effect runs.
         return self._identity_registry.with_trusted_identity(agent_id, run_if_trusted)
 
     def execute(
@@ -184,6 +189,7 @@ class RuntimeEngine:
                     verified=verified,
                     detail="verified" if verified else "verification_failed",
                     previous_attestation_digest=previous_attestation_digest,
+                    runtime_id=self._runtime_id,
                 )
                 if self._attestation_signer is not None:
                     attestation = signed_attestation(attestation, self._attestation_signer)
