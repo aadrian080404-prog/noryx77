@@ -8,12 +8,14 @@ from .jarvis import JarvisAssistant, JarvisCapabilities, JarvisRequest
 @dataclass
 class StubRuntime:
     runtime_id: str = "runtime-test"
-    response: dict | None = None
+    response: object = None
 
     def run_hypersynth(self, task):
         assert task.task_type == "jarvis_request"
         assert task.execution_id
-        return self.response or {
+        if self.response is not None:
+            return self.response
+        return {
             "status": "completed",
             "result": {"ok": True},
             "verified": True,
@@ -37,8 +39,7 @@ def test_jarvis_delegates_to_runtime_and_preserves_verification():
 
 
 def test_jarvis_rejects_malformed_runtime_result():
-    assistant = JarvisAssistant(StubRuntime(response=None))
-    assistant.runtime.response = []
+    assistant = JarvisAssistant(StubRuntime(response=[]))
     response = assistant.handle(JarvisRequest("req-3", "Do work"))
     assert response.status == "rejected"
     assert response.reason == "malformed_runtime_result"
