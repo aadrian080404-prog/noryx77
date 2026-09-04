@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from dataclasses import replace
+import math
 
 import pytest
 
-from .model_fabric import ModelFabric, ModelRequest
+from .model_fabric import ModelCandidate, ModelFabric, ModelRequest
 
 
 @dataclass
@@ -106,3 +107,53 @@ def test_bound_result_rejects_request_replay_under_different_request():
     result = fabric.execute(request)
     replay = ModelRequest("different-answer", runtime_id="runtime-a")
     assert fabric.verify_result(replay, result) is False
+
+
+def test_request_rejects_non_finite_budget_limits():
+    with pytest.raises(ValueError):
+        ModelRequest("answer", max_cost=math.nan)
+    with pytest.raises(ValueError):
+        ModelRequest("answer", max_cost=math.inf)
+    with pytest.raises(ValueError):
+        ModelRequest("answer", max_latency_ms=math.nan)
+    with pytest.raises(ValueError):
+        ModelRequest("answer", max_latency_ms=math.inf)
+
+
+def test_result_rejects_non_finite_confidence_and_candidate_economics():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+
+    assert fabric.verify_result(request, replace(result, confidence=math.nan)) is False
+    assert fabric.verify_result(
+        request,
+        replace(result, candidates=(replace(result.candidates[0], latency_ms=math.nan),)),
+    ) is False
+    assert fabric.verify_result(
+        request,
+        replace(result, candidates=(replace(result.candidates[0], cost=math.inf),)),
+    ) is False
+
+
+def test_result_rejects_malformed_digest_without_raising():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+    malformed = replace(
+        result,
+        candidates=(replace(result.candidates[0], output_digest="not-a-digest"),),
+    )
+    assert fabric.verify_result(request, malformed) is False
+
+
+def test_result_digest_fails_closed_for_malformed_candidate():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+    malformed = replace(result, candidates=(ModelCandidate("a", result.output, math.nan, 1.0, result.candidates[0].output_digest),))
+    with pytest.raises(ValueError):
+        fabric.result_digest(request, malformed)
