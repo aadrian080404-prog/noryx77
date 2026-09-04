@@ -31,16 +31,14 @@ class MemoryBoundaryTests(unittest.TestCase):
 
     def test_execution_identity_is_validated_on_write(self):
         store = MemoryStore()
-        with self.assertRaises(ValueError):
-            store.put(MemoryItem("a", "A", execution_id="x" * 257))
+        with self.assertRaises(ValueError): store.put(MemoryItem("a", "A", execution_id="x" * 257))
 
-    def test_memory_id_collision_cannot_replace_another_execution(self):
+    def test_same_memory_id_isolated_by_execution_scope(self):
         store = MemoryStore()
         store.put(MemoryItem("shared", "A", execution_id="exec-A"))
-        with self.assertRaisesRegex(ValueError, "memory_id_execution_collision"):
-            store.put(MemoryItem("shared", "attacker", execution_id="exec-B"))
+        store.put(MemoryItem("shared", "B", execution_id="exec-B"))
         self.assertEqual(store.get("shared", execution_id="exec-A").content, "A")
-        self.assertIsNone(store.get("shared", execution_id="exec-B"))
+        self.assertEqual(store.get("shared", execution_id="exec-B").content, "B")
 
     def test_memory_get_and_list_return_deep_copies(self):
         store = MemoryStore()
