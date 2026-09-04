@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from threading import RLock
 from typing import Protocol
@@ -65,11 +66,15 @@ class StateJournal:
         if self._identity_registry is not None:
             return self._identity_registry.with_trusted_identity(
                 attestation.agent_id,
-                lambda _identity: self._append_verified(attestation),
+                lambda identity: self._append_verified(attestation, identity.public_key),
             )
-        return self._append_verified(attestation)
+        return self._append_verified(attestation, None)
 
-    def _append_verified(self, attestation: Attestation) -> JournalEntry:
+    def _append_verified(self, attestation: Attestation, trusted_public_key: bytes | None) -> JournalEntry:
+        if trusted_public_key is not None:
+            expected_fingerprint = hashlib.sha256(trusted_public_key).hexdigest()
+            if attestation.agent_key_fingerprint != expected_fingerprint:
+                raise PermissionError("attestation key fingerprint is not trusted")
         if self._require_signatures:
             try:
                 valid = bool(self._verifier.verify(attestation, attestation.signature))
