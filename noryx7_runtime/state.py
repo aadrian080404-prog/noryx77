@@ -45,6 +45,7 @@ class StateJournal:
         self._lock = RLock()
         self._entries: list[JournalEntry] = []
         self._keys: set[tuple[str, str]] = set()
+        self._principals: dict[str, str] = {}
         self._require_signatures = require_signatures
         self._verifier = verifier
         self._identity_registry = identity_registry
@@ -84,6 +85,9 @@ class StateJournal:
                 raise PermissionError("invalid attestation signature")
         key = (attestation.execution_id, attestation.step_id)
         with self._lock:
+            existing_principal = self._principals.get(attestation.execution_id)
+            if existing_principal is not None and existing_principal != attestation.principal_id:
+                raise PermissionError("execution principal mismatch")
             if key in self._keys:
                 raise ValueError("duplicate execution step")
             previous = self._previous_digest_locked(attestation.execution_id)
@@ -103,6 +107,7 @@ class StateJournal:
             )
             self._entries.append(entry)
             self._keys.add(key)
+            self._principals.setdefault(attestation.execution_id, attestation.principal_id)
             return entry
 
     def _previous_digest_locked(self, execution_id: str) -> str:
