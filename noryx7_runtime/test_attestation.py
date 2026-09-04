@@ -79,7 +79,8 @@ def test_identity_registry_rejects_public_key_replacement_and_identity_swap():
     signed = signed_attestation(make_attestation(signer), signer)
     assert verifier.verify(signed, signed.signature)
     replacement, replacement_key = AgentIdentityAuthority.generate("agent-1")
-    forged = signed_attestation(make_attestation(Ed25519AttestationSigner(replacement_key), agent_id="agent-1"), Ed25519AttestationSigner(replacement_key))
+    forged_signer = Ed25519AttestationSigner(replacement_key)
+    forged = signed_attestation(make_attestation(forged_signer, agent_id="agent-1"), forged_signer)
     assert not verifier.verify(forged, forged.signature)
     assert not verifier.verify(dataclasses.replace(signed, agent_id="other-agent"), signed.signature)
 
@@ -152,9 +153,11 @@ def test_provenance_binding_is_signature_bound():
     assert not verify_attestation(dataclasses.replace(signed, provenance_seal=b"t" * 32), signer)
 
 
-def test_attestation_rejects_empty_or_oversized_runtime_and_detail():
+def test_attestation_accepts_legacy_empty_runtime_but_bounds_runtime_and_detail():
     signer = Ed25519AttestationSigner.generate()
-    for changes in ({"runtime_id": ""}, {"runtime_id": "r" * 257}, {"detail": "d" * 4097}):
+    legacy = signed_attestation(make_attestation(signer, runtime_id=""), signer)
+    assert verify_attestation(legacy, signer)
+    for changes in ({"runtime_id": "r" * 257}, {"detail": "d" * 4097}):
         with pytest.raises(ValueError): signed_attestation(make_attestation(signer, **changes), signer)
 
 
