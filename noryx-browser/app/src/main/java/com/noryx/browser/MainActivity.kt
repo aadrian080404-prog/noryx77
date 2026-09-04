@@ -22,11 +22,15 @@ class MainActivity : AppCompatActivity() {
         binding.retry.setOnClickListener { clearError(); controller.reload() }
         binding.address.setOnEditorActionListener { _, _, _ ->
             clearError()
-            try { controller.navigateInput(binding.address.text.toString()) }
-            catch (error: IllegalArgumentException) { showError() }
+            try {
+                controller.navigateInput(binding.address.text.toString())
+            } catch (error: IllegalArgumentException) {
+                showError()
+            }
             true
         }
         if (savedInstanceState == null) controller.loadHome()
+        updateNavigationState()
     }
 
     private fun configureWebView() {
@@ -35,11 +39,26 @@ class MainActivity : AppCompatActivity() {
         binding.webView.settings.allowFileAccess = false
         binding.webView.settings.allowContentAccess = false
         binding.webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        binding.webView.webViewClient = NoryxWebViewClient { runOnUiThread { showError() } }
+        binding.webView.webViewClient = NoryxWebViewClient(
+            onNavigationChanged = { state ->
+                runOnUiThread {
+                    binding.address.setText(state.url)
+                    binding.back.isEnabled = state.canGoBack
+                    binding.forward.isEnabled = state.canGoForward
+                }
+            },
+            onError = { runOnUiThread { showError() } },
+        )
         binding.webView.webChromeClient = NoryxWebChromeClient { p ->
             binding.progress.progress = p
             binding.progress.visibility = if (p < 100) View.VISIBLE else View.GONE
         }
+    }
+
+    private fun updateNavigationState() {
+        binding.back.isEnabled = binding.webView.canGoBack()
+        binding.forward.isEnabled = binding.webView.canGoForward()
+        binding.address.setText(binding.webView.url.orEmpty())
     }
 
     private fun showError() {
@@ -61,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         binding.webView.restoreState(savedInstanceState)
+        updateNavigationState()
     }
 
     override fun onDestroy() {
