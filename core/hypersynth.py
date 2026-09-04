@@ -195,7 +195,9 @@ class Hypersynth:
             results.append(result)
             if provenance is not None and request is not None:
                 fabric_result = getattr(agent, "last_fabric_result", None)
-                try: provenance = provenance.bind_model(fabric_result.request_digest, fabric_result)
+                try:
+                    model_result_digest = self.model_fabric.result_digest(request, fabric_result)
+                    provenance = provenance.bind_model(fabric_result.request_digest, fabric_result, result_digest=model_result_digest)
                 except Exception: return self._reject("verification", task, VerificationResult(False, "provenance", "model_provenance_binding_failure"), results=tuple(results))
         timeout = self._deadline_rejection(task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
@@ -246,6 +248,7 @@ class Hypersynth:
         if "" in execution_ids:
             if len(execution_ids) == 1: return VerificationResult(False, "consensus", "missing_execution_identity")
             return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        if len(execution_ids) != 1: return VerificationResult(False, "consensus", "execution_identity_mismatch")
         if len(execution_ids) != 1: return VerificationResult(False, "consensus", "execution_identity_mismatch")
         task_ids = {result.task_id for result in results}
         if len(task_ids) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
