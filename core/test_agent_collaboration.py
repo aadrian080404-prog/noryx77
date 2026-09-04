@@ -74,3 +74,42 @@ def test_evidence_cannot_be_retargeted_to_different_task():
     evidence = pair.evidence(t, result("agent-a"), "agent-b", "challenge")
     other = TaskSpec("task-2", "analysis", "other", "input", execution_id=t.execution_id)
     assert not pair.verify_evidence(evidence, task=other)
+
+
+def test_revision_evidence_requires_prior_admitted_chain_entry():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    forged_previous = "0" * 64
+    revision = pair.evidence(
+        t,
+        result("agent-a", "revised"),
+        "agent-b",
+        "challenge",
+        revision=1,
+        previous_evidence_digest=forged_previous,
+    )
+    assert not pair.verify_evidence(revision, task=t)
+
+
+def test_revision_evidence_is_bound_to_the_initial_disagreement():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    first = result("agent-a", "one")
+    second = result("agent-b", "two")
+    initial = pair.evidence(t, first, "agent-b", "resolve disagreement", revision=0)
+    initial_result = pair.admit_consensus(t, first, second, initial)
+    assert not initial_result.valid
+    initial_id = pair._evidence_id(initial)
+
+    revised_first = result("agent-a", "resolved")
+    revised_second = result("agent-b", "resolved")
+    revision = pair.evidence(
+        t,
+        revised_first,
+        "agent-b",
+        "re-evaluate after challenge",
+        revision=1,
+        previous_evidence_digest=initial_id,
+    )
+    assert pair.verify_evidence(revision, task=t)
+    assert pair.admit_consensus(t, revised_first, revised_second, revision).valid
