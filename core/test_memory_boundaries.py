@@ -34,6 +34,23 @@ class MemoryBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             store.put(MemoryItem("a", "A", execution_id="x" * 257))
 
+    def test_memory_id_collision_cannot_replace_another_execution(self):
+        store = MemoryStore()
+        store.put(MemoryItem("shared", "A", execution_id="exec-A"))
+        with self.assertRaisesRegex(ValueError, "memory_id_execution_collision"):
+            store.put(MemoryItem("shared", "attacker", execution_id="exec-B"))
+        self.assertEqual(store.get("shared", execution_id="exec-A").content, "A")
+        self.assertIsNone(store.get("shared", execution_id="exec-B"))
+
+    def test_memory_get_and_list_return_deep_copies(self):
+        store = MemoryStore()
+        payload = {"nested": ["original"]}
+        store.put(MemoryItem("mutable", payload, execution_id="exec-A"))
+        returned = store.get("mutable", execution_id="exec-A")
+        returned.content["nested"].append("tampered")
+        listed = store.list(execution_id="exec-A")
+        self.assertEqual(listed[0].content, {"nested": ["original"]})
+
 
 if __name__ == "__main__":
     unittest.main()
