@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .attestation import AttestationSigner
+from .attestation import AttestationVerifier
 from .contracts import Attestation
 from .state import JournalEntry, StateJournal
 
@@ -12,7 +12,7 @@ class RecoveryError(ValueError):
 class RuntimeRecovery:
     """Validate and reconstruct committed execution state from an append-only journal."""
 
-    def __init__(self, journal: StateJournal, verifier: AttestationSigner | None = None):
+    def __init__(self, journal: StateJournal, verifier: AttestationVerifier | None = None):
         if not isinstance(journal, StateJournal):
             raise TypeError("journal must be a StateJournal")
         effective_verifier = verifier if verifier is not None else journal.verifier
@@ -31,7 +31,7 @@ class RuntimeRecovery:
         return entries
 
     @staticmethod
-    def _validate(entries: tuple[JournalEntry, ...], verifier: AttestationSigner | None = None) -> None:
+    def _validate(entries: tuple[JournalEntry, ...], verifier: AttestationVerifier | None = None) -> None:
         previous = -1
         seen_steps: set[str] = set()
         for entry in entries:
@@ -41,9 +41,24 @@ class RuntimeRecovery:
                 raise RecoveryError("journal sequence is not strictly increasing")
             if entry.step_id in seen_steps:
                 raise RecoveryError("duplicate committed step")
-            fields = (entry.execution_id, entry.principal_id, entry.step_id, entry.agent_id, entry.action_digest, entry.output_digest)
+            fields = (
+                entry.execution_id,
+                entry.principal_id,
+                entry.step_id,
+                entry.agent_id,
+                entry.agent_key_fingerprint,
+                entry.action_digest,
+                entry.output_digest,
+            )
             if any(not isinstance(value, str) or not value for value in fields):
                 raise RecoveryError("incomplete journal entry")
+            for digest in (entry.agent_key_fingerprint, entry.action_digest, entry.output_digest):
+                if len(digest) != 64:
+                    raise RecoveryError("invalid journal digest")
+                try:
+                    int(digest, 16)
+                except ValueError as exc:
+                    raise RecoveryError("invalid journal digest") from exc
             if not isinstance(entry.signature, bytes) or len(entry.signature) != 64:
                 raise RecoveryError("invalid attestation signature")
             if verifier is None:
@@ -53,6 +68,7 @@ class RuntimeRecovery:
                 principal_id=entry.principal_id,
                 step_id=entry.step_id,
                 agent_id=entry.agent_id,
+                agent_key_fingerprint=entry.agent_key_fingerprint,
                 action_digest=entry.action_digest,
                 output_digest=entry.output_digest,
                 verified=True,
