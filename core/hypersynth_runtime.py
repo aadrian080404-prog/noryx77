@@ -13,19 +13,9 @@ from .router import ResourceRouter
 
 
 class HypersynthRuntime:
-    """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
-    def __init__(
-        self,
-        verifier=None,
-        router=None,
-        planner=None,
-        audit=None,
-        limits=None,
-        memory=None,
-        clock=None,
-        runtime_id=None,
-        provenance_key=None,
-    ):
+    """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime provenance."""
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None,
+                 runtime_id=None, provenance_key=None, model_fabric=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -36,6 +26,14 @@ class HypersynthRuntime:
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.runtime_id = runtime_id
+        if provenance_key is not None and (not isinstance(provenance_key, bytes) or len(provenance_key) < 32):
+            raise ValueError("provenance key must contain at least 32 bytes")
+        self._provenance_key = bytes(provenance_key) if provenance_key is not None else None
+        self.model_fabric = model_fabric
+        if self.model_fabric is not None and self.runtime_id is not None:
+            fabric_runtime_id = getattr(self.model_fabric, "runtime_id", None)
+            if fabric_runtime_id != self.runtime_id:
+                raise ValueError("model_fabric runtime identity mismatch")
         self.kernel = Hypersynth(
             self.verifier,
             self.router,
@@ -44,9 +42,28 @@ class HypersynthRuntime:
             memory=self.memory,
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
-            provenance_key=provenance_key,
-            runtime_id=runtime_id or "",
+            provenance_key=self._provenance_key,
+            runtime_id=self.runtime_id or "",
         )
+
+    def run_model(self, request, *, verifier=None, synthesizer=None):
+        """Execute a Model Fabric request only inside this runtime's provenance boundary."""
+        if self.model_fabric is None:
+            raise RuntimeError("model_fabric_unavailable")
+        runtime_id = getattr(request, "runtime_id", None)
+        if not isinstance(runtime_id, str) or runtime_id != self.runtime_id:
+            raise PermissionError("model request runtime identity mismatch")
+        result = self.model_fabric.execute(request, verifier=verifier, synthesizer=synthesizer)
+        if not self.model_fabric.verify_result(request, result):
+            raise RuntimeError("model_result_integrity_failure")
+        self.audit.record(
+            "model_fabric_result",
+            runtime_id=self.runtime_id,
+            request_digest=result.request_digest,
+            selected_model=result.selected_model,
+            degraded=result.degraded,
+        )
+        return result
 
     def run(self, task):
         task_id = getattr(task, "task_id", None)
