@@ -35,7 +35,7 @@ class ModelRequest:
     tools: tuple[str, ...] = ()
     runtime_id: str = ""
     def __post_init__(self) -> None:
-        if not self.prompt.strip(): raise ValueError("prompt is required")
+        if not isinstance(self.prompt, str) or not self.prompt.strip(): raise ValueError("prompt is required")
         if self.min_models < 1 or self.max_models < self.min_models: raise ValueError("invalid model fan-out")
         if self.max_cost is not None and self.max_cost < 0: raise ValueError("max_cost must be non-negative")
         if self.max_latency_ms is not None and self.max_latency_ms <= 0: raise ValueError("max_latency_ms must be positive")
@@ -68,7 +68,8 @@ class ModelFabric:
     def __init__(self, models: Sequence[ModelAdapter], *, runtime_id: str | None = None, binding_key: bytes | None = None) -> None:
         if not models: raise ValueError("at least one model is required")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id): raise ValueError("runtime_id must be a non-empty string")
-        if binding_key is not None and (not isinstance(binding_key, bytes) or len(binding_key) < 16): raise ValueError("binding_key must be at least 16 bytes")
+        if binding_key is not None and (not isinstance(binding_key, bytes) or len(binding_key) < 32): raise ValueError("binding_key must be at least 32 bytes")
+        if binding_key is not None and runtime_id is None: raise ValueError("runtime_id is required for bound model fabric")
         names: set[str] = set(); validated: list[ModelAdapter] = []
         for model in models:
             name = getattr(model, "name", None); caps = getattr(model, "capabilities", None)
