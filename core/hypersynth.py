@@ -85,7 +85,7 @@ class Hypersynth:
     def _provenance_verify(self, context): return context is None or verify_provenance(context, seal_provenance(context, self.provenance_key), self.provenance_key)
 
     def _model_agent(self, task, step):
-        if self.model_fabric is None: return None
+        if self.model_fabric is None: return None, None
         from .agents import Agent
         from noryx7_runtime.model_fabric import ModelRequest
         constraints = task.constraints if hasattr(task.constraints, "get") else {}
@@ -105,10 +105,13 @@ class Hypersynth:
         )
         fabric = self.model_fabric
         class FabricAgent(Agent):
-            def __init__(self): super().__init__("model-fabric")
+            def __init__(self):
+                super().__init__("model-fabric")
+                self.last_fabric_result = None
             def run(self, child):
                 result = fabric.execute(request)
                 if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
+                self.last_fabric_result = result
                 verification = VerificationResult(True, "agent_result", "model_fabric_verified")
                 return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id)
         return FabricAgent(), request
@@ -154,15 +157,11 @@ class Hypersynth:
         if self.model_fabric is not None: agents = tuple(agents) + ("model-fabric",)
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
-        model_requests = []
         for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
             try:
-                if agent_id == "model-fabric":
-                    selected, request = self._model_agent(task, step)
-                    decision = type("Decision", (), {"accepted": selected is not None, "reason": "model_fabric_selected"})()
-                    if request is not None: model_requests.append(request)
+                if agent_id == "model-fabric": selected, request = self._model_agent(task, step); decision = type("Decision", (), {"accepted": selected is not None, "reason": "model_fabric_selected"})()
                 else: selected, decision = self.supervisor.select(child, preferred=agent_id); request = None
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
@@ -188,12 +187,12 @@ class Hypersynth:
             if not isinstance(result, AgentResult): return self._reject("verification", task, VerificationResult(False, "agent_result", "malformed_agent_result"), results=tuple(results))
             if result.execution_id != task.execution_id: return self._reject("verification", task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
             results.append(result)
-            if provenance is not None and request is not None and hasattr(self.model_fabric, "verify_result"):
+            if provenance is not None and request is not None:
+                fabric_result = getattr(agent, "last_fabric_result", None)
+                if fabric_result is None or not self.model_fabric.verify_result(request, fabric_result):
+                    return self._reject("verification", task, VerificationResult(False, "provenance", "model_result_integrity_failure"), results=tuple(results))
                 try:
-                    fabric_result = self.model_fabric.execute(request)
-                    if not self.model_fabric.verify_result(request, fabric_result):
-                        return self._reject("verification", task, VerificationResult(False, "provenance", "model_result_integrity_failure"), results=tuple(results))
-                    provenance = provenance.bind_model(canonical_digest(request), fabric_result)
+                    provenance = provenance.bind_model(fabric_result.request_digest, fabric_result)
                 except Exception:
                     return self._reject("verification", task, VerificationResult(False, "provenance", "model_provenance_binding_failure"), results=tuple(results))
         timeout = self._deadline_rejection(task, "verification", deadline_check)
