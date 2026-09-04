@@ -6,6 +6,12 @@ from noryx7_runtime.model_fabric import ModelFabric, ModelRequest
 class Agent:
     agent_id = "base"
 
+    def __init__(self, agent_id: str | None = None):
+        if agent_id is not None:
+            if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id.encode("utf-8")) > 256:
+                raise ValueError("invalid agent_id")
+            self.agent_id = agent_id
+
     def run(self, task: TaskSpec) -> AgentResult:
         raise NotImplementedError
 
