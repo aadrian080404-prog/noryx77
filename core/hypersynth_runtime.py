@@ -14,7 +14,18 @@ from .router import ResourceRouter
 
 class HypersynthRuntime:
     """Fail-closed facade that owns HYPERSYNTH safety dependencies and runtime limits."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None):
+    def __init__(
+        self,
+        verifier=None,
+        router=None,
+        planner=None,
+        audit=None,
+        limits=None,
+        memory=None,
+        clock=None,
+        runtime_id=None,
+        provenance_key=None,
+    ):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -24,6 +35,7 @@ class HypersynthRuntime:
         self.security = SecurityBoundary(self.policy, self.verifier)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
+        self.runtime_id = runtime_id
         self.kernel = Hypersynth(
             self.verifier,
             self.router,
@@ -32,6 +44,8 @@ class HypersynthRuntime:
             memory=self.memory,
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
+            provenance_key=provenance_key,
+            runtime_id=runtime_id or "",
         )
 
     def run(self, task):
