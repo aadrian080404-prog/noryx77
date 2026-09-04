@@ -39,6 +39,17 @@ class RuntimeRecovery:
         previous_sequence = -1
         previous_digest = "0" * 64
         seen_steps = set()
+
+        # Preflight global sequence ordering before cryptographic chain checks.
+        # Recovery validates an execution-specific projection of a journal whose
+        # sequence numbers are global, so only monotonicity of the filtered
+        # projection is required here. Doing this first also preserves the
+        # deterministic error contract for reordered persisted entries.
+        for left, right in zip(entries, entries[1:]):
+            if isinstance(left, JournalEntry) and isinstance(right, JournalEntry):
+                if right.sequence <= left.sequence:
+                    raise RecoveryError("journal sequence is not strictly increasing")
+
         for entry in entries:
             if not isinstance(entry, JournalEntry):
                 raise RecoveryError("invalid journal entry")
