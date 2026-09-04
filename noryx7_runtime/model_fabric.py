@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, Sequence
 
@@ -36,9 +37,12 @@ class ModelRequest:
     runtime_id: str = ""
     def __post_init__(self) -> None:
         if not isinstance(self.prompt, str) or not self.prompt.strip(): raise ValueError("prompt is required")
-        if self.min_models < 1 or self.max_models < self.min_models: raise ValueError("invalid model fan-out")
-        if self.max_cost is not None and self.max_cost < 0: raise ValueError("max_cost must be non-negative")
-        if self.max_latency_ms is not None and self.max_latency_ms <= 0: raise ValueError("max_latency_ms must be positive")
+        if not isinstance(self.required_capabilities, frozenset) or any(not isinstance(item, str) or not item for item in self.required_capabilities): raise ValueError("invalid required capabilities")
+        if not isinstance(self.preferred_capabilities, frozenset) or any(not isinstance(item, str) or not item for item in self.preferred_capabilities): raise ValueError("invalid preferred capabilities")
+        if not isinstance(self.tools, tuple) or any(not isinstance(item, str) or not item for item in self.tools): raise ValueError("invalid model tools")
+        if not isinstance(self.min_models, int) or not isinstance(self.max_models, int) or self.min_models < 1 or self.max_models < self.min_models: raise ValueError("invalid model fan-out")
+        if self.max_cost is not None and (not isinstance(self.max_cost, (int, float)) or not math.isfinite(self.max_cost) or self.max_cost < 0): raise ValueError("max_cost must be a finite non-negative number")
+        if self.max_latency_ms is not None and (not isinstance(self.max_latency_ms, (int, float)) or not math.isfinite(self.max_latency_ms) or self.max_latency_ms <= 0): raise ValueError("max_latency_ms must be a finite positive number")
         if not isinstance(self.runtime_id, str): raise ValueError("runtime_id must be a string")
 
 @dataclass(frozen=True)
@@ -77,7 +81,8 @@ class ModelFabric:
             if not isinstance(caps, frozenset): raise TypeError("model capabilities must be frozenset")
             if any(not isinstance(item, str) or not item for item in caps): raise ValueError("model capabilities must contain non-empty strings")
             if not callable(getattr(model, "generate", None)): raise TypeError("model must expose generate")
-            if model.cost_per_call < 0 or model.expected_latency_ms <= 0: raise ValueError("invalid model economics")
+            if not isinstance(model.cost_per_call, (int, float)) or not math.isfinite(model.cost_per_call) or model.cost_per_call < 0: raise ValueError("invalid model economics")
+            if not isinstance(model.expected_latency_ms, (int, float)) or not math.isfinite(model.expected_latency_ms) or model.expected_latency_ms <= 0: raise ValueError("invalid model economics")
             names.add(name); validated.append(model)
         self._models = tuple(validated); self._runtime_id = runtime_id; self._binding_key = binding_key
     @property
@@ -111,15 +116,27 @@ class ModelFabric:
     def verify_result(self, request: ModelRequest, result: FabricResult) -> bool:
         if not isinstance(request, ModelRequest) or not isinstance(result, FabricResult): return False
         if self._runtime_id is not None and result.runtime_id != self._runtime_id: return False
+        if not isinstance(result.selected_model, str) or not result.selected_model.strip(): return False
+        if not isinstance(result.confidence, (int, float)) or not math.isfinite(result.confidence) or not 0 <= result.confidence <= 1: return False
+        if not isinstance(result.degraded, bool) or not isinstance(result.runtime_id, str) or not isinstance(result.request_digest, str) or not isinstance(result.result_mac, str): return False
+        if len(result.candidates) < 1 or len(result.candidates) > len(self._models): return False
         expected_request_digest = self._request_digest(request)
         if result.request_digest != expected_request_digest or not result.candidates: return False
         names: set[str] = set()
         for candidate in result.candidates:
             if not isinstance(candidate, ModelCandidate) or not isinstance(candidate.name, str) or not candidate.name or candidate.name in names: return False
-            if _digest(candidate.output) != candidate.output_digest or candidate.latency_ms < 0 or candidate.cost < 0: return False
+            if not isinstance(candidate.latency_ms, (int, float)) or not math.isfinite(candidate.latency_ms) or candidate.latency_ms < 0: return False
+            if not isinstance(candidate.cost, (int, float)) or not math.isfinite(candidate.cost) or candidate.cost < 0: return False
+            if not isinstance(candidate.output_digest, str) or len(candidate.output_digest) != 64 or any(ch not in "0123456789abcdef" for ch in candidate.output_digest): return False
+            try:
+                if _digest(candidate.output) != candidate.output_digest: return False
+            except (TypeError, ValueError, OverflowError): return False
             names.add(candidate.name)
         if result.selected_model not in names: return False
-        expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
+        try:
+            expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest)
+        except (TypeError, ValueError, OverflowError):
+            return False
         if self._binding_key is None:
             return hmac.compare_digest(result.result_mac, expected_envelope_digest)
         expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
