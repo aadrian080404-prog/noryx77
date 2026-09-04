@@ -93,9 +93,17 @@ class ModelFabric:
     def route(self, request: ModelRequest) -> tuple[str, ...]: return tuple(model.name for model in self._rank(request))
     def _request_digest(self, request: ModelRequest) -> str:
         return _digest({"prompt": request.prompt, "required_capabilities": sorted(request.required_capabilities), "preferred_capabilities": sorted(request.preferred_capabilities), "max_cost": request.max_cost, "max_latency_ms": request.max_latency_ms, "min_models": request.min_models, "max_models": request.max_models, "tools": list(request.tools), "runtime_id": request.runtime_id})
+    def request_digest(self, request: ModelRequest) -> str:
+        """Return the canonical digest used to bind a request to its fabric execution."""
+        if not isinstance(request, ModelRequest): raise TypeError("invalid_model_request")
+        return self._request_digest(request)
     @staticmethod
     def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate]) -> str:
         return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates)})
+    def result_digest(self, request: ModelRequest, result: FabricResult) -> str:
+        """Return the verified, deterministic result-envelope digest."""
+        if not self.verify_result(request, result): raise ValueError("invalid_fabric_result")
+        return self._result_envelope_digest(result.output, result.candidates)
     def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
         if self._binding_key is None: return output_digest
         payload = f"{self._runtime_id or ''}:{request_digest}:{output_digest}:{selected_model}".encode("utf-8")
