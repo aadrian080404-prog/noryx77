@@ -40,25 +40,29 @@ class RuntimeRecovery:
         previous_digest = "0" * 64
         seen_steps = set()
 
-        # Preflight global sequence ordering before cryptographic chain checks.
-        # Recovery validates an execution-specific projection of a journal whose
-        # sequence numbers are global, so only monotonicity of the filtered
-        # projection is required here. Doing this first also preserves the
-        # deterministic error contract for reordered persisted entries.
-        for left, right in zip(entries, entries[1:]):
-            if isinstance(left, JournalEntry) and isinstance(right, JournalEntry):
-                if right.sequence <= left.sequence:
-                    raise RecoveryError("journal sequence is not strictly increasing")
-
+        # Structural duplicate detection intentionally precedes ordering checks:
+        # duplicate persisted entries retain the established error contract.
         for entry in entries:
             if not isinstance(entry, JournalEntry):
                 raise RecoveryError("invalid journal entry")
             if entry.step_id in seen_steps:
                 raise RecoveryError("duplicate committed step")
-            # Journal sequence numbers are global to the journal, not local to an
-            # execution chain. Recovery filters one execution before validation,
-            # so its first sequence may legitimately be > 0 when executions are
-            # interleaved in the same journal.
+            seen_steps.add(entry.step_id)
+
+        # Sequence ordering is checked before cryptographic chain validation so a
+        # reordered persisted chain is classified deterministically. Sequence
+        # numbers are global to the journal, so the filtered execution may start
+        # above zero when executions are interleaved.
+        for left, right in zip(entries, entries[1:]):
+            if right.sequence <= left.sequence:
+                raise RecoveryError("journal sequence is not strictly increasing")
+
+        seen_steps.clear()
+        for entry in entries:
+            if not isinstance(entry, JournalEntry):
+                raise RecoveryError("invalid journal entry")
+            if entry.step_id in seen_steps:
+                raise RecoveryError("duplicate committed step")
             if entry.sequence <= previous_sequence:
                 raise RecoveryError("journal sequence is not strictly increasing")
             if runtime_id is not None and entry.runtime_id != runtime_id:
