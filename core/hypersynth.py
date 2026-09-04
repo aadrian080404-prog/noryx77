@@ -194,12 +194,24 @@ class Hypersynth:
         if not isinstance(subtasks, tuple) or not subtasks: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_collection"))
         seen = set()
         for subtask in subtasks:
-            if not isinstance(subtask, Subtask): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask"))
-            if subtask.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "duplicate_subtask_id"))
+            if not isinstance(subtask, Subtask): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_type"))
+            if not isinstance(subtask.subtask_id, str) or not subtask.subtask_id.strip() or subtask.subtask_id in seen: return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_identity"))
+            if not subtask.subtask_id.startswith(task.task_id + ":"): return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_identity_mismatch"))
+            if not isinstance(subtask.objective, str) or not subtask.objective.strip(): return self._reject("context", task, VerificationResult(False, "decomposition", "invalid_subtask_objective"))
+            if not isinstance(subtask.task_type, str) or not subtask.task_type.strip() or subtask.task_type != task.task_type: return self._reject("context", task, VerificationResult(False, "decomposition", "subtask_task_type_mismatch"))
             seen.add(subtask.subtask_id)
         return subtasks
 
-    @staticmethod
-    def _verify_consensus(results):
-        outputs = [canonical_digest(result.output) for result in results]
-        return VerificationResult(len(set(outputs)) == 1, "consensus", "" if len(set(outputs)) == 1 else "consensus_mismatch")
+    def _verify_consensus(self, results: tuple[AgentResult, ...]) -> VerificationResult:
+        if not isinstance(results, tuple) or not results: return VerificationResult(False, "consensus", "no_results")
+        if any(not isinstance(r, AgentResult) or not r.is_well_formed() for r in results): return VerificationResult(False, "consensus", "malformed_result")
+        if any(r.status != "completed" for r in results): return VerificationResult(False, "consensus", "incomplete_result")
+        if len({r.agent_id for r in results}) != len(results): return VerificationResult(False, "consensus", "duplicate_agent_result")
+        if len({r.task_id for r in results}) != 1: return VerificationResult(False, "consensus", "task_identity_mismatch")
+        if any(r.execution_id != results[0].execution_id for r in results): return VerificationResult(False, "consensus", "execution_identity_mismatch")
+        if not results[0].execution_id: return VerificationResult(False, "consensus", "missing_execution_identity")
+        if any(r.verification is None or not r.verification.is_well_formed() or not r.verification.valid for r in results): return VerificationResult(False, "consensus", "unverified_result")
+        if any(r.verification.stage != "agent_result" for r in results): return VerificationResult(False, "consensus", "verification_stage_mismatch")
+        outputs = [r.output for r in results]
+        if any(output != outputs[0] for output in outputs[1:]): return VerificationResult(False, "consensus", "agent_disagreement")
+        return VerificationResult(True, "consensus", "consensus_ok")
