@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, Sequence
 
@@ -13,6 +16,14 @@ class ModelAdapter(Protocol):
     def generate(self, prompt: str, *, tools: Sequence[str] = ()) -> Any: ...
 
 
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class ModelRequest:
     prompt: str
@@ -23,6 +34,7 @@ class ModelRequest:
     min_models: int = 1
     max_models: int = 3
     tools: tuple[str, ...] = ()
+    runtime_id: str = ""
 
     def __post_init__(self) -> None:
         if not self.prompt.strip():
@@ -33,6 +45,8 @@ class ModelRequest:
             raise ValueError("max_cost must be non-negative")
         if self.max_latency_ms is not None and self.max_latency_ms <= 0:
             raise ValueError("max_latency_ms must be positive")
+        if not isinstance(self.runtime_id, str):
+            raise ValueError("runtime_id must be a string")
 
 
 @dataclass(frozen=True)
@@ -41,6 +55,7 @@ class ModelCandidate:
     output: Any
     latency_ms: float
     cost: float
+    output_digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -50,6 +65,9 @@ class FabricResult:
     selected_model: str
     confidence: float
     degraded: bool = False
+    runtime_id: str = ""
+    request_digest: str = ""
+    result_mac: str = ""
 
 
 Verifier = Callable[[str, Any], float]
@@ -57,11 +75,15 @@ Synthesizer = Callable[[Sequence[ModelCandidate]], Any]
 
 
 class ModelFabric:
-    """Provider-neutral intelligence layer for routing, diversity and verification."""
+    """Provider-neutral intelligence layer with runtime-bound provenance."""
 
-    def __init__(self, models: Sequence[ModelAdapter]) -> None:
+    def __init__(self, models: Sequence[ModelAdapter], *, runtime_id: str | None = None, binding_key: bytes | None = None) -> None:
         if not models:
             raise ValueError("at least one model is required")
+        if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id):
+            raise ValueError("runtime_id must be a non-empty string")
+        if binding_key is not None and (not isinstance(binding_key, bytes) or len(binding_key) < 16):
+            raise ValueError("binding_key must be at least 16 bytes")
         names: set[str] = set()
         validated: list[ModelAdapter] = []
         for model in models:
@@ -80,8 +102,16 @@ class ModelFabric:
             names.add(name)
             validated.append(model)
         self._models = tuple(validated)
+        self._runtime_id = runtime_id
+        self._binding_key = binding_key
+
+    @property
+    def runtime_id(self) -> str | None:
+        return self._runtime_id
 
     def _rank(self, request: ModelRequest) -> tuple[ModelAdapter, ...]:
+        if self._runtime_id is not None and request.runtime_id != self._runtime_id:
+            raise PermissionError("model request runtime identity mismatch")
         eligible = [
             model for model in self._models
             if request.required_capabilities.issubset(model.capabilities)
@@ -101,6 +131,38 @@ class ModelFabric:
     def route(self, request: ModelRequest) -> tuple[str, ...]:
         return tuple(model.name for model in self._rank(request))
 
+    def _request_digest(self, request: ModelRequest) -> str:
+        return _digest({
+            "prompt": request.prompt,
+            "required_capabilities": sorted(request.required_capabilities),
+            "preferred_capabilities": sorted(request.preferred_capabilities),
+            "max_cost": request.max_cost,
+            "max_latency_ms": request.max_latency_ms,
+            "min_models": request.min_models,
+            "max_models": request.max_models,
+            "tools": list(request.tools),
+            "runtime_id": request.runtime_id,
+        })
+
+    def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
+        if self._binding_key is None:
+            return ""
+        payload = f"{self._runtime_id or ''}:{request_digest}:{output_digest}:{selected_model}".encode("utf-8")
+        return hmac.new(self._binding_key, payload, hashlib.sha256).hexdigest()
+
+    def verify_result(self, request: ModelRequest, result: FabricResult) -> bool:
+        if self._runtime_id is not None and result.runtime_id != self._runtime_id:
+            return False
+        if result.request_digest != self._request_digest(request):
+            return False
+        if not result.candidates:
+            return False
+        expected_output_digest = _digest(result.output)
+        if self._binding_key is None:
+            return expected_output_digest == next((c.output_digest for c in result.candidates if c.name == result.selected_model), "")
+        expected_mac = self._result_mac(result.request_digest, expected_output_digest, result.selected_model)
+        return hmac.compare_digest(result.result_mac, expected_mac)
+
     def execute(self, request: ModelRequest, *, verifier: Verifier | None = None, synthesizer: Synthesizer | None = None) -> FabricResult:
         selected = self._rank(request)
         candidates: list[ModelCandidate] = []
@@ -109,7 +171,7 @@ class ModelFabric:
                 import time
                 started = time.monotonic()
                 output = model.generate(request.prompt, tools=request.tools)
-                candidates.append(ModelCandidate(model.name, output, (time.monotonic() - started) * 1000.0, model.cost_per_call))
+                candidates.append(ModelCandidate(model.name, output, (time.monotonic() - started) * 1000.0, model.cost_per_call, _digest(output)))
             except Exception:
                 continue
         candidates.sort(key=lambda candidate: candidate.name)
@@ -125,4 +187,7 @@ class ModelFabric:
             selected_model, confidence = candidates[0].name, 0.0
         else:
             output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
-        return FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected))
+        request_digest = self._request_digest(request)
+        output_digest = _digest(output)
+        result_mac = self._result_mac(request_digest, output_digest, selected_model)
+        return FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, result_mac)
