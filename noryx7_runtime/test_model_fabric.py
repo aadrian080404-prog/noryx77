@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from dataclasses import replace
 
 import pytest
 
@@ -68,3 +69,40 @@ def test_synthesizer_receives_all_successful_candidates():
         synthesizer=lambda candidates: "+".join(c.name for c in candidates),
     )
     assert result.output == "a+b"
+
+
+def test_bound_fabric_requires_strong_binding_key_and_runtime():
+    model = FakeModel("a", frozenset({"text"}))
+    with pytest.raises(ValueError):
+        ModelFabric([model], runtime_id="runtime-a", binding_key=b"short")
+    with pytest.raises(ValueError):
+        ModelFabric([model], binding_key=b"x" * 32)
+
+
+def test_bound_result_cannot_cross_runtime():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric_a = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request_a = ModelRequest("answer", runtime_id="runtime-a")
+    result_a = fabric_a.execute(request_a)
+
+    fabric_b = ModelFabric([model], runtime_id="runtime-b", binding_key=b"x" * 32)
+    request_b = ModelRequest("answer", runtime_id="runtime-b")
+    assert fabric_b.verify_result(request_b, result_a) is False
+
+
+def test_bound_result_rejects_output_tampering():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+    tampered = replace(result, output="attacker-output")
+    assert fabric.verify_result(request, tampered) is False
+
+
+def test_bound_result_rejects_request_replay_under_different_request():
+    model = FakeModel("a", frozenset({"text"}))
+    fabric = ModelFabric([model], runtime_id="runtime-a", binding_key=b"x" * 32)
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+    replay = ModelRequest("different-answer", runtime_id="runtime-a")
+    assert fabric.verify_result(replay, result) is False
