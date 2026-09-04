@@ -1,16 +1,29 @@
 from .contracts import Request, Plan, ActionResult
 from .orchestrator import JarvisOrchestrator
+from .policy import Policy
 from jarvis.security.audit import AuditLog
 from jarvis.tools.registry import CapabilityRegistry
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> execute -> audit."""
     def __init__(self, *, orchestrator=None, registry=None, audit=None):
-        self.orchestrator = orchestrator or JarvisOrchestrator()
+        self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy())
         self.registry = registry or CapabilityRegistry()
         self.audit = audit or AuditLog()
 
+    def grant(self, principal_id: str, capability: str, target: str) -> None:
+        if not isinstance(self.orchestrator.policy, Policy):
+            raise TypeError("runtime policy does not support grants")
+        self.orchestrator.policy.grant(principal_id, capability, target)
+
+    def revoke(self, principal_id: str, capability: str, target: str) -> None:
+        if not isinstance(self.orchestrator.policy, Policy):
+            raise TypeError("runtime policy does not support revocation")
+        self.orchestrator.policy.revoke(principal_id, capability, target)
+
     def execute(self, request: Request, plan: Plan):
+        if not isinstance(request, Request) or not isinstance(plan, Plan):
+            raise TypeError("request and plan types are required")
         if plan.request_id != request.request_id:
             raise PermissionError("request_identity_mismatch")
 
