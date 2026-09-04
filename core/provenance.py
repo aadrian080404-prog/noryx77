@@ -63,13 +63,19 @@ class ProvenanceContext:
             canonical_digest(result), self.model_request_digest, self.model_result_digest,
         )
 
-    def bind_model(self, request_digest: str, result: Any) -> "ProvenanceContext":
+    def bind_model(self, request_digest: str, result: Any, *, result_digest: str = "") -> "ProvenanceContext":
         if not isinstance(request_digest, str) or len(request_digest) != 64 or not _is_hex(request_digest):
             raise ValueError("invalid model request digest")
+        if not isinstance(result_digest, str) or (result_digest and (len(result_digest) != 64 or not _is_hex(result_digest))):
+            raise ValueError("invalid model result digest")
+        result_request_digest = getattr(result, "request_digest", None)
+        if result_request_digest is not None and result_request_digest != request_digest:
+            raise ValueError("model request digest mismatch")
+        bound_result_digest = result_digest or canonical_digest(result)
         return ProvenanceContext(
             self.runtime_id, self.execution_id, self.principal_id,
             self.memory_digest, self.route_digest, self.request_digest,
-            self.result_digest, request_digest, canonical_digest(result),
+            self.result_digest, request_digest, bound_result_digest,
         )
 
 
