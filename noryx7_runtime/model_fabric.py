@@ -96,7 +96,7 @@ class ModelFabric:
     def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate]) -> str:
         return _digest({"output": output, "candidates": tuple((c.name, c.output_digest, c.latency_ms, c.cost) for c in candidates)})
     def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
-        if self._binding_key is None: return ""
+        if self._binding_key is None: return output_digest
         payload = f"{self._runtime_id or ''}:{request_digest}:{output_digest}:{selected_model}".encode("utf-8")
         return hmac.new(self._binding_key, payload, hashlib.sha256).hexdigest()
     def verify_result(self, request: ModelRequest, result: FabricResult) -> bool:
@@ -111,8 +111,7 @@ class ModelFabric:
         if result.selected_model not in names: return False
         expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates)
         if self._binding_key is None:
-            selected = next(candidate for candidate in result.candidates if candidate.name == result.selected_model)
-            return _digest(result.output) == selected.output_digest
+            return hmac.compare_digest(result.result_mac, expected_envelope_digest)
         expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
         return hmac.compare_digest(result.result_mac, expected_mac)
     def execute(self, request: ModelRequest, *, verifier: Verifier | None = None, synthesizer: Synthesizer | None = None) -> FabricResult:
