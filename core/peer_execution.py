@@ -15,13 +15,34 @@ class PeerExecution:
     evidence_digest: str
 
 
+@dataclass(frozen=True)
+class PeerChallenge:
+    """A bounded, explicit peer revision produced after an initial disagreement."""
+
+    first: AgentResult
+    second: AgentResult
+    challenge: str
+
+
 class PeerExecutionCoordinator:
-    """Execute two distinct peers independently, then admit only verified agreement."""
+    """Execute two peers independently, then resolve disagreement through bounded revision."""
 
     def __init__(self, collaboration: PeerCollaboration):
         if not isinstance(collaboration, PeerCollaboration):
             raise ValueError("invalid_peer_collaboration")
         self.collaboration = collaboration
+
+    @staticmethod
+    def _validate_result(result: Any, expected_agent_id: str, task: TaskSpec, prefix: str) -> AgentResult:
+        if not isinstance(result, AgentResult) or not result.is_well_formed():
+            raise ValueError(f"malformed_{prefix}_result")
+        if result.agent_id != expected_agent_id or result.execution_id != task.execution_id or result.task_id != task.task_id:
+            raise PermissionError(f"{prefix}_result_identity_mismatch")
+        if result.status != "completed" or not isinstance(result.verification, VerificationResult) or not result.verification.valid:
+            raise PermissionError(f"{prefix}_result_unverified")
+        if result.verification.stage != "agent_result":
+            raise PermissionError(f"{prefix}_verification_stage_mismatch")
+        return result
 
     def execute(
         self,
@@ -29,6 +50,8 @@ class PeerExecutionCoordinator:
         first_agent: Any,
         second_agent: Any,
         execute: Callable[[Any, TaskSpec], AgentResult],
+        *,
+        challenge: Callable[[TaskSpec, AgentResult, AgentResult, int], PeerChallenge] | None = None,
     ) -> PeerExecution:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
@@ -42,22 +65,11 @@ class PeerExecutionCoordinator:
             raise ValueError("invalid_peer_identity")
         if first_id == second_id:
             raise ValueError("peer_identity_not_independent")
+        if challenge is not None and not callable(challenge):
+            raise ValueError("invalid_peer_challenge")
 
-        first = execute(first_agent, task)
-        if not isinstance(first, AgentResult) or not first.is_well_formed():
-            raise ValueError("malformed_first_result")
-        if first.agent_id != first_id or first.execution_id != task.execution_id or first.task_id != task.task_id:
-            raise PermissionError("first_result_identity_mismatch")
-        if not isinstance(first.verification, VerificationResult) or not first.verification.valid:
-            raise PermissionError("first_result_unverified")
-
-        second = execute(second_agent, task)
-        if not isinstance(second, AgentResult) or not second.is_well_formed():
-            raise ValueError("malformed_second_result")
-        if second.agent_id != second_id or second.execution_id != task.execution_id or second.task_id != task.task_id:
-            raise PermissionError("second_result_identity_mismatch")
-        if not isinstance(second.verification, VerificationResult) or not second.verification.valid:
-            raise PermissionError("second_result_unverified")
+        first = self._validate_result(execute(first_agent, task), first_id, task, "first")
+        second = self._validate_result(execute(second_agent, task), second_id, task, "second")
 
         evidence = self.collaboration.evidence(
             task,
@@ -67,6 +79,32 @@ class PeerExecutionCoordinator:
             revision=0,
         )
         collaboration = self.collaboration.admit_consensus(task, first, second, evidence)
-        if not collaboration.valid:
+        if collaboration.valid:
+            return PeerExecution(first, second, collaboration, evidence.output_digest)
+        if collaboration.reason != "peer_disagreement_requires_resolution" or challenge is None:
             raise PermissionError(collaboration.reason)
-        return PeerExecution(first, second, collaboration, evidence.output_digest)
+
+        previous_digest = self.collaboration._evidence_id(evidence)
+        current_first, current_second = first, second
+        for revision in range(1, self.collaboration.max_rounds + 1):
+            proposed = challenge(task, current_first, current_second, revision)
+            if not isinstance(proposed, PeerChallenge) or not proposed.challenge.strip() or len(proposed.challenge.encode()) > 256:
+                raise ValueError("invalid_peer_challenge")
+            current_first = self._validate_result(proposed.first, first_id, task, "first_revision")
+            current_second = self._validate_result(proposed.second, second_id, task, "second_revision")
+            evidence = self.collaboration.evidence(
+                task,
+                current_first,
+                current_second.agent_id,
+                proposed.challenge,
+                revision=revision,
+                previous_evidence_digest=previous_digest,
+            )
+            collaboration = self.collaboration.admit_consensus(task, current_first, current_second, evidence)
+            if collaboration.valid:
+                return PeerExecution(current_first, current_second, collaboration, evidence.output_digest)
+            if collaboration.reason != "peer_disagreement_requires_resolution":
+                raise PermissionError(collaboration.reason)
+            previous_digest = self.collaboration._evidence_id(evidence)
+
+        raise PermissionError("peer_disagreement_unresolved")
