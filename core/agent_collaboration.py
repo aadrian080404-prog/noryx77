@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import hmac
 import json
+from threading import Lock
 from typing import Any
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
@@ -64,6 +65,7 @@ class PeerCollaboration:
     """Bounded two-peer protocol: independent outputs, challenge, then admission."""
 
     _DOMAIN = b"NORYX7/peer-collaboration/v1/"
+    _MAX_ADMITTED_EVIDENCE = 4096
 
     def __init__(self, runtime_id: str, execution_id: str, *, seal_key: bytes, max_rounds: int = 2):
         if not isinstance(runtime_id, str) or not runtime_id.strip():
@@ -78,11 +80,16 @@ class PeerCollaboration:
         self.execution_id = execution_id
         self._seal_key = bytes(seal_key)
         self.max_rounds = max_rounds
+        self._admitted_evidence: set[str] = set()
+        self._admitted_lock = Lock()
 
     @staticmethod
     def _digest(value: Any) -> str:
         encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=True).encode()
         return sha256(encoded).hexdigest()
+
+    def _evidence_id(self, evidence: CollaborationEvidence) -> str:
+        return self._digest({"canonical": evidence.canonical_bytes().hex(), "seal": evidence.seal})
 
     def evidence(self, task: TaskSpec, source: AgentResult, target_agent_id: str, challenge: str, revision: int = 0) -> CollaborationEvidence:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -148,4 +155,12 @@ class PeerCollaboration:
             return VerificationResult(False, "collaboration", "evidence_verification_mismatch")
         if self._digest(first.output) != self._digest(second.output):
             return VerificationResult(False, "collaboration", "peer_disagreement_requires_resolution")
+
+        evidence_id = self._evidence_id(evidence)
+        with self._admitted_lock:
+            if evidence_id in self._admitted_evidence:
+                return VerificationResult(False, "collaboration", "evidence_replay_rejected")
+            if len(self._admitted_evidence) >= self._MAX_ADMITTED_EVIDENCE:
+                return VerificationResult(False, "collaboration", "evidence_admission_limit")
+            self._admitted_evidence.add(evidence_id)
         return VerificationResult(True, "collaboration", "independent_peer_results_admitted")
