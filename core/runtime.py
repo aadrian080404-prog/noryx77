@@ -19,9 +19,11 @@ from noryx7_runtime.model_fabric import ModelFabric
 class NORYXRuntime:
     """Controlled runtime: validate -> decompose -> route -> execute -> limit -> verify -> audit."""
 
-    def __init__(self, limits: RuntimeLimits | None = None, model_fabric: ModelFabric | None = None):
+    def __init__(self, limits: RuntimeLimits | None = None, model_fabric: ModelFabric | None = None, runtime_id: str | None = None):
         self.limits = limits or RuntimeLimits()
-        self.runtime_id = uuid4().hex
+        self.runtime_id = runtime_id or uuid4().hex
+        if not isinstance(self.runtime_id, str) or not self.runtime_id or len(self.runtime_id.encode("utf-8")) > 256:
+            raise ValueError("invalid runtime_id")
         self._provenance_key = secrets.token_bytes(32)
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
