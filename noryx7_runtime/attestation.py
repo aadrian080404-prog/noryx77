@@ -11,7 +11,8 @@ from core.identity import AgentIdentity, IdentityRegistry
 from .contracts import Attestation
 
 
-_DOMAIN = b"NORYX7/runtime-attestation/v2/"
+_DOMAIN = b"NORYX7/runtime-attestation/v3/"
+_ZERO_DIGEST = "0" * 64
 
 
 class AttestationSigner(Protocol):
@@ -35,6 +36,7 @@ def _message(attestation: Attestation) -> bytes:
         "output_digest": attestation.output_digest,
         "verified": attestation.verified,
         "detail": attestation.detail,
+        "previous_attestation_digest": attestation.previous_attestation_digest,
     }
     return _DOMAIN + json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -52,10 +54,11 @@ def _validate_attestation(attestation: Attestation) -> None:
         attestation.agent_key_fingerprint,
         attestation.action_digest,
         attestation.output_digest,
+        attestation.previous_attestation_digest,
     )
     if any(not isinstance(value, str) or not value for value in fields):
         raise ValueError("attestation identity and digests are required")
-    for digest in (attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest):
+    for digest in fields[4:]:
         if len(digest) != 64:
             raise ValueError("attestation digest must be SHA-256 hex")
         try:
@@ -64,6 +67,15 @@ def _validate_attestation(attestation: Attestation) -> None:
             raise ValueError("attestation digest is not hexadecimal") from exc
     if not isinstance(attestation.verified, bool) or not isinstance(attestation.detail, str):
         raise ValueError("invalid attestation fields")
+
+
+def attestation_digest(attestation: Attestation) -> str:
+    """Return the immutable digest of a signed attestation."""
+    _validate_attestation(attestation)
+    if not isinstance(attestation.signature, bytes) or len(attestation.signature) != 64:
+        raise ValueError("attestation must carry a valid signature")
+    payload = _message(attestation) + attestation.signature
+    return hashlib.sha256(payload).hexdigest()
 
 
 @dataclass(frozen=True)
