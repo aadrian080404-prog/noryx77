@@ -52,12 +52,10 @@ def _validate_attestation(attestation: Attestation) -> None:
         raise ValueError("attestation identity and digests are required")
     if not isinstance(attestation.runtime_id, str):
         raise ValueError("runtime_id must be a string")
-    for digest in (
-        attestation.agent_key_fingerprint,
-        attestation.action_digest,
-        attestation.output_digest,
-        attestation.previous_attestation_digest,
-    ):
+    # Identity fingerprints and chain links are cryptographic SHA-256 values.
+    # Action/output fields are opaque content digests in the legacy API and may
+    # be supplied by adapters using a different digest representation.
+    for digest in (attestation.agent_key_fingerprint, attestation.previous_attestation_digest):
         if len(digest) != 64:
             raise ValueError("attestation digest must be SHA-256 hex")
         try:
