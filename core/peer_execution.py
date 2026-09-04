@@ -88,7 +88,12 @@ class PeerExecutionCoordinator:
         current_first, current_second = first, second
         for revision in range(1, self.collaboration.max_rounds + 1):
             proposed = challenge(task, current_first, current_second, revision)
-            if not isinstance(proposed, PeerChallenge) or not proposed.challenge.strip() or len(proposed.challenge.encode()) > 256:
+            if (
+                not isinstance(proposed, PeerChallenge)
+                or not isinstance(proposed.challenge, str)
+                or not proposed.challenge.strip()
+                or len(proposed.challenge.encode()) > 256
+            ):
                 raise ValueError("invalid_peer_challenge")
             current_first = self._validate_result(proposed.first, first_id, task, "first_revision")
             current_second = self._validate_result(proposed.second, second_id, task, "second_revision")
