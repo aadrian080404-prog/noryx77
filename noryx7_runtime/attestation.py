@@ -58,20 +58,21 @@ def _valid_digest(value: str) -> bool:
 def _validate_attestation(attestation: Attestation) -> None:
     if not isinstance(attestation, Attestation):
         raise TypeError("attestation must be an Attestation")
-    identity_fields = (
+    required_fields = (
         attestation.execution_id,
         attestation.principal_id,
         attestation.step_id,
         attestation.agent_id,
-        attestation.runtime_id,
     )
     if any(
         not isinstance(value, str)
         or not value
         or len(value.encode("utf-8")) > _MAX_FIELD_SIZE
-        for value in identity_fields
+        for value in required_fields
     ):
         raise ValueError("attestation identity fields are required and bounded")
+    if not isinstance(attestation.runtime_id, str) or len(attestation.runtime_id.encode("utf-8")) > _MAX_FIELD_SIZE:
+        raise ValueError("runtime_id must be bounded string")
     if not _valid_digest(attestation.agent_key_fingerprint):
         raise ValueError("attestation digest must be SHA-256 hex")
     if not _valid_digest(attestation.previous_attestation_digest):
