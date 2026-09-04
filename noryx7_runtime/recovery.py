@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from core.identity import IdentityRegistry
 
-from .attestation import AttestationVerifier
+from .attestation import AttestationVerifier, attestation_digest
 from .contracts import Attestation
 from .state import JournalEntry, StateJournal
 
@@ -47,12 +47,13 @@ class RuntimeRecovery:
         verifier: AttestationVerifier | None = None,
         identity_registry: IdentityRegistry | None = None,
     ) -> None:
-        previous = -1
+        previous_sequence = -1
+        previous_digest = "0" * 64
         seen_steps: set[str] = set()
         for entry in entries:
             if not isinstance(entry, JournalEntry):
                 raise RecoveryError("invalid journal entry")
-            if entry.sequence <= previous:
+            if entry.sequence <= previous_sequence:
                 raise RecoveryError("journal sequence is not strictly increasing")
             if entry.step_id in seen_steps:
                 raise RecoveryError("duplicate committed step")
@@ -64,16 +65,19 @@ class RuntimeRecovery:
                 entry.agent_key_fingerprint,
                 entry.action_digest,
                 entry.output_digest,
+                entry.previous_attestation_digest,
             )
             if any(not isinstance(value, str) or not value for value in fields):
                 raise RecoveryError("incomplete journal entry")
-            for digest in (entry.agent_key_fingerprint, entry.action_digest, entry.output_digest):
+            for digest in fields[4:]:
                 if len(digest) != 64:
                     raise RecoveryError("invalid journal digest")
                 try:
                     int(digest, 16)
                 except ValueError as exc:
                     raise RecoveryError("invalid journal digest") from exc
+            if entry.previous_attestation_digest != previous_digest:
+                raise RecoveryError("attestation chain is broken")
             if not isinstance(entry.signature, bytes) or len(entry.signature) != 64:
                 raise RecoveryError("invalid attestation signature")
             if verifier is None:
@@ -89,6 +93,7 @@ class RuntimeRecovery:
                 verified=True,
                 detail="verified",
                 signature=entry.signature,
+                previous_attestation_digest=entry.previous_attestation_digest,
             )
             try:
                 if identity_registry is not None:
@@ -104,7 +109,8 @@ class RuntimeRecovery:
                 raise RecoveryError("attestation verification failed") from exc
             if not valid:
                 raise RecoveryError("attestation verification failed")
-            previous = entry.sequence
+            previous_digest = attestation_digest(attestation)
+            previous_sequence = entry.sequence
             seen_steps.add(entry.step_id)
 
     @staticmethod
