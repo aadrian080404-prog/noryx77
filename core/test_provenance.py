@@ -46,6 +46,30 @@ def test_result_binding_changes_context_digest():
     assert original.digest() != bound.digest()
 
 
+def test_model_binding_is_part_of_provenance_digest():
+    original = context()
+    request_digest = canonical_digest({"request": "model"})
+    bound = original.bind_model(request_digest, {"output": "answer", "selected_model": "reasoner"})
+    assert bound.model_request_digest == request_digest
+    assert bound.model_result_digest == canonical_digest({"output": "answer", "selected_model": "reasoner"})
+    assert original.digest() != bound.digest()
+
+
+def test_model_binding_tampering_breaks_seal():
+    key = hashlib.sha256(b"noryx7-provenance-test").digest()
+    request_digest = canonical_digest({"request": "model"})
+    original = context().bind_model(request_digest, {"output": "answer"})
+    seal = seal_provenance(original, key)
+    assert verify_provenance(original, seal, key)
+    assert not verify_provenance(context().bind_model(request_digest, {"output": "tampered"}), seal, key)
+    assert not verify_provenance(context().bind_model(canonical_digest({"request": "other"}), {"output": "answer"}), seal, key)
+
+
+def test_invalid_model_request_digest_cannot_be_bound():
+    with pytest.raises(ValueError, match="invalid model request digest"):
+        context().bind_model("bad", {"output": "answer"})
+
+
 def test_invalid_context_cannot_be_sealed():
     key = hashlib.sha256(b"noryx7-provenance-test").digest()
     with pytest.raises(ValueError, match="invalid provenance context"):
