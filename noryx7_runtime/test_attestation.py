@@ -4,9 +4,11 @@ import hashlib
 import pytest
 
 from .attestation import (
+    AttestationChainVerifier,
     Ed25519AttestationSigner,
     Ed25519AttestationVerifier,
     IdentityBoundAttestationVerifier,
+    attestation_digest,
     signed_attestation,
     verify_attestation,
 )
@@ -29,6 +31,23 @@ def make_attestation(signer=None, **changes):
         detail="verified",
     )
     return dataclasses.replace(value, **changes)
+
+
+def make_chain(signer, count=2):
+    chain = []
+    previous = "0" * 64
+    for index in range(count):
+        attestation = make_attestation(
+            signer,
+            step_id=f"step-{index + 1}",
+            action_digest=hashlib.sha256(f"action-{index}".encode()).hexdigest(),
+            output_digest=hashlib.sha256(f"output-{index}".encode()).hexdigest(),
+            previous_attestation_digest=previous,
+        )
+        attestation = signed_attestation(attestation, signer)
+        chain.append(attestation)
+        previous = attestation_digest(attestation)
+    return chain
 
 
 def test_signature_binds_complete_execution_identity_and_result_chain():
@@ -111,3 +130,64 @@ def test_domain_separation_prevents_cross_protocol_message_reuse():
     signed = signed_attestation(make_attestation(signer), signer)
     assert verify_attestation(signed, signer)
     assert signed.signature != signer.private_key.sign(b"other-protocol" + signed.execution_id.encode())
+
+
+def test_chain_verifier_accepts_ordered_execution_bound_chain():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    assert verifier.verify_chain(make_chain(signer, 3))
+
+
+def test_chain_rejects_cross_execution_replay():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    chain = make_chain(signer, 2)
+    forged = dataclasses.replace(chain[1], execution_id="exec-attacker")
+    assert not verifier.verify_chain([chain[0], forged])
+
+
+def test_chain_rejects_previous_digest_swap_and_skipped_link():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    chain = make_chain(signer, 3)
+    swapped = dataclasses.replace(chain[2], previous_attestation_digest="f" * 64)
+    assert not verifier.verify_chain([chain[0], chain[1], swapped])
+    assert not verifier.verify_chain([chain[0], chain[2]])
+
+
+def test_chain_rejects_reordered_attestations():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    chain = make_chain(signer, 3)
+    assert not verifier.verify_chain([chain[0], chain[2], chain[1]])
+
+
+def test_chain_rejects_attestation_tampering_even_when_chain_pointer_is_preserved():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    chain = make_chain(signer, 2)
+    tampered = dataclasses.replace(chain[1], output_digest="c" * 64)
+    assert not verifier.verify_chain([chain[0], tampered])
+
+
+def test_chain_rejects_runtime_and_principal_swaps():
+    signer = Ed25519AttestationSigner.generate()
+    verifier = AttestationChainVerifier(Ed25519AttestationVerifier.from_public_key_bytes(signer.public_key_bytes))
+    chain = make_chain(signer, 2)
+    assert not verifier.verify_chain([chain[0], dataclasses.replace(chain[1], runtime_id="other-runtime")])
+    assert not verifier.verify_chain([chain[0], dataclasses.replace(chain[1], principal_id="other-principal")])
+
+
+def test_provenance_binding_is_signature_bound():
+    signer = Ed25519AttestationSigner.generate()
+    signed = signed_attestation(
+        make_attestation(
+            signer,
+            provenance_digest="e" * 64,
+            provenance_seal=b"s" * 32,
+        ),
+        signer,
+    )
+    assert verify_attestation(signed, signer)
+    assert not verify_attestation(dataclasses.replace(signed, provenance_digest="f" * 64), signer)
+    assert not verify_attestation(dataclasses.replace(signed, provenance_seal=b"t" * 32), signer)
