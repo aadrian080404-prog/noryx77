@@ -1,3 +1,4 @@
+import secrets
 import time
 from uuid import uuid4
 
@@ -19,6 +20,8 @@ class NORYXRuntime:
 
     def __init__(self, limits: RuntimeLimits | None = None):
         self.limits = limits or RuntimeLimits()
+        self.runtime_id = uuid4().hex
+        self._provenance_key = secrets.token_bytes(32)
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
         self.security = SecurityBoundary(self.policy, self.verifier)
@@ -34,6 +37,8 @@ class NORYXRuntime:
             audit=self.audit,
             limits=self.limits,
             memory=self.memory,
+            runtime_id=self.runtime_id,
+            provenance_key=self._provenance_key,
         )
 
     def run(self, task: TaskSpec, agent_id: str = "deterministic"):
@@ -160,5 +165,18 @@ class NORYXRuntime:
         return {"status": "completed", "results": tuple(results), "audit": self.audit.snapshot()}
 
     def run_hypersynth(self, task: TaskSpec):
-        """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
-        return self.hypersynth.run(task)
+        """Execute a task through the bounded, runtime-bound HYPERSYNTH pipeline."""
+        constraints = dict(task.constraints)
+        constraints.setdefault("runtime_id", self.runtime_id)
+        constraints.setdefault("principal_id", "runtime:" + self.runtime_id)
+        bound_task = TaskSpec(
+            task.task_id,
+            task.task_type,
+            task.objective,
+            task.input,
+            constraints,
+            task.verification_requirements,
+            task.risk_class,
+            task.execution_id,
+        )
+        return self.hypersynth.run(bound_task)
