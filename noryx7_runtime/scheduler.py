@@ -23,7 +23,7 @@ class Scheduler:
         for step in steps:
             unknown = set(step.dependencies) - known
             if unknown:
-                raise ValueError("unknown step dependency")
+                raise ValueError("missing dependency")
         remaining = set(by_id)
         result: list[ScheduledStep] = []
         while remaining:
