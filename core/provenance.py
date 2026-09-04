@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-_DOMAIN = b"NORYX7/provenance/v1/"
+_DOMAIN = b"NORYX7/provenance/v2/"
 
 
 def canonical_digest(value: Any) -> str:
@@ -30,10 +30,12 @@ class ProvenanceContext:
     route_digest: str
     request_digest: str
     result_digest: str = ""
+    model_request_digest: str = ""
+    model_result_digest: str = ""
 
     def is_well_formed(self) -> bool:
         ids = (self.runtime_id, self.execution_id, self.principal_id)
-        digests = (self.memory_digest, self.route_digest, self.request_digest, self.result_digest)
+        digests = (self.memory_digest, self.route_digest, self.request_digest, self.result_digest, self.model_request_digest, self.model_result_digest)
         return (
             all(isinstance(v, str) and bool(v) and len(v.encode("utf-8")) <= 256 for v in ids)
             and all(isinstance(v, str) and (v == "" or len(v) == 64) and (v == "" or _is_hex(v)) for v in digests)
@@ -50,17 +52,24 @@ class ProvenanceContext:
             "route_digest": self.route_digest,
             "request_digest": self.request_digest,
             "result_digest": self.result_digest,
+            "model_request_digest": self.model_request_digest,
+            "model_result_digest": self.model_result_digest,
         })
 
     def bind_result(self, result: Any) -> "ProvenanceContext":
         return ProvenanceContext(
-            self.runtime_id,
-            self.execution_id,
-            self.principal_id,
-            self.memory_digest,
-            self.route_digest,
-            self.request_digest,
-            canonical_digest(result),
+            self.runtime_id, self.execution_id, self.principal_id,
+            self.memory_digest, self.route_digest, self.request_digest,
+            canonical_digest(result), self.model_request_digest, self.model_result_digest,
+        )
+
+    def bind_model(self, request_digest: str, result: Any) -> "ProvenanceContext":
+        if not isinstance(request_digest, str) or len(request_digest) != 64 or not _is_hex(request_digest):
+            raise ValueError("invalid model request digest")
+        return ProvenanceContext(
+            self.runtime_id, self.execution_id, self.principal_id,
+            self.memory_digest, self.route_digest, self.request_digest,
+            self.result_digest, request_digest, canonical_digest(result),
         )
 
 
