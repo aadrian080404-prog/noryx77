@@ -1,4 +1,4 @@
-from .contracts import AgentResult, TaskSpec
+from .contracts import AgentResult, TaskSpec, VerificationResult
 from .verification import VerificationEngine
 from noryx7_runtime.model_fabric import ModelFabric, ModelRequest
 
