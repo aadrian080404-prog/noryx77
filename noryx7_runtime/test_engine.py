@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 
 from core.identity import AgentIdentityAuthority, IdentityRegistry
@@ -83,6 +86,78 @@ def test_identity_bound_adapter_rejects_replaced_public_key():
             identity_registry=registry,
         )
     assert private_key is not None and replacement.public_key != identity.public_key
+
+
+def test_revocation_before_runtime_dispatch_fails_closed():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    registry.revoke("agent-1")
+    called = []
+    signer = Ed25519AttestationSigner(private_key)
+    engine = object.__new__(RuntimeEngine)
+    with pytest.raises(PermissionError, match="adapter identity"):
+        RuntimeEngine(
+            adapter=capability_adapter(called, agent_id="agent-1"),
+            attestation_signer=signer,
+            identity_registry=registry,
+        )
+    assert called == []
+
+
+def test_revocation_cannot_interleave_with_effect_dispatch():
+    identity, private_key = AgentIdentityAuthority.generate("agent-1")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signer = Ed25519AttestationSigner(private_key)
+    started = threading.Event()
+    release = threading.Event()
+    called = []
+
+    class BlockingAdapter:
+        agent_id = "agent-1"
+
+        def execute(self, envelope):
+            called.append(envelope.step_id)
+            started.set()
+            assert release.wait(2)
+            return "ok"
+
+    engine = RuntimeEngine(
+        adapter=BlockingAdapter(),
+        attestation_signer=signer,
+        identity_registry=registry,
+    )
+    result = []
+
+    def run():
+        result.append(engine.execute(
+            Intent("run", "user"), [step("a")], verifier=lambda action, output: True
+        ))
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    assert started.wait(2)
+
+    revoke_done = threading.Event()
+
+    def revoke():
+        registry.revoke("agent-1")
+        revoke_done.set()
+
+    revoker = threading.Thread(target=revoke)
+    revoker.start()
+    time.sleep(0.05)
+    assert not revoke_done.is_set()
+    release.set()
+    worker.join(2)
+    revoker.join(2)
+
+    assert len(result) == 1
+    assert result[0].status is ExecutionStatus.SUCCEEDED
+    assert called == ["a"]
+    assert revoke_done.is_set()
+    assert not registry.is_trusted(identity)
 
 
 def test_adapter_without_attestation_signer_is_rejected_at_construction():
