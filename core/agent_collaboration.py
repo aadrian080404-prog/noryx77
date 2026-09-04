@@ -21,6 +21,7 @@ class CollaborationEvidence:
     target_agent_id: str
     output_digest: str
     verification_digest: str
+    target_output_digest: str
     challenge: str
     revision: int = 0
     seal: str = ""
@@ -35,6 +36,7 @@ class CollaborationEvidence:
             "target_agent_id": self.target_agent_id,
             "output_digest": self.output_digest,
             "verification_digest": self.verification_digest,
+            "target_output_digest": self.target_output_digest,
             "challenge": self.challenge,
             "revision": self.revision,
             "previous_evidence_digest": self.previous_evidence_digest,
@@ -49,6 +51,7 @@ class CollaborationEvidence:
             and isinstance(self.revision, int) and not isinstance(self.revision, bool) and 0 <= self.revision <= 32
             and self._valid_digest(self.output_digest)
             and self._valid_digest(self.verification_digest)
+            and self._valid_digest(self.target_output_digest)
             and (not self.seal or self._valid_digest(self.seal))
             and (not self.previous_evidence_digest or self._valid_digest(self.previous_evidence_digest))
         )
@@ -105,6 +108,7 @@ class PeerCollaboration:
         revision: int = 0,
         *,
         previous_evidence_digest: str = "",
+        target_output: Any = None,
     ) -> CollaborationEvidence:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
@@ -135,6 +139,7 @@ class PeerCollaboration:
             target_agent_id,
             self._digest(source.output),
             self._digest(verification),
+            self._digest(target_output),
             challenge,
             revision,
             "",
@@ -169,6 +174,8 @@ class PeerCollaboration:
                     or previous.target_agent_id != evidence.target_agent_id
                 ):
                     return False
+                if previous.revision == 0 and previous.output_digest == previous.target_output_digest:
+                    return False
         expected = hmac.new(self._seal_key, self._DOMAIN + evidence.canonical_bytes(), sha256).hexdigest()
         return hmac.compare_digest(expected, evidence.seal)
 
@@ -194,6 +201,8 @@ class PeerCollaboration:
             return VerificationResult(False, "collaboration", "evidence_output_mismatch")
         if evidence.verification_digest != self._digest(first.verification):
             return VerificationResult(False, "collaboration", "evidence_verification_mismatch")
+        if evidence.target_output_digest != self._digest(second.output):
+            return VerificationResult(False, "collaboration", "evidence_target_output_mismatch")
 
         evidence_id = self._evidence_id(evidence)
         disagreement = self._digest(first.output) != self._digest(second.output)
