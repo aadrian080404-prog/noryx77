@@ -12,6 +12,8 @@ from .contracts import Attestation
 
 _DOMAIN = b"NORYX7/runtime-attestation/v5/"
 _ZERO_DIGEST = "0" * 64
+_MAX_FIELD_SIZE = 256
+_MAX_DETAIL_SIZE = 4096
 
 
 class AttestationSigner(Protocol):
@@ -56,28 +58,30 @@ def _valid_digest(value: str) -> bool:
 def _validate_attestation(attestation: Attestation) -> None:
     if not isinstance(attestation, Attestation):
         raise TypeError("attestation must be an Attestation")
-    fields = (
+    identity_fields = (
         attestation.execution_id,
         attestation.principal_id,
         attestation.step_id,
         attestation.agent_id,
-        attestation.agent_key_fingerprint,
-        attestation.action_digest,
-        attestation.output_digest,
-        attestation.previous_attestation_digest,
+        attestation.runtime_id,
     )
-    if any(not isinstance(value, str) or not value for value in fields):
-        raise ValueError("attestation identity and digests are required")
-    if not isinstance(attestation.runtime_id, str):
-        raise ValueError("runtime_id must be a string")
+    if any(
+        not isinstance(value, str)
+        or not value
+        or len(value.encode("utf-8")) > _MAX_FIELD_SIZE
+        for value in identity_fields
+    ):
+        raise ValueError("attestation identity fields are required and bounded")
     if not _valid_digest(attestation.agent_key_fingerprint):
         raise ValueError("attestation digest must be SHA-256 hex")
     if not _valid_digest(attestation.previous_attestation_digest):
         raise ValueError("previous attestation digest must be SHA-256 hex")
     if not _valid_digest(attestation.action_digest) or not _valid_digest(attestation.output_digest):
-        raise ValueError("attestation digest must be 64 characters")
+        raise ValueError("attestation digest must be 64-character SHA-256 hex")
     if not isinstance(attestation.verified, bool) or not isinstance(attestation.detail, str):
         raise ValueError("invalid attestation fields")
+    if len(attestation.detail.encode("utf-8")) > _MAX_DETAIL_SIZE:
+        raise ValueError("attestation detail size exceeded")
     if not isinstance(attestation.provenance_digest, str) or not isinstance(attestation.provenance_seal, bytes):
         raise ValueError("invalid provenance binding")
     if bool(attestation.provenance_digest) != bool(attestation.provenance_seal):
@@ -188,7 +192,10 @@ class IdentityBoundAttestationVerifier:
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
         try:
-            return bool(self.registry.with_trusted_identity(attestation.agent_id, lambda identity: self._verify_with_identity(identity, attestation, signature)))
+            return bool(self.registry.with_trusted_identity(
+                attestation.agent_id,
+                lambda identity: self._verify_with_identity(identity, attestation, signature),
+            ))
         except Exception:
             return False
 
