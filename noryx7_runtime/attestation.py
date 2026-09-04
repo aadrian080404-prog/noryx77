@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from dataclasses import dataclass, replace
 from typing import Protocol
@@ -51,6 +50,14 @@ class Ed25519AttestationSigner:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         return cls(Ed25519PrivateKey.generate())
 
+    @property
+    def public_key_bytes(self) -> bytes:
+        from cryptography.hazmat.primitives import serialization
+        return self.private_key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+
     def sign(self, attestation: Attestation) -> bytes:
         self._validate(attestation)
         return self.private_key.sign(_message(attestation))
@@ -59,9 +66,8 @@ class Ed25519AttestationSigner:
         self._validate(attestation)
         if not isinstance(signature, bytes) or len(signature) != 64:
             return False
-        public_key = self.private_key.public_key()
         try:
-            public_key.verify(signature, _message(attestation))
+            self.private_key.public_key().verify(signature, _message(attestation))
         except Exception:
             return False
         return True
