@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import hmac
 import json
-from typing import Any, Mapping
+from typing import Any
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
 
@@ -93,6 +93,10 @@ class PeerCollaboration:
             raise ValueError("invalid_source_result")
         if not isinstance(target_agent_id, str) or not target_agent_id.strip() or target_agent_id == source.agent_id:
             raise ValueError("invalid_peer_identity")
+        if not isinstance(challenge, str) or not challenge.strip() or len(challenge.encode()) > 256:
+            raise ValueError("invalid_challenge")
+        if isinstance(revision, bool) or not isinstance(revision, int) or not 0 <= revision <= 32:
+            raise ValueError("invalid_revision")
         verification = source.verification
         if not isinstance(verification, VerificationResult) or not verification.is_well_formed() or not verification.valid:
             raise ValueError("unverified_source_result")
@@ -123,6 +127,8 @@ class PeerCollaboration:
     def admit_consensus(self, task: TaskSpec, first: AgentResult, second: AgentResult, evidence: CollaborationEvidence) -> VerificationResult:
         if not self.verify_evidence(evidence, task=task):
             return VerificationResult(False, "collaboration", "evidence_integrity_failure")
+        if not isinstance(first, AgentResult) or not isinstance(second, AgentResult):
+            return VerificationResult(False, "collaboration", "invalid_peer_result")
         if first.agent_id == second.agent_id:
             return VerificationResult(False, "collaboration", "peer_identity_not_independent")
         if first.task_id != task.task_id or second.task_id != task.task_id:
@@ -132,8 +138,14 @@ class PeerCollaboration:
         for result in (first, second):
             if result.status != "completed" or not isinstance(result.verification, VerificationResult) or not result.verification.valid:
                 return VerificationResult(False, "collaboration", "unverified_peer_result")
+            if result.verification.stage != "agent_result":
+                return VerificationResult(False, "collaboration", "verification_stage_mismatch")
         if evidence.source_agent_id != first.agent_id or evidence.target_agent_id != second.agent_id:
             return VerificationResult(False, "collaboration", "evidence_peer_mismatch")
         if evidence.output_digest != self._digest(first.output):
             return VerificationResult(False, "collaboration", "evidence_output_mismatch")
+        if evidence.verification_digest != self._digest(first.verification):
+            return VerificationResult(False, "collaboration", "evidence_verification_mismatch")
+        if self._digest(first.output) != self._digest(second.output):
+            return VerificationResult(False, "collaboration", "peer_disagreement_requires_resolution")
         return VerificationResult(True, "collaboration", "independent_peer_results_admitted")
