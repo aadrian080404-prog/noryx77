@@ -51,6 +51,21 @@ class MemoryBoundaryTests(unittest.TestCase):
         listed = store.list(execution_id="exec-A")
         self.assertEqual(listed[0].content, {"nested": ["original"]})
 
+    def test_bound_delete_requires_matching_execution(self):
+        store = MemoryStore()
+        store.put(MemoryItem("a", "A", execution_id="exec-A"))
+        self.assertFalse(store.delete("a"))
+        self.assertFalse(store.delete("a", execution_id="exec-B"))
+        self.assertIsNotNone(store.get("a", execution_id="exec-A"))
+        self.assertTrue(store.delete("a", execution_id="exec-A"))
+        self.assertIsNone(store.get("a", execution_id="exec-A"))
+
+    def test_unbound_delete_preserves_legacy_behavior(self):
+        store = MemoryStore()
+        store.put(MemoryItem("legacy", "L"))
+        self.assertTrue(store.delete("legacy"))
+        self.assertIsNone(store.get("legacy"))
+
 
 if __name__ == "__main__":
     unittest.main()
