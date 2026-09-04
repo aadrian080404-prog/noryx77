@@ -11,7 +11,7 @@ from core.identity import AgentIdentity, IdentityRegistry
 from .contracts import Attestation
 
 
-_DOMAIN = b"NORYX7/runtime-attestation/v3/"
+_DOMAIN = b"NORYX7/runtime-attestation/v4/"
 _ZERO_DIGEST = "0" * 64
 
 
@@ -37,6 +37,7 @@ def _message(attestation: Attestation) -> bytes:
         "verified": attestation.verified,
         "detail": attestation.detail,
         "previous_attestation_digest": attestation.previous_attestation_digest,
+        "runtime_id": attestation.runtime_id,
     }
     return _DOMAIN + json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -58,6 +59,8 @@ def _validate_attestation(attestation: Attestation) -> None:
     )
     if any(not isinstance(value, str) or not value for value in fields):
         raise ValueError("attestation identity and digests are required")
+    if not isinstance(attestation.runtime_id, str):
+        raise ValueError("runtime_id must be a string")
     for digest in fields[4:]:
         if len(digest) != 64:
             raise ValueError("attestation digest must be SHA-256 hex")
