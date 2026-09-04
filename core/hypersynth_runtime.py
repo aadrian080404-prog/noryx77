@@ -44,6 +44,7 @@ class HypersynthRuntime:
             max_steps=self.limits.max_actions_per_task,
             provenance_key=self._provenance_key,
             runtime_id=self.runtime_id or "",
+            model_fabric=self.model_fabric,
         )
 
     def run_model(self, request, *, verifier=None, synthesizer=None):
@@ -75,7 +76,6 @@ class HypersynthRuntime:
             return self.clock() > deadline
 
         try:
-            # Validate the public runtime contract before touching task fields.
             task_check = self.verifier.verify_task(task)
             if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
                 check = VerificationResult(False, "contract", "invalid_task_verification")
@@ -107,12 +107,7 @@ class HypersynthRuntime:
                 return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
             if result.get("status") == "completed":
                 result_check = result.get("verification")
-                if (
-                    not isinstance(result_check, VerificationResult)
-                    or not result_check.is_well_formed()
-                    or not result_check.valid
-                    or result_check.stage != "hypersynth_result"
-                ):
+                if (not isinstance(result_check, VerificationResult) or not result_check.is_well_formed() or not result_check.valid or result_check.stage != "hypersynth_result"):
                     check = VerificationResult(False, "runtime", "invalid_kernel_verification")
                     self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
                     return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
