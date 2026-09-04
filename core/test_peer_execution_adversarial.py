@@ -63,23 +63,49 @@ def test_tampered_initial_verification_cannot_enter_collaboration():
 def test_revision_cannot_skip_or_rollback_revision():
     t = task()
     collaboration = PeerCollaboration("runtime-attack", t.execution_id, seal_key=KEY, max_rounds=2)
-    c = PeerExecutionCoordinator(collaboration)
+    first, second = result("a", "a"), result("b", "b")
 
-    def initial(agent, task):
-        return result(agent.agent_id, "a" if agent.agent_id == "a" else "b")
+    initial = collaboration.evidence(
+        t,
+        first,
+        "b",
+        "initial-challenge",
+        revision=0,
+        target_output=second.output,
+        target_verification=second.verification,
+    )
+    initial_digest = collaboration.evidence_digest(initial)
+    revision_one = collaboration.evidence(
+        t,
+        result("a", "a1"),
+        "b",
+        "challenge-1",
+        revision=1,
+        previous_evidence_digest=initial_digest,
+        target_output="b1",
+        target_verification=second.verification,
+    )
+    revision_one_digest = collaboration.evidence_digest(revision_one)
 
-    def bad_revision(task, first, second, revision):
-        assert revision == 1
-        return PeerChallenge(result("a", "a1"), result("b", "b1"), "challenge-1")
+    assert collaboration.verify_evidence(initial, task=t)
+    assert collaboration.verify_evidence(revision_one, task=t)
 
-    with pytest.raises(PermissionError, match="peer_disagreement_unresolved"):
-        c.execute(t, Agent("a"), Agent("b"), initial, challenge=bad_revision)
-    assert len(collaboration._chain_evidence) == 2
+    skipped = collaboration.evidence(
+        t,
+        result("a", "a2"),
+        "b",
+        "challenge-2",
+        revision=2,
+        previous_evidence_digest=initial_digest,
+        target_output="b2",
+        target_verification=second.verification,
+    )
+    assert not collaboration.verify_evidence(skipped, task=t)
 
-    entries = list(collaboration._chain_evidence.values())
-    first_revision = next(e for e in entries if e.revision == 1)
-    forged = replace(first_revision, revision=2, previous_evidence_digest=collaboration.evidence_digest(first_revision))
-    assert not collaboration.verify_evidence(forged, task=t)
+    rollback = replace(revision_one, revision=0, previous_evidence_digest="")
+    assert not collaboration.verify_evidence(rollback, task=t)
+    assert collaboration.verify_evidence(revision_one, task=t)
+    assert revision_one_digest == collaboration.evidence_digest(revision_one)
 
 
 def test_evidence_seal_binds_challenge_and_revision():
