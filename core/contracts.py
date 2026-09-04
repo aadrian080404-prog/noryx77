@@ -73,6 +73,8 @@ class AgentResult:
     output: Any = None
     verification: VerificationResult | None = None
     execution_id: str = ""
+    model_request_digest: str = ""
+    model_result_digest: str = ""
 
     def is_well_formed(self) -> bool:
         return (
@@ -81,4 +83,18 @@ class AgentResult:
             and isinstance(self.status, str) and bool(self.status.strip())
             and (self.verification is None or isinstance(self.verification, VerificationResult))
             and isinstance(self.execution_id, str) and len(self.execution_id.encode("utf-8")) <= 256
+            and self._valid_digest(self.model_request_digest)
+            and self._valid_digest(self.model_result_digest)
         )
+
+    @staticmethod
+    def _valid_digest(value: str) -> bool:
+        if not isinstance(value, str) or len(value) not in (0, 64):
+            return False
+        if not value:
+            return True
+        try:
+            int(value, 16)
+            return True
+        except ValueError:
+            return False
