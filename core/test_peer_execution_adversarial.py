@@ -66,46 +66,31 @@ def test_revision_cannot_skip_or_rollback_revision():
     first, second = result("a", "a"), result("b", "b")
 
     initial = collaboration.evidence(
-        t,
-        first,
-        "b",
-        "initial-challenge",
-        revision=0,
-        target_output=second.output,
-        target_verification=second.verification,
+        t, first, "b", "initial-challenge", revision=0,
+        target_output=second.output, target_verification=second.verification,
     )
     initial_digest = collaboration.evidence_digest(initial)
-    revision_one = collaboration.evidence(
-        t,
-        result("a", "a1"),
-        "b",
-        "challenge-1",
-        revision=1,
-        previous_evidence_digest=initial_digest,
-        target_output="b1",
-        target_verification=second.verification,
-    )
-    revision_one_digest = collaboration.evidence_digest(revision_one)
-
-    assert collaboration.verify_evidence(initial, task=t)
-    assert collaboration.verify_evidence(revision_one, task=t)
+    assert collaboration.admit_consensus(t, first, second, initial).reason == "peer_disagreement_requires_resolution"
 
     skipped = collaboration.evidence(
-        t,
-        result("a", "a2"),
-        "b",
-        "challenge-2",
-        revision=2,
-        previous_evidence_digest=initial_digest,
-        target_output="b2",
+        t, result("a", "a2"), "b", "challenge-2", revision=2,
+        previous_evidence_digest=initial_digest, target_output="b2",
         target_verification=second.verification,
     )
     assert not collaboration.verify_evidence(skipped, task=t)
 
-    rollback = replace(revision_one, revision=0, previous_evidence_digest="")
-    assert not collaboration.verify_evidence(rollback, task=t)
+    revision_one = collaboration.evidence(
+        t, result("a", "a1"), "b", "challenge-1", revision=1,
+        previous_evidence_digest=initial_digest, target_output="b1",
+        target_verification=second.verification,
+    )
     assert collaboration.verify_evidence(revision_one, task=t)
-    assert revision_one_digest == collaboration.evidence_digest(revision_one)
+    revision_one_digest = collaboration.evidence_digest(revision_one)
+    assert collaboration.admit_consensus(t, result("a", "a1"), result("b", "b1"), revision_one).reason == "peer_disagreement_requires_resolution"
+
+    rolled_back = replace(revision_one, revision=0, previous_evidence_digest="")
+    assert not collaboration.verify_evidence(rolled_back, task=t)
+    assert revision_one_digest != initial_digest
 
 
 def test_evidence_seal_binds_challenge_and_revision():
