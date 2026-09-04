@@ -75,6 +75,7 @@ class Attestation:
     principal_id: str
     step_id: str
     agent_id: str
+    agent_key_fingerprint: str
     action_digest: str
     output_digest: str
     verified: bool
