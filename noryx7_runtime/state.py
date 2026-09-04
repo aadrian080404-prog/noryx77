@@ -33,13 +33,7 @@ class JournalEntry:
 class StateJournal:
     """Append-only commit boundary with authenticity and atomic identity trust."""
 
-    def __init__(
-        self,
-        *,
-        require_signatures: bool = True,
-        verifier: AttestationVerifier | None = None,
-        identity_registry: IdentityRegistry | None = None,
-    ) -> None:
+    def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None, identity_registry: IdentityRegistry | None = None) -> None:
         if not isinstance(require_signatures, bool):
             raise TypeError("require_signatures must be bool")
         if require_signatures and verifier is None:
@@ -134,8 +128,7 @@ class StateJournal:
         )
         return attestation_digest(attestation)
 
-    @staticmethod
-    def _validate_attestation(attestation: Attestation) -> None:
+    def _validate_attestation(self, attestation: Attestation) -> None:
         if not isinstance(attestation, Attestation):
             raise TypeError("attestation must be an Attestation")
         fields = (
@@ -152,7 +145,7 @@ class StateJournal:
             raise ValueError("incomplete attestation")
         if not attestation.verified:
             raise PermissionError("cannot commit unverified result")
-        for digest in fields[4:]:
+        for digest in (attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.previous_attestation_digest):
             if len(digest) != 64:
                 raise ValueError("attestation digest must be SHA-256 hex")
             try:
