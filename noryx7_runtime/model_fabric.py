@@ -144,6 +144,16 @@ class ModelFabric:
             "runtime_id": request.runtime_id,
         })
 
+    @staticmethod
+    def _result_envelope_digest(output: Any, candidates: Sequence[ModelCandidate]) -> str:
+        return _digest({
+            "output": output,
+            "candidates": tuple(
+                (candidate.name, candidate.output_digest, candidate.latency_ms, candidate.cost)
+                for candidate in candidates
+            ),
+        })
+
     def _result_mac(self, request_digest: str, output_digest: str, selected_model: str) -> str:
         if self._binding_key is None:
             return ""
@@ -151,16 +161,32 @@ class ModelFabric:
         return hmac.new(self._binding_key, payload, hashlib.sha256).hexdigest()
 
     def verify_result(self, request: ModelRequest, result: FabricResult) -> bool:
+        if not isinstance(result, FabricResult):
+            return False
         if self._runtime_id is not None and result.runtime_id != self._runtime_id:
             return False
         if result.request_digest != self._request_digest(request):
             return False
         if not result.candidates:
             return False
-        expected_output_digest = _digest(result.output)
+        names: set[str] = set()
+        for candidate in result.candidates:
+            if not isinstance(candidate, ModelCandidate):
+                return False
+            if not isinstance(candidate.name, str) or not candidate.name or candidate.name in names:
+                return False
+            if _digest(candidate.output) != candidate.output_digest:
+                return False
+            if candidate.latency_ms < 0 or candidate.cost < 0:
+                return False
+            names.add(candidate.name)
+        if result.selected_model not in names:
+            return False
+        expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates)
         if self._binding_key is None:
-            return expected_output_digest == next((c.output_digest for c in result.candidates if c.name == result.selected_model), "")
-        expected_mac = self._result_mac(result.request_digest, expected_output_digest, result.selected_model)
+            selected = next(candidate for candidate in result.candidates if candidate.name == result.selected_model)
+            return _digest(result.output) == selected.output_digest
+        expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
         return hmac.compare_digest(result.result_mac, expected_mac)
 
     def execute(self, request: ModelRequest, *, verifier: Verifier | None = None, synthesizer: Synthesizer | None = None) -> FabricResult:
@@ -188,6 +214,6 @@ class ModelFabric:
         else:
             output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
         request_digest = self._request_digest(request)
-        output_digest = _digest(output)
+        output_digest = self._result_envelope_digest(output, candidates)
         result_mac = self._result_mac(request_digest, output_digest, selected_model)
         return FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, result_mac)
