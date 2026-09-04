@@ -3,6 +3,7 @@ import time
 from uuid import uuid4
 
 from .actions import ActionGate
+from .agent_context import AgentContext
 from .agents import DeterministicAgent, ModelFabricAgent
 from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
@@ -175,17 +176,11 @@ class NORYXRuntime:
 
     def run_hypersynth(self, task: TaskSpec):
         """Execute a task through the bounded, runtime-bound HYPERSYNTH pipeline."""
-        constraints = dict(task.constraints)
-        constraints.setdefault("runtime_id", self.runtime_id)
-        constraints.setdefault("principal_id", "runtime:" + self.runtime_id)
-        bound_task = TaskSpec(
-            task.task_id,
-            task.task_type,
-            task.objective,
-            task.input,
-            constraints,
-            task.verification_requirements,
-            task.risk_class,
-            task.execution_id,
+        execution_id = task.execution_id or uuid4().hex
+        context = AgentContext(
+            runtime_id=self.runtime_id,
+            execution_id=execution_id,
+            principal_id="runtime:" + self.runtime_id,
         )
+        bound_task = context.bind_task(task)
         return self.hypersynth.run(bound_task)
