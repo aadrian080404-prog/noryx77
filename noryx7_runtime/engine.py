@@ -78,6 +78,28 @@ class RuntimeEngine:
         self._attestation_signer = attestation_signer
         self._identity_registry = identity_registry
 
+    def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
+        dispatch = self._adapter.execute if self._adapter is not None else executor
+        if dispatch is None:
+            raise RuntimeError("execution dispatch is unavailable")
+        if self._adapter is None or self._identity_registry is None:
+            return dispatch(envelope)
+
+        public_key = getattr(self._attestation_signer, "public_key_bytes", None)
+        if not isinstance(public_key, bytes):
+            raise PermissionError("identity-bound execution requires signer public key")
+        agent_id = str(self._adapter.agent_id)
+
+        def run_if_trusted(identity: AgentIdentity) -> Any:
+            if identity.public_key != public_key:
+                raise PermissionError("adapter identity key mismatch")
+            return dispatch(envelope)
+
+        # Hold the identity trust-anchor lock through the bounded dispatch. This
+        # gives revoke-vs-dispatch a single linearization point: either the
+        # effect starts before revocation, or revocation wins and no effect runs.
+        return self._identity_registry.with_trusted_identity(agent_id, run_if_trusted)
+
     def execute(
         self,
         intent: Intent,
@@ -138,8 +160,7 @@ class RuntimeEngine:
                     "parameters": envelope.parameters,
                     "nonce": envelope.nonce,
                 })
-                dispatch = self._adapter.execute if self._adapter is not None else executor
-                output = dispatch(envelope)
+                output = self._dispatch(envelope, executor)
                 verified = bool(verifier(envelope, output))
                 output_digest = _digest(output)
                 agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
