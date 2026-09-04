@@ -138,8 +138,7 @@ class ModelFabric:
             except (TypeError, ValueError, OverflowError): return False
             names.add(candidate.name)
         if result.selected_model not in names: return False
-        try:
-            expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest, result.confidence, result.degraded)
+        try: expected_envelope_digest = self._result_envelope_digest(result.output, result.candidates, result.selected_model, result.request_digest, result.confidence, result.degraded)
         except (TypeError, ValueError, OverflowError): return False
         if self._binding_key is None: return hmac.compare_digest(result.result_mac, expected_envelope_digest)
         expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
@@ -162,7 +161,13 @@ class ModelFabric:
                 if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score): raise RuntimeError("model_verification_failure")
                 score = max(0.0, min(1.0, float(score))); scored_rows.append((score, candidate))
             scored = sorted(scored_rows, key=lambda x: (-x[0], x[1].name))
-            confidence, winner = scored[0]; output = winner.output if synthesizer is None else synthesizer(tuple(c for _, c in scored)); selected_model = winner.name
+            confidence, winner = scored[0]
+            if synthesizer is None:
+                output = winner.output
+            else:
+                try: output = synthesizer(tuple(c for _, c in scored))
+                except Exception as exc: raise RuntimeError("model_synthesis_failure") from exc
+            selected_model = winner.name
         elif synthesizer is not None:
             try: output = synthesizer(tuple(candidates))
             except Exception as exc: raise RuntimeError("model_synthesis_failure") from exc
