@@ -9,7 +9,7 @@ from typing import Protocol
 from core.identity import AgentIdentity, IdentityRegistry
 from .contracts import Attestation
 
-_DOMAIN = b"NORYX7/runtime-attestation/v4/"
+_DOMAIN = b"NORYX7/runtime-attestation/v5/"
 
 class AttestationSigner(Protocol):
     def sign(self, attestation: Attestation) -> bytes: ...
@@ -32,24 +32,19 @@ def _message(attestation: Attestation) -> bytes:
         "detail": attestation.detail,
         "previous_attestation_digest": attestation.previous_attestation_digest,
         "runtime_id": attestation.runtime_id,
+        "provenance_digest": attestation.provenance_digest,
+        "provenance_seal": base64.b64encode(attestation.provenance_seal).decode("ascii"),
     }
     return _DOMAIN + json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 def _validate_attestation(attestation: Attestation) -> None:
     if not isinstance(attestation, Attestation):
         raise TypeError("attestation must be an Attestation")
-    fields = (
-        attestation.execution_id, attestation.principal_id, attestation.step_id,
-        attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest,
-        attestation.output_digest, attestation.previous_attestation_digest,
-    )
+    fields = (attestation.execution_id, attestation.principal_id, attestation.step_id, attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.previous_attestation_digest)
     if any(not isinstance(value, str) or not value for value in fields):
         raise ValueError("attestation identity and digests are required")
     if not isinstance(attestation.runtime_id, str):
         raise ValueError("runtime_id must be a string")
-    # Identity fingerprints and chain links are SHA-256 values. Action/output
-    # digests are legacy opaque representations, but retain the fixed-width
-    # contract so malformed values still fail closed.
     for digest in (attestation.agent_key_fingerprint, attestation.previous_attestation_digest):
         if len(digest) != 64:
             raise ValueError("attestation digest must be SHA-256 hex")
@@ -62,19 +57,24 @@ def _validate_attestation(attestation: Attestation) -> None:
             raise ValueError("attestation digest must be 64 characters")
     if not isinstance(attestation.verified, bool) or not isinstance(attestation.detail, str):
         raise ValueError("invalid attestation fields")
+    if not isinstance(attestation.provenance_digest, str) or not isinstance(attestation.provenance_seal, bytes):
+        raise ValueError("invalid provenance binding")
+    if bool(attestation.provenance_digest) != bool(attestation.provenance_seal):
+        raise ValueError("provenance digest and seal must be supplied together")
+    if attestation.provenance_digest:
+        if len(attestation.provenance_digest) != 64:
+            raise ValueError("provenance digest must be SHA-256 hex")
+        try:
+            int(attestation.provenance_digest, 16)
+        except ValueError as exc:
+            raise ValueError("provenance digest is not hexadecimal") from exc
+        if len(attestation.provenance_seal) != 32:
+            raise ValueError("provenance seal must be 32 bytes")
 
 def attestation_digest(attestation) -> str:
     if not isinstance(attestation, Attestation):
         try:
-            attestation = Attestation(
-                execution_id=attestation.execution_id, principal_id=attestation.principal_id,
-                step_id=attestation.step_id, agent_id=attestation.agent_id,
-                agent_key_fingerprint=attestation.agent_key_fingerprint,
-                action_digest=attestation.action_digest, output_digest=attestation.output_digest,
-                verified=True, detail="verified", signature=attestation.signature,
-                previous_attestation_digest=attestation.previous_attestation_digest,
-                runtime_id=getattr(attestation, "runtime_id", ""),
-            )
+            attestation = Attestation(execution_id=attestation.execution_id, principal_id=attestation.principal_id, step_id=attestation.step_id, agent_id=attestation.agent_id, agent_key_fingerprint=attestation.agent_key_fingerprint, action_digest=attestation.action_digest, output_digest=attestation.output_digest, verified=True, detail="verified", signature=attestation.signature, previous_attestation_digest=attestation.previous_attestation_digest, runtime_id=getattr(attestation, "runtime_id", ""), provenance_digest=getattr(attestation, "provenance_digest", ""), provenance_seal=getattr(attestation, "provenance_seal", b""))
         except AttributeError as exc:
             raise TypeError("attestation must be an Attestation") from exc
     _validate_attestation(attestation)
@@ -87,8 +87,7 @@ class Ed25519AttestationSigner:
     private_key: object
     def __post_init__(self) -> None:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-        if not isinstance(self.private_key, Ed25519PrivateKey):
-            raise TypeError("private_key must be an Ed25519 private key")
+        if not isinstance(self.private_key, Ed25519PrivateKey): raise TypeError("private_key must be an Ed25519 private key")
     @classmethod
     def generate(cls):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -98,16 +97,12 @@ class Ed25519AttestationSigner:
         from cryptography.hazmat.primitives import serialization
         return self.private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     def sign(self, attestation):
-        _validate_attestation(attestation)
-        return self.private_key.sign(_message(attestation))
+        _validate_attestation(attestation); return self.private_key.sign(_message(attestation))
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
-        if not isinstance(signature, bytes) or len(signature) != 64:
-            return False
-        try:
-            self.private_key.public_key().verify(signature, _message(attestation))
-        except Exception:
-            return False
+        if not isinstance(signature, bytes) or len(signature) != 64: return False
+        try: self.private_key.public_key().verify(signature, _message(attestation))
+        except Exception: return False
         return True
 
 @dataclass(frozen=True)
@@ -115,56 +110,41 @@ class Ed25519AttestationVerifier:
     public_key: object
     def __post_init__(self) -> None:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-        if not isinstance(self.public_key, Ed25519PublicKey):
-            raise TypeError("public_key must be an Ed25519 public key")
+        if not isinstance(self.public_key, Ed25519PublicKey): raise TypeError("public_key must be an Ed25519 public key")
     @classmethod
     def from_public_key_bytes(cls, public_key):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-        if not isinstance(public_key, bytes) or len(public_key) != 32:
-            raise ValueError("public_key must be 32 bytes")
+        if not isinstance(public_key, bytes) or len(public_key) != 32: raise ValueError("public_key must be 32 bytes")
         return cls(Ed25519PublicKey.from_public_bytes(public_key))
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
-        if not isinstance(signature, bytes) or len(signature) != 64:
-            return False
-        try:
-            self.public_key.verify(signature, _message(attestation))
-        except Exception:
-            return False
+        if not isinstance(signature, bytes) or len(signature) != 64: return False
+        try: self.public_key.verify(signature, _message(attestation))
+        except Exception: return False
         return True
 
 @dataclass(frozen=True)
 class IdentityBoundAttestationVerifier:
     registry: IdentityRegistry
     def __post_init__(self):
-        if not isinstance(self.registry, IdentityRegistry):
-            raise TypeError("registry must be an IdentityRegistry")
+        if not isinstance(self.registry, IdentityRegistry): raise TypeError("registry must be an IdentityRegistry")
     def verify(self, attestation, signature):
         _validate_attestation(attestation)
-        try:
-            return bool(self.registry.with_trusted_identity(
-                attestation.agent_id,
-                lambda identity: self._verify_with_identity(identity, attestation, signature),
-            ))
-        except Exception:
-            return False
+        try: return bool(self.registry.with_trusted_identity(attestation.agent_id, lambda identity: self._verify_with_identity(identity, attestation, signature)))
+        except Exception: return False
     @staticmethod
     def _verify_with_identity(identity: AgentIdentity, attestation, signature):
-        if hashlib.sha256(identity.public_key).hexdigest() != attestation.agent_key_fingerprint:
-            return False
+        if hashlib.sha256(identity.public_key).hexdigest() != attestation.agent_key_fingerprint: return False
         return Ed25519AttestationVerifier.from_public_key_bytes(identity.public_key).verify(attestation, signature)
 
 def signed_attestation(attestation, signer):
     _validate_attestation(attestation)
-    if not callable(getattr(signer, "sign", None)):
-        raise TypeError("signer must expose sign")
+    if not callable(getattr(signer, "sign", None)): raise TypeError("signer must expose sign")
     signature = signer.sign(attestation)
-    if not isinstance(signature, bytes) or len(signature) != 64:
-        raise ValueError("signer returned an invalid Ed25519 signature")
+    if not isinstance(signature, bytes) or len(signature) != 64: raise ValueError("signer returned an invalid Ed25519 signature")
     return replace(attestation, signature=signature)
 
 def verify_attestation(attestation, signer):
     _validate_attestation(attestation)
-    if not callable(getattr(signer, "verify", None)):
-        raise TypeError("signer must expose verify")
+    if not callable(getattr(signer, "verify", None)): raise TypeError("signer must expose verify")
     return bool(signer.verify(attestation, attestation.signature))
