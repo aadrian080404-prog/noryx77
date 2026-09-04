@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence
 from uuid import uuid4
 
+from core.identity import AgentIdentity, IdentityRegistry
+
 from .adapters import ExecutionAdapter
 from .attestation import AttestationSigner, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
@@ -36,12 +38,7 @@ class RuntimeResult:
 
 
 class RuntimeEngine:
-    """Operational kernel for the NORYX7 data plane.
-
-    Adapter-backed execution requires a cryptographic attestation signer so
-    committed results cannot be transplanted across executions, principals,
-    steps, agents, or action/output digests.
-    """
+    """Operational kernel for the NORYX7 data plane."""
 
     def __init__(
         self,
@@ -51,6 +48,7 @@ class RuntimeEngine:
         scheduler: Scheduler | None = None,
         adapter: ExecutionAdapter | None = None,
         attestation_signer: AttestationSigner | None = None,
+        identity_registry: IdentityRegistry | None = None,
     ) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
             raise ValueError("max_actions must be a non-negative integer")
@@ -64,11 +62,21 @@ class RuntimeEngine:
             raise TypeError("attestation_signer must expose sign")
         if adapter is not None and attestation_signer is None:
             raise ValueError("adapter-backed execution requires attestation_signer")
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise TypeError("identity_registry must be an IdentityRegistry")
+        if adapter is not None and identity_registry is not None:
+            public_key = getattr(attestation_signer, "public_key_bytes", None)
+            if not isinstance(public_key, bytes):
+                raise ValueError("identity-bound execution requires signer public key")
+            identity = AgentIdentity(str(adapter.agent_id), public_key)
+            if not identity_registry.is_trusted(identity):
+                raise PermissionError("adapter identity is not trusted")
         self._max_actions = max_actions
         self._clock = clock
         self._scheduler = scheduler or Scheduler()
         self._adapter = adapter
         self._attestation_signer = attestation_signer
+        self._identity_registry = identity_registry
 
     def execute(
         self,
@@ -134,12 +142,20 @@ class RuntimeEngine:
                 output = dispatch(envelope)
                 verified = bool(verifier(envelope, output))
                 output_digest = _digest(output)
-                agent_id = str(getattr(self._adapter, "agent_id", "adapter")) if self._adapter is not None else "executor"
+                agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
+                if self._attestation_signer is not None:
+                    public_key = getattr(self._attestation_signer, "public_key_bytes", None)
+                    if not isinstance(public_key, bytes):
+                        raise ValueError("attestation signer does not expose public key")
+                    fingerprint = hashlib.sha256(public_key).hexdigest()
+                else:
+                    fingerprint = hashlib.sha256(b"legacy-executor").hexdigest()
                 attestation = Attestation(
                     execution_id=envelope.execution_id,
                     principal_id=envelope.principal_id,
                     step_id=envelope.step_id,
                     agent_id=agent_id,
+                    agent_key_fingerprint=fingerprint,
                     action_digest=action_digest,
                     output_digest=output_digest,
                     verified=verified,
