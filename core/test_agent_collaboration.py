@@ -24,6 +24,17 @@ def test_independent_peer_evidence_is_sealed_and_admitted():
     assert pair.admit_consensus(t, first, second, evidence).valid
 
 
+def test_admitted_evidence_cannot_be_replayed():
+    t = task()
+    pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
+    first, second = result("agent-a"), result("agent-b")
+    evidence = pair.evidence(t, first, "agent-b", "challenge")
+    assert pair.admit_consensus(t, first, second, evidence).valid
+    replay = pair.admit_consensus(t, first, second, evidence)
+    assert not replay.valid
+    assert replay.reason == "evidence_replay_rejected"
+
+
 def test_tampered_evidence_fails_closed():
     t = task()
     pair = PeerCollaboration("runtime-1", t.execution_id, seal_key=KEY)
