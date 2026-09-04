@@ -10,7 +10,7 @@ from uuid import uuid4
 from core.identity import AgentIdentity, IdentityRegistry
 
 from .adapters import ExecutionAdapter
-from .attestation import AttestationSigner, signed_attestation
+from .attestation import AttestationSigner, attestation_digest, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
 from .scheduler import Scheduler
 
@@ -18,6 +18,7 @@ from .scheduler import Scheduler
 Executor = Callable[[ActionEnvelope], Any]
 Verifier = Callable[[ActionEnvelope, Any], bool]
 Committer = Callable[[ActionEnvelope, Attestation, Any], None]
+_ZERO_DIGEST = "0" * 64
 
 
 def _canonical(value: Any) -> str:
@@ -136,6 +137,7 @@ class RuntimeEngine:
         ordered = tuple(item.step for item in self._scheduler.schedule(steps))
         attestations: list[Attestation] = []
         outputs: list[Any] = []
+        previous_attestation_digest = _ZERO_DIGEST
 
         for step in ordered:
             if self._clock() > context.deadline_monotonic:
@@ -181,6 +183,7 @@ class RuntimeEngine:
                     output_digest=output_digest,
                     verified=verified,
                     detail="verified" if verified else "verification_failed",
+                    previous_attestation_digest=previous_attestation_digest,
                 )
                 if self._attestation_signer is not None:
                     attestation = signed_attestation(attestation, self._attestation_signer)
@@ -201,6 +204,8 @@ class RuntimeEngine:
                     return RuntimeResult(context.execution_id, ExecutionStatus.FAILED, tuple(attestations), tuple(outputs), type(exc).__name__)
             attestations.append(attestation)
             outputs.append(output)
+            if attestation.signature:
+                previous_attestation_digest = attestation_digest(attestation)
 
         return RuntimeResult(context.execution_id, ExecutionStatus.SUCCEEDED, tuple(attestations), tuple(outputs))
 
