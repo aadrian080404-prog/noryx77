@@ -27,7 +27,7 @@ class CognitiveState:
 
 
 class Hypersynth:
-    """Bounded cognitive kernel with immutable execution and optional cryptographic provenance."""
+    """Bounded cognitive kernel with immutable execution and cryptographic provenance."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
     def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, provenance_key=None, runtime_id="", model_fabric=None):
@@ -94,8 +94,8 @@ class Hypersynth:
         tools = constraints.get("tools", ())
         request = ModelRequest(
             prompt=step.objective,
-            required_capabilities=tuple(capabilities),
-            preferred_capabilities=tuple(preferred),
+            required_capabilities=frozenset(capabilities),
+            preferred_capabilities=frozenset(preferred),
             max_cost=constraints.get("max_cost", float("inf")),
             max_latency_ms=constraints.get("max_latency_ms", 0),
             min_models=max(1, min(self.max_agents, int(constraints.get("min_models", 1)))),
@@ -111,7 +111,7 @@ class Hypersynth:
                 if not fabric.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
                 verification = VerificationResult(True, "agent_result", "model_fabric_verified")
                 return AgentResult(self.agent_id, child.task_id, "completed", result.output, verification, child.execution_id)
-        return FabricAgent()
+        return FabricAgent(), request
 
     def run(self, task: TaskSpec, *, deadline_check=None):
         task = self._bind_execution(task)
@@ -154,22 +154,26 @@ class Hypersynth:
         if self.model_fabric is not None: agents = tuple(agents) + ("model-fabric",)
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
+        model_requests = []
         for index, step in enumerate(plan.steps):
             agent_id = agents[index % len(agents)]
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
             try:
-                if agent_id == "model-fabric": selected = self._model_agent(task, step); decision = type("Decision", (), {"accepted": selected is not None, "reason": "model_fabric_selected"})()
-                else: selected, decision = self.supervisor.select(child, preferred=agent_id)
+                if agent_id == "model-fabric":
+                    selected, request = self._model_agent(task, step)
+                    decision = type("Decision", (), {"accepted": selected is not None, "reason": "model_fabric_selected"})()
+                    if request is not None: model_requests.append(request)
+                else: selected, decision = self.supervisor.select(child, preferred=agent_id); request = None
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
-            assignments.append((selected, child, step))
+            assignments.append((selected, child, step, request))
         try:
-            route_digest = canonical_digest(tuple((child.task_id, agent.agent_id, step.action_type, step.risk_class) for agent, child, step in assignments))
+            route_digest = canonical_digest(tuple((child.task_id, agent.agent_id, step.action_type, step.risk_class) for agent, child, step, _ in assignments))
             provenance = self._provenance_start(task, route_digest)
             if provenance is not None and not self._provenance_verify(provenance): return self._reject("allocation", task, VerificationResult(False, "provenance", "provenance_seal_failure"))
         except Exception as exc: return self._reject("allocation", task, VerificationResult(False, "provenance", str(exc)))
         results = []
-        for index, (agent, child, step) in enumerate(assignments):
+        for index, (agent, child, step, request) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
@@ -184,6 +188,14 @@ class Hypersynth:
             if not isinstance(result, AgentResult): return self._reject("verification", task, VerificationResult(False, "agent_result", "malformed_agent_result"), results=tuple(results))
             if result.execution_id != task.execution_id: return self._reject("verification", task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
             results.append(result)
+            if provenance is not None and request is not None and hasattr(self.model_fabric, "verify_result"):
+                try:
+                    fabric_result = self.model_fabric.execute(request)
+                    if not self.model_fabric.verify_result(request, fabric_result):
+                        return self._reject("verification", task, VerificationResult(False, "provenance", "model_result_integrity_failure"), results=tuple(results))
+                    provenance = provenance.bind_model(canonical_digest(request), fabric_result)
+                except Exception:
+                    return self._reject("verification", task, VerificationResult(False, "provenance", "model_provenance_binding_failure"), results=tuple(results))
         timeout = self._deadline_rejection(task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
