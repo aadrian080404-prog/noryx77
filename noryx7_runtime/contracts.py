@@ -81,3 +81,4 @@ class Attestation:
     verified: bool
     detail: str = ""
     signature: bytes = b""
+    previous_attestation_digest: str = "0" * 64
