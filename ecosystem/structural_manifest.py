@@ -29,9 +29,11 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
         "noryx-browser/app/src/main/java/com/noryx/browser/MainActivity.kt",
         "noryx-browser/app/src/main/java/com/noryx/browser/BrowserController.kt",
         "noryx-browser/app/src/main/java/com/noryx/browser/NavigationState.kt",
+        "noryx-browser/app/src/main/java/com/noryx/browser/NavigationPolicy.kt",
         "noryx-browser/app/src/main/java/com/noryx/browser/NoryxWebViewClient.kt",
         "noryx-browser/app/src/main/java/com/noryx/browser/NoryxWebChromeClient.kt",
         "noryx-browser/app/src/main/res/layout/activity_main.xml",
+        "noryx-browser/app/src/test/java/com/noryx/browser/NavigationPolicyTest.kt",
     ),
     "hypersynth": (
         "core/hypersynth.py",
@@ -42,6 +44,8 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
         "core/verification.py",
         "core/memory.py",
         "core/secure_memory.py",
+        "core/security.py",
+        "core/recovery.py",
     ),
     "orchestration": (
         "core/runtime.py",
@@ -49,6 +53,9 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
         "core/interaction_context.py",
         "core/user_understanding.py",
         "core/state.py",
+        "core/security.py",
+        "core/recovery.py",
+        "core/evaluation.py",
         "ecosystem/boundaries.py",
     ),
 }
