@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from .authorization_replay import AuthorizationReplayGuard
-from .device import DeviceIdentity, DeviceTrust
+from .device import DeviceCapabilityGate, DeviceIdentity, DeviceTrust
 from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityRegistry
 
 VERSION: Final[int] = 1
@@ -90,7 +90,7 @@ class TrustEvidence:
 
 
 class TrustChain:
-    """Verifies the complete identity→attestation→channel→device→action chain."""
+    """Verifies identity, attestation, channel, live device capability and replay state."""
 
     def __init__(self, registry: IdentityRegistry, replay_guard: AuthorizationReplayGuard | None = None) -> None:
         if not isinstance(registry, IdentityRegistry):
@@ -152,3 +152,30 @@ class TrustChain:
             return True
         except (InvalidSignature, ValueError, TypeError, PermissionError):
             return False
+
+    def verify_live_device_capability(
+        self,
+        evidence: TrustEvidence,
+        *,
+        device_gate: DeviceCapabilityGate,
+        capability: str,
+        now: int,
+        expected_epoch: int,
+    ) -> bool:
+        """Require the live device gate to authorize the exact trust-chain action.
+
+        This closes a time-of-check/time-of-use gap: a previously verified
+        DeviceIdentity snapshot is insufficient after capability revocation,
+        expiry, epoch rotation, isolation, or device replacement.
+        """
+        if not isinstance(evidence, TrustEvidence) or not isinstance(device_gate, DeviceCapabilityGate):
+            return False
+        if evidence.device != device_gate.identity:
+            return False
+        if evidence.epoch != expected_epoch:
+            return False
+        if not isinstance(capability, str) or not capability.strip():
+            return False
+        if isinstance(now, bool) or not isinstance(now, int) or now < 0:
+            return False
+        return device_gate.allows(capability, now=now, epoch=expected_epoch)
