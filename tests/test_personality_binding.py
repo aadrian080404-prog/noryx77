@@ -1,5 +1,13 @@
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from core.identity import AgentIdentityAuthority, IdentityRegistry
 from core.personality import PersonalityProfile
-from core.personality_binding import bind_personality, verify_personality_binding
+from core.personality_binding import (
+    bind_personality,
+    sign_identity_personality_binding,
+    verify_identity_personality_binding,
+    verify_personality_binding,
+)
 
 
 def profile(agent_id="agent-a", seed=7):
@@ -40,3 +48,31 @@ def test_profile_agent_mismatch_is_rejected():
         assert str(exc) == "agent_identity_mismatch"
     else:
         raise AssertionError("expected identity mismatch")
+
+
+def test_signed_binding_is_tied_to_registered_identity_and_epoch():
+    identity, private_key = AgentIdentityAuthority.generate("agent-a")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    signed = sign_identity_personality_binding(profile(), identity=identity, private_key=private_key, epoch=9)
+    assert verify_identity_personality_binding(signed, profile=profile(), registry=registry, expected_epoch=9)
+    assert not verify_identity_personality_binding(signed, profile=profile(), registry=registry, expected_epoch=10)
+
+
+def test_signed_binding_rejects_personality_swap_and_untrusted_identity():
+    identity, private_key = AgentIdentityAuthority.generate("agent-a")
+    registry = IdentityRegistry()
+    signed = sign_identity_personality_binding(profile(), identity=identity, private_key=private_key, epoch=1)
+    assert not verify_identity_personality_binding(signed, profile=profile(seed=8), registry=None)
+    assert not verify_identity_personality_binding(signed, profile=profile(), registry=registry)
+
+
+def test_signed_binding_rejects_private_key_swap():
+    identity, _ = AgentIdentityAuthority.generate("agent-a")
+    wrong_key = Ed25519PrivateKey.generate()
+    try:
+        sign_identity_personality_binding(profile(), identity=identity, private_key=wrong_key, epoch=1)
+    except ValueError as exc:
+        assert str(exc) == "identity_private_key_mismatch"
+    else:
+        raise AssertionError("expected private-key mismatch")
