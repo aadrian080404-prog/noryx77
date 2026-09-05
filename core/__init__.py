@@ -63,3 +63,5 @@ __all__ = [
     "TrustAnchor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult", "action_digest", "manifest_digest",
     "sign_approval",
 ]
+
+# Architecture expansion marker: hierarchical memory is represented by MemoryStore + policy tiers pending dedicated module consolidation.
