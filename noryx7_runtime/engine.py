@@ -8,6 +8,7 @@ from typing import Any, Callable, Iterable, Sequence
 from uuid import uuid4
 
 from core.identity import AgentIdentity, IdentityRegistry
+from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof
 
 from .adapters import ExecutionAdapter
 from .attestation import AttestationSigner, attestation_digest, signed_attestation
@@ -18,6 +19,7 @@ from .scheduler import Scheduler
 Executor = Callable[[ActionEnvelope], Any]
 Verifier = Callable[[ActionEnvelope, Any], bool]
 Committer = Callable[[ActionEnvelope, Attestation, Any], None]
+AuthorizationProvider = Callable[[ActionEnvelope, bytes], SignedAuthorizationProof | None]
 _ZERO_DIGEST = "0" * 64
 
 
@@ -27,6 +29,19 @@ def _canonical(value: Any) -> str:
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
+
+def _approval_statement(envelope: ActionEnvelope) -> bytes:
+    """Canonical side-effect statement covered by high-risk approval."""
+    return _canonical({
+        "execution_id": envelope.execution_id,
+        "principal_id": envelope.principal_id,
+        "step_id": envelope.step_id,
+        "action_type": envelope.action_type,
+        "target": envelope.target,
+        "parameters": envelope.parameters,
+        "nonce": envelope.nonce,
+    }).encode("utf-8")
 
 
 @dataclass(frozen=True)
@@ -50,6 +65,10 @@ class RuntimeEngine:
         adapter: ExecutionAdapter | None = None,
         attestation_signer: AttestationSigner | None = None,
         identity_registry: IdentityRegistry | None = None,
+        multi_auth_authority: SignedApprovalAuthority | None = None,
+        authorization_provider: AuthorizationProvider | None = None,
+        high_risk_action_types: frozenset[str] | set[str] | tuple[str, ...] = frozenset(),
+        authorization_epoch: int = 0,
     ) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
             raise ValueError("max_actions must be a non-negative integer")
@@ -65,6 +84,23 @@ class RuntimeEngine:
             raise ValueError("adapter-backed execution requires attestation_signer")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
             raise TypeError("identity_registry must be an IdentityRegistry")
+        if multi_auth_authority is not None and not isinstance(multi_auth_authority, SignedApprovalAuthority):
+            raise TypeError("multi_auth_authority must be a SignedApprovalAuthority")
+        if authorization_provider is not None and not callable(authorization_provider):
+            raise TypeError("authorization_provider must be callable")
+        if multi_auth_authority is None and authorization_provider is not None:
+            raise ValueError("authorization_provider requires multi_auth_authority")
+        if isinstance(authorization_epoch, bool) or not isinstance(authorization_epoch, int) or authorization_epoch < 0:
+            raise ValueError("authorization_epoch must be a non-negative integer")
+        if not isinstance(high_risk_action_types, (frozenset, set, tuple)):
+            raise TypeError("high_risk_action_types must be a set-like sequence")
+        normalized_risk_types = frozenset(high_risk_action_types)
+        if any(not isinstance(item, str) or not item for item in normalized_risk_types):
+            raise ValueError("high_risk_action_types must contain non-empty strings")
+        if normalized_risk_types and multi_auth_authority is None:
+            raise ValueError("high-risk actions require multi_auth_authority")
+        if normalized_risk_types and authorization_provider is None:
+            raise ValueError("high-risk actions require authorization_provider")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes):
@@ -78,6 +114,10 @@ class RuntimeEngine:
         self._adapter = adapter
         self._attestation_signer = attestation_signer
         self._identity_registry = identity_registry
+        self._multi_auth_authority = multi_auth_authority
+        self._authorization_provider = authorization_provider
+        self._high_risk_action_types = normalized_risk_types
+        self._authorization_epoch = authorization_epoch
 
     def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
         dispatch = self._adapter.execute if self._adapter is not None else executor
@@ -100,6 +140,23 @@ class RuntimeEngine:
         # gives revoke-vs-dispatch a single linearization point: either the
         # effect starts before revocation, or revocation wins and no effect runs.
         return self._identity_registry.with_trusted_identity(agent_id, run_if_trusted)
+
+    def _authorize_high_risk(self, envelope: ActionEnvelope, action_digest: str) -> None:
+        if envelope.action_type not in self._high_risk_action_types:
+            return
+        authority = self._multi_auth_authority
+        provider = self._authorization_provider
+        if authority is None or provider is None:
+            raise PermissionError("high-risk authorization is unavailable")
+        digest_bytes = bytes.fromhex(action_digest)
+        proof = provider(envelope, digest_bytes)
+        if not authority.verify(
+            proof,
+            action_id=envelope.execution_id,
+            epoch=self._authorization_epoch,
+            action_statement=digest_bytes,
+        ):
+            raise PermissionError("high-risk authorization denied")
 
     def execute(
         self,
@@ -162,6 +219,10 @@ class RuntimeEngine:
                     "parameters": envelope.parameters,
                     "nonce": envelope.nonce,
                 })
+                # Authorization is deliberately before dispatch: a high-risk
+                # action can never reach an adapter/executor before its signed
+                # multi-party proof has been validated.
+                self._authorize_high_risk(envelope, action_digest)
                 output = self._dispatch(envelope, executor)
                 verified = bool(verifier(envelope, output))
                 output_digest = _digest(output)
