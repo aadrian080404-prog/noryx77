@@ -7,15 +7,18 @@ from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .decomposition import TaskDecomposer
 from .hypersynth_runtime import HypersynthRuntime
+from .interaction_context import InteractionContext
 from .limits import RuntimeLimits
 from .memory import MemoryStore
+from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage
 from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
 
+
 class NORYXRuntime:
-    """Controlled runtime: validate -> decompose -> route -> execute -> limit -> verify -> audit."""
+    """Controlled runtime: validate -> understand/context -> route -> execute -> verify -> commit."""
 
     def __init__(self, limits: RuntimeLimits | None = None):
         self.limits = limits or RuntimeLimits()
@@ -36,7 +39,22 @@ class NORYXRuntime:
             memory=self.memory,
         )
 
-    def run(self, task: TaskSpec, agent_id: str = "deterministic"):
+    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext | None) -> OrchestrationEnvelope:
+        if interaction_context is None:
+            raise ValueError("interaction_context_required")
+        if not isinstance(interaction_context, InteractionContext):
+            raise TypeError("interaction_context_required")
+        envelope = OrchestrationEnvelope(
+            request_id=task.task_id,
+            principal_id=task.execution_id or "runtime",
+            operation=task.task_type,
+            interaction_context=interaction_context,
+        )
+        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD)
+        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
+        return envelope
+
+    def run(self, task: TaskSpec, agent_id: str = "deterministic", interaction_context: InteractionContext | None = None):
         started = time.monotonic()
         deadline = started + self.limits.max_task_seconds
         task_id = getattr(task, "task_id", None)
@@ -60,6 +78,14 @@ class NORYXRuntime:
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
+
+        try:
+            envelope = self._context_envelope(task, interaction_context)
+            envelope = OrchestrationCoordinator.with_intent_digest(envelope, task.objective)
+            self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id, envelope_digest=OrchestrationCoordinator.digest(envelope))
+        except (TypeError, ValueError):
+            self.audit.record("orchestration_rejection", task_id=task_id, reason="invalid_interaction_context")
+            return {"status": "rejected", "reason": "invalid_interaction_context", "task_id": task_id}
 
         execution_id = task.execution_id or uuid4().hex
         try:
@@ -142,12 +168,7 @@ class NORYXRuntime:
                 return {"status": "rejected", "reason": "max_output_items_exceeded", "task_id": child.task_id}
 
             runtime_verification = self.verifier.verify_output(output, stage="runtime_result")
-            self.audit.record(
-                "runtime_output_verification",
-                task_id=child.task_id,
-                valid=runtime_verification.valid,
-                reason=runtime_verification.reason,
-            )
+            self.audit.record("runtime_output_verification", task_id=child.task_id, valid=runtime_verification.valid, reason=runtime_verification.reason)
             if not runtime_verification.valid:
                 return {"status": "rejected", "reason": "runtime_output_verification_failed", "verification": runtime_verification, "task_id": child.task_id}
 
@@ -157,8 +178,11 @@ class NORYXRuntime:
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
+        self.audit.record("orchestration_commit", task_id=task_id, stage=OrchestrationStage.COMMITTED.value, context_id=interaction_context.context_id)
         return {"status": "completed", "results": tuple(results), "audit": self.audit.snapshot()}
 
-    def run_hypersynth(self, task: TaskSpec):
+    def run_hypersynth(self, task: TaskSpec, interaction_context: InteractionContext | None = None):
         """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
-        return self.hypersynth.run(task)
+        if interaction_context is None or not isinstance(interaction_context, InteractionContext):
+            return {"status": "rejected", "reason": "interaction_context_required", "task_id": getattr(task, "task_id", None)}
+        return self.hypersynth.run(task, interaction_context=interaction_context)
