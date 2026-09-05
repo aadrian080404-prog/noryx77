@@ -8,6 +8,7 @@ from .interaction_context import InteractionContext
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .policy import PolicyEngine
+from .recovery import RecoveryController, RecoveryState
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
@@ -15,14 +16,17 @@ from .verification import VerificationEngine
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
         self.limits = limits or RuntimeLimits()
         self.clock = clock or time.monotonic
         self.policy = PolicyEngine()
-        self.security = SecurityBoundary(self.policy, self.verifier)
+        self.recovery = recovery or RecoveryController()
+        if not isinstance(self.recovery, RecoveryController):
+            raise TypeError("invalid_recovery_controller")
+        self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
@@ -43,6 +47,11 @@ class HypersynthRuntime:
 
         def deadline_exceeded():
             return self.clock() > deadline
+
+        if self.recovery.state is not RecoveryState.NORMAL:
+            check = VerificationResult(False, "recovery", "recovery_state_denies_execution")
+            self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
+            return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
 
         if not isinstance(interaction_context, InteractionContext):
             check = VerificationResult(False, "context", "interaction_context_required")
