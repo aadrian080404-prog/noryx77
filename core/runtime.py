@@ -84,6 +84,10 @@ class NORYXRuntime:
         task_id = getattr(task, "task_id", None)
         execution_id = getattr(task, "execution_id", "") or uuid4().hex
         envelope = None
+        recovery_state, recovery_epoch = self.recovery.snapshot()
+        if recovery_state.value != "normal":
+            self.audit.record("recovery_execution_denied", task_id=task_id, reason="recovery_state_denies_execution")
+            return {"status": "rejected", "reason": "recovery_state_denies_execution", "task_id": task_id}
 
         def deadline_exceeded() -> bool:
             return time.monotonic() > deadline
@@ -210,7 +214,7 @@ class NORYXRuntime:
             expected_task_ids=expected_task_ids,
         )
         self.audit.record("aggregate_result_verification", task_id=task_id,
-                          valid=all(check.valid for check in aggregate_verification),
+                          valid=bool(aggregate_verification) and all(check.valid for check in aggregate_verification),
                           checks=len(aggregate_verification))
         if not aggregate_verification or not all(check.valid for check in aggregate_verification):
             failed = next((check for check in aggregate_verification if not check.valid),
@@ -227,6 +231,14 @@ class NORYXRuntime:
             for check in aggregate_verification
         ]
         verification_results.append({"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason})
+
+        try:
+            self.recovery.require_normal(expected_epoch=recovery_epoch)
+        except PermissionError as exc:
+            reason = str(exc)
+            self.audit.record("state_commit_rejected", task_id=task_id, reason=reason)
+            return self._rejection(envelope, task_id, reason, self.audit)
+
         committed_state = NORYXState(
             input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
             goal=task.objective,
@@ -239,6 +251,7 @@ class NORYXRuntime:
         try:
             commit = self.state.commit(committed_state, execution_id=execution_id, task_id=task_id,
                                        verification_valid=final_verification.valid, verification_stage=final_verification.stage)
+            self.recovery.require_normal(expected_epoch=recovery_epoch)
         except (TypeError, ValueError, PermissionError, MemoryError) as exc:
             self.audit.record("state_commit_failure", task_id=task_id, reason=type(exc).__name__)
             return self._rejection(envelope, task_id, "state_commit_failed", self.audit)
