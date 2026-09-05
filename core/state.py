@@ -5,9 +5,10 @@ from typing import Any
 
 @dataclass
 class NORYXState:
-    """Bounded internal state; unverified data never becomes committed state."""
+    """Bounded internal state; persistent state contains references, not raw user content."""
 
     user_input: str = ""
+    input_digest: str = ""
     context: list[str] = field(default_factory=list)
     goal: str = ""
     subtasks: list[str] = field(default_factory=list)
@@ -34,10 +35,11 @@ class StateCommit:
 
 
 class StateStore:
-    """Transactional state boundary with monotonic per-execution commits."""
+    """Transactional state boundary with monotonic commits and input-reference hygiene."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
+    MAX_DIGEST_LENGTH = 64
 
     def __init__(self, max_commits: int = 10_000):
         if isinstance(max_commits, bool) or not isinstance(max_commits, int) or max_commits < 1:
@@ -62,6 +64,10 @@ class StateStore:
             raise PermissionError("verified_commit_required")
         if not isinstance(verification_stage, str) or verification_stage.strip() != "runtime_result":
             raise PermissionError("runtime_verification_required")
+        if not isinstance(state.input_digest, str) or len(state.input_digest) != self.MAX_DIGEST_LENGTH:
+            raise ValueError("invalid_input_digest")
+        if state.user_input:
+            raise PermissionError("raw_user_input_must_not_be_committed")
         if len(self._commits) >= self.max_commits and execution_id not in self._commits:
             raise MemoryError("state_capacity_exceeded")
         self._sequence += 1
