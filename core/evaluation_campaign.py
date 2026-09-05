@@ -49,7 +49,6 @@ class EvaluationCampaign:
     def is_holdout(self, index: int) -> bool:
         if not 0 <= index < self.cases:
             raise IndexError("scenario_index_out_of_range")
-        # Deterministic partition independent of execution order.
         digest = hashlib.sha256(f"holdout:{self.seed}:{index}".encode()).digest()
         return int.from_bytes(digest[:8], "big") % self.cases < self.holdout_cases
 
@@ -59,5 +58,9 @@ class EvaluationCampaign:
 
     @staticmethod
     def approve(matrix: EvaluationMatrix) -> bool:
-        """Fail closed: no evidence or any failed dimension means rejection."""
+        """Fail closed unless every required evaluation dimension is present and passing."""
+        required = set(EvaluationDimension)
+        results = matrix.results()
+        if {result.dimension for result in results} != required:
+            return False
         return matrix.passed()
