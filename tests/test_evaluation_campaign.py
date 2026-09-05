@@ -1,5 +1,5 @@
 from core.adversarial import AdversarialEngine
-from core.evaluation import EvaluationDimension, EvaluationMatrix
+from core.evaluation import EvaluationDimension, EvaluationMatrix, EvaluationResult
 from core.evaluation_campaign import EvaluationCampaign
 
 
@@ -26,13 +26,21 @@ def test_holdout_partition_is_seed_sensitive() -> None:
     assert any(a.is_holdout(i) != b.is_holdout(i) for i in range(200))
 
 
-def test_campaign_approval_fails_closed() -> None:
+def test_campaign_approval_fails_closed_on_empty_or_partial_matrix() -> None:
     campaign = EvaluationCampaign(seed=3, cases=100, holdout_cases=10)
     matrix = EvaluationMatrix()
     assert not campaign.approve(matrix)
     campaign.record(matrix, dimension=EvaluationDimension.SECURITY, passed=True, score=1.0, evidence="verified")
+    assert not campaign.approve(matrix)
+
+
+def test_campaign_approval_requires_every_dimension_and_all_pass() -> None:
+    campaign = EvaluationCampaign(seed=4, cases=100, holdout_cases=10)
+    matrix = EvaluationMatrix()
+    for dimension in EvaluationDimension:
+        matrix.record(EvaluationResult(dimension, True, 1.0, "independent-evidence"))
     assert campaign.approve(matrix)
-    campaign.record(matrix, dimension=EvaluationDimension.RECOVERY, passed=False, score=0.2, evidence="failure")
+    matrix.record(EvaluationResult(EvaluationDimension.RECOVERY, False, 0.2, "failure"))
     assert not campaign.approve(matrix)
 
 
