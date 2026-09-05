@@ -1,5 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
+from math import isfinite
+from threading import RLock
 from typing import Any
 
 
@@ -47,6 +49,7 @@ class StateStore:
         self.max_commits = max_commits
         self._commits: dict[str, StateCommit] = {}
         self._sequence = 0
+        self._lock = RLock()
 
     @staticmethod
     def _valid_id(value: str, max_bytes: int) -> bool:
@@ -68,20 +71,29 @@ class StateStore:
             raise ValueError("invalid_input_digest")
         if state.user_input:
             raise PermissionError("raw_user_input_must_not_be_committed")
-        if len(self._commits) >= self.max_commits and execution_id not in self._commits:
-            raise MemoryError("state_capacity_exceeded")
-        self._sequence += 1
-        snapshot = deepcopy(state)
-        snapshot.status = "committed"
-        commit = StateCommit(execution_id, task_id, snapshot, verification_stage, self._sequence)
-        self._commits[execution_id] = commit
-        return deepcopy(commit)
+        if not isinstance(state.confidence, (int, float)) or isinstance(state.confidence, bool):
+            raise ValueError("invalid_confidence")
+        if not isfinite(float(state.confidence)) or not 0.0 <= float(state.confidence) <= 1.0:
+            raise ValueError("invalid_confidence")
+        if not isinstance(state.verification_results, list):
+            raise ValueError("invalid_verification_results")
+        with self._lock:
+            if len(self._commits) >= self.max_commits and execution_id not in self._commits:
+                raise MemoryError("state_capacity_exceeded")
+            self._sequence += 1
+            snapshot = deepcopy(state)
+            snapshot.status = "committed"
+            commit = StateCommit(execution_id, task_id, snapshot, verification_stage, self._sequence)
+            self._commits[execution_id] = commit
+            return deepcopy(commit)
 
     def get(self, execution_id: str) -> StateCommit | None:
         if not self._valid_id(execution_id, self.MAX_EXECUTION_ID_BYTES):
             return None
-        commit = self._commits.get(execution_id)
-        return deepcopy(commit) if commit is not None else None
+        with self._lock:
+            commit = self._commits.get(execution_id)
+            return deepcopy(commit) if commit is not None else None
 
     def __len__(self) -> int:
-        return len(self._commits)
+        with self._lock:
+            return len(self._commits)
