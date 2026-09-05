@@ -172,11 +172,11 @@ class DefenseController:
     def enter_lockdown(self, reason: str) -> None:
         _id(reason, name="lockdown_reason")
         with self._lock:
-            self._mode = DefenseMode.LOCKDOWN
-            event = SecurityEvent(f"lockdown-{len(self._events)}", "lockdown", "security", 1.0, reason)
             if len(self._events) >= MAX_COMPONENTS:
                 raise OverflowError("security_event_capacity")
+            event = SecurityEvent(f"lockdown-{len(self._events)}", "lockdown", "security", 1.0, reason)
             self._events.append(event)
+            self._mode = DefenseMode.LOCKDOWN
 
     def enter_recovery(self) -> None:
         with self._lock:
