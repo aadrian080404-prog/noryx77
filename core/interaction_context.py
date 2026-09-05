@@ -6,6 +6,7 @@ from .user_understanding import UserSignal, UserUnderstandingProfile
 
 MAX_INTERACTION_SIGNALS = 32
 MAX_CONTEXT_SIZE = 4096
+MAX_PROFILE_ID_SIZE = 256
 
 @dataclass(frozen=True)
 class InteractionContext:
@@ -13,12 +14,17 @@ class InteractionContext:
     signals: tuple[UserSignal, ...]
     context_id: str
     def __post_init__(self):
-        if not isinstance(self.profile_id,str) or not self.profile_id: raise ValueError("profile_id_required")
-        if len(self.signals)>MAX_INTERACTION_SIGNALS: raise ValueError("interaction_signal_capacity_exceeded")
-        if not isinstance(self.context_id,str) or not self.context_id: raise ValueError("context_id_required")
+        if not isinstance(self.profile_id, str) or not self.profile_id.strip() or len(self.profile_id.encode("utf-8")) > MAX_PROFILE_ID_SIZE:
+            raise ValueError("invalid_profile_id")
+        if not isinstance(self.signals, tuple) or len(self.signals) > MAX_INTERACTION_SIGNALS:
+            raise ValueError("interaction_signal_capacity_exceeded")
+        if any(not isinstance(signal, UserSignal) for signal in self.signals):
+            raise TypeError("user_signal_required")
+        if not isinstance(self.context_id, str) or not self.context_id.strip() or len(self.context_id.encode("utf-8")) > 64:
+            raise ValueError("invalid_context_id")
     def as_prompt_context(self):
         rendered="\n".join([f"profile_id={self.profile_id}"]+[f"{s.kind.value}={s.value};confidence={s.confidence:.2f}" for s in self.signals])
-        if len(rendered.encode())>MAX_CONTEXT_SIZE: raise ValueError("interaction_context_size_exceeded")
+        if len(rendered.encode("utf-8"))>MAX_CONTEXT_SIZE: raise ValueError("interaction_context_size_exceeded")
         return rendered
 
 def build_interaction_context(profile):
@@ -27,4 +33,6 @@ def build_interaction_context(profile):
     if len(profile.signals)>MAX_INTERACTION_SIGNALS: raise ValueError("interaction_signal_capacity_exceeded")
     signals=tuple(profile.signals)
     material=profile.profile_id+"|"+"|".join(f"{s.kind.value}:{s.value}:{s.confidence:.2f}" for s in signals)
-    return InteractionContext(profile.profile_id,signals,sha256(material.encode()).hexdigest())
+    context=InteractionContext(profile.profile_id,signals,sha256(material.encode()).hexdigest())
+    context.as_prompt_context()
+    return context
