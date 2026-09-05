@@ -1,3 +1,4 @@
+import hashlib
 import time
 from uuid import uuid4
 
@@ -55,8 +56,8 @@ class NORYXRuntime:
         return envelope
 
     @staticmethod
-    def _plan_material(subtasks) -> tuple[tuple[str, str, str], ...]:
-        return tuple((x.subtask_id, x.task_type, x.objective) for x in subtasks)
+    def _plan_material(subtasks) -> str:
+        return repr(tuple((x.subtask_id, x.task_type, x.objective) for x in subtasks))
 
     def run(self, task: TaskSpec, agent_id: str = "deterministic", interaction_context: InteractionContext | None = None):
         started = time.monotonic()
@@ -135,7 +136,6 @@ class NORYXRuntime:
                 self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
             output = result.output
-
             if not result.is_well_formed():
                 check = VerificationResult(False, "agent_result", "malformed_agent_result")
                 self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
@@ -164,22 +164,16 @@ class NORYXRuntime:
                 check = VerificationResult(False, "agent_result", "verification_stage_mismatch")
                 self.audit.record("verification_stage_failure", task_id=child.task_id, reason=check.reason)
                 return {"status": "rejected", "reason": check.reason, "verification": check, "task_id": child.task_id}
-
             if deadline_exceeded():
                 self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
                 return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": child.task_id}
-            if not self.limits.validate_output(output):
+            if not self.limits.validate_output(output) or not self.limits.validate_output_items(output):
                 self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
                 return {"status": "rejected", "reason": "output_limit_exceeded", "task_id": child.task_id}
-            if not self.limits.validate_output_items(output):
-                self.audit.record("output_item_limit", task_id=child.task_id, allowed=False, reason="max_output_items_exceeded")
-                return {"status": "rejected", "reason": "max_output_items_exceeded", "task_id": child.task_id}
-
             runtime_verification = self.verifier.verify_output(output, stage="runtime_result")
             self.audit.record("runtime_output_verification", task_id=child.task_id, valid=runtime_verification.valid, reason=runtime_verification.reason)
             if not runtime_verification.valid:
                 return {"status": "rejected", "reason": "runtime_output_verification_failed", "verification": runtime_verification, "task_id": child.task_id}
-
             results.append(result)
             self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
 
@@ -193,7 +187,7 @@ class NORYXRuntime:
             self.audit.record("state_commit_rejected", task_id=task_id, reason="final_verification_failed")
             return {"status": "rejected", "reason": "final_verification_failed", "verification": final_verification, "task_id": task_id}
         committed_state = NORYXState(
-            user_input=str(task.input),
+            input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
             goal=task.objective,
             subtasks=[x.subtask_id for x in subtasks],
             final_answer=str(results[-1].output) if results else "",
@@ -202,20 +196,17 @@ class NORYXRuntime:
             status="verified",
         )
         try:
-            commit = self.state.commit(
-                committed_state,
-                execution_id=execution_id,
-                task_id=task_id,
-                verification_valid=final_verification.valid,
-                verification_stage=final_verification.stage,
-            )
+            commit = self.state.commit(committed_state, execution_id=execution_id, task_id=task_id,
+                                       verification_valid=final_verification.valid, verification_stage=final_verification.stage)
         except (TypeError, ValueError, PermissionError, MemoryError) as exc:
             self.audit.record("state_commit_failure", task_id=task_id, reason=type(exc).__name__)
             return {"status": "rejected", "reason": "state_commit_failed", "task_id": task_id}
-
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
-        self.audit.record("orchestration_commit", task_id=task_id, stage=envelope.stage.value, context_id=interaction_context.context_id, execution_id=execution_id, state_sequence=commit.sequence)
-        return {"status": "completed", "results": tuple(results), "state_commit": commit, "orchestration_stage": envelope.stage.value, "audit": self.audit.snapshot()}
+        self.audit.record("orchestration_commit", task_id=task_id, stage=envelope.stage.value,
+                          context_id=interaction_context.context_id, execution_id=execution_id,
+                          state_sequence=commit.sequence)
+        return {"status": "completed", "results": tuple(results), "state_commit": commit,
+                "orchestration_stage": envelope.stage.value, "audit": self.audit.snapshot()}
 
     def run_hypersynth(self, task: TaskSpec, interaction_context: InteractionContext | None = None):
         """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
