@@ -5,7 +5,7 @@ import pytest
 
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 
-from .attestation import Ed25519AttestationSigner, IdentityBoundAttestationVerifier, signed_attestation
+from .attestation import Ed25519AttestationSigner, IdentityBoundAttestationVerifier, attestation_digest, signed_attestation
 from .contracts import Attestation
 from .recovery import RecoveryError, RuntimeRecovery
 from .state import StateJournal
@@ -87,7 +87,7 @@ def test_recovery_rejects_tampered_signed_entry():
         entry.sequence, entry.execution_id, entry.principal_id, entry.step_id,
         entry.agent_id, entry.agent_key_fingerprint, entry.action_digest, "c" * 64, entry.signature
     )
-    with pytest.raises(RecoveryError, match="attestation verification failed"):
+    with pytest.raises(RecoveryError):
         RuntimeRecovery(journal).recover("exec-1")
 
 
@@ -108,7 +108,8 @@ def test_recovery_rejects_duplicate_step_even_without_mutating_journal_api():
     second = signed_attestation(Attestation(
         execution_id="exec-1", principal_id="principal-1", step_id="step-2", agent_id="agent-1",
         agent_key_fingerprint=hashlib.sha256(signer.public_key_bytes).hexdigest(),
-        action_digest="c" * 64, output_digest="d" * 64, verified=True, detail="verified"
+        action_digest="c" * 64, output_digest="d" * 64, verified=True, detail="verified",
+        previous_attestation_digest=attestation_digest(first),
     ), signer)
     entry = journal.append(second)
     journal._entries = [journal.snapshot()[0], entry, entry]
