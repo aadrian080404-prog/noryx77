@@ -2,9 +2,12 @@ import pytest
 
 from core.interaction_context import build_interaction_context
 from core.user_understanding import (
+    SignalKind,
     UnderstandingConsent,
     UserContent,
+    UserSignal,
     UserUnderstandingEngine,
+    UserUnderstandingProfile,
 )
 
 
@@ -43,3 +46,14 @@ def test_context_has_stable_nonempty_identifier():
     context = build_interaction_context(_profile())
     assert len(context.context_id) == 64
     assert all(char in "0123456789abcdef" for char in context.context_id)
+
+
+def test_context_fails_closed_on_signal_overflow():
+    evidence = ("evidence",)
+    signals = tuple(
+        UserSignal(SignalKind.TOPIC, f"topic-{index}", 0.7, evidence)
+        for index in range(33)
+    )
+    profile = UserUnderstandingProfile("profile", signals, 1)
+    with pytest.raises(ValueError, match="interaction_signal_capacity_exceeded"):
+        build_interaction_context(profile)
