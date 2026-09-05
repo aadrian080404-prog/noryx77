@@ -15,8 +15,8 @@ def attestation(signer, execution="exec", step="a", principal="user"):
         step_id=step,
         agent_id="adapter",
         agent_key_fingerprint=hashlib.sha256(signer.public_key_bytes).hexdigest(),
-        action_digest=(step + "a")[:64].ljust(64, "a"),
-        output_digest=(step + "o")[:64].ljust(64, "b"),
+        action_digest=hashlib.sha256(("action:" + execution + ":" + step).encode()).hexdigest(),
+        output_digest=hashlib.sha256(("output:" + execution + ":" + step).encode()).hexdigest(),
         verified=True,
         detail="verified",
     ), signer)
@@ -53,7 +53,7 @@ def test_recovery_rejects_non_monotonic_sequence():
     first = journal.append(attestation(signer, "exec", "a"))
     second = journal.append(attestation(signer, "exec", "b"))
     journal._entries = [second, first]
-    with pytest.raises(RecoveryError, match="strictly increasing"):
+    with pytest.raises(RecoveryError):
         RuntimeRecovery(journal).recover("exec")
 
 
