@@ -5,6 +5,11 @@ from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .context import ContextManager, ContextSnapshot
 from .coordination import AgentAssignment, AgentCoordinator
 from .decomposition import Subtask, TaskDecomposer
+from .defense import (
+    AccessRequest, DefenseController, DefenseDecision, DefenseMode,
+    ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog,
+    SegmentationPolicy, SecurityEvent, TrustDecision,
+)
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
@@ -21,12 +26,14 @@ from .tools import CapabilityRegistry, ToolExecutor
 from .verification import VerificationEngine
 
 __all__ = [
-    "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
+    "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
     "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityRegistry",
     "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
-    "DeterministicAgent", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine",
-    "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "Plan", "PlanStep", "Planner",
-    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
-    "SecurityDecision", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor",
-    "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "Hypersynth",
+    "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator",
+    "MemoryStore", "NORYXError", "NORYXRuntime", "OfflineArtifact", "OfflineRecoveryCatalog", "Plan",
+    "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits",
+    "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult",
+    "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor", "TrustDecision", "VerificationEngine",
+    "VerificationFailure", "VerificationResult",
 ]
