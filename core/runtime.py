@@ -100,7 +100,6 @@ class NORYXRuntime:
         self.audit.record("task_verification", task_id=task_id, valid=task_check.valid, reason=task_check.reason)
         if not task_check.valid:
             return {"status": "rejected", "reason": task_check.reason, "verification": task_check}
-
         if not self.limits.validate_input(task.input):
             result = {"status": "rejected", "reason": "input_limit_exceeded"}
             self.audit.record("task_rejected", task_id=task_id, reason=result["reason"])
@@ -132,7 +131,6 @@ class NORYXRuntime:
         if agent is None:
             self.audit.record("routing_failure", task_id=task_id, error="agent_unavailable")
             return self._rejection(envelope, task_id, "agent_unavailable", self.audit)
-
         if len(subtasks) > self.limits.max_actions_per_task:
             self.audit.record("action_limit", task_id=task_id, allowed=False, reason="max_actions_per_task_exceeded")
             return self._rejection(envelope, task_id, "max_actions_per_task_exceeded", self.audit)
@@ -147,118 +145,77 @@ class NORYXRuntime:
                              task.constraints, task.verification_requirements, task.risk_class, execution_id)
             action = ActionSpec("act:" + child.task_id, "compute", execution_id=child.execution_id, risk_class=child.risk_class)
             decision, result = self.action_gate.authorize_and_execute(
-                action,
-                lambda: agent.run(child),
-                calls_used=len(results),
-                execution_id=child.execution_id,
-            )
+                action, lambda: agent.run(child), calls_used=len(results), execution_id=child.execution_id)
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return self._rejection(envelope, child.task_id, decision.reason, self.audit, verification=decision.verification)
             if not isinstance(result, AgentResult):
                 check = VerificationResult(False, "execution", "malformed_agent_result")
-                self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             output = result.output
             if not result.is_well_formed():
                 check = VerificationResult(False, "agent_result", "malformed_agent_result")
-                self.audit.record("agent_result_contract_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.agent_id != agent.agent_id:
                 check = VerificationResult(False, "agent_result", "agent_identity_mismatch")
-                self.audit.record("agent_identity_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.task_id != child.task_id:
                 check = VerificationResult(False, "agent_result", "task_identity_mismatch")
-                self.audit.record("task_identity_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.execution_id != execution_id:
                 check = VerificationResult(False, "agent_result", "execution_identity_mismatch")
-                self.audit.record("execution_identity_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.status != "completed":
                 check = VerificationResult(False, "agent_result", "invalid_result_status")
-                self.audit.record("result_status_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.verification is None or not result.verification.is_well_formed() or not result.verification.valid:
                 check = VerificationResult(False, "agent_result", "unverified_agent_result")
-                self.audit.record("result_verification_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.verification.stage != "agent_result":
                 check = VerificationResult(False, "agent_result", "verification_stage_mismatch")
-                self.audit.record("verification_stage_failure", task_id=child.task_id, reason=check.reason)
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if deadline_exceeded():
-                self.audit.record("task_timeout", task_id=child.task_id, reason="max_task_seconds_exceeded")
                 return self._rejection(envelope, child.task_id, "max_task_seconds_exceeded", self.audit)
             if not self.limits.validate_output(output) or not self.limits.validate_output_items(output):
-                self.audit.record("output_limit", task_id=child.task_id, allowed=False, reason="output_limit_exceeded")
                 return self._rejection(envelope, child.task_id, "output_limit_exceeded", self.audit)
             runtime_verification = self.verifier.verify_output(output, stage="runtime_result")
-            self.audit.record("runtime_output_verification", task_id=child.task_id, valid=runtime_verification.valid, reason=runtime_verification.reason)
             if not runtime_verification.valid:
                 return self._rejection(envelope, child.task_id, "runtime_output_verification_failed", self.audit, verification=runtime_verification)
             results.append(result)
-            self.audit.record("agent_result", task_id=child.task_id, agent_id=agent.agent_id, status=result.status)
 
         if deadline_exceeded():
-            self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return self._rejection(envelope, task_id, "max_task_seconds_exceeded", self.audit)
-
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.VERIFYING)
         expected_task_ids = tuple(x.subtask_id for x in subtasks)
         aggregate_verification = self.verifier.verify_agent_results(
-            results,
-            expected_agent_id=agent.agent_id,
-            expected_execution_id=execution_id,
-            expected_task_ids=expected_task_ids,
-        )
-        self.audit.record("aggregate_result_verification", task_id=task_id,
-                          valid=bool(aggregate_verification) and all(check.valid for check in aggregate_verification),
-                          checks=len(aggregate_verification))
+            results, expected_agent_id=agent.agent_id, expected_execution_id=execution_id,
+            expected_task_ids=expected_task_ids)
         if not aggregate_verification or not all(check.valid for check in aggregate_verification):
             failed = next((check for check in aggregate_verification if not check.valid),
                           VerificationResult(False, "runtime_results", "aggregate_verification_failed"))
-            return self._rejection(envelope, task_id, "aggregate_verification_failed", self.audit,
-                                   verification=failed)
-
+            return self._rejection(envelope, task_id, "aggregate_verification_failed", self.audit, verification=failed)
         final_verification = self.verifier.verify_output(results[-1].output if results else None, stage="runtime_result")
         if not final_verification.valid:
-            self.audit.record("state_commit_rejected", task_id=task_id, reason="final_verification_failed")
             return self._rejection(envelope, task_id, "final_verification_failed", self.audit, verification=final_verification)
         verification_results = [
-            {"stage": check.stage, "valid": check.valid, "reason": check.reason}
-            for check in aggregate_verification
+            {"stage": check.stage, "valid": check.valid, "reason": check.reason} for check in aggregate_verification
         ]
         verification_results.append({"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason})
-
-        try:
-            self.recovery.require_normal(expected_epoch=recovery_epoch)
-        except PermissionError as exc:
-            reason = str(exc)
-            self.audit.record("state_commit_rejected", task_id=task_id, reason=reason)
-            return self._rejection(envelope, task_id, reason, self.audit)
-
         committed_state = NORYXState(
-            input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
-            goal=task.objective,
-            subtasks=list(expected_task_ids),
-            final_answer=str(results[-1].output) if results else "",
-            verification_results=verification_results,
-            confidence=1.0,
-            status="verified",
-        )
+            input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(), goal=task.objective,
+            subtasks=list(expected_task_ids), final_answer=str(results[-1].output) if results else "",
+            verification_results=verification_results, confidence=1.0, status="verified")
         try:
-            commit = self.state.commit(committed_state, execution_id=execution_id, task_id=task_id,
-                                       verification_valid=final_verification.valid, verification_stage=final_verification.stage)
-            self.recovery.require_normal(expected_epoch=recovery_epoch)
+            commit = self.recovery.run_if_normal(
+                lambda: self.state.commit(committed_state, execution_id=execution_id, task_id=task_id,
+                                          verification_valid=final_verification.valid, verification_stage=final_verification.stage),
+                expected_epoch=recovery_epoch)
         except (TypeError, ValueError, PermissionError, MemoryError) as exc:
             self.audit.record("state_commit_failure", task_id=task_id, reason=type(exc).__name__)
             return self._rejection(envelope, task_id, "state_commit_failed", self.audit)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
         self.audit.record("orchestration_commit", task_id=task_id, stage=envelope.stage.value,
-                          context_id=interaction_context.context_id, execution_id=execution_id,
-                          state_sequence=commit.sequence)
+                          context_id=interaction_context.context_id, execution_id=execution_id, state_sequence=commit.sequence)
         return {"status": "completed", "results": tuple(results), "state_commit": commit,
                 "orchestration_stage": envelope.stage.value, "audit": self.audit.snapshot()}
 
