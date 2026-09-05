@@ -110,6 +110,15 @@ class OrchestrationCoordinator:
         return updated, OrchestrationTransition(envelope.stage, target, OrchestrationCoordinator.digest(updated))
 
     @staticmethod
+    def reject(envelope: OrchestrationEnvelope) -> tuple[OrchestrationEnvelope, OrchestrationTransition]:
+        """Fail closed from any non-terminal stage without permitting recovery by transition."""
+        if not isinstance(envelope, OrchestrationEnvelope):
+            raise TypeError("orchestration_envelope_required")
+        if envelope.stage in (OrchestrationStage.COMMITTED, OrchestrationStage.REJECTED):
+            raise ValueError("terminal_orchestration_stage")
+        return OrchestrationCoordinator.transition(envelope, OrchestrationStage.REJECTED)
+
+    @staticmethod
     def with_intent_digest(envelope: OrchestrationEnvelope, intent_material: str) -> OrchestrationEnvelope:
         if not isinstance(intent_material, str) or not intent_material.strip():
             raise ValueError("intent_material_required")
