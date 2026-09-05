@@ -144,8 +144,16 @@ class NORYXRuntime:
             child = TaskSpec(subtask.subtask_id, subtask.task_type, subtask.objective, task.input,
                              task.constraints, task.verification_requirements, task.risk_class, execution_id)
             action = ActionSpec("act:" + child.task_id, "compute", execution_id=child.execution_id, risk_class=child.risk_class)
-            decision, result = self.action_gate.authorize_and_execute(
-                action, lambda: agent.run(child), calls_used=len(results), execution_id=child.execution_id)
+            try:
+                decision, result = self.recovery.run_if_normal(
+                    lambda: self.action_gate.authorize_and_execute(
+                        action, lambda: agent.run(child), calls_used=len(results), execution_id=child.execution_id),
+                    expected_epoch=recovery_epoch,
+                )
+            except PermissionError as exc:
+                return self._rejection(envelope, child.task_id, str(exc), self.audit)
+            except Exception:
+                return self._rejection(envelope, child.task_id, "action_execution_failure", self.audit)
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return self._rejection(envelope, child.task_id, decision.reason, self.audit, verification=decision.verification)
