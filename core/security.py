@@ -31,7 +31,10 @@ class SecurityBoundary:
     def inspect(self, action: ActionSpec) -> SecurityDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return SecurityDecision(False, "invalid_action", "unknown")
-        if self.recovery.state is not RecoveryState.NORMAL:
+        try:
+            self.recovery.require_normal()
+            _, epoch = self.recovery.snapshot()
+        except PermissionError:
             return SecurityDecision(False, "recovery_state_denies_execution", action.risk_class)
         if action.risk_class not in self.ALLOWED_RISKS:
             return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
@@ -39,6 +42,10 @@ class SecurityBoundary:
             policy_decision = self.policy.evaluate(action)
         except Exception:
             return SecurityDecision(False, "policy_evaluation_failure", action.risk_class)
+        try:
+            self.recovery.require_normal(expected_epoch=epoch)
+        except PermissionError as exc:
+            return SecurityDecision(False, str(exc), action.risk_class)
         if (
             not isinstance(policy_decision, dict)
             or not isinstance(policy_decision.get("allowed"), bool)
