@@ -18,6 +18,7 @@ from .runtime import NORYXRuntime
 from .security import SecurityBoundary, SecurityDecision
 from .supervisor import AgentDecision, AgentSupervisor
 from .tools import CapabilityRegistry, ToolExecutor
+from .user_understanding import SignalKind, UnderstandingConsent, UserContent, UserSignal, UserUnderstandingEngine, UserUnderstandingProfile
 from .verification import VerificationEngine
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "DeterministicAgent", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine",
     "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "Plan", "PlanStep", "Planner",
     "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityBoundary",
-    "SecurityDecision", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor",
-    "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "SecurityDecision", "SignalKind", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec",
+    "ToolExecutor", "UnderstandingConsent", "UserContent", "UserSignal", "UserUnderstandingEngine",
+    "UserUnderstandingProfile", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
