@@ -17,6 +17,7 @@ from typing import Iterable
 MAX_ID = 256
 MAX_LABEL = 128
 MAX_COMPONENTS = 4096
+MAX_SEGMENTATION_RULES = 4096
 
 
 def _id(value: str, *, name: str = "id") -> str:
@@ -100,9 +101,12 @@ class OfflineArtifact:
 
 
 class SegmentationPolicy:
-    """Explicit allow-list for component-to-component communication."""
+    """Explicit, bounded allow-list for component-to-component communication."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_rules: int = MAX_SEGMENTATION_RULES) -> None:
+        if isinstance(max_rules, bool) or not isinstance(max_rules, int) or max_rules <= 0 or max_rules > MAX_SEGMENTATION_RULES:
+            raise ValueError("invalid_segmentation_capacity")
+        self._max_rules = max_rules
         self._allowed: set[tuple[str, str]] = set()
         self._lock = threading.RLock()
 
@@ -110,7 +114,10 @@ class SegmentationPolicy:
         _id(source, name="source")
         _id(destination, name="destination")
         with self._lock:
-            self._allowed.add((source, destination))
+            pair = (source, destination)
+            if pair not in self._allowed and len(self._allowed) >= self._max_rules:
+                raise OverflowError("segmentation_capacity")
+            self._allowed.add(pair)
 
     def revoke(self, source: str, destination: str) -> None:
         with self._lock:
@@ -166,7 +173,10 @@ class DefenseController:
         _id(reason, name="lockdown_reason")
         with self._lock:
             self._mode = DefenseMode.LOCKDOWN
-            self._events.append(SecurityEvent(f"lockdown-{len(self._events)}", "lockdown", "security", 1.0, reason))
+            event = SecurityEvent(f"lockdown-{len(self._events)}", "lockdown", "security", 1.0, reason)
+            if len(self._events) >= MAX_COMPONENTS:
+                raise OverflowError("security_event_capacity")
+            self._events.append(event)
 
     def enter_recovery(self) -> None:
         with self._lock:
