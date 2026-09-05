@@ -1,15 +1,13 @@
 """Consent-bound pre-interaction user understanding for NORYX7.
 
-The engine can study user-provided content before the first live interaction,
-but only inside an explicit consent boundary. It extracts non-sensitive,
-interaction-relevant signals (topics, format, tone, verbosity and workflow
-preferences), keeps confidence and provenance, and never persists raw content.
-It does not infer health, religion, politics, sexuality, race, financial status,
-or other sensitive traits.
+The engine observes only content explicitly supplied through an authorized
+content source, converts it into bounded interaction signals, and discards raw
+content. It is designed for personalization, not surveillance or manipulation.
+Sensitive personal-attribute inference is rejected by design.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from hashlib import sha256
 import re
@@ -19,6 +17,8 @@ MAX_CONTENT_ITEMS: Final[int] = 4096
 MAX_CONTENT_SIZE: Final[int] = 256 * 1024
 MAX_SIGNALS: Final[int] = 128
 MAX_VALUE_SIZE: Final[int] = 256
+MAX_EVIDENCE_PER_SIGNAL: Final[int] = 32
+ALLOWED_SOURCES: Final[frozenset[str]] = frozenset({"user_provided", "user_selected", "authorized_import"})
 
 
 class UnderstandingConsent(str, Enum):
@@ -48,8 +48,8 @@ class UserContent:
             raise ValueError("content_required")
         if len(self.text.encode("utf-8")) > MAX_CONTENT_SIZE:
             raise ValueError("content_size_exceeded")
-        if not isinstance(self.source, str) or not self.source.strip():
-            raise ValueError("invalid_content_source")
+        if self.source not in ALLOWED_SOURCES:
+            raise PermissionError("unauthorized_content_source")
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,8 @@ class UserSignal:
             raise ValueError("invalid_signal_confidence")
         if not isinstance(self.evidence_ids, tuple) or not self.evidence_ids:
             raise ValueError("signal_evidence_required")
+        if len(self.evidence_ids) > MAX_EVIDENCE_PER_SIGNAL:
+            raise ValueError("signal_evidence_capacity_exceeded")
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,7 @@ class UserUnderstandingProfile:
 
 
 class UserUnderstandingEngine:
-    """Builds a bounded interaction profile from explicitly supplied content."""
+    """Build a bounded interaction profile from explicitly authorized content."""
 
     _TOPICS = (
         "programming", "software", "architecture", "engineering", "science",
@@ -89,6 +91,13 @@ class UserUnderstandingEngine:
     _FORMATS = ("short", "detailed", "step_by_step", "table", "bullet_points", "example_driven")
     _TONES = ("direct", "formal", "friendly", "technical", "concise", "exploratory")
     _WORKFLOWS = ("planning", "debugging", "comparison", "research", "execution", "verification")
+    # These are privacy stop-words, not classifiers: seeing one means the
+    # engine must not turn the content into a sensitive user attribute.
+    _SENSITIVE_MARKERS = (
+        "religion", "political party", "sexual orientation", "race", "ethnicity",
+        "diagnosis", "medical condition", "health condition", "criminal record",
+        "password", "private key", "credit card", "bank account",
+    )
 
     def __init__(self, *, consent: UnderstandingConsent) -> None:
         if not isinstance(consent, UnderstandingConsent):
@@ -97,15 +106,25 @@ class UserUnderstandingEngine:
 
     @staticmethod
     def _evidence_id(item: UserContent) -> str:
+        # Provenance binds to an opaque content id/source, never to raw text.
         return sha256((item.content_id + "\x00" + item.source).encode("utf-8")).hexdigest()
 
     @staticmethod
     def _contains(text: str, term: str) -> bool:
         return re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, re.IGNORECASE) is not None
 
+    def _sensitive_content(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(self._contains(lowered, marker) for marker in self._SENSITIVE_MARKERS)
+
     def _extract(self, item: UserContent) -> list[UserSignal]:
-        text = item.text
+        # Sensitive content can still be supplied to the surrounding product,
+        # but this personalization engine refuses to derive profile signals from it.
+        if self._sensitive_content(item.text):
+            return []
+
         evidence = (self._evidence_id(item),)
+        text = item.text
         signals: list[UserSignal] = []
         for term in self._TOPICS:
             if self._contains(text, term):
@@ -119,6 +138,7 @@ class UserUnderstandingEngine:
         for term in self._WORKFLOWS:
             if self._contains(text, term):
                 signals.append(UserSignal(SignalKind.WORKFLOW, term, 0.70, evidence))
+
         word_count = len(text.split())
         if word_count <= 80:
             signals.append(UserSignal(SignalKind.VERBOSITY, "concise_content", 0.60, evidence))
@@ -139,18 +159,23 @@ class UserUnderstandingEngine:
             for signal in self._extract(item):
                 key = (signal.kind, signal.value)
                 previous = collected.get(key)
-                if previous is None or signal.confidence > previous.confidence:
+                if previous is None:
                     collected[key] = signal
-                elif previous is not None:
-                    ids = tuple(dict.fromkeys(previous.evidence_ids + signal.evidence_ids))
-                    collected[key] = UserSignal(signal.kind, signal.value, min(1.0, previous.confidence + 0.05), ids)
+                else:
+                    ids = tuple(dict.fromkeys(previous.evidence_ids + signal.evidence_ids))[:MAX_EVIDENCE_PER_SIGNAL]
+                    collected[key] = UserSignal(
+                        signal.kind,
+                        signal.value,
+                        min(1.0, previous.confidence + 0.05),
+                        ids,
+                    )
                 if len(collected) >= MAX_SIGNALS:
                     break
             if len(collected) >= MAX_SIGNALS:
                 break
 
         signals = tuple(sorted(collected.values(), key=lambda s: (s.kind.value, s.value)))
-        material = "|".join(f"{s.kind.value}:{s.value}" for s in signals)
+        material = "|".join(f"{s.kind.value}:{s.value}:{s.confidence:.4f}" for s in signals)
         profile_id = sha256(material.encode("utf-8")).hexdigest()
         return UserUnderstandingProfile(profile_id, signals, len(contents), raw_content_retained=False)
 
