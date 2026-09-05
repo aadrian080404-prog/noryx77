@@ -83,8 +83,6 @@ class AssistantIntegrationBoundary:
         self._device_boundary = device_boundary
 
     def execute(self, adapter: PlatformAdapter, action: PlatformAction, *, now: int, epoch: int) -> bool:
-        if adapter.platform != self._device_boundary.gate.identity.role_to_platform if False else False:
-            pass
         if action.epoch != epoch:
             return False
         device_action = DeviceAction(action.device_id, action.capability, action.action_id, action.epoch)
