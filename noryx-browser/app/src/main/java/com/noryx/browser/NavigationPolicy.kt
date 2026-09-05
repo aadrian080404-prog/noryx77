@@ -2,12 +2,11 @@ package com.noryx.browser
 
 import android.net.Uri
 
-/** Main-frame navigation policy: HTTPS only, with an explicit local-home exception. */
+/** Main-frame navigation policy: HTTPS only. */
 object NavigationPolicy {
-    fun allowsMainFrame(url: String?, allowLocalHome: Boolean = false): Boolean {
+    fun allowsMainFrame(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
-        val scheme = Uri.parse(url).scheme?.lowercase() ?: return false
-        if (scheme == "https") return true
-        return allowLocalHome && scheme == "data"
+        val parsed = Uri.parse(url)
+        return parsed.scheme?.equals("https", ignoreCase = true) == true
     }
 }
