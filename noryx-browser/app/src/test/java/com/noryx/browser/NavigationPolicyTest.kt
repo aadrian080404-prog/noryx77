@@ -16,11 +16,16 @@ class NavigationPolicyTest {
     @Test fun customSchemesAreRejected() {
         assertFalse(NavigationPolicy.allowsMainFrame("intent://example.com"))
         assertFalse(NavigationPolicy.allowsMainFrame("javascript:alert(1)"))
+        assertFalse(NavigationPolicy.allowsMainFrame("file:///sdcard/test.html"))
     }
 
-    @Test fun localDataIsAllowedOnlyForExplicitHome() {
+    @Test fun dataUrlsAreAlwaysRejected() {
         assertFalse(NavigationPolicy.allowsMainFrame("data:text/html,home"))
-        assertTrue(NavigationPolicy.allowsMainFrame("data:text/html,home", allowLocalHome = true))
+        assertFalse(NavigationPolicy.allowsMainFrame("data:text/html,<script>alert(1)</script>"))
+    }
+
+    @Test fun syntheticOfflineHomeOriginIsAllowedAsHttps() {
+        assertTrue(NavigationPolicy.allowsMainFrame("https://home.noryx.local/"))
     }
 
     @Test fun missingUrlIsRejected() {
