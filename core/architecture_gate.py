@@ -1,14 +1,9 @@
-"""Executable structural-completeness gate for NORYX7.
-
-The gate is intentionally independent of runtime execution. It verifies that
-all mandatory architectural planes have an explicit implementation boundary,
-trust boundary, failure semantics, recovery path, observability contract and
-verification target before the system can be frozen.
-"""
+"""Executable structural-completeness gate for NORYX7."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Mapping
 
 
@@ -34,16 +29,9 @@ class ArchitecturePlane(str, Enum):
 
 
 REQUIRED_ATTRIBUTES = (
-    "contract",
-    "implementation_boundary",
-    "integration_boundary",
-    "trust_boundary",
-    "failure_semantics",
-    "resource_budget",
-    "observability",
-    "recovery_path",
-    "verification_target",
-    "regression_target",
+    "contract", "implementation_boundary", "integration_boundary", "trust_boundary",
+    "failure_semantics", "resource_budget", "observability", "recovery_path",
+    "verification_target", "regression_target",
 )
 
 
@@ -76,12 +64,24 @@ class ArchitectureGateResult:
 
 
 class ArchitectureCompletenessGate:
-    """Fail-closed structural gate; it never performs execution or authorization."""
+    """Fail-closed structural gate; never performs execution or authorization."""
 
-    def __init__(self, definitions: Mapping[ArchitecturePlane, PlaneDefinition]):
+    def __init__(self, definitions: Mapping[ArchitecturePlane, PlaneDefinition], repository_root: str | Path | None = None):
         if not isinstance(definitions, Mapping):
             raise TypeError("definitions_mapping_required")
         self._definitions = dict(definitions)
+        self._root = Path(repository_root).resolve() if repository_root is not None else Path(__file__).resolve().parents[1]
+
+    def _implementation_files_exist(self, definition: PlaneDefinition) -> tuple[str, ...]:
+        missing = []
+        for token in definition.implementation_boundary.replace(",", " ").split():
+            token = token.strip()
+            if not token.endswith(".py"):
+                continue
+            candidates = (self._root / token, self._root / "core" / token, self._root / "jarvis" / token)
+            if not any(path.is_file() for path in candidates):
+                missing.append(f"{definition.plane.value}:implementation_missing:{token}")
+        return tuple(missing)
 
     def evaluate(self) -> ArchitectureGateResult:
         missing = tuple(p.value for p in ArchitecturePlane if p not in self._definitions)
@@ -92,6 +92,7 @@ class ArchitectureCompletenessGate:
                 continue
             try:
                 definition.validate()
+                invalid.extend(self._implementation_files_exist(definition))
             except (TypeError, ValueError) as exc:
                 invalid.append(f"{plane.value}:{exc}")
         return ArchitectureGateResult(not missing and not invalid, missing, tuple(invalid))
@@ -99,11 +100,7 @@ class ArchitectureCompletenessGate:
     def require_complete(self) -> None:
         result = self.evaluate()
         if not result.complete:
-            raise RuntimeError(
-                "architecture_incomplete:" + ",".join(result.missing + result.invalid)
-            )
+            raise RuntimeError("architecture_incomplete:" + ",".join(result.missing + result.invalid))
 
 
-# Canonical structural registry. Concrete implementations remain responsible
-# for their own runtime behavior; this registry prevents undocumented planes.
 CANONICAL_PLANES = tuple(ArchitecturePlane)
