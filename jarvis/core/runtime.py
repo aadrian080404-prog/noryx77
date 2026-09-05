@@ -1,7 +1,7 @@
 from .contracts import Request, Plan, ActionResult
 from .orchestrator import JarvisOrchestrator
 from .policy import Policy
-from .recovery import RecoveryController
+from .recovery import RecoveryController, RecoveryState
 from .state import JarvisState, JarvisStateStore
 from jarvis.security.audit import AuditLog
 from jarvis.tools.registry import CapabilityRegistry
