@@ -1,6 +1,7 @@
 import unittest
 
 from .defense import (
+    MAX_COMPONENTS,
     AccessRequest,
     DefenseController,
     DefenseMode,
@@ -26,6 +27,13 @@ class DefenseInfrastructureTests(unittest.TestCase):
         policy.revoke("agent", "memory")
         self.assertEqual(controller.authorize(self.request(target="memory")).decision, TrustDecision.DENY)
 
+    def test_segmentation_capacity_is_bounded(self):
+        policy = SegmentationPolicy(max_rules=1)
+        policy.allow("a", "b")
+        with self.assertRaises(OverflowError):
+            policy.allow("a", "c")
+        policy.allow("a", "b")
+
     def test_revocation_survives_other_state_changes(self):
         controller = DefenseController()
         controller.revoke("principal")
@@ -40,6 +48,14 @@ class DefenseInfrastructureTests(unittest.TestCase):
         self.assertEqual(decision.decision, TrustDecision.DENY)
         with self.assertRaises(PermissionError):
             controller.trust_component("new")
+
+    def test_lockdown_capacity_failure_does_not_change_mode(self):
+        controller = DefenseController()
+        for index in range(MAX_COMPONENTS):
+            controller.record_event(SecurityEvent(f"e{index}", "anomaly", "agent", 0.5))
+        with self.assertRaises(OverflowError):
+            controller.enter_lockdown("capacity")
+        self.assertEqual(controller.mode, DefenseMode.NORMAL)
 
     def test_recovery_requires_verified_trusted_components(self):
         controller = DefenseController()
