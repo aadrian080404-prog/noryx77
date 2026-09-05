@@ -11,6 +11,7 @@ from .defense import (
     ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog,
     SegmentationPolicy, SecurityEvent, TrustDecision,
 )
+from .device import CapabilityGrant, DeviceAction, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceRuntimeBoundary, DeviceTrust
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
@@ -29,11 +30,11 @@ from .verification import VerificationEngine
 __all__ = [
     "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
     "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "AuditLog",
-    "CapabilityRegistry", "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
-    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "EscalationPolicy", "Hypersynth",
-    "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator", "MemoryStore",
-    "NORYXError", "NORYXRuntime", "OfflineArtifact", "OfflineRecoveryCatalog", "Plan", "PlanStep", "Planner",
-    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityAlert", "SecurityBoundary",
-    "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec",
-    "ToolExecutor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "CapabilityGrant", "CapabilityRegistry", "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
+    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity",
+    "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis",
+    "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "OfflineArtifact",
+    "OfflineRecoveryCatalog", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
+    "RuntimeLimits", "SecurityAlert", "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult",
+    "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
