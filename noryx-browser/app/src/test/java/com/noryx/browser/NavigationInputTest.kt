@@ -36,6 +36,11 @@ class NavigationInputTest {
         NavigationInput.normalize("https://example.com/\u0000")
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun oversizedInputIsRejected() {
+        NavigationInput.normalize("a".repeat(4097))
+    }
+
     @Test fun phraseBecomesHttpsSearch() {
         assertEquals("https://www.google.com/search?q=hello+world", NavigationInput.normalize("hello world"))
     }
