@@ -32,19 +32,6 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
-def _approval_statement(envelope: ActionEnvelope) -> bytes:
-    """Canonical side-effect statement covered by high-risk approval."""
-    return _canonical({
-        "execution_id": envelope.execution_id,
-        "principal_id": envelope.principal_id,
-        "step_id": envelope.step_id,
-        "action_type": envelope.action_type,
-        "target": envelope.target,
-        "parameters": envelope.parameters,
-        "nonce": envelope.nonce,
-    }).encode("utf-8")
-
-
 @dataclass(frozen=True)
 class RuntimeResult:
     execution_id: str
@@ -105,6 +92,10 @@ class RuntimeEngine:
             raise ValueError("high-risk actions require multi_auth_authority")
         if normalized_risk_types and authorization_provider is None:
             raise ValueError("high-risk actions require authorization_provider")
+        if normalized_risk_types and replay_guard is None:
+            # Replay protection is mandatory for high-risk execution. Callers may
+            # supply a bounded guard, but omission must never silently disable it.
+            replay_guard = AuthorizationReplayGuard()
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes):
@@ -141,9 +132,6 @@ class RuntimeEngine:
                 raise PermissionError("adapter identity key mismatch")
             return dispatch(envelope)
 
-        # Hold the identity trust-anchor lock through the bounded dispatch. This
-        # gives revoke-vs-dispatch a single linearization point: either the
-        # effect starts before revocation, or revocation wins and no effect runs.
         return self._identity_registry.with_trusted_identity(agent_id, run_if_trusted)
 
     def _authorize_high_risk(self, envelope: ActionEnvelope, action_digest: str) -> None:
@@ -151,7 +139,7 @@ class RuntimeEngine:
             return
         authority = self._multi_auth_authority
         provider = self._authorization_provider
-        if authority is None or provider is None:
+        if authority is None or provider is None or self._replay_guard is None:
             raise PermissionError("high-risk authorization is unavailable")
         digest_bytes = bytes.fromhex(action_digest)
         proof = provider(envelope, digest_bytes)
@@ -162,7 +150,7 @@ class RuntimeEngine:
             action_statement=digest_bytes,
         ):
             raise PermissionError("high-risk authorization denied")
-        if self._replay_guard is not None and not self._replay_guard.consume(digest_bytes):
+        if not self._replay_guard.consume(digest_bytes):
             raise PermissionError("high-risk authorization replayed")
 
     def execute(
@@ -226,9 +214,6 @@ class RuntimeEngine:
                     "parameters": envelope.parameters,
                     "nonce": envelope.nonce,
                 })
-                # Authorization is deliberately before dispatch: a high-risk
-                # action can never reach an adapter/executor before its signed
-                # multi-party proof has been validated and consumed once.
                 self._authorize_high_risk(envelope, action_digest)
                 output = self._dispatch(envelope, executor)
                 verified = bool(verifier(envelope, output))
