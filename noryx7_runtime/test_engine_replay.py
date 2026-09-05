@@ -37,7 +37,7 @@ def test_runtime_consumes_high_risk_authorization_once_before_dispatch():
         authorization_epoch=7,
         replay_guard=guard,
     )
-    intent = Intent(principal_id=1, description="delete")
+    intent = Intent(text="delete", principal_id="principal-1")
     steps = [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})]
 
     first = engine.execute(intent, steps, executor=lambda e: calls.append(e) or "ok", verifier=lambda e, o: True, execution_id="exec-1")
@@ -59,7 +59,7 @@ def test_replay_guard_can_block_a_reused_digest():
         authorization_epoch=7,
         replay_guard=guard,
     )
-    intent = Intent(principal_id=1, description="delete")
+    intent = Intent(text="delete", principal_id="principal-1")
     steps = [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})]
     original = engine.execute(intent, steps, executor=lambda e: "ok", verifier=lambda e, o: True, execution_id="exec-2")
     assert original.status is ExecutionStatus.SUCCEEDED
