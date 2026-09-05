@@ -66,6 +66,8 @@ class ArchitectureGateResult:
 class ArchitectureCompletenessGate:
     """Fail-closed structural gate; never performs execution or authorization."""
 
+    _PATH_SUFFIXES = (".py", ".kt", ".kts", ".xml", ".gradle", ".json", ".toml")
+
     def __init__(self, definitions: Mapping[ArchitecturePlane, PlaneDefinition], repository_root: str | Path | None = None):
         if not isinstance(definitions, Mapping):
             raise TypeError("definitions_mapping_required")
@@ -75,8 +77,8 @@ class ArchitectureCompletenessGate:
     def _implementation_files_exist(self, definition: PlaneDefinition) -> tuple[str, ...]:
         missing = []
         for token in definition.implementation_boundary.replace(",", " ").split():
-            token = token.strip()
-            if not token.endswith(".py"):
+            token = token.strip().strip("[]()")
+            if not token or not token.endswith(self._PATH_SUFFIXES):
                 continue
             candidates = (self._root / token, self._root / "core" / token, self._root / "jarvis" / token)
             if not any(path.is_file() for path in candidates):
