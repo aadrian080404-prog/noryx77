@@ -2,7 +2,7 @@ name: NORYX7 Foundation Verification
 
 on:
   push:
-    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "noryx7-real-runtime"]
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "noryx7-real-runtime", "rebuild-jarvis-browser-structure"]
   pull_request:
   workflow_dispatch:
 
