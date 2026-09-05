@@ -30,7 +30,7 @@ from .verification import VerificationEngine
 
 __all__ = [
     "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "Alerting", "AuditLog",
+    "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "AuditLog",
     "AssistantIntegrationBoundary", "AuthorizationProof", "CapabilityGrant", "CapabilityRegistry", "ContextManager", "ContextSnapshot",
     "ContractViolation", "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent",
     "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity", "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust", "EscalationPolicy",
