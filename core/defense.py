@@ -14,7 +14,6 @@ import math
 import threading
 from typing import Iterable
 
-
 MAX_ID = 256
 MAX_LABEL = 128
 MAX_COMPONENTS = 4096
