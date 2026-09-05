@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from hashlib import sha256
+from typing import Mapping
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .reasoning import Hypothesis, SimulationResult
@@ -13,16 +15,52 @@ class MetacognitiveReflection:
     hypotheses_verified: int
     simulations_verified: int
     confidence: float
+    calibration_score: float
+    strategy_score: float
+    anomalies: tuple[str, ...] = ()
+    error_attribution: tuple[tuple[str, str], ...] = ()
+    correction_required: bool = False
+    recommended_action: str = "accept"
+    learning_signal: str = "stable"
+    state_fingerprint: str = ""
 
     def __getitem__(self, key: str):
-        """Preserve the legacy mapping-style reflection API while exposing typed fields."""
         if not isinstance(key, str) or not hasattr(self, key):
             raise KeyError(key)
         return getattr(self, key)
 
 
 class MetacognitionEngine:
-    """Bounded final self-check over observable pipeline invariants; no hidden reasoning traces."""
+    """Bounded, observable self-monitoring and self-correction gate.
+
+    This layer deliberately consumes only externally observable pipeline facts. It never
+    inspects, stores, or emits hidden reasoning traces. Automatic retries are not performed
+    here because repeating a side-effecting action without an idempotency guarantee is unsafe.
+    Instead, metacognition returns a bounded correction decision that the orchestrator can
+    safely act on at a higher policy boundary.
+    """
+
+    _MAX_ANOMALIES = 16
+    _MAX_ATTRIBUTIONS = 16
+    _VALID_ACTIONS = {"accept", "replan", "resimulate", "escalate", "reject"}
+
+    @staticmethod
+    def _clamp(value: float) -> float:
+        return max(0.0, min(1.0, float(value)))
+
+    @staticmethod
+    def _fingerprint(parts: tuple[str, ...]) -> str:
+        return sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+    def _failure(
+        self,
+        reason: str,
+        anomalies: tuple[str, ...] = (),
+        *,
+        action: str = "reject",
+        attribution: tuple[tuple[str, str], ...] = (),
+    ):
+        return VerificationResult(False, "metacognition", reason), None
 
     def reflect(
         self,
@@ -32,55 +70,140 @@ class MetacognitionEngine:
         simulations: tuple[SimulationResult, ...],
         results: tuple[AgentResult, ...],
         final_verification: VerificationResult,
+        *,
+        telemetry: Mapping[str, object] | None = None,
+        prior_confidence: float | None = None,
     ) -> tuple[VerificationResult, MetacognitiveReflection | None]:
+        # Structural invariants remain fail-closed and deterministic.
         if not isinstance(task, TaskSpec) or not isinstance(plan, Plan):
-            return VerificationResult(False, "metacognition", "invalid_reflection_inputs"), None
+            return self._failure("invalid_reflection_inputs")
         if not isinstance(hypotheses, tuple) or not isinstance(simulations, tuple) or not isinstance(results, tuple):
-            return VerificationResult(False, "metacognition", "invalid_reflection_collection"), None
-        if not isinstance(final_verification, VerificationResult) or not final_verification.valid:
-            return VerificationResult(False, "metacognition", "final_verification_failed"), None
+            return self._failure("invalid_reflection_collection")
+        if not isinstance(final_verification, VerificationResult) or not final_verification.is_well_formed() or not final_verification.valid:
+            return self._failure("final_verification_failed", ("final_verification",), action="reject")
         if plan.task_id != task.task_id or not plan.steps:
-            return VerificationResult(False, "metacognition", "plan_identity_mismatch"), None
+            return self._failure("plan_identity_mismatch", ("plan",))
         if len(plan.steps) != len(hypotheses) or len(hypotheses) != len(simulations) or len(simulations) != len(results):
-            return VerificationResult(False, "metacognition", "pipeline_count_mismatch"), None
+            return self._failure("pipeline_count_mismatch", ("pipeline_cardinality",))
+
         plan_step_ids = tuple(step.step_id for step in plan.steps)
         if any(not isinstance(step.step_id, str) or not step.step_id.strip() for step in plan.steps):
-            return VerificationResult(False, "metacognition", "invalid_plan_step_identity"), None
+            return self._failure("invalid_plan_step_identity", ("plan_identity",))
         if len(set(plan_step_ids)) != len(plan_step_ids):
-            return VerificationResult(False, "metacognition", "duplicate_plan_step_identity"), None
+            return self._failure("duplicate_plan_step_identity", ("plan_identity",))
+
         for hypothesis, step in zip(hypotheses, plan.steps):
             if not isinstance(hypothesis, Hypothesis):
-                return VerificationResult(False, "metacognition", "invalid_hypothesis_type"), None
+                return self._failure("invalid_hypothesis_type", ("hypothesis_type",))
             if hypothesis.task_id != task.task_id or hypothesis.statement != step.objective or hypothesis.basis != (step.step_id,):
-                return VerificationResult(False, "metacognition", "hypothesis_plan_identity_mismatch"), None
+                return self._failure("hypothesis_plan_identity_mismatch", ("hypothesis_plan_binding",))
+
         expected_hypothesis_ids = tuple(h.hypothesis_id for h in hypotheses)
-        actual_simulation_ids = tuple(simulation.hypothesis_id for simulation in simulations if isinstance(simulation, SimulationResult))
-        if len(actual_simulation_ids) != len(simulations) or actual_simulation_ids != expected_hypothesis_ids:
-            return VerificationResult(False, "metacognition", "simulation_hypothesis_identity_mismatch"), None
+        if any(not isinstance(simulation, SimulationResult) for simulation in simulations):
+            return self._failure("invalid_simulation_type", ("simulation_type",))
+        actual_simulation_ids = tuple(simulation.hypothesis_id for simulation in simulations)
+        if actual_simulation_ids != expected_hypothesis_ids:
+            return self._failure("simulation_hypothesis_identity_mismatch", ("simulation_binding",))
+        if any(not simulation.feasible for simulation in simulations):
+            return self._failure("infeasible_simulation_present", ("simulation_feasibility",), action="resimulate")
+
         if any(not isinstance(result, AgentResult) or result.status != "completed" for result in results):
-            return VerificationResult(False, "metacognition", "incomplete_result_set"), None
-        if any(result.verification is None or not result.verification.valid for result in results):
-            return VerificationResult(False, "metacognition", "unverified_result_set"), None
+            return self._failure("incomplete_result_set", ("execution",), action="retry")
+        if any(result.verification is None or not result.verification.is_well_formed() or not result.verification.valid for result in results):
+            return self._failure("unverified_result_set", ("agent_verification",), action="reject")
         if any(result.verification.stage != "agent_result" for result in results):
-            return VerificationResult(False, "metacognition", "result_verification_stage_mismatch"), None
+            return self._failure("result_verification_stage_mismatch", ("verification_stage",))
+
         result_task_ids = tuple(result.task_id for result in results)
         if len(set(result_task_ids)) != len(result_task_ids):
-            return VerificationResult(False, "metacognition", "duplicate_result_task_identity"), None
+            return self._failure("duplicate_result_task_identity", ("result_identity",))
         if result_task_ids != plan_step_ids:
-            return VerificationResult(False, "metacognition", "result_plan_order_mismatch"), None
+            return self._failure("result_plan_order_mismatch", ("plan_execution_order",))
         agents = tuple(result.agent_id for result in results)
         if len(set(agents)) != len(agents):
-            return VerificationResult(False, "metacognition", "duplicate_agent_identity"), None
-        if any(not isinstance(simulation, SimulationResult) for simulation in simulations):
-            return VerificationResult(False, "metacognition", "invalid_simulation_type"), None
-        if any(not simulation.feasible for simulation in simulations):
-            return VerificationResult(False, "metacognition", "infeasible_simulation_present"), None
+            return self._failure("duplicate_agent_identity", ("agent_identity",))
+
+        # Observable telemetry is optional and strictly bounded. Unknown keys are ignored.
+        telemetry = telemetry if isinstance(telemetry, Mapping) else {}
+        anomalies: list[str] = []
+        attribution: list[tuple[str, str]] = []
+
+        def flag(name: str, owner: str) -> None:
+            if len(anomalies) < self._MAX_ANOMALIES and name not in anomalies:
+                anomalies.append(name)
+            if len(attribution) < self._MAX_ATTRIBUTIONS and (owner, name) not in attribution:
+                attribution.append((owner, name))
+
+        latency = telemetry.get("latency_ratio")
+        if isinstance(latency, (int, float)) and not isinstance(latency, bool) and latency > 1.0:
+            flag("latency_budget_pressure", "runtime")
+        disagreement = telemetry.get("disagreement")
+        if disagreement is True:
+            flag("agent_disagreement", "coordination")
+        resource_pressure = telemetry.get("resource_pressure")
+        if isinstance(resource_pressure, (int, float)) and not isinstance(resource_pressure, bool) and resource_pressure > 0.9:
+            flag("resource_pressure", "allocation")
+        if prior_confidence is not None and (not isinstance(prior_confidence, (int, float)) or isinstance(prior_confidence, bool) or not 0.0 <= prior_confidence <= 1.0):
+            return self._failure("invalid_prior_confidence", ("calibration_input",))
+
+        # Confidence is evidence-weighted, not a hard-coded success value.
+        structural = 1.0
+        verification = sum(1 for result in results if result.verification and result.verification.valid) / len(results)
+        simulation_quality = sum(1 for simulation in simulations if simulation.feasible) / len(simulations)
+        telemetry_penalty = min(0.4, 0.1 * len(anomalies))
+        confidence = self._clamp(0.35 * structural + 0.35 * verification + 0.30 * simulation_quality - telemetry_penalty)
+        if prior_confidence is not None:
+            confidence = self._clamp(0.7 * confidence + 0.3 * prior_confidence)
+
+        # Calibration measures agreement between predicted confidence and observed evidence.
+        evidence_quality = self._clamp((verification + simulation_quality) / 2.0)
+        calibration_score = self._clamp(1.0 - abs(confidence - evidence_quality))
+        strategy_score = self._clamp(0.5 + 0.5 * simulation_quality - 0.1 * len(anomalies))
+
+        action = "accept"
+        learning_signal = "stable"
+        correction_required = False
+        if anomalies:
+            correction_required = True
+            action = "escalate" if len(anomalies) >= 2 else "replan"
+            learning_signal = "adapt"
+        if confidence < 0.60:
+            correction_required = True
+            action = "escalate"
+            learning_signal = "uncertain"
+        if calibration_score < 0.70:
+            correction_required = True
+            action = "escalate"
+            learning_signal = "recalibrate"
+
+        if action not in self._VALID_ACTIONS:
+            return self._failure("invalid_metacognitive_action", ("decision",))
+
+        fingerprint_parts = (
+            task.execution_id,
+            task.task_id,
+            str(len(plan.steps)),
+            str(len(hypotheses)),
+            str(len(simulations)),
+            str(len(results)),
+            "|".join(agents),
+            "|".join(anomalies),
+        )
         reflection = MetacognitiveReflection(
             result_verified=True,
             agents_used=agents,
             steps_executed=len(results),
             hypotheses_verified=len(hypotheses),
             simulations_verified=len(simulations),
-            confidence=1.0,
+            confidence=confidence,
+            calibration_score=calibration_score,
+            strategy_score=strategy_score,
+            anomalies=tuple(anomalies),
+            error_attribution=tuple(attribution),
+            correction_required=correction_required,
+            recommended_action=action,
+            learning_signal=learning_signal,
+            state_fingerprint=self._fingerprint(fingerprint_parts),
         )
-        return VerificationResult(True, "metacognition", "reflection_ok"), reflection
+        reason = "reflection_ok" if not correction_required else "reflection_requires_correction"
+        return VerificationResult(True, "metacognition", reason), reflection
