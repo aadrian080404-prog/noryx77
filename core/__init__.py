@@ -1,5 +1,6 @@
 from .actions import ActionDecision, ActionGate
 from .agents import Agent, DeterministicAgent
+from .alerting import AlertChannel, AlertRouter, AlertSeverity, EscalationPolicy, SecurityAlert
 from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .context import ContextManager, ContextSnapshot
@@ -27,13 +28,12 @@ from .verification import VerificationEngine
 
 __all__ = [
     "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
-    "AgentDecision", "AgentResult", "AgentSupervisor", "AuditLog", "CapabilityRegistry",
-    "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
-    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "Hypersynth",
-    "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator",
-    "MemoryStore", "NORYXError", "NORYXRuntime", "OfflineArtifact", "OfflineRecoveryCatalog", "Plan",
-    "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits",
-    "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult",
-    "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor", "TrustDecision", "VerificationEngine",
-    "VerificationFailure", "VerificationResult",
+    "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "AuditLog",
+    "CapabilityRegistry", "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
+    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "EscalationPolicy", "Hypersynth",
+    "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator", "MemoryStore",
+    "NORYXError", "NORYXRuntime", "OfflineArtifact", "OfflineRecoveryCatalog", "Plan", "PlanStep", "Planner",
+    "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityAlert", "SecurityBoundary",
+    "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec",
+    "ToolExecutor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
