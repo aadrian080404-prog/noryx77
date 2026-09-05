@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence
 from uuid import uuid4
 
+from core.authorization_replay import AuthorizationReplayGuard
 from core.identity import AgentIdentity, IdentityRegistry
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof
 
@@ -69,6 +70,7 @@ class RuntimeEngine:
         authorization_provider: AuthorizationProvider | None = None,
         high_risk_action_types: frozenset[str] | set[str] | tuple[str, ...] = frozenset(),
         authorization_epoch: int = 0,
+        replay_guard: AuthorizationReplayGuard | None = None,
     ) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0:
             raise ValueError("max_actions must be a non-negative integer")
@@ -90,6 +92,8 @@ class RuntimeEngine:
             raise TypeError("authorization_provider must be callable")
         if multi_auth_authority is None and authorization_provider is not None:
             raise ValueError("authorization_provider requires multi_auth_authority")
+        if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard):
+            raise TypeError("replay_guard must be an AuthorizationReplayGuard")
         if isinstance(authorization_epoch, bool) or not isinstance(authorization_epoch, int) or authorization_epoch < 0:
             raise ValueError("authorization_epoch must be a non-negative integer")
         if not isinstance(high_risk_action_types, (frozenset, set, tuple)):
@@ -118,6 +122,7 @@ class RuntimeEngine:
         self._authorization_provider = authorization_provider
         self._high_risk_action_types = normalized_risk_types
         self._authorization_epoch = authorization_epoch
+        self._replay_guard = replay_guard
 
     def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
         dispatch = self._adapter.execute if self._adapter is not None else executor
@@ -157,6 +162,8 @@ class RuntimeEngine:
             action_statement=digest_bytes,
         ):
             raise PermissionError("high-risk authorization denied")
+        if self._replay_guard is not None and not self._replay_guard.consume(digest_bytes):
+            raise PermissionError("high-risk authorization replayed")
 
     def execute(
         self,
@@ -221,7 +228,7 @@ class RuntimeEngine:
                 })
                 # Authorization is deliberately before dispatch: a high-risk
                 # action can never reach an adapter/executor before its signed
-                # multi-party proof has been validated.
+                # multi-party proof has been validated and consumed once.
                 self._authorize_high_risk(envelope, action_digest)
                 output = self._dispatch(envelope, executor)
                 verified = bool(verifier(envelope, output))
