@@ -7,11 +7,7 @@ from .authorization_replay import AuthorizationReplayGuard
 from .context import ContextManager, ContextSnapshot
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .coordination import AgentAssignment, AgentCoordinator
-from .defense import (
-    AccessRequest, DefenseController, DefenseDecision, DefenseMode,
-    ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog,
-    SegmentationPolicy, SecurityEvent, TrustDecision,
-)
+from .defense import AccessRequest, DefenseController, DefenseDecision, DefenseMode, ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog, SegmentationPolicy, SecurityEvent, TrustDecision
 from .decomposition import Subtask, TaskDecomposer
 from .device import CapabilityGrant, DeviceAction, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceRuntimeBoundary, DeviceTrust
 from .distributed import DistributedTopology, NodeDescriptor, NodeRole, ShardDescriptor
@@ -27,7 +23,7 @@ from .metacognition import MetacognitiveReflection
 from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthority, SignedAuthorizationProof, ThresholdAuthorizer, action_digest, sign_approval
 from .observability import EventKind, ObservedEvent, SecurityEventBus
 from .personality import ApollonianPersonality, PersonalityProfile
-from .personality_binding import bind_personality, verify_personality_binding
+from .personality_binding import SignedPersonalityBinding, bind_personality, sign_identity_personality_binding, verify_identity_personality_binding, verify_personality_binding
 from .perimeter import PerimeterPolicy, TrafficDirection, TrafficRequest
 from .planning import Plan, PlanStep, Planner
 from .platform import AssistantIntegrationBoundary, InteractionKind, PlatformAction, PlatformAdapter, PlatformKind, PlatformRequest
@@ -46,22 +42,5 @@ from .tools import CapabilityRegistry, ToolExecutor
 from .verification import VerificationEngine
 
 __all__ = [
-    "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "AdversarialEngine", "Agent", "AgentAssignment",
-    "AgentCoordinator", "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity",
-    "ApollonianPersonality", "ArtifactManifest", "AttackOutcome", "AttackScenario", "AuditLog", "AuthorizationProof",
-    "AuthorizationReplayGuard", "bind_personality", "CapabilityGrant", "CapabilityRegistry", "CampaignManifest", "ContextManager", "ContextSnapshot",
-    "ContractViolation", "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent",
-    "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity", "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust",
-    "DistributedTopology", "EgressPolicy", "EgressRequest", "EvaluationCampaign", "EvaluationDimension", "EvaluationMatrix", "EvaluationResult",
-    "EventKind", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest",
-    "ImprovementPipeline", "ImprovementProposal", "ImprovementStage", "InteractionKind", "InternalSimulator", "MemoryStore",
-    "MetacognitiveReflection", "NodeDescriptor", "NodeRole", "NORYXError", "NORYXRuntime", "ObservedEvent", "OfflineArtifact",
-    "OfflineRecoveryCatalog", "PersonalityProfile", "PerimeterPolicy", "Plan", "PlanStep", "Planner", "PlatformAction",
-    "PlatformAdapter", "PlatformKind", "PlatformRequest", "PolicyDenied", "PolicyEngine", "RecoveryController", "RecoveryState",
-    "ResourceRouter", "RouteError", "RuntimeLimits", "Sandbox", "SandboxProfile", "SandboxState", "SecureBootChain",
-    "SecurityAlert", "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SecurityEventBus", "SegmentationPolicy",
-    "ShardDescriptor", "SignedApproval", "SignedApprovalAuthority", "SignedAuthorizationProof", "SimulationResult", "Subtask",
-    "SupplyChainVerifier", "TaskDecomposer", "TaskSpec", "ThresholdAuthorizer", "ToolExecutor", "TrafficDirection", "TrafficRequest",
-    "TrustAnchor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult", "verify_personality_binding", "action_digest", "manifest_digest",
-    "sign_approval",
+    "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "AdversarialEngine", "Agent", "AgentAssignment", "AgentCoordinator", "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "ApollonianPersonality", "ArtifactManifest", "AttackOutcome", "AttackScenario", "AuditLog", "AuthorizationProof", "AuthorizationReplayGuard", "bind_personality", "CapabilityGrant", "CapabilityRegistry", "CampaignManifest", "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity", "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust", "DistributedTopology", "EgressPolicy", "EgressRequest", "EvaluationCampaign", "EvaluationDimension", "EvaluationMatrix", "EvaluationResult", "EventKind", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest", "ImprovementPipeline", "ImprovementProposal", "ImprovementStage", "InteractionKind", "InternalSimulator", "MemoryStore", "MetacognitiveReflection", "NodeDescriptor", "NodeRole", "NORYXError", "NORYXRuntime", "ObservedEvent", "OfflineArtifact", "OfflineRecoveryCatalog", "PersonalityProfile", "PerimeterPolicy", "Plan", "PlanStep", "Planner", "PlatformAction", "PlatformAdapter", "PlatformKind", "PlatformRequest", "PolicyDenied", "PolicyEngine", "RecoveryController", "RecoveryState", "ResourceRouter", "RouteError", "RuntimeLimits", "Sandbox", "SandboxProfile", "SandboxState", "SecureBootChain", "SecurityAlert", "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SecurityEventBus", "SegmentationPolicy", "ShardDescriptor", "SignedApproval", "SignedApprovalAuthority", "SignedAuthorizationProof", "SignedPersonalityBinding", "SimulationResult", "Subtask", "SupplyChainVerifier", "TaskDecomposer", "TaskSpec", "ThresholdAuthorizer", "ToolExecutor", "TrafficDirection", "TrafficRequest", "TrustAnchor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult", "verify_identity_personality_binding", "verify_personality_binding", "action_digest", "manifest_digest", "sign_approval", "sign_identity_personality_binding",
 ]
