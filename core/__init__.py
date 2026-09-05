@@ -5,7 +5,6 @@ from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .context import ContextManager, ContextSnapshot
 from .coordination import AgentAssignment, AgentCoordinator
-from .decomposition import Subtask, TaskDecomposer
 from .defense import (
     AccessRequest, DefenseController, DefenseDecision, DefenseMode,
     ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog,
@@ -18,6 +17,7 @@ from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .planning import Plan, PlanStep, Planner
+from .platform import AssistantIntegrationBoundary, InteractionKind, PlatformAction, PlatformAdapter, PlatformKind, PlatformRequest
 from .policy import PolicyEngine
 from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
 from .router import ResourceRouter
@@ -30,11 +30,13 @@ from .verification import VerificationEngine
 __all__ = [
     "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "Agent", "AgentAssignment", "AgentCoordinator",
     "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity", "AuditLog",
-    "CapabilityGrant", "CapabilityRegistry", "ContextManager", "ContextSnapshot", "ContractViolation", "CognitiveState", "CrossChecker",
-    "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent", "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity",
-    "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis",
-    "HypothesisEngine", "ImmutableCoreManifest", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "OfflineArtifact",
-    "OfflineRecoveryCatalog", "Plan", "PlanStep", "Planner", "PolicyDenied", "PolicyEngine", "ResourceRouter", "RouteError",
-    "RuntimeLimits", "SecurityAlert", "SecurityBoundary", "SecurityDecision", "SecurityEvent", "SegmentationPolicy", "SimulationResult",
-    "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor", "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult",
+    "AssistantIntegrationBoundary", "CapabilityGrant", "CapabilityRegistry", "ContextManager", "ContextSnapshot",
+    "ContractViolation", "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode",
+    "DeterministicAgent", "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity", "DeviceRole", "DeviceRuntimeBoundary",
+    "DeviceTrust", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest",
+    "InteractionKind", "InternalSimulator", "MemoryStore", "NORYXError", "NORYXRuntime", "OfflineArtifact", "OfflineRecoveryCatalog",
+    "Plan", "PlanStep", "Planner", "PlatformAction", "PlatformAdapter", "PlatformKind", "PlatformRequest", "PolicyDenied",
+    "PolicyEngine", "ResourceRouter", "RouteError", "RuntimeLimits", "SecurityAlert", "SecurityBoundary", "SecurityDecision",
+    "SecurityEvent", "SegmentationPolicy", "SimulationResult", "Subtask", "TaskDecomposer", "TaskSpec", "ToolExecutor",
+    "TrustDecision", "VerificationEngine", "VerificationFailure", "VerificationResult",
 ]
