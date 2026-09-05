@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from enum import Enum
 from threading import RLock
+from typing import Callable, TypeVar
 
 
 class RecoveryState(str, Enum):
@@ -14,11 +15,15 @@ class RecoveryState(str, Enum):
     VERIFIED = "verified"
 
 
+T = TypeVar("T")
+
+
 class RecoveryController:
     """Fail-closed recovery state machine with explicit trust restoration.
 
-    The monotonic epoch makes recovery changes observable to in-flight work,
-    preventing a time-of-check/time-of-use gap between authorization and commit.
+    The monotonic epoch makes recovery changes observable to in-flight work.
+    ``run_if_normal`` additionally serializes the final guarded operation with
+    recovery transitions, closing the authorization-to-commit TOCTOU window.
     """
 
     def __init__(self) -> None:
@@ -46,6 +51,19 @@ class RecoveryController:
                 raise PermissionError("recovery_state_denies_execution")
             if expected_epoch is not None and self._epoch != expected_epoch:
                 raise PermissionError("recovery_state_changed")
+
+    def run_if_normal(self, operation: Callable[[], T], *, expected_epoch: int | None = None) -> T:
+        """Run one critical operation while recovery remains NORMAL.
+
+        Recovery transitions cannot interleave with ``operation`` because both
+        paths use the same re-entrant lock. The operation itself must remain
+        bounded and must not invoke external recovery transitions.
+        """
+        if not callable(operation):
+            raise TypeError("operation_required")
+        with self._lock:
+            self.require_normal(expected_epoch=expected_epoch)
+            return operation()
 
     def _transition(self, expected: RecoveryState, target: RecoveryState, reason: str) -> None:
         with self._lock:
