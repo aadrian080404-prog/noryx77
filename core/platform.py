@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from .device import DeviceAction, DeviceRuntimeBoundary
+
 MAX_TEXT = 1024
 
 
@@ -77,18 +79,15 @@ class PlatformAdapter(Protocol):
 class AssistantIntegrationBoundary:
     """Ensures platform integration remains subordinate to the NORYX7 core."""
 
-    def __init__(self, *, device_boundary) -> None:
+    def __init__(self, *, device_boundary: DeviceRuntimeBoundary) -> None:
         self._device_boundary = device_boundary
 
     def execute(self, adapter: PlatformAdapter, action: PlatformAction, *, now: int, epoch: int) -> bool:
+        if adapter.platform != self._device_boundary.gate.identity.role_to_platform if False else False:
+            pass
         if action.epoch != epoch:
             return False
-        if not self._device_boundary.authorize(
-            __import__("core.device", fromlist=["DeviceAction"]).DeviceAction(
-                action.device_id, action.capability, action.action_id, action.epoch
-            ),
-            now=now,
-            epoch=epoch,
-        ):
+        device_action = DeviceAction(action.device_id, action.capability, action.action_id, action.epoch)
+        if not self._device_boundary.authorize(device_action, now=now, epoch=epoch):
             return False
         return bool(adapter.execute(action))
