@@ -14,11 +14,12 @@ from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, Orch
 from .policy import PolicyEngine
 from .router import ResourceRouter
 from .security import SecurityBoundary
+from .state import NORYXState, StateStore
 from .verification import VerificationEngine
 
 
 class NORYXRuntime:
-    """Controlled runtime: validate -> understand/context -> route -> execute -> verify -> commit."""
+    """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
 
     def __init__(self, limits: RuntimeLimits | None = None):
         self.limits = limits or RuntimeLimits()
@@ -27,6 +28,7 @@ class NORYXRuntime:
         self.security = SecurityBoundary(self.policy, self.verifier)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
+        self.state = StateStore(max_commits=self.limits.max_memory_items)
         self.audit = AuditLog()
         self.router = ResourceRouter()
         self.router.register(DeterministicAgent(self.verifier))
@@ -39,14 +41,12 @@ class NORYXRuntime:
             memory=self.memory,
         )
 
-    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext | None) -> OrchestrationEnvelope:
-        if interaction_context is None:
-            raise ValueError("interaction_context_required")
+    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str) -> OrchestrationEnvelope:
         if not isinstance(interaction_context, InteractionContext):
             raise TypeError("interaction_context_required")
         envelope = OrchestrationEnvelope(
             request_id=task.task_id,
-            principal_id=task.execution_id or "runtime",
+            principal_id=execution_id,
             operation=task.task_type,
             interaction_context=interaction_context,
         )
@@ -54,10 +54,15 @@ class NORYXRuntime:
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
         return envelope
 
+    @staticmethod
+    def _plan_material(subtasks) -> tuple[tuple[str, str, str], ...]:
+        return tuple((x.subtask_id, x.task_type, x.objective) for x in subtasks)
+
     def run(self, task: TaskSpec, agent_id: str = "deterministic", interaction_context: InteractionContext | None = None):
         started = time.monotonic()
         deadline = started + self.limits.max_task_seconds
         task_id = getattr(task, "task_id", None)
+        execution_id = getattr(task, "execution_id", "") or uuid4().hex
 
         def deadline_exceeded() -> bool:
             return time.monotonic() > deadline
@@ -80,17 +85,19 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
 
         try:
-            envelope = self._context_envelope(task, interaction_context)
+            envelope = self._context_envelope(task, interaction_context, execution_id)
             envelope = OrchestrationCoordinator.with_intent_digest(envelope, task.objective)
             self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id, envelope_digest=OrchestrationCoordinator.digest(envelope))
         except (TypeError, ValueError):
             self.audit.record("orchestration_rejection", task_id=task_id, reason="invalid_interaction_context")
             return {"status": "rejected", "reason": "invalid_interaction_context", "task_id": task_id}
 
-        execution_id = task.execution_id or uuid4().hex
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
+            envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED)
+            envelope = OrchestrationCoordinator.with_plan_digest(envelope, self._plan_material(subtasks))
+            envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.PLANNED)
         except LookupError:
             self.audit.record("routing_failure", task_id=task_id, error="agent_unavailable")
             return {"status": "rejected", "reason": "agent_unavailable", "task_id": task_id}
@@ -105,6 +112,7 @@ class NORYXRuntime:
             self.audit.record("action_limit", task_id=task_id, allowed=False, reason="max_actions_per_task_exceeded")
             return {"status": "rejected", "reason": "max_actions_per_task_exceeded", "task_id": task_id}
 
+        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.EXECUTING)
         results = []
         for subtask in subtasks:
             if deadline_exceeded():
@@ -178,8 +186,36 @@ class NORYXRuntime:
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
-        self.audit.record("orchestration_commit", task_id=task_id, stage=OrchestrationStage.COMMITTED.value, context_id=interaction_context.context_id)
-        return {"status": "completed", "results": tuple(results), "audit": self.audit.snapshot()}
+
+        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.VERIFYING)
+        final_verification = self.verifier.verify_output(results[-1].output if results else None, stage="runtime_result")
+        if not final_verification.valid:
+            self.audit.record("state_commit_rejected", task_id=task_id, reason="final_verification_failed")
+            return {"status": "rejected", "reason": "final_verification_failed", "verification": final_verification, "task_id": task_id}
+        committed_state = NORYXState(
+            user_input=str(task.input),
+            goal=task.objective,
+            subtasks=[x.subtask_id for x in subtasks],
+            final_answer=str(results[-1].output) if results else "",
+            verification_results=[{"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason}],
+            confidence=1.0,
+            status="verified",
+        )
+        try:
+            commit = self.state.commit(
+                committed_state,
+                execution_id=execution_id,
+                task_id=task_id,
+                verification_valid=final_verification.valid,
+                verification_stage=final_verification.stage,
+            )
+        except (TypeError, ValueError, PermissionError, MemoryError) as exc:
+            self.audit.record("state_commit_failure", task_id=task_id, reason=type(exc).__name__)
+            return {"status": "rejected", "reason": "state_commit_failed", "task_id": task_id}
+
+        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
+        self.audit.record("orchestration_commit", task_id=task_id, stage=envelope.stage.value, context_id=interaction_context.context_id, execution_id=execution_id, state_sequence=commit.sequence)
+        return {"status": "completed", "results": tuple(results), "state_commit": commit, "orchestration_stage": envelope.stage.value, "audit": self.audit.snapshot()}
 
     def run_hypersynth(self, task: TaskSpec, interaction_context: InteractionContext | None = None):
         """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
