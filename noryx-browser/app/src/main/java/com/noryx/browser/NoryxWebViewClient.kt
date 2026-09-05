@@ -12,7 +12,7 @@ class NoryxWebViewClient(
 ) : WebViewClient() {
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
         super.onPageStarted(view, url, favicon)
-        if (!NavigationPolicy.allowsMainFrame(url, allowLocalHome = true)) {
+        if (!NavigationPolicy.allowsMainFrame(url)) {
             view.stopLoading()
             onError()
             return
@@ -22,7 +22,7 @@ class NoryxWebViewClient(
 
     override fun onPageFinished(view: WebView, url: String?) {
         super.onPageFinished(view, url)
-        if (!NavigationPolicy.allowsMainFrame(url, allowLocalHome = true)) {
+        if (!NavigationPolicy.allowsMainFrame(url)) {
             onError()
             return
         }
@@ -31,7 +31,7 @@ class NoryxWebViewClient(
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         if (!request.isForMainFrame) return false
-        return !NavigationPolicy.allowsMainFrame(request.url.toString(), allowLocalHome = true)
+        return !NavigationPolicy.allowsMainFrame(request.url.toString())
     }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
