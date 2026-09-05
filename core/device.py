@@ -82,6 +82,7 @@ class DeviceCapabilityGate:
         return (
             self.identity.trust is DeviceTrust.VERIFIED
             and grant is not None
+            and grant.audience == self.identity.device_id
             and grant.epoch == epoch
             and now <= grant.expires_at
         )
