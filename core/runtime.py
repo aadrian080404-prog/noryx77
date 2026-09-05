@@ -202,16 +202,37 @@ class NORYXRuntime:
             return self._rejection(envelope, task_id, "max_task_seconds_exceeded", self.audit)
 
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.VERIFYING)
+        expected_task_ids = tuple(x.subtask_id for x in subtasks)
+        aggregate_verification = self.verifier.verify_agent_results(
+            results,
+            expected_agent_id=agent.agent_id,
+            expected_execution_id=execution_id,
+            expected_task_ids=expected_task_ids,
+        )
+        self.audit.record("aggregate_result_verification", task_id=task_id,
+                          valid=all(check.valid for check in aggregate_verification),
+                          checks=len(aggregate_verification))
+        if not aggregate_verification or not all(check.valid for check in aggregate_verification):
+            failed = next((check for check in aggregate_verification if not check.valid),
+                          VerificationResult(False, "runtime_results", "aggregate_verification_failed"))
+            return self._rejection(envelope, task_id, "aggregate_verification_failed", self.audit,
+                                   verification=failed)
+
         final_verification = self.verifier.verify_output(results[-1].output if results else None, stage="runtime_result")
         if not final_verification.valid:
             self.audit.record("state_commit_rejected", task_id=task_id, reason="final_verification_failed")
             return self._rejection(envelope, task_id, "final_verification_failed", self.audit, verification=final_verification)
+        verification_results = [
+            {"stage": check.stage, "valid": check.valid, "reason": check.reason}
+            for check in aggregate_verification
+        ]
+        verification_results.append({"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason})
         committed_state = NORYXState(
             input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
             goal=task.objective,
-            subtasks=[x.subtask_id for x in subtasks],
+            subtasks=list(expected_task_ids),
             final_answer=str(results[-1].output) if results else "",
-            verification_results=[{"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason}],
+            verification_results=verification_results,
             confidence=1.0,
             status="verified",
         )
