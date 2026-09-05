@@ -16,7 +16,6 @@ def test_pre_interaction_profile_is_deterministic_and_contains_only_bounded_sign
     engine = UserUnderstandingEngine(consent=UnderstandingConsent.PRE_INTERACTION)
     first = engine.build_profile(contents)
     second = engine.build_profile(contents)
-
     assert first.profile_id == second.profile_id
     assert first.signals == second.signals
     assert first.raw_content_retained is False
@@ -63,3 +62,21 @@ def test_duplicate_evidence_increases_confidence_without_unbounded_growth():
     topic = next(signal for signal in profile.signals if signal.kind is SignalKind.TOPIC and signal.value == "programming")
     assert 0.70 <= topic.confidence <= 1.0
     assert len(topic.evidence_ids) == 2
+
+
+def test_unauthorized_content_source_fails_closed():
+    with pytest.raises(PermissionError):
+        UserContent("c1", "programming", source="background_scan")
+
+
+def test_sensitive_content_produces_no_personalization_signal():
+    content = UserContent("c1", "My diagnosis is relevant to this conversation.")
+    profile = UserUnderstandingEngine(consent=UnderstandingConsent.PRE_INTERACTION).build_profile((content,))
+    assert profile.signals == ()
+
+
+def test_continuous_consent_remains_bounded_and_does_not_retain_raw_content():
+    engine = UserUnderstandingEngine(consent=UnderstandingConsent.CONTINUOUS)
+    profile = engine.build_profile((UserContent("c1", "I prefer concise technical explanations."),))
+    assert profile.raw_content_retained is False
+    assert len(profile.signals) <= 128
