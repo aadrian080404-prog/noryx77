@@ -1,16 +1,29 @@
-from .contracts import Request, Plan, ActionResult
+from .contracts import Request, Plan, PlanStep, ActionResult
 from .policy import Policy
 
+
 class JarvisOrchestrator:
+    """Fail-closed execution coordinator for the standalone JARVIS front."""
+
     def __init__(self, policy=None):
         self.policy = policy or Policy()
 
-    def authorize_step(self, request: Request, step) -> bool:
-        return self.policy.authorize(request.principal_id, step.capability, step.target)
+    def authorize_step(self, request: Request, step: PlanStep) -> bool:
+        if not isinstance(request, Request) or not isinstance(step, PlanStep):
+            return False
+        try:
+            return bool(self.policy.authorize(request.principal_id, step.capability, step.target))
+        except Exception:
+            return False
 
     def execute(self, request: Request, plan: Plan, executor):
+        if not isinstance(request, Request) or not isinstance(plan, Plan):
+            raise TypeError("request_and_plan_required")
+        if not callable(executor):
+            raise TypeError("executor_required")
         if plan.request_id != request.request_id:
             raise ValueError("request_plan_mismatch")
+
         seen = set()
         results = []
         completed = set()
@@ -18,7 +31,12 @@ class JarvisOrchestrator:
             if step.step_id in seen:
                 raise ValueError("duplicate_step_id")
             seen.add(step.step_id)
-            if step.dependencies and not set(step.dependencies).issubset(completed):
+            dependencies = set(step.dependencies)
+            if step.step_id in dependencies:
+                raise ValueError("self_dependency")
+            if not dependencies.issubset(seen - {step.step_id}):
+                raise ValueError("dependency_order_violation")
+            if not dependencies.issubset(completed):
                 raise ValueError("unsatisfied_dependencies")
             if not self.authorize_step(request, step):
                 raise PermissionError("capability_denied")
