@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+
 from .contracts import ActionSpec, VerificationResult
+from .recovery import RecoveryController, RecoveryState
 
 
 @dataclass(frozen=True)
@@ -10,18 +12,27 @@ class SecurityDecision:
 
 
 class SecurityBoundary:
-    """Defensive authorization boundary for autonomous actions; deny by default."""
+    """Defensive authorization boundary for autonomous actions; deny by default.
+
+    Recovery state is part of the trust decision: anything other than NORMAL
+    fails closed. The boundary never performs recovery transitions itself.
+    """
     ALLOWED_RISKS = {"normal", "sensitive"}
 
-    def __init__(self, policy, verifier):
+    def __init__(self, policy, verifier, recovery=None):
         if policy is None or verifier is None:
             raise ValueError("policy and verifier are required")
+        if recovery is not None and not isinstance(recovery, RecoveryController):
+            raise TypeError("invalid_recovery_controller")
         self.policy = policy
         self.verifier = verifier
+        self.recovery = recovery or RecoveryController()
 
     def inspect(self, action: ActionSpec) -> SecurityDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return SecurityDecision(False, "invalid_action", "unknown")
+        if self.recovery.state is not RecoveryState.NORMAL:
+            return SecurityDecision(False, "recovery_state_denies_execution", action.risk_class)
         if action.risk_class not in self.ALLOWED_RISKS:
             return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
         try:
