@@ -1,5 +1,7 @@
 package com.noryx.browser
 
+import android.graphics.Bitmap
+import android.net.Uri
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -9,7 +11,7 @@ class NoryxWebViewClient(
     private val onNavigationChanged: (NavigationState) -> Unit,
     private val onError: () -> Unit,
 ) : WebViewClient() {
-    override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+    override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
         super.onPageStarted(view, url, favicon)
         onNavigationChanged(state(view, url, loading = true))
     }
@@ -19,7 +21,10 @@ class NoryxWebViewClient(
         onNavigationChanged(state(view, url, loading = false))
     }
 
-    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = false
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        val scheme = Uri.parse(request.url.toString()).scheme?.lowercase()
+        return scheme != "https"
+    }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (request.isForMainFrame) onError()
