@@ -34,7 +34,7 @@ class StateCommit:
 
 
 class StateStore:
-    """Small transactional state boundary with monotonic per-execution commits."""
+    """Transactional state boundary with monotonic per-execution commits."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
@@ -50,15 +50,8 @@ class StateStore:
     def _valid_id(value: str, max_bytes: int) -> bool:
         return isinstance(value, str) and bool(value.strip()) and len(value.encode("utf-8")) <= max_bytes
 
-    def commit(
-        self,
-        state: NORYXState,
-        *,
-        execution_id: str,
-        task_id: str,
-        verification_valid: bool,
-        verification_stage: str,
-    ) -> StateCommit:
+    def commit(self, state: NORYXState, *, execution_id: str, task_id: str,
+               verification_valid: bool, verification_stage: str) -> StateCommit:
         if not isinstance(state, NORYXState):
             raise TypeError("state_required")
         if not self._valid_id(execution_id, self.MAX_EXECUTION_ID_BYTES):
