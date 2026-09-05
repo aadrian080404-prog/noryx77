@@ -80,10 +80,21 @@ class AssistantIntegrationBoundary:
     """Ensures platform integration remains subordinate to the NORYX7 core."""
 
     def __init__(self, *, device_boundary: DeviceRuntimeBoundary) -> None:
+        if not isinstance(device_boundary, DeviceRuntimeBoundary):
+            raise TypeError("device_boundary must be a DeviceRuntimeBoundary")
         self._device_boundary = device_boundary
+
+    @property
+    def device_boundary(self) -> DeviceRuntimeBoundary:
+        return self._device_boundary
 
     def execute(self, adapter: PlatformAdapter, action: PlatformAction, *, now: int, epoch: int) -> bool:
         if action.epoch != epoch:
+            return False
+        if not isinstance(adapter.platform, PlatformKind):
+            return False
+        expected = self._device_boundary.gate.identity.platform
+        if expected != adapter.platform.value:
             return False
         device_action = DeviceAction(action.device_id, action.capability, action.action_id, action.epoch)
         if not self._device_boundary.authorize(device_action, now=now, epoch=epoch):
