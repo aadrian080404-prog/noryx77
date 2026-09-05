@@ -18,6 +18,7 @@ from .distributed import DistributedTopology, NodeDescriptor, NodeRole, ShardDes
 from .egress import EgressPolicy, EgressRequest
 from .errors import ContractViolation, NORYXError, PolicyDenied, RouteError, VerificationFailure
 from .evaluation import EvaluationDimension, EvaluationMatrix, EvaluationResult
+from .evaluation_campaign import CampaignManifest, EvaluationCampaign
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
 from .limits import RuntimeLimits
@@ -47,10 +48,10 @@ __all__ = [
     "AccessRequest", "ActionDecision", "ActionGate", "ActionSpec", "AdversarialEngine", "Agent", "AgentAssignment",
     "AgentCoordinator", "AgentDecision", "AgentResult", "AgentSupervisor", "AlertChannel", "AlertRouter", "AlertSeverity",
     "ApollonianPersonality", "ArtifactManifest", "AttackOutcome", "AttackScenario", "AuditLog", "AuthorizationProof",
-    "AuthorizationReplayGuard", "CapabilityGrant", "CapabilityRegistry", "ContextManager", "ContextSnapshot", "ContractViolation",
-    "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent",
+    "AuthorizationReplayGuard", "CapabilityGrant", "CapabilityRegistry", "CampaignManifest", "ContextManager", "ContextSnapshot",
+    "ContractViolation", "CognitiveState", "CrossChecker", "DefenseController", "DefenseDecision", "DefenseMode", "DeterministicAgent",
     "DeviceAction", "DeviceCapabilityGate", "DeviceIdentity", "DeviceRole", "DeviceRuntimeBoundary", "DeviceTrust",
-    "DistributedTopology", "EgressPolicy", "EgressRequest", "EvaluationDimension", "EvaluationMatrix", "EvaluationResult",
+    "DistributedTopology", "EgressPolicy", "EgressRequest", "EvaluationCampaign", "EvaluationDimension", "EvaluationMatrix", "EvaluationResult",
     "EventKind", "EscalationPolicy", "Hypersynth", "HypersynthRuntime", "Hypothesis", "HypothesisEngine", "ImmutableCoreManifest",
     "ImprovementPipeline", "ImprovementProposal", "ImprovementStage", "InteractionKind", "InternalSimulator", "MemoryStore",
     "MetacognitiveReflection", "NodeDescriptor", "NodeRole", "NORYXError", "NORYXRuntime", "ObservedEvent", "OfflineArtifact",
