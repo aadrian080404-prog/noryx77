@@ -3,9 +3,11 @@ import time
 
 import pytest
 
+from core.device import CapabilityGrant, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceRuntimeBoundary, DeviceTrust
 from core.identity import AgentIdentityAuthority, IdentityRegistry
+from core.platform import AssistantIntegrationBoundary, PlatformAction, PlatformKind
 
-from .adapters import CapabilityAdapter
+from .adapters import CapabilityAdapter, PlatformExecutionAdapter
 from .attestation import Ed25519AttestationSigner, verify_attestation
 from .capabilities import Capability, CapabilityBroker
 from .contracts import ExecutionStatus, Intent, PlanStep
@@ -156,6 +158,64 @@ def test_revocation_cannot_interleave_with_effect_dispatch():
     assert called == ["a"]
     assert revoke_done.is_set()
     assert not registry.is_trusted(identity)
+
+
+def test_platform_adapter_executes_only_through_device_boundary():
+    identity = DeviceIdentity("phone-1", PlatformKind.ANDROID.value, DeviceRole.CLIENT, DeviceTrust.VERIFIED)
+    gate = DeviceCapabilityGate(identity)
+    gate.grant(CapabilityGrant("tool.call", identity.device_id, expires_at=100, epoch=7))
+    boundary = AssistantIntegrationBoundary(device_boundary=DeviceRuntimeBoundary(gate))
+    seen = []
+
+    class AndroidAdapter:
+        platform = PlatformKind.ANDROID
+
+        def receive(self):
+            raise AssertionError("runtime execution must not poll platform input")
+
+        def execute(self, action: PlatformAction) -> bool:
+            seen.append(action)
+            return True
+
+    adapter = PlatformExecutionAdapter(
+        AndroidAdapter(), boundary, agent_id="agent-1", epoch=7, clock=lambda: 10
+    )
+    signer = Ed25519AttestationSigner.generate()
+    result = RuntimeEngine(adapter=adapter, attestation_signer=signer).execute(
+        Intent("run", "user"), [step("a")], verifier=lambda action, output: output is True
+    )
+    assert result.status is ExecutionStatus.SUCCEEDED
+    assert len(seen) == 1
+    assert seen[0].device_id == "phone-1"
+    assert seen[0].capability == "tool.call"
+    assert seen[0].epoch == 7
+
+
+def test_platform_adapter_denies_wrong_platform_before_effect():
+    identity = DeviceIdentity("phone-1", PlatformKind.ANDROID.value, DeviceRole.CLIENT, DeviceTrust.VERIFIED)
+    gate = DeviceCapabilityGate(identity)
+    gate.grant(CapabilityGrant("tool.call", identity.device_id, expires_at=100, epoch=7))
+    boundary = AssistantIntegrationBoundary(device_boundary=DeviceRuntimeBoundary(gate))
+    called = []
+
+    class IOSAdapter:
+        platform = PlatformKind.IOS
+
+        def receive(self):
+            raise AssertionError
+
+        def execute(self, action):
+            called.append(action)
+            return True
+
+    adapter = PlatformExecutionAdapter(IOSAdapter(), boundary, agent_id="agent-1", epoch=7, clock=lambda: 10)
+    signer = Ed25519AttestationSigner.generate()
+    result = RuntimeEngine(adapter=adapter, attestation_signer=signer).execute(
+        Intent("run", "user"), [step("a")], verifier=lambda action, output: True
+    )
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "PermissionError"
+    assert called == []
 
 
 def test_adapter_without_attestation_signer_is_rejected_at_construction():
