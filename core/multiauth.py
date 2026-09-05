@@ -89,9 +89,11 @@ class SignedAuthorizationProof:
             raise TypeError("action_statement_must_be_bytes")
         if not self.approvals or len(self.approvals) > MAX_PARTIES:
             raise ValueError("invalid_approvals")
+        if any(not isinstance(a, SignedApproval) for a in self.approvals):
+            raise TypeError("invalid_approval")
         if len({a.approver_id for a in self.approvals}) != len(self.approvals):
             raise ValueError("duplicate_approver")
-        if not isinstance(self.threshold, int) or not 1 <= self.threshold <= len(self.approvals):
+        if not isinstance(self.threshold, int) or isinstance(self.threshold, bool) or not 1 <= self.threshold <= len(self.approvals):
             raise ValueError("invalid_threshold")
 
 
@@ -99,11 +101,13 @@ class SignedApprovalAuthority:
     """Verifies independent Ed25519 approvals against a canonical action digest."""
 
     def __init__(self, *, required_threshold: int, trusted_keys: dict[str, bytes] | None = None) -> None:
-        if not isinstance(required_threshold, int) or required_threshold < 1 or required_threshold > MAX_PARTIES:
+        if not isinstance(required_threshold, int) or isinstance(required_threshold, bool) or not 1 <= required_threshold <= MAX_PARTIES:
             raise ValueError("invalid_required_threshold")
         self._required = required_threshold
-        self._keys = dict(trusted_keys or {})
+        self._keys: dict[str, bytes] = {}
         self._lock = threading.RLock()
+        for approver_id, public_key in (trusted_keys or {}).items():
+            self.register(approver_id, public_key)
 
     @property
     def required_threshold(self) -> int:
@@ -132,21 +136,8 @@ class SignedApprovalAuthority:
             return False
         digest = action_digest(action_id, epoch, action_statement)
         with self._lock:
-            for approval in proof.approvals:
-                trusted = self._keys.get(approval.approver_id)
-                if trusted is None or trusted != approval.public_key:
-                    continue
-                try:
-                    Ed25519PublicKey.from_public_bytes(approval.public_key).verify(approval.signature, digest)
-                except (InvalidSignature, ValueError, TypeError):
-                    continue
-                else:
-                    # A proof counts only distinct trusted, valid approvers.
-                    if sum(1 for a in proof.approvals if a is approval) + sum(
-                        1 for a in proof.approvals if a is not approval and self._valid(a, digest)
-                    ) >= self._required:
-                        return True
-            return False
+            valid = sum(1 for approval in proof.approvals if self._valid(approval, digest))
+            return valid >= self._required
 
     def _valid(self, approval: SignedApproval, digest: bytes) -> bool:
         trusted = self._keys.get(approval.approver_id)
