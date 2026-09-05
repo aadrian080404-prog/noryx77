@@ -19,6 +19,7 @@ This matrix is the architectural gate before final hardening.
 | Interfaces | JARVIS, Browser and future surfaces | boundary and permission tests |
 | Audit | event integrity, provenance, observability | chain/tamper/completeness tests |
 | Performance | latency, throughput, resource bounds | percentile + endurance campaigns |
+| Universal Intelligence Fabric | domain contracts, evidence, uncertainty, specialist pipelines, cognitive diversity | integration + contradiction + containment tests |
 
 ## Completion rule
 
