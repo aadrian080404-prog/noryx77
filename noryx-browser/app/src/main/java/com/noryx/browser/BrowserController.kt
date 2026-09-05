@@ -8,5 +8,20 @@ class BrowserController(private val webView: WebView) {
     fun goBack() { if (webView.canGoBack()) webView.goBack() }
     fun goForward() { if (webView.canGoForward()) webView.goForward() }
     fun reload() = webView.reload()
-    fun loadHome() = webView.loadDataWithBaseURL(null, HomePage.HTML, "text/html", "UTF-8", null)
+
+    /**
+     * Loads the offline home under a synthetic HTTPS origin so the navigation
+     * policy never needs a broad `data:` exception for local content.
+     */
+    fun loadHome() = webView.loadDataWithBaseURL(
+        HOME_ORIGIN,
+        HomePage.HTML,
+        "text/html",
+        "UTF-8",
+        null,
+    )
+
+    private companion object {
+        const val HOME_ORIGIN = "https://home.noryx.local/"
+    }
 }
