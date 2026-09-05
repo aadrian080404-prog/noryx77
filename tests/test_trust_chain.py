@@ -3,7 +3,7 @@ from dataclasses import replace
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from core.authorization_replay import AuthorizationReplayGuard
-from core.device import DeviceIdentity, DeviceRole, DeviceTrust
+from core.device import CapabilityGrant, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceTrust
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from core.trust_chain import TrustChain, channel_binding_digest
 
@@ -126,3 +126,38 @@ def test_channel_binding_is_order_independent_for_identity_pair_but_direction_bo
     c = channel_binding_digest(agent, peer, "session-1", "receive")
     assert a == b
     assert a != c
+
+
+def test_live_device_capability_is_required_for_execution_context():
+    evidence, _, _, _, _, device, _, _ = _evidence()
+    gate = DeviceCapabilityGate(device)
+    gate.grant(CapabilityGrant("transfer", device.device_id, expires_at=100, epoch=7))
+    chain = TrustChain(IdentityRegistry())
+
+    assert chain.verify_live_device_capability(
+        evidence, device_gate=gate, capability="transfer", now=50, expected_epoch=7
+    )
+
+    gate.revoke("transfer")
+    assert not chain.verify_live_device_capability(
+        evidence, device_gate=gate, capability="transfer", now=50, expected_epoch=7
+    )
+
+
+def test_live_device_epoch_and_identity_swaps_fail_closed():
+    evidence, _, _, _, _, device, _, _ = _evidence()
+    gate = DeviceCapabilityGate(device)
+    gate.grant(CapabilityGrant("transfer", device.device_id, expires_at=100, epoch=7))
+    chain = TrustChain(IdentityRegistry())
+
+    assert not chain.verify_live_device_capability(
+        evidence, device_gate=gate, capability="transfer", now=101, expected_epoch=7
+    )
+    assert not chain.verify_live_device_capability(
+        evidence, device_gate=gate, capability="transfer", now=50, expected_epoch=8
+    )
+    other = DeviceCapabilityGate(DeviceIdentity("device-b", "android", DeviceRole.CLIENT, DeviceTrust.VERIFIED))
+    other.grant(CapabilityGrant("transfer", "device-b", expires_at=100, epoch=7))
+    assert not chain.verify_live_device_capability(
+        evidence, device_gate=other, capability="transfer", now=50, expected_epoch=7
+    )
