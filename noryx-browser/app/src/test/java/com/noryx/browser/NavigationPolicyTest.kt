@@ -24,6 +24,12 @@ class NavigationPolicyTest {
         assertFalse(NavigationPolicy.allowsMainFrame("data:text/html,<script>alert(1)</script>"))
     }
 
+    @Test fun malformedHttpsUrlsAreRejected() {
+        assertFalse(NavigationPolicy.allowsMainFrame("https://"))
+        assertFalse(NavigationPolicy.allowsMainFrame("https:///path"))
+        assertFalse(NavigationPolicy.allowsMainFrame("https://user:password@example.com"))
+    }
+
     @Test fun syntheticOfflineHomeOriginIsAllowedAsHttps() {
         assertTrue(NavigationPolicy.allowsMainFrame("https://home.noryx.local/"))
     }
