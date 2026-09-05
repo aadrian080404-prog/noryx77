@@ -29,9 +29,10 @@ class UserContent:
     source: str = "user_provided"
     def __post_init__(self):
         if not isinstance(self.content_id, str) or not self.content_id.strip(): raise ValueError("invalid_content_id")
+        if len(self.content_id.encode("utf-8")) > MAX_VALUE_SIZE: raise ValueError("content_id_too_large")
         if not isinstance(self.text, str) or not self.text.strip(): raise ValueError("content_required")
         if len(self.text.encode("utf-8")) > MAX_CONTENT_SIZE: raise ValueError("content_size_exceeded")
-        if not isinstance(self.source, str) or not self.source.strip(): raise ValueError("invalid_content_source")
+        if not isinstance(self.source, str) or not self.source.strip() or len(self.source.encode("utf-8")) > MAX_VALUE_SIZE: raise ValueError("invalid_content_source")
 
 @dataclass(frozen=True)
 class UserSignal:
@@ -43,7 +44,8 @@ class UserSignal:
         if not isinstance(self.kind, SignalKind): raise ValueError("invalid_signal_kind")
         if not isinstance(self.value, str) or not self.value.strip() or len(self.value.encode("utf-8")) > MAX_VALUE_SIZE: raise ValueError("invalid_signal_value")
         if isinstance(self.confidence, bool) or not 0.0 <= self.confidence <= 1.0: raise ValueError("invalid_signal_confidence")
-        if not isinstance(self.evidence_ids, tuple) or not self.evidence_ids: raise ValueError("signal_evidence_required")
+        if not isinstance(self.evidence_ids, tuple) or not self.evidence_ids or len(self.evidence_ids) > MAX_SIGNALS: raise ValueError("signal_evidence_required")
+        if any(not isinstance(item, str) or not item.strip() or len(item.encode("utf-8")) > MAX_VALUE_SIZE for item in self.evidence_ids): raise ValueError("invalid_signal_evidence")
 
 @dataclass(frozen=True)
 class UserUnderstandingProfile:
@@ -51,6 +53,12 @@ class UserUnderstandingProfile:
     signals: tuple[UserSignal, ...]
     content_count: int
     raw_content_retained: bool = False
+    def __post_init__(self):
+        if not isinstance(self.profile_id, str) or not self.profile_id.strip(): raise ValueError("profile_id_required")
+        if not isinstance(self.signals, tuple) or len(self.signals) > MAX_SIGNALS: raise ValueError("signal_capacity_exceeded")
+        if any(not isinstance(s, UserSignal) for s in self.signals): raise TypeError("user_signal_required")
+        if isinstance(self.content_count, bool) or not isinstance(self.content_count, int) or not 0 <= self.content_count <= MAX_CONTENT_ITEMS: raise ValueError("invalid_content_count")
+        if not isinstance(self.raw_content_retained, bool): raise ValueError("invalid_raw_content_flag")
 
 class UserUnderstandingEngine:
     _TOPICS = ("programming","software","architecture","engineering","science","finance","economics","business","travel","writing","research","design","security","automation")
@@ -90,8 +98,8 @@ class UserUnderstandingEngine:
                 else:
                     ids=tuple(dict.fromkeys(prev.evidence_ids+signal.evidence_ids))
                     collected[key]=UserSignal(signal.kind,signal.value,min(1.,prev.confidence+.05),ids)
-                if len(collected)>=MAX_SIGNALS: break
-            if len(collected)>=MAX_SIGNALS: break
+                if len(collected)>MAX_SIGNALS:
+                    raise ValueError("signal_capacity_exceeded")
         signals=tuple(sorted(collected.values(),key=lambda s:(s.kind.value,s.value)))
         profile_id=sha256("|".join(f"{s.kind.value}:{s.value}" for s in signals).encode()).hexdigest()
         return UserUnderstandingProfile(profile_id,signals,len(contents),False)
