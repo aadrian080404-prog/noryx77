@@ -1,8 +1,4 @@
-"""Cryptographic binding of personality metadata to an agent execution epoch.
-
-The binding is integrity/context metadata only. It never grants capabilities,
-changes authorization, or changes the security/recovery policy.
-"""
+"""Cryptographic binding of personality metadata to an agent execution epoch."""
 from __future__ import annotations
 
 import hashlib
@@ -10,6 +6,7 @@ import hmac
 from dataclasses import dataclass
 
 from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from .identity import AgentIdentity, IdentityRegistry
@@ -90,11 +87,10 @@ def sign_identity_personality_binding(
         raise ValueError("agent_identity_mismatch")
     if not isinstance(private_key, Ed25519PrivateKey):
         raise TypeError("private_key_must_be_ed25519")
-    raw_public = private_key.public_key().public_bytes_raw()
+    raw_public = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     if raw_public != identity.public_key:
         raise ValueError("identity_private_key_mismatch")
-    message = _signed_message(identity, profile.fingerprint, epoch)
-    return SignedPersonalityBinding(identity, profile.fingerprint, epoch, private_key.sign(message))
+    return SignedPersonalityBinding(identity, profile.fingerprint, epoch, private_key.sign(_signed_message(identity, profile.fingerprint, epoch)))
 
 
 def verify_identity_personality_binding(
@@ -113,10 +109,7 @@ def verify_identity_personality_binding(
     if registry is not None and not registry.is_trusted(binding.identity):
         return False
     try:
-        Ed25519PublicKey.from_public_bytes(binding.identity.public_key).verify(
-            binding.signature,
-            _signed_message(binding.identity, binding.personality_fingerprint, binding.epoch),
-        )
+        Ed25519PublicKey.from_public_bytes(binding.identity.public_key).verify(binding.signature, _signed_message(binding.identity, binding.personality_fingerprint, binding.epoch))
         return True
     except (InvalidSignature, ValueError, TypeError):
         return False
