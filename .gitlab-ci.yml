@@ -12,7 +12,7 @@ python_static:
   image: python:3.12-slim
   script:
     - python --version
-    - python -m compileall -q core ecosystem jarvis noryx7_runtime
+    - python -m compileall -q core ecosystem jarvis noryx7_runtime devtools
 
 tests:
   stage: unit
@@ -20,7 +20,7 @@ tests:
   before_script:
     - python -m pip install --disable-pip-version-check -r requirements-test.txt
   script:
-    - python -m pytest -q
+    - python -m devtools.test_lab.runner --suite compile pytest
 
 closure:
   stage: integration
@@ -28,5 +28,4 @@ closure:
   before_script:
     - python -m pip install --disable-pip-version-check -r requirements-test.txt
   script:
-    - python -c "from ecosystem.global_closure import require_closed; require_closed()"
-    - python -c "from ecosystem.completeness import require_complete; require_complete()"
+    - python -m devtools.test_lab.runner --suite closure completeness
