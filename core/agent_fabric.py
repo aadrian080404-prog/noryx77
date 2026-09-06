@@ -16,6 +16,7 @@ from .agent_skills import AgentSkillRegistry
 from .identity import AgentIdentity, IdentityRegistry
 
 MAX_FABRIC_AGENTS = 1024
+_PRINCIPAL_CONTEXT_KEY = "noryx7_principal_id"
 
 
 @dataclass(frozen=True)
@@ -80,6 +81,11 @@ class AgentFabric:
             raise TypeError("agent_input_required")
         if required_skill is not None:
             self._skills.get(required_skill)
+        bound_context = dict(request.context)
+        if _PRINCIPAL_CONTEXT_KEY in bound_context and bound_context[_PRINCIPAL_CONTEXT_KEY] != principal_id:
+            raise PermissionError("principal_context_mismatch")
+        bound_context[_PRINCIPAL_CONTEXT_KEY] = principal_id
+        bound_request = AgentInput(request.content, request.mode, bound_context)
         with self._lock:
             candidates = tuple(self._bindings[name] for name in sorted(self._bindings))
         for binding in candidates:
@@ -87,9 +93,9 @@ class AgentFabric:
                 continue
             if not self._identities.is_trusted(binding.identity):
                 continue
-            if not bool(self._authorize_principal(principal_id, binding, request)):
+            if not bool(self._authorize_principal(principal_id, binding, bound_request)):
                 continue
-            return binding.agent.run(request)
+            return binding.agent.run(bound_request)
         raise PermissionError("no_authorized_agent")
 
     def snapshot(self) -> tuple[str, ...]:
