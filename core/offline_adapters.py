@@ -16,12 +16,12 @@ class PolicyOfflineAdapter:
         self._policy = policy
 
     def authorize(self, *, principal_id: str, operation: str, offline: bool) -> bool:
-        if offline is not True:
+        if offline is not True or not isinstance(operation, str) or not operation.strip():
             return False
         action = ActionSpec(
             action_id=f"offline:{principal_id}:{operation}",
-            action_type=operation,
-            target="offline",
+            action_type="compute",
+            target=operation,
             risk_class="normal",
             execution_id=principal_id,
         )
@@ -94,6 +94,6 @@ class BoundAuthenticatedCipher:
             )
         except (KeyError, TypeError, ValueError, UnicodeDecodeError) as exc:
             raise ValueError("invalid_offline_ciphertext") from exc
-        if envelope.aad != aad:
-            raise ValueError("offline_aad_mismatch")
+        if envelope.aad != aad or not envelope.is_well_formed():
+            raise ValueError("offline_envelope_invalid")
         return envelope
