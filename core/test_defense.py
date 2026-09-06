@@ -18,6 +18,11 @@ class DefenseInfrastructureTests(unittest.TestCase):
     def request(self, component="agent", capability="observe", target=""):
         return AccessRequest("principal", component, capability, target, "session")
 
+    def test_malformed_authorize_request_fails_closed(self):
+        controller = DefenseController()
+        with self.assertRaises(TypeError):
+            controller.authorize(object())
+
     def test_deny_by_default_segmentation(self):
         policy = SegmentationPolicy()
         controller = DefenseController(segmentation=policy)
