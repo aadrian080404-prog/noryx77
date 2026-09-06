@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: python -m pip install --disable-pip-version-check -r requirements.txt -r requirements-test.txt
       - run: python -m pip check
       - run: python -m compileall -q core noryx7_runtime ecosystem
       - run: python -m pytest core noryx7_runtime tests -q
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: python -m pip install --disable-pip-version-check -r requirements.txt -r requirements-test.txt
       - run: python -m pip check
       - run: python -m compileall -q jarvis
       - run: python -m pytest jarvis/tests -q
