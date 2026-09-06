@@ -1,5 +1,6 @@
 package com.noryx.browser
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +21,7 @@ class MainActivity : AppCompatActivity() {
         binding.reload.setOnClickListener { clearError(); controller.reload() }
         binding.home.setOnClickListener { clearError(); controller.loadHome() }
         binding.retry.setOnClickListener { clearError(); controller.reload() }
+        configureDebugTestLab()
         binding.address.setOnEditorActionListener { _, _, _ ->
             clearError()
             try {
@@ -31,6 +33,15 @@ class MainActivity : AppCompatActivity() {
         }
         if (savedInstanceState == null) controller.loadHome()
         updateNavigationState()
+    }
+
+    private fun configureDebugTestLab() {
+        if (!BuildConfig.DEBUG) return
+        val id = resources.getIdentifier("debugTestLab", "id", packageName)
+        if (id == 0) return
+        findViewById<View>(id)?.setOnClickListener {
+            startActivity(Intent(this, Class.forName("com.noryx.browser.testlab.TestLabActivity")))
+        }
     }
 
     private fun configureWebView() {
