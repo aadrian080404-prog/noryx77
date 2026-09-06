@@ -134,7 +134,7 @@ class OfflineSyncQueue:
             existing = self._records.get(execution.execution_id)
             if existing is not None:
                 if existing.execution != execution:
-                    raise OfflineConflictError("duplicate_execution_identity_conflict")
+                    raise OfflineConflictError("identity_conflict")
                 return existing
             if len(self._records) >= self._max_items:
                 raise OfflineDeniedError("offline_sync_queue_full")
