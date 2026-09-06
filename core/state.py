@@ -99,10 +99,13 @@ class StateStore:
             raise ValueError("invalid_confidence")
         if not isinstance(state.verification_results, list):
             raise ValueError("invalid_verification_results")
-        if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
-            raise ValueError("invalid_principal_id")
-        if not self._valid_fingerprint(principal_key_fingerprint):
-            raise ValueError("invalid_principal_key_fingerprint")
+        # Identity binding is optional only for legacy callers; whenever supplied,
+        # both the principal and its exact public-key fingerprint are mandatory.
+        if principal_id or principal_key_fingerprint:
+            if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
+                raise ValueError("invalid_principal_id")
+            if not self._valid_fingerprint(principal_key_fingerprint):
+                raise ValueError("invalid_principal_key_fingerprint")
         with self._lock:
             # execution_id is the durable execution identity. Once committed it is
             # single-use; accepting a second commit would permit replay/overwrite.
