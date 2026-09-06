@@ -51,6 +51,12 @@ class StateStore:
         self._sequence = 0
         self._lock = RLock()
 
+    @property
+    def version(self) -> int:
+        """Monotonic local state version used as an offline sync base."""
+        with self._lock:
+            return self._sequence
+
     @staticmethod
     def _valid_id(value: str, max_bytes: int) -> bool:
         return isinstance(value, str) and bool(value.strip()) and len(value.encode("utf-8")) <= max_bytes
