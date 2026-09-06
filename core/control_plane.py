@@ -36,6 +36,8 @@ class Noryx7ControlPlane:
         self.recovery = RecoveryController()
         self.adversarial = AdversarialEngine()
         self.defense = DefenseController()
+        # The control-plane core is the only component pre-trusted for recovery.
+        self.defense.trust_component("core")
 
     def admit_artifact(self, manifest: ArtifactManifest) -> bool:
         return self.supply_chain.verify(manifest)
@@ -52,11 +54,19 @@ class Noryx7ControlPlane:
         if self.recovery.state is not RecoveryState.TRUSTED_ONLY:
             raise PermissionError("trusted_only_state_required")
         self.recovery.recover()
+        self.defense.enter_recovery()
 
     def mark_verified(self) -> None:
         if self.recovery.state is not RecoveryState.RECOVERY:
             raise PermissionError("recovery_state_required")
+        self.defense.finish_recovery(verified_components=("core",))
         self.recovery.verify(True)
+
+    def resume_normal(self) -> None:
+        if self.recovery.state is not RecoveryState.VERIFIED:
+            raise PermissionError("verified_state_required")
+        self.defense.resume_normal()
+        self.recovery.resume()
 
     def status(self) -> ControlPlaneStatus:
         return ControlPlaneStatus(self.defense.mode, self.recovery.state, len(self.events.snapshot()))
