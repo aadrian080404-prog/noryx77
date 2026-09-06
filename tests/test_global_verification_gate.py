@@ -14,6 +14,7 @@ REQUIRED_MODULES = (
     "core.authorization_replay",
     "core.control_plane",
     "core.crypto",
+    "core.cyber_range",
     "core.defense",
     "core.hypersynth",
     "core.hypersynth_runtime",
