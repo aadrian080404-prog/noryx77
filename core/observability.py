@@ -39,7 +39,13 @@ class SecurityEventBus:
         self._lock = RLock()
 
     def publish(self, kind: EventKind, *, component: str, severity: int, evidence_digest: str) -> ObservedEvent:
-        if not isinstance(kind, EventKind) or not component or not isinstance(evidence_digest, str) or len(evidence_digest) != 64:
+        if (
+            not isinstance(kind, EventKind)
+            or not component
+            or not isinstance(evidence_digest, str)
+            or len(evidence_digest) != 64
+            or any(c not in "0123456789abcdef" for c in evidence_digest)
+        ):
             raise ValueError("invalid_security_event")
         if not isinstance(severity, int) or isinstance(severity, bool) or not 0 <= severity <= 100:
             raise ValueError("invalid_severity")
