@@ -19,6 +19,11 @@ def test_high_risk_action_requires_threshold_and_current_epoch():
     assert not auth.verify(proof, action_id="other", epoch=4)
 
 
+def test_malformed_legacy_proof_fails_closed():
+    auth = ThresholdAuthorizer(required_threshold=2)
+    assert not auth.verify(object(), action_id="delete-root", epoch=4)
+
+
 def test_duplicate_approvers_are_rejected():
     with pytest.raises(ValueError):
         AuthorizationProof("x", ("a", "a"), 2, 1)
