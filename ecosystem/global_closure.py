@@ -1,7 +1,7 @@
 """Executable cross-layer closure gate for NORYX7.
 
-This gate intentionally separates structural presence from runtime evidence. It
-verifies that the critical persistence, offline, identity, key, control-plane,
+This gate separates structural presence from runtime evidence. It verifies that
+critical persistence, orchestration, identity, security, recovery, verification,
 and browser seams are wired at import/interface level. It does not pretend that
 external KMS/HSM, hardware monotonic counters, Android devices, or CI runners
 have been validated locally.
@@ -22,6 +22,7 @@ class ClosureReport:
 _REQUIRED_MODULES = (
     "core.state",
     "core.state_journal",
+    "core.runtime",
     "core.offline",
     "core.offline_anchor",
     "core.attestation",
@@ -38,6 +39,7 @@ _REQUIRED_MODULES = (
 _REQUIRED_SYMBOLS = {
     "core.state": ("NORYXState", "StateCommit", "StateStore"),
     "core.state_journal": ("StateJournal",),
+    "core.runtime": ("NORYXRuntime",),
     "core.offline": ("OfflineRuntime", "OfflineSnapshot", "OfflineExecution"),
     "core.offline_anchor": ("MonotonicAnchor",),
     "core.attestation": ("Attestation", "AttestationVerifier", "RuntimeIdentity"),
@@ -48,6 +50,26 @@ _REQUIRED_SYMBOLS = {
     "core.recovery": ("RecoveryController",),
     "core.verification": ("VerificationEngine",),
 }
+
+_REQUIRED_PATHS = (
+    "core/state.py",
+    "core/state_journal.py",
+    "core/runtime.py",
+    "core/offline.py",
+    "core/offline_anchor.py",
+    "core/attestation.py",
+    "core/key_lifecycle.py",
+    "core/crypto.py",
+    "core/control_plane.py",
+    "core/observability.py",
+    "core/security.py",
+    "core/recovery.py",
+    "core/verification.py",
+    "noryx-browser/settings.gradle.kts",
+    "noryx-browser/app/build.gradle.kts",
+    "noryx-browser/app/src/main/AndroidManifest.xml",
+    "devtools/test_lab/runner.py",
+)
 
 
 def evaluate(repository_root: str | Path | None = None) -> ClosureReport:
@@ -63,20 +85,7 @@ def evaluate(repository_root: str | Path | None = None) -> ClosureReport:
                 problems.append(f"symbol:{module_name}:{symbol}")
 
     root = Path(repository_root).resolve() if repository_root is not None else Path(__file__).resolve().parents[1]
-    required_paths = (
-        "core/state.py",
-        "core/state_journal.py",
-        "core/offline.py",
-        "core/offline_anchor.py",
-        "core/attestation.py",
-        "core/key_lifecycle.py",
-        "core/control_plane.py",
-        "core/observability.py",
-        "noryx-browser/settings.gradle.kts",
-        "noryx-browser/app/build.gradle.kts",
-        "noryx-browser/app/src/main/AndroidManifest.xml",
-    )
-    problems.extend(f"path:{path}" for path in required_paths if not (root / path).exists())
+    problems.extend(f"path:{path}" for path in _REQUIRED_PATHS if not (root / path).exists())
     return ClosureReport(not problems, tuple(problems))
 
 
@@ -84,3 +93,15 @@ def require_closed(repository_root: str | Path | None = None) -> None:
     report = evaluate(repository_root)
     if not report.passed:
         raise RuntimeError("global_infrastructure_not_closed:" + ",".join(report.problems))
+
+
+def main() -> int:
+    report = evaluate()
+    print("NORYX7 GLOBAL CLOSURE: " + ("PASS" if report.passed else "FAIL"))
+    for problem in report.problems:
+        print(problem)
+    return 0 if report.passed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
