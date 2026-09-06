@@ -58,6 +58,25 @@ def test_runtime_offline_rejects_unconfigured_execution():
     assert result["reason"] == "offline_not_configured"
 
 
+def test_runtime_offline_rejects_missing_execution_identity_before_local_execution():
+    runtime = _runtime()
+    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1})
+    called = False
+
+    def local_executor(_task):
+        nonlocal called
+        called = True
+        return "must-not-run"
+
+    result = runtime.run_offline(task, capability="compute_local", local_executor=local_executor)
+
+    assert result["status"] == "rejected"
+    assert result["reason"] == "offline_execution_id_required"
+    assert called is False
+    assert len(runtime.state) == 0
+    assert len(runtime.offline.queue) == 0
+
+
 def test_runtime_offline_does_not_commit_unverified_result():
     runtime = _runtime()
     runtime.install_offline_snapshot(_snapshot("exec-1"))
