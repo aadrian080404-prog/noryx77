@@ -16,8 +16,8 @@ concurrency:
 jobs:
   foundation:
     name: Foundation — compile, tests, verification
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -36,6 +36,10 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest core noryx7_runtime ecosystem jarvis tests -q 2>&1 | tee test-output.txt
+      - name: Verify NORYX Browser
+        working-directory: noryx-browser
+        run: |
+          gradle test assembleDebug --no-daemon
       - name: Publish verification summary
         if: always()
         shell: bash
@@ -47,7 +51,7 @@ jobs:
             echo "Branch: ${GITHUB_REF_NAME}"
             echo "Job status: ${{ job.status }}"
             echo ""
-            echo "### Test output (tail)"
+            echo "### Python test output (tail)"
             echo '```text'
             tail -n 120 test-output.txt 2>/dev/null || true
             echo '```'
