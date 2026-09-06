@@ -41,3 +41,24 @@ def test_identity_authorization_is_explicit_and_revocable():
     fabric.revoke("session")
     with pytest.raises(PermissionError):
         fabric.authorize("session", "read", digest("policy"))
+
+
+def test_existing_session_cannot_be_rebound_to_different_identity():
+    fabric = GlobalIdentityAuthorizationFabric()
+    first = IdentityAuthorization("id-a", "session", "device-a", "operator", ("read",), digest("policy"), digest("grant-a"))
+    second = IdentityAuthorization("id-b", "session", "device-b", "operator", ("read",), digest("policy"), digest("grant-b"))
+    fabric.bind(first)
+    with pytest.raises(PermissionError, match="binding_mismatch"):
+        fabric.bind(second)
+    assert fabric.authorize("session", "read", digest("policy")) == first
+
+
+def test_same_identity_session_may_refresh_authorization_without_swapping_identity():
+    fabric = GlobalIdentityAuthorizationFabric()
+    first = IdentityAuthorization("id-a", "session", "device-a", "operator", ("read",), digest("policy"), digest("grant-a"))
+    refreshed = IdentityAuthorization("id-a", "session", "device-a", "operator", ("read", "write"), digest("policy-2"), digest("grant-b"))
+    fabric.bind(first)
+    fabric.bind(refreshed)
+    with pytest.raises(PermissionError):
+        fabric.authorize("session", "read", digest("policy"))
+    assert fabric.authorize("session", "write", digest("policy-2")) == refreshed
