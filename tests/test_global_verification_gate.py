@@ -9,7 +9,9 @@ from ecosystem.completeness import evaluate, require_complete
 
 REQUIRED_MODULES = (
     "core.actions",
+    "core.control_plane",
     "core.crypto",
+    "core.defense",
     "core.hypersynth",
     "core.hypersynth_runtime",
     "core.identity",
@@ -17,8 +19,10 @@ REQUIRED_MODULES = (
     "core.offline",
     "core.recovery",
     "core.runtime",
+    "core.security_integration",
     "core.state",
     "core.tools",
+    "core.multiauth",
     "ecosystem.boundaries",
     "ecosystem.dispatch_contract",
     "ecosystem.global_fabric",
