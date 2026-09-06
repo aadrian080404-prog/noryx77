@@ -46,3 +46,16 @@ def test_control_plane_recovery_methods_fail_closed_on_wrong_state():
     with pytest.raises(PermissionError):
         control.resume_normal()
     assert control.status().event_count == 0
+
+
+def test_control_plane_detects_desynchronized_security_planes_before_transition():
+    control = Noryx7ControlPlane(supply_chain=SupplyChainVerifier())
+    control.defense.enter_lockdown("test desynchronization")
+
+    with pytest.raises(PermissionError, match="control_plane_state_desynchronized"):
+        control.incident()
+
+    # The recovery plane was not advanced after the mismatch was detected.
+    assert control.recovery.snapshot() == (RecoveryState.NORMAL, 0)
+    assert control.defense.mode is DefenseMode.LOCKDOWN
+    assert control.status().event_count == 0
