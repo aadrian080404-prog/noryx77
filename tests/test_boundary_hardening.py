@@ -6,11 +6,21 @@ from ecosystem.dispatch_contract import make_receipt
 
 def test_intent_rejects_oversized_payload():
     with pytest.raises(ValueError, match="payload_size_exceeded"):
-        make_intent(Front.ORCHESTRATION, "run", b"x" * (4 * 1024 * 1024 + 1))
+        make_intent(
+            Front.ORCHESTRATION,
+            "run",
+            b"x" * (4 * 1024 * 1024 + 1),
+            principal_id="principal-test",
+        )
 
 
 def test_receipt_rejects_blank_reason_and_oversized_evidence():
-    intent = make_intent(Front.ORCHESTRATION, "run", b"x")
+    intent = make_intent(
+        Front.ORCHESTRATION,
+        "run",
+        b"x",
+        principal_id="principal-test",
+    )
     with pytest.raises(ValueError, match="invalid_reason"):
         make_receipt(
             intent,
