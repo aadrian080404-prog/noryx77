@@ -1,4 +1,5 @@
 from .contracts import AgentResult, TaskSpec
+from .identity import AgentIdentity
 from .verification import VerificationEngine
 
 
@@ -12,8 +13,12 @@ class Agent:
 class DeterministicAgent(Agent):
     agent_id = "deterministic"
 
-    def __init__(self, verifier: VerificationEngine | None = None):
+    def __init__(self, verifier: VerificationEngine | None = None, identity: AgentIdentity | None = None):
         self.verifier = verifier or VerificationEngine()
+        if identity is not None:
+            if not isinstance(identity, AgentIdentity) or not identity.is_well_formed() or identity.agent_id != self.agent_id:
+                raise ValueError("invalid_deterministic_agent_identity")
+        self.identity = identity
 
     def run(self, task: TaskSpec) -> AgentResult:
         check = self.verifier.verify_task(task)
