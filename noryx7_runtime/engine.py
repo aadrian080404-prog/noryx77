@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__
 
 import hashlib
 import json
@@ -73,6 +73,7 @@ class RuntimeEngine:
         if high_risk_action_types is None: high_risk_action_types = frozenset()
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
+        if high_risk_action_types and replay_guard is None: raise ValueError("high_risk_actions_require_replay_guard")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
@@ -116,6 +117,9 @@ class RuntimeEngine:
             return
         if self._multi_auth_authority is None or self._authorization_provider is None:
             raise PermissionError("multi_auth_required")
+        if self._replay_guard is None:
+            # Constructor invariants make this unreachable for configured high-risk actions.
+            raise PermissionError("replay_guard_required")
         try:
             statement = bytes.fromhex(action_digest)
             proof = self._authorization_provider(envelope, statement)
@@ -130,7 +134,7 @@ class RuntimeEngine:
             action_statement=statement,
         ):
             raise PermissionError("authorization_proof_invalid")
-        if self._replay_guard is not None and not self._replay_guard.consume(statement):
+        if not self._replay_guard.consume(statement):
             raise PermissionError("authorization_replay_detected")
 
     def execute(self, intent: Intent, steps: Sequence[PlanStep], *, executor: Executor | None = None,
