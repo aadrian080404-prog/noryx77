@@ -1,4 +1,4 @@
-from .agent_core import AgentContext, AgentCore, AgentInput, AgentPlan, AgentResponse, InteractionMode
+from .agent_core import AgentContext, AgentCore, AgentInput, AgentPlan, AgentResponse
 from .agent_fabric import AgentBinding, AgentFabric
 from .agent_skills import AgentSkill, AgentSkillRegistry
 from .identity import AgentIdentityAuthority, IdentityRegistry
@@ -50,6 +50,24 @@ def test_dispatch_requires_principal_authorization():
 def test_dispatch_runs_verified_agent():
     fabric, _, _ = make_fabric()
     assert fabric.dispatch(principal_id="owner", request=AgentInput("hello"), required_skill="skill") == "done"
+
+
+def test_principal_is_bound_into_agent_context():
+    fabric, _, _ = make_fabric()
+    seen = []
+    fabric._authorize_principal = lambda principal, binding, request: seen.append(request.context["noryx7_principal_id"]) or principal == "owner"
+    assert fabric.dispatch(principal_id="owner", request=AgentInput("hello"), required_skill="skill") == "done"
+    assert seen == ["owner"]
+
+
+def test_principal_context_spoofing_is_rejected():
+    fabric, _, _ = make_fabric()
+    try:
+        fabric.dispatch(principal_id="owner", request=AgentInput("hello", context={"noryx7_principal_id": "other"}))
+    except PermissionError as exc:
+        assert str(exc) == "principal_context_mismatch"
+    else:
+        raise AssertionError("spoofed principal context was accepted")
 
 
 def test_revoked_identity_is_rejected():
