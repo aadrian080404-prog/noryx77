@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from math import isfinite
 
-from .challenge_verification import IndependentChallengeVerifier
+from .metacognitive_challenge import PipelineChallengeVerifier
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .reasoning import Hypothesis, SimulationResult
 from .planning import Plan
@@ -26,7 +26,7 @@ class MetacognitionEngine:
     """Bounded final self-check with an independent challenge-verification path."""
 
     def __init__(self, challenge_verifier=None):
-        self.challenge_verifier = challenge_verifier or IndependentChallengeVerifier()
+        self.challenge_verifier = challenge_verifier or PipelineChallengeVerifier()
         if not hasattr(self.challenge_verifier, "verify") or not callable(self.challenge_verifier.verify):
             raise TypeError("invalid_challenge_verifier")
 
