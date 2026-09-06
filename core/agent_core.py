@@ -1,11 +1,3 @@
-"""Native operating contract and fast execution loop for NORYX7 agents.
-
-The Agent Core is deliberately model/provider agnostic. It defines how an agent
-perceives input, builds context, plans, requests authorization, acts, observes,
-verifies, reflects and responds. Text and voice are transport adapters, not
-separate brains, so the same agent remains deterministic about policy and
-capabilities regardless of interface.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,246 +6,105 @@ from threading import RLock
 from typing import Any, Callable, Mapping, Protocol
 
 
-MAX_TEXT = 64 * 1024
-MAX_CONTEXT_ITEMS = 128
-MAX_PLAN_STEPS = 64
-MAX_REGISTERED_AGENTS = 1024
-
-
 class AgentPhase(str, Enum):
-    IDLE = "idle"
-    UNDERSTANDING = "understanding"
-    PLANNING = "planning"
-    AUTHORIZING = "authorizing"
-    ACTING = "acting"
-    OBSERVING = "observing"
-    VERIFYING = "verifying"
-    REFLECTING = "reflecting"
-    RESPONDING = "responding"
-    FAILED = "failed"
-
-
-class InteractionMode(str, Enum):
-    TEXT = "text"
-    VOICE = "voice"
-
+    IDLE = "idle"; UNDERSTANDING = "understanding"; PLANNING = "planning"; AUTHORIZING = "authorizing"; ACTING = "acting"; OBSERVING = "observing"; VERIFYING = "verifying"; REFLECTING = "reflecting"; RESPONDING = "responding"; FAILED = "failed"
+class InteractionMode(str, Enum): TEXT = "text"; VOICE = "voice"
 
 @dataclass(frozen=True)
 class AgentInput:
-    content: str
-    mode: InteractionMode = InteractionMode.TEXT
-    context: Mapping[str, Any] = field(default_factory=dict)
-
-    def validate(self) -> None:
-        if not isinstance(self.content, str) or not self.content.strip():
-            raise ValueError("agent_input_required")
-        if len(self.content.encode("utf-8")) > MAX_TEXT:
-            raise ValueError("agent_input_too_large")
-        if not isinstance(self.mode, InteractionMode):
-            raise TypeError("invalid_interaction_mode")
-        if not isinstance(self.context, Mapping) or len(self.context) > MAX_CONTEXT_ITEMS:
-            raise ValueError("invalid_agent_context")
-
+    content: str; mode: InteractionMode = InteractionMode.TEXT; context: Mapping[str, Any] = field(default_factory=dict)
+    def __post_init__(self):
+        if not isinstance(self.content, str) or not self.content.strip(): raise ValueError("content must be non-empty")
+        if len(self.content.encode("utf-8")) > 64 * 1024: raise ValueError("input exceeds 64KiB")
+        if not isinstance(self.mode, InteractionMode): raise TypeError("mode must be InteractionMode")
+        if len(self.context) > 128: raise ValueError("context exceeds 128 items")
 
 @dataclass(frozen=True)
 class AgentContext:
-    objective: str
-    input: AgentInput
-    facts: Mapping[str, Any] = field(default_factory=dict)
-
-
+    objective: str; input: AgentInput; facts: Mapping[str, Any] = field(default_factory=dict)
 @dataclass(frozen=True)
 class AgentPlan:
     steps: tuple[str, ...]
-
-    def validate(self) -> None:
-        if not self.steps or len(self.steps) > MAX_PLAN_STEPS:
-            raise ValueError("invalid_agent_plan")
-        if any(not isinstance(step, str) or not step.strip() for step in self.steps):
-            raise ValueError("invalid_agent_plan_step")
-
-
+    def __post_init__(self):
+        if not self.steps or len(self.steps) > 64 or any(not isinstance(s, str) or not s.strip() for s in self.steps): raise ValueError("invalid agent plan")
 @dataclass(frozen=True)
 class AgentResponse:
-    content: str
-    mode: InteractionMode
-    phase: AgentPhase = AgentPhase.RESPONDING
-    verified: bool = False
-
+    content: str; mode: InteractionMode; phase: AgentPhase = AgentPhase.RESPONDING; verified: bool = False
 
 class AgentBrain(Protocol):
     def understand(self, request: AgentInput) -> AgentContext: ...
     def plan(self, context: AgentContext) -> AgentPlan: ...
-    def act(self, context: AgentContext, step: str) -> Any: ...
-    def verify(self, context: AgentContext, step: str, result: Any) -> bool: ...
-    def reflect(self, context: AgentContext, results: tuple[Any, ...]) -> str: ...
-    def respond(self, context: AgentContext, reflection: str, mode: InteractionMode) -> AgentResponse: ...
+    def act(self, step: str, context: AgentContext) -> Any: ...
+    def verify(self, step: str, result: Any, context: AgentContext) -> bool: ...
+    def reflect(self, context: AgentContext, results: tuple[Any, ...]) -> Any: ...
+    def respond(self, context: AgentContext, reflection: Any, results: tuple[Any, ...]) -> AgentResponse: ...
 
-
-class AuthorizationHook(Protocol):
-    def __call__(self, context: AgentContext, step: str) -> bool: ...
-
-
+AuthorizationHook = Callable[[str, AgentContext], bool]
 class AgentTransport(Protocol):
-    def encode(self, response: AgentResponse) -> Any: ...
-
-
+    def deliver(self, response: AgentResponse) -> AgentResponse: ...
 class TextTransport:
-    def encode(self, response: AgentResponse) -> str:
-        if not isinstance(response, AgentResponse):
-            raise TypeError("agent_response_required")
-        return response.content
-
-
+    def deliver(self, response: AgentResponse) -> AgentResponse: return response
 class VoiceTransport:
-    """Speech boundary only; actual STT/TTS engines are injected by the host."""
-    def __init__(self, *, synthesize: Callable[[str], Any], transcribe: Callable[[Any], str] | None = None) -> None:
-        if not callable(synthesize):
-            raise TypeError("voice_synthesizer_required")
-        if transcribe is not None and not callable(transcribe):
-            raise TypeError("voice_transcriber_invalid")
-        self._synthesize = synthesize
-        self._transcribe = transcribe
-
-    def decode(self, audio: Any) -> str:
-        if self._transcribe is None:
-            raise RuntimeError("voice_transcriber_unavailable")
-        text = self._transcribe(audio)
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError("voice_transcription_invalid")
-        return text
-
-    def encode(self, response: AgentResponse) -> Any:
-        if not isinstance(response, AgentResponse):
-            raise TypeError("agent_response_required")
-        return self._synthesize(response.content)
-
+    def deliver(self, response: AgentResponse) -> AgentResponse: return response
 
 class AgentOperatingManual:
-    """Immutable policy surface describing the mandatory agent lifecycle."""
-    PHASES = (
-        AgentPhase.UNDERSTANDING, AgentPhase.PLANNING, AgentPhase.AUTHORIZING,
-        AgentPhase.ACTING, AgentPhase.OBSERVING, AgentPhase.VERIFYING,
-        AgentPhase.REFLECTING, AgentPhase.RESPONDING,
-    )
-
-    @classmethod
-    def validate(cls) -> None:
-        if cls.PHASES[0] is not AgentPhase.UNDERSTANDING or cls.PHASES[-1] is not AgentPhase.RESPONDING:
-            raise RuntimeError("agent_manual_corrupt")
-        if len(set(cls.PHASES)) != len(cls.PHASES):
-            raise RuntimeError("agent_manual_duplicate_phase")
-
+    PHASES = (AgentPhase.UNDERSTANDING, AgentPhase.PLANNING, AgentPhase.AUTHORIZING, AgentPhase.ACTING, AgentPhase.OBSERVING, AgentPhase.VERIFYING, AgentPhase.REFLECTING, AgentPhase.RESPONDING)
 
 class AgentCore:
-    """Fast, bounded agent lifecycle with fail-closed authorization/verification."""
-    def __init__(self, *, agent_id: str, brain: AgentBrain, authorize: AuthorizationHook | None = None,
-                 transport: AgentTransport | None = None, max_steps: int = MAX_PLAN_STEPS) -> None:
-        if not isinstance(agent_id, str) or not agent_id.strip():
-            raise ValueError("agent_id_required")
-        for name in ("understand", "plan", "act", "verify", "reflect", "respond"):
-            if not callable(getattr(brain, name, None)):
-                raise TypeError(f"brain_missing_{name}")
-        if authorize is not None and not callable(authorize):
-            raise TypeError("authorize_must_be_callable")
-        if transport is not None and not callable(getattr(transport, "encode", None)):
-            raise TypeError("transport_must_expose_encode")
-        if isinstance(max_steps, bool) or not isinstance(max_steps, int) or not 1 <= max_steps <= MAX_PLAN_STEPS:
-            raise ValueError("invalid_max_steps")
-        AgentOperatingManual.validate()
-        self.agent_id = agent_id
-        self._brain = brain
-        self._authorize = authorize
-        self._transport = transport or TextTransport()
-        self._max_steps = max_steps
-        self._lock = RLock()
-        self._phase = AgentPhase.IDLE
-
+    def __init__(self, agent_id: str, brain: AgentBrain, authorize: AuthorizationHook | None = None, transport: AgentTransport | None = None, max_steps: int = 64) -> None:
+        if not isinstance(agent_id, str) or not agent_id: raise ValueError("agent_id must be non-empty")
+        if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps < 1: raise ValueError("max_steps must be positive")
+        self.agent_id, self.brain, self.authorize, self.transport, self.max_steps = agent_id, brain, authorize, transport, max_steps
+        self._phase = AgentPhase.IDLE; self._last_failure: str | None = None; self._lock = RLock()
     @property
     def phase(self) -> AgentPhase:
+        with self._lock: return self._phase
+    @property
+    def last_failure(self) -> str | None:
+        with self._lock: return self._last_failure
+    def _set_phase(self, phase: AgentPhase) -> None: self._phase = phase
+    def reset(self) -> None:
+        """Explicitly recover a failed agent; never auto-resets a failed execution."""
         with self._lock:
-            return self._phase
-
-    def _set_phase(self, phase: AgentPhase) -> None:
+            if self._phase is not AgentPhase.FAILED: raise ValueError("agent_not_failed")
+            self._phase = AgentPhase.IDLE; self._last_failure = None
+    def run(self, request: AgentInput) -> AgentResponse:
         with self._lock:
-            self._phase = phase
-
-    def run(self, request: AgentInput) -> Any:
-        request.validate()
-        with self._lock:
-            if self._phase is not AgentPhase.IDLE:
-                raise RuntimeError("agent_busy")
-            self._phase = AgentPhase.UNDERSTANDING
-        try:
-            context = self._brain.understand(request)
-            if not isinstance(context, AgentContext):
-                raise TypeError("brain_returned_invalid_context")
-            self._set_phase(AgentPhase.PLANNING)
-            plan = self._brain.plan(context)
-            if not isinstance(plan, AgentPlan):
-                raise TypeError("brain_returned_invalid_plan")
-            plan.validate()
-            if len(plan.steps) > self._max_steps:
-                raise ValueError("agent_step_budget_exceeded")
-            results: list[Any] = []
-            for step in plan.steps:
-                self._set_phase(AgentPhase.AUTHORIZING)
-                if self._authorize is not None and not bool(self._authorize(context, step)):
-                    raise PermissionError("agent_action_denied")
-                self._set_phase(AgentPhase.ACTING)
-                result = self._brain.act(context, step)
-                self._set_phase(AgentPhase.OBSERVING)
-                observed = result
-                self._set_phase(AgentPhase.VERIFYING)
-                if not bool(self._brain.verify(context, step, observed)):
-                    raise PermissionError("agent_result_verification_failed")
-                results.append(observed)
-            self._set_phase(AgentPhase.REFLECTING)
-            reflection = self._brain.reflect(context, tuple(results))
-            if not isinstance(reflection, str) or len(reflection.encode("utf-8")) > MAX_TEXT:
-                raise ValueError("agent_reflection_invalid")
-            self._set_phase(AgentPhase.RESPONDING)
-            response = self._brain.respond(context, reflection, request.mode)
-            if not isinstance(response, AgentResponse) or not response.verified:
-                raise PermissionError("agent_response_unverified")
-            return self._transport.encode(response)
-        except Exception:
-            self._set_phase(AgentPhase.FAILED)
-            raise
-        finally:
-            with self._lock:
-                if self._phase is not AgentPhase.FAILED:
-                    self._phase = AgentPhase.IDLE
-
+            if self._phase is AgentPhase.FAILED: raise RuntimeError("agent_failed_requires_reset")
+            if self._phase is not AgentPhase.IDLE: raise RuntimeError("agent_busy")
+            try:
+                self._set_phase(AgentPhase.UNDERSTANDING); context = self.brain.understand(request)
+                self._set_phase(AgentPhase.PLANNING); plan = self.brain.plan(context)
+                if len(plan.steps) > self.max_steps: raise ValueError("agent_step_budget_exceeded")
+                results = []
+                for step in plan.steps:
+                    self._set_phase(AgentPhase.AUTHORIZING)
+                    if self.authorize is not None and not self.authorize(step, context): raise PermissionError("agent_action_denied")
+                    self._set_phase(AgentPhase.ACTING); result = self.brain.act(step, context)
+                    self._set_phase(AgentPhase.OBSERVING); self._set_phase(AgentPhase.VERIFYING)
+                    if not self.brain.verify(step, result, context): raise PermissionError("agent_result_unverified")
+                    results.append(result)
+                self._set_phase(AgentPhase.REFLECTING); reflection = self.brain.reflect(context, tuple(results))
+                self._set_phase(AgentPhase.RESPONDING); response = self.brain.respond(context, reflection, tuple(results))
+                if not isinstance(response, AgentResponse) or not response.verified or response.phase is not AgentPhase.RESPONDING: raise PermissionError("agent_response_unverified")
+                if self.transport is not None: response = self.transport.deliver(response)
+                self._set_phase(AgentPhase.IDLE); return response
+            except Exception as exc:
+                self._last_failure = type(exc).__name__
+                self._set_phase(AgentPhase.FAILED)
+                raise
 
 class AgentRegistry:
-    """Bounded, thread-safe registry for deterministic multi-agent dispatch."""
-    def __init__(self, *, max_agents: int = MAX_REGISTERED_AGENTS) -> None:
-        if isinstance(max_agents, bool) or not isinstance(max_agents, int) or not 1 <= max_agents <= MAX_REGISTERED_AGENTS:
-            raise ValueError("invalid_max_agents")
-        self._max_agents = max_agents
-        self._agents: dict[str, AgentCore] = {}
-        self._lock = RLock()
-
+    def __init__(self, max_agents: int = 1024):
+        if not isinstance(max_agents, int) or isinstance(max_agents, bool) or max_agents < 1: raise ValueError("max_agents must be positive")
+        self._max_agents = max_agents; self._agents = {}; self._lock = RLock()
     def register(self, agent: AgentCore) -> None:
-        if not isinstance(agent, AgentCore):
-            raise TypeError("agent_core_required")
+        if not isinstance(agent, AgentCore): raise TypeError("agent must be AgentCore")
         with self._lock:
-            if agent.agent_id in self._agents:
-                raise ValueError("agent_id_already_registered")
-            if len(self._agents) >= self._max_agents:
-                raise RuntimeError("agent_registry_capacity_exceeded")
+            if agent.agent_id in self._agents: raise ValueError("duplicate agent")
+            if len(self._agents) >= self._max_agents: raise OverflowError("agent registry capacity exceeded")
             self._agents[agent.agent_id] = agent
-
     def get(self, agent_id: str) -> AgentCore:
-        if not isinstance(agent_id, str) or not agent_id.strip():
-            raise ValueError("agent_id_required")
-        with self._lock:
-            try:
-                return self._agents[agent_id]
-            except KeyError as exc:
-                raise KeyError("agent_not_registered") from exc
-
-    def snapshot(self) -> tuple[str, ...]:
-        with self._lock:
-            return tuple(sorted(self._agents))
+        with self._lock: return self._agents[agent_id]
+    def snapshot(self) -> tuple[AgentCore, ...]:
+        with self._lock: return tuple(self._agents[key] for key in sorted(self._agents))
