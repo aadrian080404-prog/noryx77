@@ -22,12 +22,16 @@ def spec():
     return ChallengeSpec("c1", ChallengeDomain.NOVEL, 0.7, digest("prompt"), digest("answer"), 3)
 
 
-def trace(success=True):
-    return ChallengeTrace(0.8, 0.9 if success else 0.2, "verify-and-revise", 3, 2, 2, digest("answer"), True, success)
+def trace(success=True, self_claim=True):
+    return ChallengeTrace(0.8, 0.9 if success else 0.2, "verify-and-revise", 3, 2, 2, digest("answer"), self_claim, success)
 
 
-def verification(challenge=None, challenge_trace=None):
-    return IndependentChallengeVerifier().verify(challenge or spec(), challenge_trace or trace())
+def verifier_fn(challenge, challenge_trace):
+    return challenge_trace.answer_digest == challenge.expected_answer_digest and challenge_trace.task_success
+
+
+def verification(challenge=None, challenge_trace=None, verifier=verifier_fn):
+    return IndependentChallengeVerifier(verifier).verify(challenge or spec(), challenge_trace or trace())
 
 
 def evaluate(challenge=None, challenge_trace=None):
@@ -53,6 +57,17 @@ def test_failed_challenge_does_not_claim_improvement():
     score = evaluate(challenge_trace=trace(False))
     assert score.task_performance == 0.0
     assert AdaptiveChallengeController().next_level(3, score) == 2
+
+
+def test_trace_self_assertion_cannot_create_independent_verification():
+    challenge = spec()
+    forged = trace(self_claim=True)
+    verification_result = verification(challenge, forged, verifier=lambda _challenge, _trace: False)
+    assert verification_result.answer_matches
+    assert not verification_result.independent_verified
+    assert evaluate(challenge, forged) is not None
+    score = MetacognitiveChallengeEvaluator().evaluate(challenge, forged, verification_result)
+    assert score.task_performance == 0.0
 
 
 def test_improvement_requires_independent_verification_evidence():
