@@ -1,4 +1,6 @@
-from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
+from .actions import ActionGate
+from .contracts import ActionSpec, VerificationResult
+
 
 class CapabilityRegistry:
     """Explicit registry of capabilities. Unknown capabilities are denied."""
@@ -27,28 +29,42 @@ class CapabilityRegistry:
 
 
 class ToolExecutor:
-    """Tool boundary: capability lookup -> policy -> execution -> verification."""
-    def __init__(self, policy, verifier):
-        self.policy = policy
+    """Tool boundary: capability lookup -> ActionGate -> execution -> verification.
+
+    ToolExecutor is intentionally not an independent authorization path. Every tool
+    invocation must pass through the canonical ActionGate before its handler runs.
+    """
+    def __init__(self, action_gate, verifier):
+        if not isinstance(action_gate, ActionGate):
+            raise ValueError("action_gate_required")
+        if not hasattr(verifier, "verify_output") or not callable(verifier.verify_output):
+            raise ValueError("verifier_required")
+        self.action_gate = action_gate
         self.verifier = verifier
         self.capabilities = CapabilityRegistry()
 
-    def execute(self, action: ActionSpec):
+    def execute(self, action: ActionSpec, calls_used: int = 0, *, execution_id=None, grant=None, principal=None):
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
         handler = self.capabilities.resolve(action.action_type)
         if handler is None:
             return None, VerificationResult(False, "tool_policy", "unknown_capability")
+
+        effective_execution_id = action.execution_id if execution_id is None and action.execution_id else execution_id
         try:
-            policy_allowed = self.policy.allows(action)
+            decision, output = self.action_gate.authorize_and_execute(
+                action,
+                lambda: handler(action.target, dict(action.parameters)),
+                calls_used,
+                execution_id=effective_execution_id,
+                grant=grant,
+                principal=principal,
+            )
         except Exception:
-            return None, VerificationResult(False, "tool_policy", "policy_evaluation_failure")
-        if not isinstance(policy_allowed, bool) or not policy_allowed:
-            return None, VerificationResult(False, "tool_policy", "action_denied")
-        try:
-            output = handler(action.target, dict(action.parameters))
-        except Exception as exc:
-            return None, VerificationResult(False, "tool_execution", f"execution_failed:{type(exc).__name__}")
+            return None, VerificationResult(False, "tool_policy", "action_gate_failure")
+        if not decision.allowed:
+            return None, VerificationResult(False, "tool_policy", decision.verification.reason or "action_denied")
+
         try:
             check = self.verifier.verify_output(output, stage="tool_result")
         except Exception:
