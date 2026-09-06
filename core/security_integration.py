@@ -22,6 +22,8 @@ class DefenseGate:
 
     This layer does not execute actions. It delegates authorization to the
     canonical DefenseController for every request, including same-zone traffic.
+    Same-zone traffic still crosses the authorization boundary; it simply does
+    not require a cross-zone segmentation rule.
     """
 
     def __init__(self, controller: DefenseController):
@@ -52,7 +54,7 @@ class DefenseGate:
             principal_id=envelope.principal_id,
             component=envelope.component_id,
             capability=envelope.capability,
-            target=envelope.target_zone,
+            target=envelope.target_zone if envelope.source_zone != envelope.target_zone else "",
             session_id=session_id,
         )
         decision = self._controller.authorize(request)
