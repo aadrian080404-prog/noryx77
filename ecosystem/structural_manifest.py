@@ -31,7 +31,8 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
     "orchestration": (
         "core/runtime.py", "core/orchestration.py", "core/interaction_context.py", "core/user_understanding.py",
         "core/state.py", "core/security.py", "core/recovery.py", "core/evaluation.py",
-        "ecosystem/boundaries.py", "ecosystem/dispatch_contract.py",
+        "ecosystem/boundaries.py", "ecosystem/dispatch_contract.py", "ecosystem/isolation.py",
+        "ecosystem/runtime_dispatch.py", "ecosystem/completeness.py", "ecosystem/structural_manifest.py",
     ),
 }
 
