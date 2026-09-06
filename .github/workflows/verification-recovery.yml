@@ -1,0 +1,48 @@
+name: NORYX7 Verification Recovery
+
+on:
+  workflow_run:
+    workflows: ["NORYX7 Foundation Verification"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  recover-runner-failure:
+    name: Recover pre-execution runner failure
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Inspect failed workflow jobs
+        id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")"
+          count="$(jq '.jobs | length' <<<"$jobs")"
+          executed="$(jq '[.jobs[].steps // [] | length] | add' <<<"$jobs")"
+          failed="$(jq '[.jobs[] | select(.conclusion == "failure")] | length' <<<"$jobs")"
+          echo "job_count=$count" >> "$GITHUB_OUTPUT"
+          echo "executed_steps=$executed" >> "$GITHUB_OUTPUT"
+          echo "failed_jobs=$failed" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ] && [ "$failed" -gt 0 ] && [ "$executed" -eq 0 ]; then
+            echo "pre_execution_failure=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pre_execution_failure=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Re-run only the failed jobs
+        if: ${{ steps.inspect.outputs.pre_execution_failure == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run rerun "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
+      - name: Record recovery decision
+        run: |
+          echo "Workflow run: ${{ github.event.workflow_run.id }}"
+          echo "Detected pre-execution failure: ${{ steps.inspect.outputs.pre_execution_failure }}"
+          echo "Recovery is limited to one automatic retry and never masks a real test failure."
