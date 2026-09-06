@@ -1,4 +1,5 @@
 import hashlib
+import json
 import time
 from uuid import uuid4
 
@@ -6,11 +7,14 @@ from .actions import ActionGate
 from .agents import DeterministicAgent
 from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
+from .crypto import AuthenticatedCipher
 from .decomposition import TaskDecomposer
 from .hypersynth_runtime import HypersynthRuntime
 from .interaction_context import InteractionContext
 from .limits import RuntimeLimits
 from .memory import MemoryStore
+from .offline import OfflineExecution, OfflineRuntime, OfflineSnapshot
+from .offline_adapters import BoundAuthenticatedCipher, PolicyOfflineAdapter, VerificationOfflineAdapter
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage
 from .policy import PolicyEngine
 from .recovery import RecoveryController
@@ -44,6 +48,109 @@ class NORYXRuntime:
             memory=self.memory,
             recovery=self.recovery,
         )
+        self._offline: OfflineRuntime | None = None
+
+    def configure_offline(self, *, cipher: AuthenticatedCipher, key_id: str,
+                          snapshot_authenticator, clock=None) -> OfflineRuntime:
+        """Install an explicit offline boundary using the same policy, verifier and recovery controller.
+
+        The key provider remains outside the runtime; production deployments must inject a
+        hardware/KMS-backed AuthenticatedCipher rather than the test-only in-memory provider.
+        """
+        bound_cipher = BoundAuthenticatedCipher(cipher, key_id=key_id)
+        offline = OfflineRuntime(
+            recovery=self.recovery,
+            policy=PolicyOfflineAdapter(self.policy),
+            verifier=VerificationOfflineAdapter(self.verifier),
+            cipher=bound_cipher,
+            clock=clock or (lambda: int(time.time())),
+            snapshot_authenticator=snapshot_authenticator,
+            max_snapshot_age=86_400,
+        )
+        self._offline = offline
+        return offline
+
+    @property
+    def offline(self) -> OfflineRuntime | None:
+        return self._offline
+
+    def install_offline_snapshot(self, snapshot: OfflineSnapshot) -> None:
+        if self._offline is None:
+            raise RuntimeError("offline_not_configured")
+        self._offline.install_snapshot(snapshot)
+
+    @staticmethod
+    def _offline_payload(task: TaskSpec) -> bytes:
+        body = {"task_id": task.task_id, "task_type": task.task_type,
+                "objective": task.objective, "input": task.input}
+        try:
+            payload = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("offline_payload_serialization_failed") from exc
+        return payload
+
+    def run_offline(self, task: TaskSpec, *, capability: str, local_executor):
+        """Execute an already-authorized local operation without invoking cloud routing.
+
+        Admission, recovery, policy, authenticated encryption, result verification and state
+        commit remain shared with the normal runtime. The caller supplies only the local
+        execution function; it must not perform network/cloud I/O.
+        """
+        if self._offline is None:
+            return {"status": "rejected", "reason": "offline_not_configured", "task_id": getattr(task, "task_id", None)}
+        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+            return {"status": "rejected", "reason": "invalid_task", "task_id": getattr(task, "task_id", None)}
+        if not isinstance(capability, str) or not capability.strip():
+            return {"status": "rejected", "reason": "offline_capability_required", "task_id": task.task_id}
+        if not callable(local_executor):
+            return {"status": "rejected", "reason": "local_executor_required", "task_id": task.task_id}
+
+        execution_id = task.execution_id or uuid4().hex
+        payload = self._offline_payload(task)
+        execution = OfflineExecution(
+            execution_id=execution_id,
+            principal_id=execution_id,
+            operation=task.task_type,
+            capability=capability,
+            payload_digest=hashlib.sha256(payload).hexdigest(),
+            base_state_version=str(self.state.version),
+        )
+
+        committed = {}
+        def commit(execution_record, result):
+            verification = self.verifier.verify_output(result, stage="runtime_result")
+            if not verification.is_well_formed() or not verification.valid:
+                raise PermissionError("offline_result_unverified")
+            state = NORYXState(
+                input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
+                goal=task.objective,
+                subtasks=[task.task_id],
+                final_answer=str(result),
+                verification_results=[{"stage": verification.stage, "valid": verification.valid, "reason": verification.reason}],
+                confidence=1.0,
+                status="verified",
+            )
+            committed["state"] = self.state.commit(
+                state, execution_id=execution_record.execution_id, task_id=task.task_id,
+                verification_valid=verification.valid, verification_stage=verification.stage,
+            )
+
+        try:
+            envelope = self._offline.execute(
+                execution=execution,
+                payload=payload,
+                execute=lambda: local_executor(task),
+                commit=commit,
+            )
+        except Exception as exc:
+            self.audit.record("offline_execution_rejected", task_id=task.task_id,
+                              execution_id=execution_id, reason=type(exc).__name__)
+            return {"status": "rejected", "reason": str(exc), "task_id": task.task_id, "execution_id": execution_id}
+        self.audit.record("offline_execution_committed", task_id=task.task_id,
+                          execution_id=execution_id, sequence=envelope.sequence)
+        return {"status": "completed", "task_id": task.task_id, "execution_id": execution_id,
+                "state_commit": committed["state"], "sync_envelope": envelope,
+                "offline_state": self._offline.state.value, "audit": self.audit.snapshot()}
 
     def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str) -> OrchestrationEnvelope:
         if not isinstance(interaction_context, InteractionContext):
@@ -172,7 +279,7 @@ class NORYXRuntime:
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.execution_id != execution_id:
                 check = VerificationResult(False, "agent_result", "execution_identity_mismatch")
-                return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
+                return self._rejection(envelope, child.task_id, "execution_identity_mismatch", self.audit, verification=check)
             if result.status != "completed":
                 check = VerificationResult(False, "agent_result", "invalid_result_status")
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
