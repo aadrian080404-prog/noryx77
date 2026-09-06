@@ -39,6 +39,9 @@ class OfflinePolicy(Protocol):
 class OfflineVerifier(Protocol):
     def verify(self, result: object) -> bool: ...
 
+class MonotonicAnchorLike(Protocol):
+    def accept(self, issued_at: int, snapshot_id: str) -> bool: ...
+
 class OfflineConflictError(RuntimeError):
     pass
 
@@ -174,11 +177,12 @@ class OfflineSyncQueue:
 T = TypeVar("T")
 
 class OfflineRuntime:
-    """Offline admission -> encrypted outbox reservation -> local execution -> verified commit -> sync."""
+    """Offline admission -> durable monotonic admission -> encrypted outbox -> verified commit -> sync."""
     def __init__(self, *, recovery: RecoveryLike, policy: OfflinePolicy, verifier: OfflineVerifier,
                  cipher: OfflineCipher, clock: Callable[[], int],
                  snapshot_authenticator: Callable[[OfflineSnapshot], bool],
-                 max_snapshot_age: int = MAX_SNAPSHOT_AGE) -> None:
+                 max_snapshot_age: int = MAX_SNAPSHOT_AGE,
+                 monotonic_anchor: MonotonicAnchorLike | None = None) -> None:
         if not callable(snapshot_authenticator) or not callable(clock):
             raise TypeError("offline_authenticator_and_clock_required")
         if isinstance(max_snapshot_age, bool) or not isinstance(max_snapshot_age, int) or max_snapshot_age < 0:
@@ -190,6 +194,7 @@ class OfflineRuntime:
         self._state = OfflineState.ONLINE
         self._lock = threading.RLock()
         self._max_snapshot_age = max_snapshot_age
+        self._monotonic_anchor = monotonic_anchor
         self._highest_snapshot_issued_at: int | None = None
         self._highest_snapshot_id: str | None = None
 
@@ -216,6 +221,13 @@ class OfflineRuntime:
         now = self._clock()
         if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
             raise OfflineDeniedError("stale_offline_snapshot")
+        if self._monotonic_anchor is not None:
+            try:
+                anchored = self._monotonic_anchor.accept(snapshot.issued_at, snapshot.snapshot_id)
+            except Exception as exc:
+                raise OfflineDeniedError("offline_anchor_unavailable") from exc
+            if anchored is not True:
+                raise OfflineDeniedError("offline_snapshot_rollback")
         with self._lock:
             if self._highest_snapshot_issued_at is not None:
                 if snapshot.issued_at < self._highest_snapshot_issued_at:
@@ -269,7 +281,6 @@ class OfflineRuntime:
         envelope = None
         try:
             envelope = self._queue.enqueue(execution, payload)
-
             def critical() -> None:
                 produced = execute() if execute is not None else result
                 try:
