@@ -11,7 +11,6 @@ from hashlib import sha256
 from threading import RLock
 from typing import Any
 
-
 MAX_ID_BYTES = 256
 MAX_DIGEST_LENGTH = 64
 MAX_RESULTS = 256
@@ -34,6 +33,7 @@ class StateCommit:
     request_id: str
     state: JarvisState
     sequence: int
+    principal_id: str
 
 
 def _valid_id(value: str) -> bool:
@@ -64,13 +64,16 @@ class JarvisStateStore:
         verified_results: bool,
         execution_id: str,
         request_id: str,
+        principal_id: str,
     ) -> StateCommit:
         if not isinstance(state, JarvisState):
             raise TypeError("state_required")
-        if not _valid_id(execution_id) or not _valid_id(request_id):
+        if not _valid_id(execution_id) or not _valid_id(request_id) or not _valid_id(principal_id):
             raise ValueError("invalid_identity")
         if state.execution_id != execution_id or state.request_id != request_id:
             raise ValueError("state_identity_mismatch")
+        if state.principal_id != principal_id:
+            raise ValueError("state_principal_mismatch")
         if verified_results is not True:
             raise PermissionError("verified_results_required")
         if not isinstance(state.request_digest, str) or len(state.request_digest) != MAX_DIGEST_LENGTH:
@@ -82,12 +85,14 @@ class JarvisStateStore:
         if any(not _valid_id(step) for step in state.completed_steps):
             raise ValueError("invalid_step_id")
         with self._lock:
-            if len(self._commits) >= self._max_commits and execution_id not in self._commits:
+            if execution_id in self._commits:
+                raise PermissionError("execution_already_committed")
+            if len(self._commits) >= self._max_commits:
                 raise MemoryError("state_capacity_exceeded")
             self._sequence += 1
             snapshot = deepcopy(state)
             snapshot.status = "committed"
-            commit = StateCommit(execution_id, request_id, snapshot, self._sequence)
+            commit = StateCommit(execution_id, request_id, snapshot, self._sequence, principal_id)
             self._commits[execution_id] = commit
             return deepcopy(commit)
 
