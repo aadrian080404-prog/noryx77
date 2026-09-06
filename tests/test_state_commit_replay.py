@@ -5,6 +5,10 @@ import pytest
 from core.state import NORYXState, StateStore
 
 
+PRINCIPAL_ID = "agent-a"
+PRINCIPAL_FINGERPRINT = hashlib.sha256(b"agent-a-public-key").hexdigest()
+
+
 def _state():
     return NORYXState(
         input_digest=hashlib.sha256(b"input").hexdigest(),
@@ -15,24 +19,39 @@ def _state():
     )
 
 
-def test_state_store_rejects_duplicate_execution_commit():
-    store = StateStore()
-    first = store.commit(
+def _commit(store, execution_id="execution-1", task_id="task-1", principal_id=PRINCIPAL_ID, fingerprint=PRINCIPAL_FINGERPRINT):
+    return store.commit(
         _state(),
-        execution_id="execution-1",
-        task_id="task-1",
+        execution_id=execution_id,
+        task_id=task_id,
         verification_valid=True,
         verification_stage="runtime_result",
+        principal_id=principal_id,
+        principal_key_fingerprint=fingerprint,
     )
 
+
+def test_state_store_rejects_duplicate_execution_commit():
+    store = StateStore()
+    first = _commit(store)
+
     with pytest.raises(PermissionError, match="execution_already_committed"):
-        store.commit(
-            _state(),
-            execution_id="execution-1",
-            task_id="task-1",
-            verification_valid=True,
-            verification_stage="runtime_result",
-        )
+        _commit(store)
 
     assert store.version == first.sequence == 1
     assert len(store) == 1
+
+
+def test_state_store_requires_identity_binding():
+    store = StateStore()
+    with pytest.raises(ValueError, match="invalid_principal_id"):
+        store.commit(
+            _state(), execution_id="execution-2", task_id="task-2",
+            verification_valid=True, verification_stage="runtime_result",
+        )
+
+
+def test_state_store_rejects_malformed_identity_fingerprint():
+    store = StateStore()
+    with pytest.raises(ValueError, match="invalid_principal_key_fingerprint"):
+        _commit(store, execution_id="execution-3", fingerprint="A" * 64)
