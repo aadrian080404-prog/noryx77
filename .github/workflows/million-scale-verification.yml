@@ -1,6 +1,8 @@
 name: NORYX7 Million-Scale Verification
 
 on:
+  push:
+    branches: ["architecture-freeze-2026-09-06"]
   workflow_dispatch:
     inputs:
       cases:
