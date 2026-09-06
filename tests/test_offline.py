@@ -53,19 +53,19 @@ class Cipher:
         return ciphertext[len(prefix):]
 
 
-def make_snapshot(now=100):
-    base = OfflineSnapshot("snap-1", "principal-1", now, "policy-1", "artifact-1", ("local.execute",), "state-1", "0" * 64)
+def make_snapshot(now=100, snapshot_id="snap-1", state_version="state-1"):
+    base = OfflineSnapshot(snapshot_id, "principal-1", now, "policy-1", "artifact-1", ("local.execute",), state_version, "0" * 64)
     return replace(base, integrity_digest=sha256(base.canonical_bytes()).hexdigest())
 
 
-def make_runtime(recovery=None, policy=None, verifier=None, now=100, max_snapshot_age=86_400):
+def make_runtime(recovery=None, policy=None, verifier=None, now=100, max_snapshot_age=86_400, authenticator=None):
     return OfflineRuntime(
         recovery=recovery or Recovery(),
         policy=policy or Policy(),
         verifier=verifier or Verifier(),
         cipher=Cipher(),
         clock=lambda: now,
-        snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
+        snapshot_authenticator=authenticator or (lambda snapshot: snapshot.snapshot_id in {"snap-1", "snap-2"}),
         max_snapshot_age=max_snapshot_age,
     )
 
@@ -149,3 +149,28 @@ def test_conflicting_remote_version_never_silently_overwrites():
     with pytest.raises(OfflineConflictError, match="conflict"):
         runtime.acknowledge_synced("exec-1", remote_state_version="different-state")
     assert len(runtime.queue) == 1
+
+
+def test_older_authenticated_snapshot_cannot_rollback_newer_snapshot():
+    runtime = make_runtime(now=200)
+    runtime.install_snapshot(make_snapshot(now=200, snapshot_id="snap-2", state_version="state-2"))
+    with pytest.raises(OfflineDeniedError, match="rollback"):
+        runtime.install_snapshot(make_snapshot(now=150, snapshot_id="snap-1", state_version="state-1"))
+
+
+def test_distinct_snapshot_with_same_issuance_epoch_cannot_replace_current_one():
+    runtime = make_runtime(now=200)
+    runtime.install_snapshot(make_snapshot(now=200, snapshot_id="snap-1", state_version="state-1"))
+    with pytest.raises(OfflineDeniedError, match="same_epoch"):
+        runtime.install_snapshot(make_snapshot(now=200, snapshot_id="snap-2", state_version="state-2"))
+
+
+def test_duplicate_execution_identity_cannot_change_payload_or_principal():
+    runtime = make_runtime()
+    runtime.install_snapshot(make_snapshot())
+    payload = b"approved"
+    execution = make_execution(payload)
+    runtime.queue.enqueue(execution, payload)
+    altered = replace(execution, principal_id="principal-2")
+    with pytest.raises(OfflineConflictError, match="identity_conflict"):
+        runtime.queue.enqueue(altered, payload)
