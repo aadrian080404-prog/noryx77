@@ -27,20 +27,23 @@ class NORYXState:
 
 @dataclass(frozen=True)
 class StateCommit:
-    """Immutable evidence of one verified state commit."""
+    """Immutable evidence of one verified state commit and its execution principal."""
 
     execution_id: str
     task_id: str
     state: NORYXState
     verification_stage: str
     sequence: int
+    principal_id: str = ""
+    principal_key_fingerprint: str = ""
 
 
 class StateStore:
-    """Transactional state boundary with monotonic, single-use commits and input-reference hygiene."""
+    """Transactional state boundary with monotonic, single-use commits and identity binding."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
+    MAX_PRINCIPAL_ID_BYTES = 256
     MAX_DIGEST_LENGTH = 64
 
     def __init__(self, max_commits: int = 10_000):
@@ -69,8 +72,13 @@ class StateStore:
             and all(char in "0123456789abcdef" for char in value)
         )
 
+    @classmethod
+    def _valid_fingerprint(cls, value: str) -> bool:
+        return cls._valid_digest(value)
+
     def commit(self, state: NORYXState, *, execution_id: str, task_id: str,
-               verification_valid: bool, verification_stage: str) -> StateCommit:
+               verification_valid: bool, verification_stage: str,
+               principal_id: str = "", principal_key_fingerprint: str = "") -> StateCommit:
         if not isinstance(state, NORYXState):
             raise TypeError("state_required")
         if not self._valid_id(execution_id, self.MAX_EXECUTION_ID_BYTES):
@@ -91,6 +99,10 @@ class StateStore:
             raise ValueError("invalid_confidence")
         if not isinstance(state.verification_results, list):
             raise ValueError("invalid_verification_results")
+        if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
+            raise ValueError("invalid_principal_id")
+        if not self._valid_fingerprint(principal_key_fingerprint):
+            raise ValueError("invalid_principal_key_fingerprint")
         with self._lock:
             # execution_id is the durable execution identity. Once committed it is
             # single-use; accepting a second commit would permit replay/overwrite.
@@ -101,7 +113,10 @@ class StateStore:
             self._sequence += 1
             snapshot = deepcopy(state)
             snapshot.status = "committed"
-            commit = StateCommit(execution_id, task_id, snapshot, verification_stage, self._sequence)
+            commit = StateCommit(
+                execution_id, task_id, snapshot, verification_stage, self._sequence,
+                principal_id, principal_key_fingerprint,
+            )
             self._commits[execution_id] = commit
             return deepcopy(commit)
 
