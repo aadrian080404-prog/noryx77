@@ -31,7 +31,7 @@ class AgentBinding:
             raise ValueError("invalid_agent_identity")
         if self.identity.agent_id != self.agent.agent_id:
             raise ValueError("agent_identity_mismatch")
-        if not identities.is_trusted(self.agent.agent_id, self.identity.public_key):
+        if not identities.is_trusted(self.identity):
             raise PermissionError("agent_identity_not_trusted")
         if not isinstance(self.skills, tuple) or not self.skills:
             raise ValueError("agent_skills_required")
@@ -85,7 +85,7 @@ class AgentFabric:
         for binding in candidates:
             if required_skill is not None and required_skill not in binding.skills:
                 continue
-            if not self._identities.is_trusted(binding.agent.agent_id, binding.identity.public_key):
+            if not self._identities.is_trusted(binding.identity):
                 continue
             if not bool(self._authorize_principal(principal_id, binding, request)):
                 continue
