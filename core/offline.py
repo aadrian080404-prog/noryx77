@@ -174,7 +174,7 @@ class OfflineSyncQueue:
 T = TypeVar("T")
 
 class OfflineRuntime:
-    """Offline admission -> local execution -> verified commit -> encrypted sync."""
+    """Offline admission -> encrypted outbox reservation -> local execution -> verified commit -> sync."""
     def __init__(self, *, recovery: RecoveryLike, policy: OfflinePolicy, verifier: OfflineVerifier,
                  cipher: OfflineCipher, clock: Callable[[], int],
                  snapshot_authenticator: Callable[[OfflineSnapshot], bool],
@@ -245,15 +245,21 @@ class OfflineRuntime:
         if (result is None) == (execute is None):
             raise ValueError("provide_exactly_one_result_source")
         epoch = self._admit(execution, payload)
+        envelope = None
         try:
+            # Reserve the encrypted outbox record before commit. If verification/commit fails,
+            # remove the reservation so state and durable sync evidence cannot diverge.
+            envelope = self._queue.enqueue(execution, payload)
+
             def critical() -> None:
                 produced = execute() if execute is not None else result
                 if not self._verifier.verify(produced):
                     raise OfflineDeniedError("offline_result_unverified")
                 commit(execution, produced)  # type: ignore[arg-type]
             self._recovery.run_if_normal(critical, expected_epoch=epoch)
-            envelope = self._queue.enqueue(execution, payload)
         except Exception:
+            if envelope is not None:
+                self._queue.acknowledge(execution.execution_id)
             with self._lock:
                 self._state = OfflineState.RECOVERY
             raise
