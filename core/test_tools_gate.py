@@ -51,6 +51,22 @@ class ToolExecutorGateTests(unittest.TestCase):
         self.assertTrue(check.valid)
         self.assertEqual(check.stage, "tool_result")
 
+    def test_authorized_tool_requires_execution_identity_grant_and_principal(self):
+        calls = []
+        self.executor.capabilities.register("publish", lambda target, params: calls.append(target) or target)
+        action = ActionSpec(
+            "a4",
+            "publish",
+            target="protected",
+            execution_id="exec-4",
+            requires_authorization=True,
+        )
+        output, check = self.executor.execute(action, execution_id="exec-4")
+        self.assertIsNone(output)
+        self.assertFalse(check.valid)
+        self.assertEqual(check.reason, "authorization_required")
+        self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()
