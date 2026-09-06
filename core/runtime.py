@@ -100,12 +100,14 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "offline_not_configured", "task_id": getattr(task, "task_id", None)}
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             return {"status": "rejected", "reason": "invalid_task", "task_id": getattr(task, "task_id", None)}
+        if not task.execution_id.strip():
+            return {"status": "rejected", "reason": "offline_execution_id_required", "task_id": task.task_id}
         if not isinstance(capability, str) or not capability.strip():
             return {"status": "rejected", "reason": "offline_capability_required", "task_id": task.task_id}
         if not callable(local_executor):
             return {"status": "rejected", "reason": "local_executor_required", "task_id": task.task_id}
 
-        execution_id = task.execution_id or uuid4().hex
+        execution_id = task.execution_id
         payload = self._offline_payload(task)
         execution = OfflineExecution(
             execution_id=execution_id,
@@ -279,7 +281,7 @@ class NORYXRuntime:
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.execution_id != execution_id:
                 check = VerificationResult(False, "agent_result", "execution_identity_mismatch")
-                return self._rejection(envelope, child.task_id, "execution_identity_mismatch", self.audit, verification=check)
+                return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
             if result.status != "completed":
                 check = VerificationResult(False, "agent_result", "invalid_result_status")
                 return self._rejection(envelope, child.task_id, check.reason, self.audit, verification=check)
