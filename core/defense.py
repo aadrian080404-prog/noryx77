@@ -202,6 +202,8 @@ class DefenseController:
             self._mode = DefenseMode.NORMAL
 
     def authorize(self, request: AccessRequest) -> DefenseDecision:
+        if not isinstance(request, AccessRequest):
+            raise TypeError("access_request_required")
         with self._lock:
             if request.principal_id in self._revoked:
                 return DefenseDecision(TrustDecision.DENY, "principal_revoked", self._mode)
