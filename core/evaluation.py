@@ -3,11 +3,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from math import isfinite
 
 
 class EvaluationDimension(str, Enum):
     TECHNICAL = "technical"
     COGNITIVE = "cognitive"
+    METACOGNITIVE = "metacognitive"
     ADVERSARIAL = "adversarial"
     SAFETY = "safety"
     SECURITY = "security"
@@ -35,9 +37,13 @@ class EvaluationMatrix:
     def record(self, result: EvaluationResult) -> None:
         if not isinstance(result, EvaluationResult):
             raise TypeError("evaluation_result_required")
-        if not 0.0 <= result.score <= 1.0:
+        if not isinstance(result.dimension, EvaluationDimension):
+            raise TypeError("invalid_evaluation_dimension")
+        if not isinstance(result.passed, bool):
+            raise TypeError("invalid_pass_flag")
+        if not isfinite(result.score) or not 0.0 <= result.score <= 1.0:
             raise ValueError("invalid_score")
-        if not result.evidence:
+        if not isinstance(result.evidence, str) or not result.evidence.strip():
             raise ValueError("evidence_required")
         self._results.append(result)
 
