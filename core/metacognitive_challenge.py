@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha256
 from math import isfinite
-from typing import Iterable
+from typing import Callable
 
 
 class ChallengeDomain(str, Enum):
@@ -84,19 +85,60 @@ class ChallengeScore:
                 raise ValueError("invalid_challenge_score")
 
 
+@dataclass(frozen=True)
+class ChallengeVerification:
+    challenge_id: str
+    answer_matches: bool
+    independent_verified: bool
+    evidence_digest: str
+
+    def __post_init__(self) -> None:
+        if not self.challenge_id.strip() or len(self.challenge_id.encode()) > 256:
+            raise ValueError("invalid_challenge_id")
+        if not isinstance(self.answer_matches, bool) or not isinstance(self.independent_verified, bool):
+            raise TypeError("invalid_verification_flags")
+        if len(self.evidence_digest) != 64 or any(c not in "0123456789abcdef" for c in self.evidence_digest):
+            raise ValueError("invalid_evidence_digest")
+
+
+class IndependentChallengeVerifier:
+    """Independent boundary: challenge correctness is certified outside scoring."""
+
+    def verify(self, challenge: ChallengeSpec, trace: ChallengeTrace) -> ChallengeVerification:
+        if not isinstance(challenge, ChallengeSpec) or not isinstance(trace, ChallengeTrace):
+            raise TypeError("challenge_evidence_required")
+        answer_matches = trace.answer_digest == challenge.expected_answer_digest
+        payload = "|".join((challenge.challenge_id, challenge.prompt_digest, challenge.expected_answer_digest,
+                            trace.answer_digest, str(answer_matches), str(trace.task_success))).encode("utf-8")
+        return ChallengeVerification(
+            challenge.challenge_id,
+            answer_matches,
+            bool(trace.independent_verified),
+            sha256(payload).hexdigest(),
+        )
+
+
 class MetacognitiveChallengeEvaluator:
     """Scores only verifier-backed evidence; it never certifies improvement itself."""
 
-    def evaluate(self, challenge: ChallengeSpec, trace: ChallengeTrace) -> ChallengeScore:
+    def evaluate(self, challenge: ChallengeSpec, trace: ChallengeTrace, verification: ChallengeVerification) -> ChallengeScore:
         if not isinstance(challenge, ChallengeSpec) or not isinstance(trace, ChallengeTrace):
             raise TypeError("challenge_evidence_required")
-        calibration = 1.0 - abs(trace.final_confidence - float(trace.task_success))
+        if not isinstance(verification, ChallengeVerification) or verification.challenge_id != challenge.challenge_id:
+            raise ValueError("independent_verification_required")
+        if not verification.answer_matches or not verification.independent_verified:
+            task_success = False
+        else:
+            task_success = trace.task_success
+        calibration = 1.0 - abs(trace.final_confidence - float(task_success))
         verification_factor = min(1.0, trace.intermediate_verifications / 3.0)
         error_factor = min(1.0, trace.errors_detected / max(1, trace.strategy_revisions + trace.errors_detected))
-        correction = 1.0 if trace.task_success and trace.strategy_revisions > 0 else (0.5 if trace.task_success else 0.0)
+        correction = 1.0 if task_success and trace.strategy_revisions > 0 else (0.5 if task_success else 0.0)
         adaptation = min(1.0, (trace.strategy_revisions + trace.errors_detected) / 4.0)
-        robustness = (verification_factor + (1.0 if trace.independent_verified else 0.0)) / 2.0
-        return ChallengeScore(float(trace.task_success), robustness, calibration, error_factor, correction, adaptation, float(trace.task_success and trace.independent_verified), 1.0 if trace.intermediate_verifications >= 1 and trace.independent_verified else 0.0)
+        robustness = (verification_factor + (1.0 if verification.independent_verified else 0.0)) / 2.0
+        return ChallengeScore(float(task_success), robustness, calibration, error_factor, correction, adaptation,
+                              float(task_success and verification.independent_verified),
+                              1.0 if trace.intermediate_verifications >= 1 and verification.independent_verified else 0.0)
 
 
 @dataclass(frozen=True)
@@ -113,6 +155,8 @@ class AdaptiveChallengeController:
     def next_level(self, current_level: int, score: ChallengeScore) -> int:
         if isinstance(current_level, bool) or not isinstance(current_level, int) or not 0 <= current_level <= 10000:
             raise ValueError("invalid_current_level")
+        if not isinstance(score, ChallengeScore):
+            raise TypeError("challenge_score_required")
         if score.task_performance >= 0.9 and score.calibration >= 0.8 and score.reasoning_robustness >= 0.8:
             return min(10000, current_level + 1)
         if score.task_performance < 0.5 or score.calibration < 0.5:
@@ -120,10 +164,14 @@ class AdaptiveChallengeController:
         return current_level
 
     @staticmethod
-    def improvement_is_verified(evidence: ImprovementEvidence) -> bool:
+    def improvement_is_verified(evidence: ImprovementEvidence, verifier: Callable[[ImprovementEvidence], bool]) -> bool:
         if not isinstance(evidence, ImprovementEvidence):
             raise TypeError("improvement_evidence_required")
+        if not callable(verifier):
+            raise TypeError("independent_verifier_required")
         digest = evidence.independent_verification_digest
         if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise ValueError("invalid_independent_verification_digest")
+        if not verifier(evidence):
+            return False
         return evidence.candidate.task_performance > evidence.baseline.task_performance and evidence.candidate.reasoning_robustness >= evidence.baseline.reasoning_robustness
