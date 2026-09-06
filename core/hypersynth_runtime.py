@@ -37,18 +37,20 @@ class HypersynthRuntime:
             memory=self.memory,
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
+            recovery=self.recovery,
         )
 
     def run(self, task: TaskSpec, *, interaction_context: InteractionContext):
         task_id = getattr(task, "task_id", None)
         started = self.clock()
         deadline = started + self.limits.max_task_seconds
+        recovery_state, recovery_epoch = self.recovery.snapshot()
         self.audit.record("hypersynth_start", task_id=task_id, context_id=getattr(interaction_context, "context_id", None))
 
         def deadline_exceeded():
             return self.clock() > deadline
 
-        if self.recovery.state is not RecoveryState.NORMAL:
+        if recovery_state is not RecoveryState.NORMAL:
             check = VerificationResult(False, "recovery", "recovery_state_denies_execution")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
             return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
@@ -65,6 +67,7 @@ class HypersynthRuntime:
             return {"status": "rejected", "phase": "context", "verification": check, "audit": self.audit.snapshot()}
 
         try:
+            self.recovery.require_normal(expected_epoch=recovery_epoch)
             task_check = self.verifier.verify_task(task)
             if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
                 check = VerificationResult(False, "contract", "invalid_task_verification")
@@ -95,6 +98,7 @@ class HypersynthRuntime:
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                 return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+            self.recovery.require_normal(expected_epoch=recovery_epoch)
             if result.get("status") == "completed":
                 result_check = result.get("verification")
                 if (not isinstance(result_check, VerificationResult) or not result_check.is_well_formed()
@@ -120,6 +124,10 @@ class HypersynthRuntime:
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+        except PermissionError as exc:
+            check = VerificationResult(False, "recovery", str(exc))
+            self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
+            return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
         except Exception as exc:
             check = VerificationResult(False, "runtime", "controlled_runtime_failure")
             self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__, reason=check.reason)
