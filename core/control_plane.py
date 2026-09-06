@@ -11,7 +11,7 @@ from .adversarial import AdversarialEngine
 from .defense import DefenseController, DefenseMode
 from .observability import SecurityEventBus
 from .personality import ApollonianPersonality
-from .recovery_plane import RecoveryController, RecoveryState
+from .recovery import RecoveryController, RecoveryState
 from .supply_chain import ArtifactManifest, SupplyChainVerifier
 
 
@@ -42,21 +42,21 @@ class Noryx7ControlPlane:
 
     def incident(self) -> None:
         if self.recovery.state is RecoveryState.NORMAL:
-            self.recovery.transition(RecoveryState.INCIDENT)
+            self.recovery.incident()
         if self.recovery.state is RecoveryState.INCIDENT:
-            self.recovery.transition(RecoveryState.LOCKDOWN)
+            self.recovery.lockdown()
             self.defense.enter_lockdown("control-plane incident")
-            self.recovery.transition(RecoveryState.TRUSTED_ONLY)
+            self.recovery.trusted_only()
 
     def begin_recovery(self) -> None:
         if self.recovery.state is not RecoveryState.TRUSTED_ONLY:
             raise PermissionError("trusted_only_state_required")
-        self.recovery.transition(RecoveryState.RECOVERY)
+        self.recovery.recover()
 
     def mark_verified(self) -> None:
         if self.recovery.state is not RecoveryState.RECOVERY:
             raise PermissionError("recovery_state_required")
-        self.recovery.transition(RecoveryState.VERIFIED)
+        self.recovery.verify(True)
 
     def status(self) -> ControlPlaneStatus:
         return ControlPlaneStatus(self.defense.mode, self.recovery.state, len(self.events.snapshot()))
