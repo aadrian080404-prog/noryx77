@@ -18,13 +18,13 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
         "noryx-browser/app/src/test/java/com/noryx/browser/NavigationPolicyTest.kt",
     ),
     "hypersynth": (
-        "core/hypersynth.py", "core/hypersynth_runtime.py", "core/reasoning.py", "core/metacognition.py", "core/metacognitive_challenge.py",
+        "core/agents.py", "core/agent_core.py", "core/hypersynth.py", "core/hypersynth_runtime.py", "core/reasoning.py", "core/metacognition.py", "core/metacognitive_challenge.py",
         "core/planning.py", "core/verification.py", "core/memory.py", "core/secure_memory.py", "core/security.py", "core/recovery.py",
         "core/offline.py", "core/offline_adapters.py", "core/multiauth.py", "core/control_plane.py", "core/defense.py", "core/observability.py",
         "core/security_integration.py", "core/authorization_replay.py", "core/supply_chain.py", "tests/test_metacognitive_challenge.py", "tests/test_offline.py",
     ),
     "orchestration": (
-        "core/runtime.py", "core/orchestration.py", "core/interaction_context.py", "core/user_understanding.py", "core/state.py",
+        "core/agents.py", "core/agent_core.py", "core/runtime.py", "core/orchestration.py", "core/interaction_context.py", "core/user_understanding.py", "core/state.py",
         "core/security.py", "core/security_integration.py", "core/defense.py", "core/observability.py", "core/control_plane.py", "core/multiauth.py",
         "core/authorization_replay.py", "core/supply_chain.py", "core/recovery.py", "core/offline.py", "core/offline_adapters.py", "core/evaluation.py", "core/evaluation_campaign.py", "ecosystem/boundaries.py",
         "ecosystem/dispatch_contract.py", "ecosystem/isolation.py", "ecosystem/runtime_dispatch.py", "ecosystem/global_scale.py", "ecosystem/global_fabric.py",
