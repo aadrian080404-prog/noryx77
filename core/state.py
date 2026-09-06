@@ -34,12 +34,12 @@ class StateCommit:
     state: NORYXState
     verification_stage: str
     sequence: int
-    principal_id: str = ""
-    principal_key_fingerprint: str = ""
+    principal_id: str
+    principal_key_fingerprint: str
 
 
 class StateStore:
-    """Transactional state boundary with monotonic, single-use commits and identity binding."""
+    """Transactional state boundary with monotonic, single-use and identity-bound commits."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
@@ -78,7 +78,7 @@ class StateStore:
 
     def commit(self, state: NORYXState, *, execution_id: str, task_id: str,
                verification_valid: bool, verification_stage: str,
-               principal_id: str = "", principal_key_fingerprint: str = "") -> StateCommit:
+               principal_id: str, principal_key_fingerprint: str) -> StateCommit:
         if not isinstance(state, NORYXState):
             raise TypeError("state_required")
         if not self._valid_id(execution_id, self.MAX_EXECUTION_ID_BYTES):
@@ -99,13 +99,10 @@ class StateStore:
             raise ValueError("invalid_confidence")
         if not isinstance(state.verification_results, list):
             raise ValueError("invalid_verification_results")
-        # Identity binding is optional only for legacy callers; whenever supplied,
-        # both the principal and its exact public-key fingerprint are mandatory.
-        if principal_id or principal_key_fingerprint:
-            if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
-                raise ValueError("invalid_principal_id")
-            if not self._valid_fingerprint(principal_key_fingerprint):
-                raise ValueError("invalid_principal_key_fingerprint")
+        if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
+            raise ValueError("invalid_principal_id")
+        if not self._valid_fingerprint(principal_key_fingerprint):
+            raise ValueError("invalid_principal_key_fingerprint")
         with self._lock:
             # execution_id is the durable execution identity. Once committed it is
             # single-use; accepting a second commit would permit replay/overwrite.
