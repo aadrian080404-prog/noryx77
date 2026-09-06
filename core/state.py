@@ -37,7 +37,7 @@ class StateCommit:
 
 
 class StateStore:
-    """Transactional state boundary with monotonic commits and input-reference hygiene."""
+    """Transactional state boundary with monotonic, single-use commits and input-reference hygiene."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
@@ -61,6 +61,14 @@ class StateStore:
     def _valid_id(value: str, max_bytes: int) -> bool:
         return isinstance(value, str) and bool(value.strip()) and len(value.encode("utf-8")) <= max_bytes
 
+    @classmethod
+    def _valid_digest(cls, value: str) -> bool:
+        return (
+            isinstance(value, str)
+            and len(value) == cls.MAX_DIGEST_LENGTH
+            and all(char in "0123456789abcdef" for char in value)
+        )
+
     def commit(self, state: NORYXState, *, execution_id: str, task_id: str,
                verification_valid: bool, verification_stage: str) -> StateCommit:
         if not isinstance(state, NORYXState):
@@ -73,7 +81,7 @@ class StateStore:
             raise PermissionError("verified_commit_required")
         if not isinstance(verification_stage, str) or verification_stage.strip() != "runtime_result":
             raise PermissionError("runtime_verification_required")
-        if not isinstance(state.input_digest, str) or len(state.input_digest) != self.MAX_DIGEST_LENGTH:
+        if not self._valid_digest(state.input_digest):
             raise ValueError("invalid_input_digest")
         if state.user_input:
             raise PermissionError("raw_user_input_must_not_be_committed")
@@ -84,6 +92,8 @@ class StateStore:
         if not isinstance(state.verification_results, list):
             raise ValueError("invalid_verification_results")
         with self._lock:
+            # execution_id is the durable execution identity. Once committed it is
+            # single-use; accepting a second commit would permit replay/overwrite.
             if execution_id in self._commits:
                 raise PermissionError("execution_already_committed")
             if len(self._commits) >= self.max_commits:
