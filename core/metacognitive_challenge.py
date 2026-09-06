@@ -27,14 +27,14 @@ class ChallengeSpec:
     adaptive_level: int = 0
 
     def __post_init__(self) -> None:
-        if not self.challenge_id.strip() or len(self.challenge_id.encode()) > 256:
+        if not isinstance(self.challenge_id, str) or not self.challenge_id.strip() or len(self.challenge_id.encode()) > 256:
             raise ValueError("invalid_challenge_id")
         if not isinstance(self.domain, ChallengeDomain):
             raise TypeError("invalid_challenge_domain")
         if not isfinite(self.difficulty) or not 0.0 <= self.difficulty <= 1.0:
             raise ValueError("invalid_difficulty")
         for value, name in ((self.prompt_digest, "prompt_digest"), (self.expected_answer_digest, "expected_answer_digest")):
-            if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
+            if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
                 raise ValueError(f"invalid_{name}")
         if isinstance(self.adaptive_level, bool) or not isinstance(self.adaptive_level, int) or not 0 <= self.adaptive_level <= 10000:
             raise ValueError("invalid_adaptive_level")
@@ -56,12 +56,12 @@ class ChallengeTrace:
         for value, name in ((self.initial_confidence, "initial_confidence"), (self.final_confidence, "final_confidence")):
             if not isfinite(value) or not 0.0 <= value <= 1.0:
                 raise ValueError(f"invalid_{name}")
-        if not self.strategy.strip() or len(self.strategy.encode()) > 2048:
+        if not isinstance(self.strategy, str) or not self.strategy.strip() or len(self.strategy.encode()) > 2048:
             raise ValueError("invalid_strategy")
         for value, name in ((self.intermediate_verifications, "intermediate_verifications"), (self.errors_detected, "errors_detected"), (self.strategy_revisions, "strategy_revisions")):
             if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 10000:
                 raise ValueError(f"invalid_{name}")
-        if len(self.answer_digest) != 64 or any(c not in "0123456789abcdef" for c in self.answer_digest):
+        if not isinstance(self.answer_digest, str) or len(self.answer_digest) != 64 or any(c not in "0123456789abcdef" for c in self.answer_digest):
             raise ValueError("invalid_answer_digest")
         if not isinstance(self.independent_verified, bool) or not isinstance(self.task_success, bool):
             raise TypeError("invalid_challenge_flags")
@@ -93,27 +93,36 @@ class ChallengeVerification:
     evidence_digest: str
 
     def __post_init__(self) -> None:
-        if not self.challenge_id.strip() or len(self.challenge_id.encode()) > 256:
+        if not isinstance(self.challenge_id, str) or not self.challenge_id.strip() or len(self.challenge_id.encode()) > 256:
             raise ValueError("invalid_challenge_id")
         if not isinstance(self.answer_matches, bool) or not isinstance(self.independent_verified, bool):
             raise TypeError("invalid_verification_flags")
-        if len(self.evidence_digest) != 64 or any(c not in "0123456789abcdef" for c in self.evidence_digest):
+        if not isinstance(self.evidence_digest, str) or len(self.evidence_digest) != 64 or any(c not in "0123456789abcdef" for c in self.evidence_digest):
             raise ValueError("invalid_evidence_digest")
 
 
 class IndependentChallengeVerifier:
-    """Independent boundary: challenge correctness is certified outside scoring."""
+    """Independent boundary: correctness is certified by an injected verifier, never by trace self-assertion."""
+
+    def __init__(self, verifier: Callable[[ChallengeSpec, ChallengeTrace], bool]):
+        if not callable(verifier):
+            raise TypeError("independent_verifier_required")
+        self._verifier = verifier
 
     def verify(self, challenge: ChallengeSpec, trace: ChallengeTrace) -> ChallengeVerification:
         if not isinstance(challenge, ChallengeSpec) or not isinstance(trace, ChallengeTrace):
             raise TypeError("challenge_evidence_required")
+        try:
+            independent_verified = self._verifier(challenge, trace) is True
+        except Exception:
+            independent_verified = False
         answer_matches = trace.answer_digest == challenge.expected_answer_digest
         payload = "|".join((challenge.challenge_id, challenge.prompt_digest, challenge.expected_answer_digest,
-                            trace.answer_digest, str(answer_matches), str(trace.task_success))).encode("utf-8")
+                            trace.answer_digest, str(answer_matches), str(independent_verified), str(trace.task_success))).encode("utf-8")
         return ChallengeVerification(
             challenge.challenge_id,
             answer_matches,
-            bool(trace.independent_verified),
+            independent_verified,
             sha256(payload).hexdigest(),
         )
 
@@ -126,10 +135,7 @@ class MetacognitiveChallengeEvaluator:
             raise TypeError("challenge_evidence_required")
         if not isinstance(verification, ChallengeVerification) or verification.challenge_id != challenge.challenge_id:
             raise ValueError("independent_verification_required")
-        if not verification.answer_matches or not verification.independent_verified:
-            task_success = False
-        else:
-            task_success = trace.task_success
+        task_success = bool(verification.answer_matches and verification.independent_verified and trace.task_success)
         calibration = 1.0 - abs(trace.final_confidence - float(task_success))
         verification_factor = min(1.0, trace.intermediate_verifications / 3.0)
         error_factor = min(1.0, trace.errors_detected / max(1, trace.strategy_revisions + trace.errors_detected))
@@ -151,7 +157,6 @@ class ImprovementEvidence:
 
 class AdaptiveChallengeController:
     """Selects harder/easier levels from verified outcomes without declaring self-improvement."""
-
     def next_level(self, current_level: int, score: ChallengeScore) -> int:
         if isinstance(current_level, bool) or not isinstance(current_level, int) or not 0 <= current_level <= 10000:
             raise ValueError("invalid_current_level")
@@ -172,6 +177,9 @@ class AdaptiveChallengeController:
         digest = evidence.independent_verification_digest
         if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise ValueError("invalid_independent_verification_digest")
-        if not verifier(evidence):
+        try:
+            if verifier(evidence) is not True:
+                return False
+        except Exception:
             return False
         return evidence.candidate.task_performance > evidence.baseline.task_performance and evidence.candidate.reasoning_robustness >= evidence.baseline.reasoning_robustness
