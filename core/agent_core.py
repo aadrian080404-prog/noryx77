@@ -17,6 +17,7 @@ from typing import Any, Callable, Mapping, Protocol
 MAX_TEXT = 64 * 1024
 MAX_CONTEXT_ITEMS = 128
 MAX_PLAN_STEPS = 64
+MAX_REGISTERED_AGENTS = 1024
 
 
 class AgentPhase(str, Enum):
@@ -223,3 +224,36 @@ class AgentCore:
             with self._lock:
                 if self._phase is not AgentPhase.FAILED:
                     self._phase = AgentPhase.IDLE
+
+
+class AgentRegistry:
+    """Bounded, thread-safe registry for deterministic multi-agent dispatch."""
+    def __init__(self, *, max_agents: int = MAX_REGISTERED_AGENTS) -> None:
+        if isinstance(max_agents, bool) or not isinstance(max_agents, int) or not 1 <= max_agents <= MAX_REGISTERED_AGENTS:
+            raise ValueError("invalid_max_agents")
+        self._max_agents = max_agents
+        self._agents: dict[str, AgentCore] = {}
+        self._lock = RLock()
+
+    def register(self, agent: AgentCore) -> None:
+        if not isinstance(agent, AgentCore):
+            raise TypeError("agent_core_required")
+        with self._lock:
+            if agent.agent_id in self._agents:
+                raise ValueError("agent_id_already_registered")
+            if len(self._agents) >= self._max_agents:
+                raise RuntimeError("agent_registry_capacity_exceeded")
+            self._agents[agent.agent_id] = agent
+
+    def get(self, agent_id: str) -> AgentCore:
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("agent_id_required")
+        with self._lock:
+            try:
+                return self._agents[agent_id]
+            except KeyError as exc:
+                raise KeyError("agent_not_registered") from exc
+
+    def snapshot(self) -> tuple[str, ...]:
+        with self._lock:
+            return tuple(sorted(self._agents))
