@@ -42,13 +42,10 @@ def test_state_store_rejects_duplicate_execution_commit():
     assert len(store) == 1
 
 
-def test_state_store_requires_identity_binding():
+def test_state_store_rejects_partial_identity_binding():
     store = StateStore()
     with pytest.raises(ValueError, match="invalid_principal_id"):
-        store.commit(
-            _state(), execution_id="execution-2", task_id="task-2",
-            verification_valid=True, verification_stage="runtime_result",
-        )
+        _commit(store, execution_id="execution-2", principal_id="")
 
 
 def test_state_store_rejects_malformed_identity_fingerprint():
