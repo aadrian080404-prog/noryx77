@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from math import isfinite
 
+from .challenge_verification import IndependentChallengeVerifier
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .reasoning import Hypothesis, SimulationResult
 from .planning import Plan
@@ -22,7 +23,12 @@ class MetacognitiveReflection:
 
 
 class MetacognitionEngine:
-    """Bounded final self-check; confidence is derived only from verified evidence."""
+    """Bounded final self-check with an independent challenge-verification path."""
+
+    def __init__(self, challenge_verifier=None):
+        self.challenge_verifier = challenge_verifier or IndependentChallengeVerifier()
+        if not hasattr(self.challenge_verifier, "verify") or not callable(self.challenge_verifier.verify):
+            raise TypeError("invalid_challenge_verifier")
 
     def reflect(self, task, plan, hypotheses, simulations, results, final_verification):
         if not isinstance(task, TaskSpec) or not isinstance(plan, Plan):
@@ -67,7 +73,14 @@ class MetacognitionEngine:
             return VerificationResult(False, "metacognition", "invalid_simulation_type"), None
         if any(not simulation.feasible or simulation.reason != "feasible" for simulation in simulations):
             return VerificationResult(False, "metacognition", "infeasible_simulation_present"), None
-        evidence_checks = [final_verification.valid] + [result.verification.valid for result in results]
+        try:
+            challenge = self.challenge_verifier.verify(task, plan, hypotheses, simulations, results, results[-1].output)
+        except Exception:
+            return VerificationResult(False, "metacognition", "challenge_verification_failure"), None
+        if not isinstance(challenge, VerificationResult) or not challenge.is_well_formed() or not challenge.valid or challenge.stage != "challenge_verification":
+            reason = challenge.reason if isinstance(challenge, VerificationResult) and challenge.is_well_formed() else "challenge_verification_failed"
+            return VerificationResult(False, "metacognition", reason), None
+        evidence_checks = [final_verification.valid, challenge.valid] + [result.verification.valid for result in results]
         confidence = sum(1.0 for check in evidence_checks if check) / len(evidence_checks)
         if not isfinite(confidence) or not 0.0 < confidence <= 1.0:
             return VerificationResult(False, "metacognition", "invalid_confidence"), None
