@@ -1,0 +1,32 @@
+stages:
+  - static
+  - unit
+  - integration
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+python_static:
+  stage: static
+  image: python:3.12-slim
+  script:
+    - python --version
+    - python -m compileall -q core ecosystem jarvis noryx7_runtime
+
+tests:
+  stage: unit
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --disable-pip-version-check -r requirements-test.txt
+  script:
+    - python -m pytest -q
+
+closure:
+  stage: integration
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --disable-pip-version-check -r requirements-test.txt
+  script:
+    - python -c "from ecosystem.global_closure import require_closed; require_closed()"
+    - python -c "from ecosystem.completeness import require_complete; require_complete()"
