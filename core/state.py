@@ -2,7 +2,10 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from math import isfinite
 from threading import RLock
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .state_journal import StateJournal
 
 
 @dataclass
@@ -39,24 +42,30 @@ class StateCommit:
 
 
 class StateStore:
-    """Transactional state boundary with monotonic, single-use and identity-bound commits."""
+    """Transactional state boundary with optional durable journal recovery."""
 
     MAX_EXECUTION_ID_BYTES = 256
     MAX_TASK_ID_BYTES = 256
     MAX_PRINCIPAL_ID_BYTES = 256
     MAX_DIGEST_LENGTH = 64
 
-    def __init__(self, max_commits: int = 10_000):
+    def __init__(self, max_commits: int = 10_000, *, journal: StateJournal | None = None):
         if isinstance(max_commits, bool) or not isinstance(max_commits, int) or max_commits < 1:
             raise ValueError("max_commits must be a positive integer")
         self.max_commits = max_commits
+        self._journal = journal
         self._commits: dict[str, StateCommit] = {}
         self._sequence = 0
         self._lock = RLock()
+        if journal is not None:
+            recovered = journal.recover()
+            if len(recovered) > max_commits:
+                raise MemoryError("journal_exceeds_state_capacity")
+            self._commits = deepcopy(recovered)
+            self._sequence = max((commit.sequence for commit in recovered.values()), default=0)
 
     @property
     def version(self) -> int:
-        """Monotonic local state version used as an offline sync base."""
         with self._lock:
             return self._sequence
 
@@ -66,11 +75,7 @@ class StateStore:
 
     @classmethod
     def _valid_digest(cls, value: str) -> bool:
-        return (
-            isinstance(value, str)
-            and len(value) == cls.MAX_DIGEST_LENGTH
-            and all(char in "0123456789abcdef" for char in value)
-        )
+        return isinstance(value, str) and len(value) == cls.MAX_DIGEST_LENGTH and all(char in "0123456789abcdef" for char in value)
 
     @classmethod
     def _valid_fingerprint(cls, value: str) -> bool:
@@ -104,20 +109,20 @@ class StateStore:
         if not self._valid_fingerprint(principal_key_fingerprint):
             raise ValueError("invalid_principal_key_fingerprint")
         with self._lock:
-            # execution_id is the durable execution identity. Once committed it is
-            # single-use; accepting a second commit would permit replay/overwrite.
             if execution_id in self._commits:
                 raise PermissionError("execution_already_committed")
             if len(self._commits) >= self.max_commits:
                 raise MemoryError("state_capacity_exceeded")
-            self._sequence += 1
+            sequence = self._sequence + 1
             snapshot = deepcopy(state)
             snapshot.status = "committed"
-            commit = StateCommit(
-                execution_id, task_id, snapshot, verification_stage, self._sequence,
-                principal_id, principal_key_fingerprint,
-            )
+            commit = StateCommit(execution_id, task_id, snapshot, verification_stage, sequence, principal_id, principal_key_fingerprint)
+            # Durable append is performed before publishing the commit in memory.
+            # A failed durable write therefore cannot leave a phantom in-memory commit.
+            if self._journal is not None:
+                self._journal.append(commit)
             self._commits[execution_id] = commit
+            self._sequence = sequence
             return deepcopy(commit)
 
     def get(self, execution_id: str) -> StateCommit | None:
