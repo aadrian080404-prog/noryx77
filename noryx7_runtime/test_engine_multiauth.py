@@ -1,5 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from core.authorization_replay import AuthorizationReplayGuard
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
 
 from .contracts import ExecutionStatus, Intent, PlanStep
@@ -37,15 +38,35 @@ def proof_provider(a, b, epoch=7, mutate=False, override_epoch=None):
     return provider
 
 
+def configured_engine(authority, provider, replay_guard=None):
+    return RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=provider,
+        high_risk_action_types={"money.transfer"},
+        authorization_epoch=7,
+        replay_guard=replay_guard or AuthorizationReplayGuard(),
+    )
+
+
+def test_high_risk_requires_explicit_replay_guard():
+    authority, a, b = authority_and_keys()
+    try:
+        RuntimeEngine(
+            multi_auth_authority=authority,
+            authorization_provider=proof_provider(a, b),
+            high_risk_action_types={"money.transfer"},
+            authorization_epoch=7,
+        )
+    except ValueError as exc:
+        assert str(exc) == "high_risk_actions_require_replay_guard"
+    else:
+        raise AssertionError("high-risk runtime accepted without replay guard")
+
+
 def test_high_risk_valid_multi_auth_is_required_before_executor():
     authority, a, b = authority_and_keys()
     called = []
-    engine = RuntimeEngine(
-        multi_auth_authority=authority,
-        authorization_provider=proof_provider(a, b),
-        high_risk_action_types={"money.transfer"},
-        authorization_epoch=7,
-    )
+    engine = configured_engine(authority, proof_provider(a, b), AuthorizationReplayGuard())
     result = engine.execute(
         Intent("run", "user"),
         [step("money.transfer")],
@@ -57,15 +78,34 @@ def test_high_risk_valid_multi_auth_is_required_before_executor():
     assert called == ["step-1"]
 
 
+def test_high_risk_replay_is_rejected_before_second_side_effect():
+    authority, a, b = authority_and_keys()
+    replay = AuthorizationReplayGuard()
+    provider = proof_provider(a, b)
+    engine = configured_engine(authority, provider, replay)
+    called = []
+    first = engine.execute(
+        Intent("run", "user"), [step("money.transfer")],
+        executor=lambda action: called.append(action.step_id) or "ok",
+        verifier=lambda action, output: True,
+        execution_id="exec-replay",
+    )
+    second = engine.execute(
+        Intent("run", "user"), [step("money.transfer")],
+        executor=lambda action: called.append(action.step_id) or "ok",
+        verifier=lambda action, output: True,
+        execution_id="exec-replay",
+    )
+    assert first.status is ExecutionStatus.SUCCEEDED
+    assert second.status is ExecutionStatus.FAILED
+    assert second.error == "PermissionError"
+    assert called == ["step-1"]
+
+
 def test_high_risk_missing_proof_fails_before_side_effect():
     authority, _, _ = authority_and_keys()
     called = []
-    engine = RuntimeEngine(
-        multi_auth_authority=authority,
-        authorization_provider=lambda envelope, digest: None,
-        high_risk_action_types={"money.transfer"},
-        authorization_epoch=7,
-    )
+    engine = configured_engine(authority, lambda envelope, digest: None)
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -80,12 +120,7 @@ def test_high_risk_missing_proof_fails_before_side_effect():
 def test_high_risk_wrong_signed_statement_fails_before_side_effect():
     authority, a, b = authority_and_keys()
     called = []
-    engine = RuntimeEngine(
-        multi_auth_authority=authority,
-        authorization_provider=proof_provider(a, b, mutate=True),
-        high_risk_action_types={"money.transfer"},
-        authorization_epoch=7,
-    )
+    engine = configured_engine(authority, proof_provider(a, b, mutate=True))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -100,12 +135,7 @@ def test_high_risk_wrong_signed_statement_fails_before_side_effect():
 def test_high_risk_wrong_epoch_fails_before_side_effect():
     authority, a, b = authority_and_keys()
     called = []
-    engine = RuntimeEngine(
-        multi_auth_authority=authority,
-        authorization_provider=proof_provider(a, b, override_epoch=6),
-        high_risk_action_types={"money.transfer"},
-        authorization_epoch=7,
-    )
+    engine = configured_engine(authority, proof_provider(a, b, override_epoch=6))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -121,12 +151,7 @@ def test_revoked_approver_fails_before_side_effect():
     authority, a, b = authority_and_keys()
     authority.revoke("A")
     called = []
-    engine = RuntimeEngine(
-        multi_auth_authority=authority,
-        authorization_provider=proof_provider(a, b),
-        high_risk_action_types={"money.transfer"},
-        authorization_epoch=7,
-    )
+    engine = configured_engine(authority, proof_provider(a, b))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
