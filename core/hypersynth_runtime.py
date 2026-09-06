@@ -1,3 +1,4 @@
+import hashlib
 import time
 
 from .actions import ActionGate
@@ -26,6 +27,9 @@ class HypersynthRuntime:
         self.recovery = recovery or RecoveryController()
         if not isinstance(self.recovery, RecoveryController):
             raise TypeError("invalid_recovery_controller")
+        self.identity_registry = getattr(self.router, "identity_registry", None)
+        if self.identity_registry is None:
+            raise ValueError("hypersynth_identity_registry_required")
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
@@ -39,6 +43,19 @@ class HypersynthRuntime:
             max_steps=self.limits.max_actions_per_task,
             recovery=self.recovery,
         )
+
+    def _principal_binding(self, agent_ids):
+        """Require every execution participant to be a currently trusted agent identity."""
+        bindings = []
+        for agent_id in tuple(agent_ids):
+            agent = self.router.route(agent_id)
+            identity = getattr(agent, "identity", None)
+            if not self.identity_registry.is_trusted(identity):
+                raise PermissionError("agent_identity_untrusted")
+            bindings.append((identity.agent_id, hashlib.sha256(identity.public_key).hexdigest()))
+        if not bindings:
+            raise PermissionError("no_trusted_hypersynth_agent")
+        return tuple(bindings)
 
     def run(self, task: TaskSpec, *, interaction_context: InteractionContext):
         task_id = getattr(task, "task_id", None)
@@ -89,6 +106,11 @@ class HypersynthRuntime:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             self.audit.record("hypersynth_context_bound", task_id=task_id, context_id=interaction_context.context_id)
+            # The kernel may select multiple agents. Validate the complete registered route set
+            # before entering cognition so an untrusted route can never become an execution path.
+            principal_bindings = self._principal_binding(self.router.available())
+            self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings),
+                              fingerprints=tuple(x[1] for x in principal_bindings))
             result = self.kernel.run(task, deadline_check=deadline_exceeded)
             if not isinstance(result, dict):
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
@@ -125,12 +147,12 @@ class HypersynthRuntime:
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
         except PermissionError as exc:
-            check = VerificationResult(False, "recovery", str(exc))
-            self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
-            return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
-        except Exception as exc:
+            check = VerificationResult(False, "identity", str(exc))
+            self.audit.record("hypersynth_rejected", task_id=task_id, phase="identity", reason=check.reason)
+            return {"status": "rejected", "phase": "identity", "verification": check, "audit": self.audit.snapshot()}
+        except Exception:
             check = VerificationResult(False, "runtime", "controlled_runtime_failure")
-            self.audit.record("hypersynth_failure", task_id=task_id, error=type(exc).__name__, reason=check.reason)
+            self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
             return {"status": "rejected", "phase": "execution", "reason": check.reason, "verification": check, "audit": self.audit.snapshot()}
         result["audit"] = self.audit.snapshot()
         return result
