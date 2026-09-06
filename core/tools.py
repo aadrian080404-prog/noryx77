@@ -1,5 +1,7 @@
 from .actions import ActionGate
 from .contracts import ActionSpec, VerificationResult
+from .limits import RuntimeLimits
+from .security import SecurityBoundary
 
 
 class CapabilityRegistry:
@@ -29,17 +31,19 @@ class CapabilityRegistry:
 
 
 class ToolExecutor:
-    """Tool boundary: capability lookup -> ActionGate -> execution -> verification.
-
-    ToolExecutor is intentionally not an independent authorization path. Every tool
-    invocation must pass through the canonical ActionGate before its handler runs.
-    """
-    def __init__(self, action_gate, verifier):
-        if not isinstance(action_gate, ActionGate):
-            raise ValueError("action_gate_required")
+    """Tool boundary: capability lookup -> canonical ActionGate -> execution -> verification."""
+    def __init__(self, policy_or_gate, verifier):
+        if isinstance(policy_or_gate, ActionGate):
+            self.action_gate = policy_or_gate
+        else:
+            if not hasattr(policy_or_gate, "allows") or not callable(policy_or_gate.allows):
+                raise ValueError("action_gate_or_policy_required")
+            # Backward-compatible construction still routes every execution through
+            # the canonical gate; callers may inject a fully configured ActionGate.
+            security = SecurityBoundary(policy_or_gate, verifier)
+            self.action_gate = ActionGate(policy_or_gate, security, RuntimeLimits())
         if not hasattr(verifier, "verify_output") or not callable(verifier.verify_output):
             raise ValueError("verifier_required")
-        self.action_gate = action_gate
         self.verifier = verifier
         self.capabilities = CapabilityRegistry()
 
