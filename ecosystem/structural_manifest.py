@@ -20,13 +20,13 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
     "hypersynth": (
         "core/hypersynth.py", "core/hypersynth_runtime.py", "core/reasoning.py", "core/metacognition.py", "core/metacognitive_challenge.py",
         "core/planning.py", "core/verification.py", "core/memory.py", "core/secure_memory.py", "core/security.py", "core/recovery.py",
-        "tests/test_metacognitive_challenge.py",
+        "core/offline.py", "tests/test_metacognitive_challenge.py", "tests/test_offline.py",
     ),
     "orchestration": (
         "core/runtime.py", "core/orchestration.py", "core/interaction_context.py", "core/user_understanding.py", "core/state.py",
-        "core/security.py", "core/recovery.py", "core/evaluation.py", "core/evaluation_campaign.py", "ecosystem/boundaries.py",
+        "core/security.py", "core/recovery.py", "core/offline.py", "core/evaluation.py", "core/evaluation_campaign.py", "ecosystem/boundaries.py",
         "ecosystem/dispatch_contract.py", "ecosystem/isolation.py", "ecosystem/runtime_dispatch.py", "ecosystem/global_scale.py", "ecosystem/global_fabric.py",
-        "ecosystem/completeness.py", "ecosystem/structural_manifest.py", "tests/test_global_fabric.py",
+        "ecosystem/completeness.py", "ecosystem/structural_manifest.py", "tests/test_global_fabric.py", "tests/test_offline.py",
     ),
 }
 
