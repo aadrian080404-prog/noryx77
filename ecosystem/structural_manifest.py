@@ -26,7 +26,7 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
         "core/runtime.py", "core/orchestration.py", "core/interaction_context.py", "core/user_understanding.py", "core/state.py",
         "core/security.py", "core/recovery.py", "core/offline.py", "core/evaluation.py", "core/evaluation_campaign.py", "ecosystem/boundaries.py",
         "ecosystem/dispatch_contract.py", "ecosystem/isolation.py", "ecosystem/runtime_dispatch.py", "ecosystem/global_scale.py", "ecosystem/global_fabric.py",
-        "ecosystem/completeness.py", "ecosystem/structural_manifest.py", "tests/test_global_fabric.py", "tests/test_offline.py",
+        "ecosystem/closure_contract.py", "ecosystem/completeness.py", "ecosystem/structural_manifest.py", "tests/test_global_fabric.py", "tests/test_offline.py", "tests/test_closure_contract.py",
     ),
 }
 
