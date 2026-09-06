@@ -23,6 +23,7 @@ from .interaction_context import InteractionContext, build_interaction_context
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .metacognition import MetacognitiveReflection
+from .metacognitive_challenge import AdaptiveChallengeController, ChallengeDomain, ChallengeScore, ChallengeSpec, ChallengeTrace, ChallengeVerification, ImprovementEvidence, IndependentChallengeVerifier, MetacognitiveChallengeEvaluator
 from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthority, SignedAuthorizationProof, ThresholdAuthorizer, action_digest, sign_approval
 from .observability import EventKind, ObservedEvent, SecurityEventBus
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage, OrchestrationTransition
