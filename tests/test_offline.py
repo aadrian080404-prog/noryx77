@@ -58,7 +58,7 @@ def make_snapshot(now=100):
     return replace(base, integrity_digest=sha256(base.canonical_bytes()).hexdigest())
 
 
-def make_runtime(recovery=None, policy=None, verifier=None, now=100):
+def make_runtime(recovery=None, policy=None, verifier=None, now=100, max_snapshot_age=86_400):
     return OfflineRuntime(
         recovery=recovery or Recovery(),
         policy=policy or Policy(),
@@ -66,6 +66,7 @@ def make_runtime(recovery=None, policy=None, verifier=None, now=100):
         cipher=Cipher(),
         clock=lambda: now,
         snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
+        max_snapshot_age=max_snapshot_age,
     )
 
 
@@ -94,7 +95,7 @@ def test_cloud_only_capability_is_denied_offline():
 
 
 def test_stale_or_tampered_snapshot_fails_closed():
-    runtime = make_runtime(now=100)
+    runtime = make_runtime(now=100, max_snapshot_age=10)
     stale = make_snapshot(now=0)
     with pytest.raises(OfflineDeniedError, match="stale"):
         runtime.install_snapshot(stale)
