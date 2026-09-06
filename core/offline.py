@@ -191,6 +191,14 @@ class OfflineRuntime:
         self._lock = threading.RLock()
         self._max_snapshot_age = max_snapshot_age
 
+    def _authenticated_snapshot(self, snapshot: OfflineSnapshot) -> bool:
+        if not isinstance(snapshot, OfflineSnapshot) or not snapshot.verify_integrity():
+            return False
+        try:
+            return self._snapshot_authenticator(snapshot) is True
+        except Exception:
+            return False
+
     @property
     def state(self) -> OfflineState:
         with self._lock:
@@ -201,7 +209,7 @@ class OfflineRuntime:
         return self._queue
 
     def install_snapshot(self, snapshot: OfflineSnapshot) -> None:
-        if not isinstance(snapshot, OfflineSnapshot) or not snapshot.verify_integrity() or not self._snapshot_authenticator(snapshot):
+        if not self._authenticated_snapshot(snapshot):
             raise OfflineDeniedError("invalid_offline_snapshot")
         now = self._clock()
         if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
@@ -217,7 +225,7 @@ class OfflineRuntime:
     def _admit(self, execution: OfflineExecution, payload: bytes) -> int:
         with self._lock:
             snapshot = self._snapshot
-            if snapshot is None or not snapshot.verify_integrity() or not self._snapshot_authenticator(snapshot):
+            if snapshot is None or not self._authenticated_snapshot(snapshot):
                 raise OfflineDeniedError("offline_snapshot_required")
             now = self._clock()
             if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
@@ -231,7 +239,11 @@ class OfflineRuntime:
                 raise ValueError("invalid_payload")
             if _digest(payload) != execution.payload_digest:
                 raise OfflineDeniedError("offline_payload_mismatch")
-            if not self._policy.authorize(principal_id=execution.principal_id, operation=execution.operation, offline=True):
+            try:
+                policy_allowed = self._policy.authorize(principal_id=execution.principal_id, operation=execution.operation, offline=True)
+            except Exception:
+                policy_allowed = False
+            if policy_allowed is not True:
                 raise OfflineDeniedError("offline_policy_denied")
             recovery_state, epoch = self._recovery.snapshot()
             if str(getattr(recovery_state, "value", recovery_state)).lower() != "normal":
@@ -247,13 +259,15 @@ class OfflineRuntime:
         epoch = self._admit(execution, payload)
         envelope = None
         try:
-            # Reserve the encrypted outbox record before commit. If verification/commit fails,
-            # remove the reservation so state and durable sync evidence cannot diverge.
             envelope = self._queue.enqueue(execution, payload)
 
             def critical() -> None:
                 produced = execute() if execute is not None else result
-                if not self._verifier.verify(produced):
+                try:
+                    verified = self._verifier.verify(produced)
+                except Exception:
+                    verified = False
+                if verified is not True:
                     raise OfflineDeniedError("offline_result_unverified")
                 commit(execution, produced)  # type: ignore[arg-type]
             self._recovery.run_if_normal(critical, expected_epoch=epoch)
@@ -271,7 +285,7 @@ class OfflineRuntime:
         if authenticated is not True or channel_verified is not True:
             raise OfflineDeniedError("secure_reconnect_required")
         with self._lock:
-            if self._snapshot is None or not self._snapshot.verify_integrity() or not self._snapshot_authenticator(self._snapshot):
+            if self._snapshot is None or not self._authenticated_snapshot(self._snapshot):
                 raise OfflineDeniedError("offline_snapshot_required")
             self._state = OfflineState.SYNCING
             return self._queue.snapshot()
