@@ -66,7 +66,9 @@ class RuntimeEngine:
     @property
     def runtime_id(self) -> str: return self._runtime_id
     @staticmethod
-    def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult: return RuntimeResult(lifecycle.transition(status).execution_id, status, tuple(attestations), tuple(outputs), error)
+    def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult:
+        final = lifecycle.transition(status)
+        return RuntimeResult(final.execution_id, final.status, tuple(attestations), tuple(outputs), error)
     def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
         dispatch = self._adapter.execute if self._adapter is not None else executor
         if dispatch is None: raise RuntimeError("execution dispatch is unavailable")
@@ -81,11 +83,12 @@ class RuntimeEngine:
         if envelope.action_type not in self._high_risk_action_types: return
         if self._multi_auth_authority is None or self._authorization_provider is None: raise PermissionError("multi_auth_required")
         if self._replay_guard is None: raise PermissionError("replay_guard_required")
-        try: proof = self._authorization_provider(envelope, bytes.fromhex(action_digest))
+        statement = bytes.fromhex(action_digest)
+        try: proof = self._authorization_provider(envelope, statement)
         except Exception as exc: raise PermissionError("authorization_provider_failed") from exc
         if not isinstance(proof, SignedAuthorizationProof): raise PermissionError("authorization_proof_required")
-        if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=bytes.fromhex(action_digest)): raise PermissionError("authorization_proof_invalid")
-        if not self._replay_guard.consume(bytes.fromhex(action_digest)): raise PermissionError("authorization_replay_detected")
+        if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=statement): raise PermissionError("authorization_proof_invalid")
+        if not self._replay_guard.consume(statement): raise PermissionError("authorization_replay_detected")
     def execute(self, intent: Intent, steps: Sequence[PlanStep], *, executor: Executor | None = None, verifier: Verifier, committer: Committer | None = None, timeout_seconds: float = 30.0, execution_id: str | None = None) -> RuntimeResult:
         if not isinstance(intent, Intent): raise TypeError("intent must be an Intent")
         if not isinstance(steps, Sequence): raise TypeError("steps must be a sequence")
