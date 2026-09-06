@@ -26,6 +26,7 @@ from .metacognition import MetacognitiveReflection
 from .metacognitive_challenge import AdaptiveChallengeController, ChallengeDomain, ChallengeScore, ChallengeSpec, ChallengeTrace, ChallengeVerification, ImprovementEvidence, IndependentChallengeVerifier, MetacognitiveChallengeEvaluator
 from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthority, SignedAuthorizationProof, ThresholdAuthorizer, action_digest, sign_approval
 from .observability import EventKind, ObservedEvent, SecurityEventBus
+from .offline import OfflineConflictError, OfflineDeniedError, OfflineExecution, OfflineRuntime, OfflineSnapshot, OfflineState, OfflineSyncQueue, SyncEnvelope
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage, OrchestrationTransition
 from .personality import ApollonianPersonality, PersonalityProfile
 from .personality_binding import SignedPersonalityBinding, bind_personality, sign_identity_personality_binding, verify_identity_personality_binding, verify_personality_binding
