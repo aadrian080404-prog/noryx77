@@ -30,10 +30,21 @@ FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
     ),
 }
 
+# Structural hazards discovered during consolidation. These are deliberately fail-closed:
+# a duplicated package tree can shadow imports and silently create two competing runtimes.
+FORBIDDEN_PATH_PREFIXES: Final[tuple[str, ...]] = ("core/core/",)
+
 
 def missing_paths(repository_root: str | Path | None = None) -> tuple[str, ...]:
     root = Path(repository_root).resolve() if repository_root is not None else Path(__file__).resolve().parents[1]
-    return tuple(relative for paths in FRONT_REQUIRED_PATHS.values() for relative in paths if not (root / relative).exists())
+    missing = [
+        relative for paths in FRONT_REQUIRED_PATHS.values()
+        for relative in paths if not (root / relative).exists()
+    ]
+    for prefix in FORBIDDEN_PATH_PREFIXES:
+        if any(path.as_posix().startswith(prefix) for path in root.rglob("*") if path.is_file()):
+            missing.append(f"forbidden:{prefix}")
+    return tuple(missing)
 
 
 def require_complete(repository_root: str | Path | None = None) -> None:
