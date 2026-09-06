@@ -132,6 +132,12 @@ class GlobalIdentityAuthorizationFabric:
         if not isinstance(authorization, IdentityAuthorization):
             raise TypeError("authorization_required")
         with self._lock:
+            previous = self._entries.get(authorization.session_id)
+            if previous is not None and (
+                previous.identity_id != authorization.identity_id
+                or previous.device_id != authorization.device_id
+            ):
+                raise PermissionError("session_identity_binding_mismatch")
             self._entries[authorization.session_id] = authorization
 
     def authorize(self, session_id: str, capability: str, policy_digest: str) -> IdentityAuthorization:
