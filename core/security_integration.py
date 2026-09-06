@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Mapping
 
-from .defense import DefenseController
+from .defense import AccessRequest, DefenseController, TrustDecision
 
 
 @dataclass(frozen=True)
@@ -20,8 +20,8 @@ class SecurityEnvelope:
 class DefenseGate:
     """Fail-closed bridge between runtime actions and the defense control plane.
 
-    This layer does not execute actions. It decides whether the trusted runtime may
-    continue toward the existing capability/action gate.
+    This layer does not execute actions. It delegates authorization to the
+    canonical DefenseController for every request, including same-zone traffic.
     """
 
     def __init__(self, controller: DefenseController):
@@ -42,17 +42,26 @@ class DefenseGate:
         )
         if any(not isinstance(value, str) or not value.strip() for value in fields):
             return {"allowed": False, "reason": "invalid_security_envelope"}
-        if envelope.source_zone == envelope.target_zone:
-            return {"allowed": True, "reason": "same_zone"}
-        return self._controller.authorize(
+        context = envelope.context or {}
+        if not isinstance(context, Mapping) or any(
+            not isinstance(key, str) or not isinstance(value, str) for key, value in context.items()
+        ):
+            return {"allowed": False, "reason": "invalid_security_context"}
+        session_id = context.get("session_id", "")
+        request = AccessRequest(
             principal_id=envelope.principal_id,
-            component_id=envelope.component_id,
-            source_zone=envelope.source_zone,
-            target_zone=envelope.target_zone,
+            component=envelope.component_id,
             capability=envelope.capability,
-            risk=envelope.risk,
-            context=envelope.context or {},
+            target=envelope.target_zone,
+            session_id=session_id,
         )
+        decision = self._controller.authorize(request)
+        return {
+            "allowed": decision.decision is TrustDecision.ALLOW,
+            "decision": decision.decision.value,
+            "reason": decision.reason,
+            "mode": decision.mode.value,
+        }
 
     def allows(self, envelope: SecurityEnvelope) -> bool:
         return bool(self.evaluate(envelope).get("allowed"))
