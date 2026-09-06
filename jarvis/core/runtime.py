@@ -29,7 +29,7 @@ class JarvisRuntime:
         if recovery_state is not RecoveryState.NORMAL:
             self.audit.record("recovery_execution_denied", request.principal_id); return ()
         if not plan.steps or not self.orchestrator.authorize_step(request, plan.steps[0]):
-            self.audit.record("execution_authorization_rejected", request.principal_id); return ()
+            self.audit.record("execution_authorization_rejected", request.principal_id); raise PermissionError("capability_denied")
         execution_id = request.request_id
         try:
             self.state.reserve(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id)
