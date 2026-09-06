@@ -1,6 +1,6 @@
 """Fail-closed offline execution and reconnection primitives for NORYX7.
 
-Offline mode is a constrained execution mode, not a security bypass.  It requires
+Offline mode is a constrained execution mode, not a security bypass. It requires
 an authenticated local snapshot, approved local capabilities, the same recovery
 state and policy gates used online, and verified results before local commit.
 Synchronization is encrypted, bounded, idempotent, and conflict-detecting.
@@ -12,8 +12,7 @@ from enum import Enum
 import hashlib
 import json
 import threading
-from typing import Callable, Mapping, Protocol
-
+from typing import Callable, Protocol
 
 MAX_ID_BYTES = 256
 MAX_PAYLOAD_BYTES = 64 * 1024
@@ -36,11 +35,11 @@ class OfflineState(str, Enum):
 
 class RecoveryLike(Protocol):
     def snapshot(self) -> tuple[object, int]: ...
-    def require_normal(self, expected_epoch: int | None = None) -> None: ...
+    def run_if_normal(self, operation: Callable[[], object], expected_epoch: int | None = None) -> object: ...
 
 
 class OfflineCipher(Protocol):
-    """Authenticated encryption adapter; implementations must never return plaintext."""
+    """Authenticated-encryption adapter; plaintext must never be persisted by the queue."""
 
     def encrypt(self, plaintext: bytes, *, aad: bytes) -> bytes: ...
     def decrypt(self, ciphertext: bytes, *, aad: bytes) -> bytes: ...
@@ -182,7 +181,10 @@ class OfflineSyncQueue:
         with self._lock:
             envelope = self._records[execution_id]
             aad = f"noryx7/offline-sync/v1/{execution_id}".encode("utf-8")
-            return self._cipher.decrypt(envelope.ciphertext, aad=aad)
+            plaintext = self._cipher.decrypt(envelope.ciphertext, aad=aad)
+            if not isinstance(plaintext, bytes) or not plaintext:
+                raise OfflineDeniedError("invalid_decrypted_payload")
+            return plaintext
 
     def acknowledge(self, execution_id: str) -> None:
         with self._lock:
@@ -198,7 +200,7 @@ class OfflineSyncQueue:
 
 
 class OfflineRuntime:
-    """Coordinates offline admission, verified execution, commit and secure sync."""
+    """Coordinates offline admission, verified execution, local commit and secure sync."""
 
     def __init__(
         self,
@@ -208,6 +210,7 @@ class OfflineRuntime:
         verifier: OfflineVerifier,
         cipher: OfflineCipher,
         clock: Callable[[], int],
+        snapshot_authenticator: Callable[[OfflineSnapshot], bool],
         max_snapshot_age: int = MAX_SNAPSHOT_AGE,
     ) -> None:
         if max_snapshot_age < 0:
@@ -216,6 +219,7 @@ class OfflineRuntime:
         self._policy = policy
         self._verifier = verifier
         self._clock = clock
+        self._snapshot_authenticator = snapshot_authenticator
         self._queue = OfflineSyncQueue(cipher)
         self._snapshot: OfflineSnapshot | None = None
         self._state = OfflineState.ONLINE
@@ -232,7 +236,7 @@ class OfflineRuntime:
         return self._queue
 
     def install_snapshot(self, snapshot: OfflineSnapshot) -> None:
-        if not snapshot.verify_integrity():
+        if not snapshot.verify_integrity() or not self._snapshot_authenticator(snapshot):
             raise OfflineDeniedError("invalid_offline_snapshot")
         now = self._clock()
         if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
@@ -243,10 +247,31 @@ class OfflineRuntime:
 
     def disconnect(self) -> None:
         with self._lock:
-            if self._snapshot is None:
-                self._state = OfflineState.DISCONNECTED
-                return
-            self._state = OfflineState.READY
+            self._state = OfflineState.READY if self._snapshot is not None else OfflineState.DISCONNECTED
+
+    def _admit(self, execution: OfflineExecution, payload: bytes) -> int:
+        with self._lock:
+            snapshot = self._snapshot
+            if snapshot is None or not snapshot.verify_integrity() or not self._snapshot_authenticator(snapshot):
+                raise OfflineDeniedError("offline_snapshot_required")
+            now = self._clock()
+            if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
+                self._state = OfflineState.RECOVERY
+                raise OfflineDeniedError("stale_offline_snapshot")
+            if snapshot.principal_id != execution.principal_id:
+                raise OfflineDeniedError("offline_identity_mismatch")
+            if execution.capability not in snapshot.capabilities:
+                raise OfflineDeniedError("offline_capability_denied")
+            if _digest(payload) != execution.payload_digest:
+                raise OfflineDeniedError("offline_payload_mismatch")
+            if not self._policy.authorize(principal_id=execution.principal_id, operation=execution.operation, offline=True):
+                raise OfflineDeniedError("offline_policy_denied")
+            recovery_state, epoch = self._recovery.snapshot()
+            if str(getattr(recovery_state, "value", recovery_state)).lower() != "normal":
+                self._state = OfflineState.RECOVERY
+                raise OfflineDeniedError("offline_recovery_denied")
+            self._state = OfflineState.EXECUTING
+            return epoch
 
     def execute(
         self,
@@ -258,36 +283,16 @@ class OfflineRuntime:
     ) -> SyncEnvelope:
         if not isinstance(payload, bytes) or not 0 < len(payload) <= MAX_PAYLOAD_BYTES:
             raise ValueError("invalid_payload")
-        with self._lock:
-            snapshot = self._snapshot
-            if snapshot is None or not snapshot.verify_integrity():
-                raise OfflineDeniedError("offline_snapshot_required")
-            if snapshot.principal_id != execution.principal_id:
-                raise OfflineDeniedError("offline_identity_mismatch")
-            if execution.capability not in snapshot.capabilities:
-                raise OfflineDeniedError("offline_capability_denied")
-            if _digest(payload) != execution.payload_digest:
-                raise OfflineDeniedError("offline_payload_mismatch")
-            if not self._policy.authorize(principal_id=execution.principal_id, operation=execution.operation, offline=True):
-                raise OfflineDeniedError("offline_policy_denied")
-            recovery_state, epoch = self._recovery.snapshot()
-            if str(getattr(recovery_state, "value", recovery_state)).lower() not in {"normal", "verified"}:
-                self._state = OfflineState.RECOVERY
-                raise OfflineDeniedError("offline_recovery_denied")
-            self._state = OfflineState.EXECUTING
+        epoch = self._admit(execution, payload)
 
         try:
-            def critical() -> None:
+            def critical() -> object:
                 if not self._verifier.verify(result):
                     raise OfflineDeniedError("offline_result_unverified")
                 commit(execution, result)
+                return None
 
-            self._recovery.require_normal(expected_epoch=epoch)
-            if str(getattr(recovery_state, "value", recovery_state)).lower() == "verified":
-                # A VERIFIED recovery state is safe only if its controller permits
-                # normal-operation admission; require_normal is the authoritative gate.
-                pass
-            critical()
+            self._recovery.run_if_normal(critical, expected_epoch=epoch)
             envelope = self._queue.enqueue(execution, payload)
         except Exception:
             with self._lock:
@@ -301,15 +306,23 @@ class OfflineRuntime:
         if not authenticated or not channel_verified:
             raise OfflineDeniedError("secure_reconnect_required")
         with self._lock:
-            if self._snapshot is None or not self._snapshot.verify_integrity():
+            if self._snapshot is None or not self._snapshot.verify_integrity() or not self._snapshot_authenticator(self._snapshot):
                 raise OfflineDeniedError("offline_snapshot_required")
             self._state = OfflineState.SYNCING
             return self._queue.snapshot()
 
-    def acknowledge_synced(self, execution_id: str, *, conflict: bool = False) -> None:
+    def acknowledge_synced(self, execution_id: str, *, remote_state_version: str | None = None, conflict: bool = False) -> None:
         with self._lock:
             if conflict:
                 self._state = OfflineState.CONFLICT
                 raise OfflineConflictError("offline_sync_conflict")
+            _bounded(execution_id, "execution_id")
+            envelope = self._queue.snapshot()
+            matching = next((item for item in envelope if item.execution.execution_id == execution_id), None)
+            if matching is None:
+                raise KeyError(execution_id)
+            if remote_state_version is not None and remote_state_version != matching.execution.base_state_version:
+                self._state = OfflineState.CONFLICT
+                raise OfflineConflictError("offline_state_version_conflict")
             self._queue.acknowledge(execution_id)
             self._state = OfflineState.SYNC_PENDING if len(self._queue) else OfflineState.ONLINE
