@@ -1,7 +1,7 @@
 """Unified control-plane composition for the NORYX7 architecture.
 
-This module wires policy, verification, defense, recovery, observability and
-supply-chain boundaries without granting cognition components security authority.
+Security state is authoritative; observability is evidence only and must never
+be able to roll back or block a security transition.
 """
 from __future__ import annotations
 
@@ -38,25 +38,30 @@ class Noryx7ControlPlane:
         self.recovery = RecoveryController()
         self.adversarial = AdversarialEngine()
         self.defense = DefenseController()
-        # The control-plane core is the only component pre-trusted for recovery.
         self.defense.trust_component("core")
         self._transition_lock = RLock()
+        self._observation_failures = 0
 
     def _observe(self, kind: EventKind, reason: str, *, severity: int = 80) -> None:
-        """Record a deterministic evidence digest before exposing a transition."""
+        """Best-effort evidence emission; security state is never delegated to telemetry."""
         evidence = hashlib.sha256(
             f"noryx7/control-plane/v1|{kind.value}|{reason}|{self.recovery.epoch}".encode("utf-8")
         ).hexdigest()
-        self.events.publish(
-            kind,
-            component="control-plane",
-            severity=severity,
-            evidence_digest=evidence,
-        )
+        try:
+            self.events.publish(kind, component="control-plane", severity=severity, evidence_digest=evidence)
+        except Exception:
+            # The transition has already been made authoritative by the caller.
+            # A broken observer cannot reopen or block a containment transition.
+            self._observation_failures += 1
 
     def _require_synchronized(self, recovery_state: RecoveryState, defense_mode: DefenseMode) -> None:
         if self.recovery.state is not recovery_state or self.defense.mode is not defense_mode:
             raise PermissionError("control_plane_state_desynchronized")
+
+    @property
+    def observation_failures(self) -> int:
+        with self._transition_lock:
+            return self._observation_failures
 
     def admit_artifact(self, manifest: ArtifactManifest) -> bool:
         return self.supply_chain.verify(manifest)
