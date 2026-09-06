@@ -8,6 +8,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 MAX_COMPONENT_ID = 256
+MAX_VERSION = 256
 
 
 @dataclass(frozen=True)
@@ -21,9 +22,13 @@ class ArtifactManifest:
     def __post_init__(self) -> None:
         if not isinstance(self.component_id, str) or not self.component_id or len(self.component_id) > MAX_COMPONENT_ID:
             raise ValueError("invalid_component_id")
-        if not isinstance(self.version, str) or not self.version:
+        if not isinstance(self.version, str) or not self.version or len(self.version) > MAX_VERSION:
             raise ValueError("invalid_version")
-        if not isinstance(self.artifact_digest, str) or len(self.artifact_digest) != 64:
+        if (
+            not isinstance(self.artifact_digest, str)
+            or len(self.artifact_digest) != 64
+            or any(char not in "0123456789abcdef" for char in self.artifact_digest)
+        ):
             raise ValueError("invalid_artifact_digest")
         if not isinstance(self.signer_key, bytes) or len(self.signer_key) != 32:
             raise ValueError("invalid_signer_key")
@@ -45,6 +50,7 @@ class SupplyChainVerifier:
             raise ValueError("invalid_trusted_key")
 
     def verify(self, manifest: ArtifactManifest) -> bool:
+        """Verify the signed manifest and its trusted signer identity."""
         if not isinstance(manifest, ArtifactManifest) or manifest.signer_key not in self._trusted:
             return False
         try:
@@ -55,3 +61,11 @@ class SupplyChainVerifier:
             return True
         except (InvalidSignature, ValueError, TypeError):
             return False
+
+    def verify_artifact(self, manifest: ArtifactManifest, artifact: bytes) -> bool:
+        """Verify both the signed manifest and the actual artifact bytes."""
+        if not isinstance(manifest, ArtifactManifest) or not isinstance(artifact, bytes):
+            return False
+        if hashlib.sha256(artifact).hexdigest() != manifest.artifact_digest:
+            return False
+        return self.verify(manifest)
