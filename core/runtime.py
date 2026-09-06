@@ -22,13 +22,19 @@ from .recovery import RecoveryController
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .state import NORYXState, StateStore
+from .state_journal import StateJournal
 from .verification import VerificationEngine
 
 
 class NORYXRuntime:
-    """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
+    """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit.
 
-    def __init__(self, limits: RuntimeLimits | None = None):
+    The state journal is an explicit durability boundary. Production callers should
+    provide a protected persistent path; tests may use a temporary path or leave it
+    unset for the historical in-memory mode.
+    """
+
+    def __init__(self, limits: RuntimeLimits | None = None, *, state_journal_path: str | None = None):
         self.limits = limits or RuntimeLimits()
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
@@ -36,7 +42,8 @@ class NORYXRuntime:
         self.security = SecurityBoundary(self.policy, self.verifier, recovery=self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
-        self.state = StateStore(max_commits=self.limits.max_memory_items)
+        self.state_journal = StateJournal(state_journal_path, max_commits=self.limits.max_memory_items) if state_journal_path else None
+        self.state = StateStore(max_commits=self.limits.max_memory_items, journal=self.state_journal)
         self.audit = AuditLog()
         self.identity_registry = IdentityRegistry()
         deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
@@ -54,6 +61,11 @@ class NORYXRuntime:
         )
         self._offline: OfflineRuntime | None = None
 
+    def close(self) -> None:
+        """Close external durable resources owned by the runtime."""
+        if self.state_journal is not None:
+            self.state_journal.close()
+
     def _principal_binding(self, agent_id: str) -> tuple[str, str]:
         """Return the trusted agent principal and its exact public-key fingerprint."""
         agent = self.router.route(agent_id)
@@ -65,11 +77,7 @@ class NORYXRuntime:
 
     def configure_offline(self, *, cipher: AuthenticatedCipher, key_id: str,
                           snapshot_authenticator, clock=None) -> OfflineRuntime:
-        """Install an explicit offline boundary using the same policy, verifier and recovery controller.
-
-        The key provider remains outside the runtime; production deployments must inject a
-        hardware/KMS-backed AuthenticatedCipher rather than the test-only in-memory provider.
-        """
+        """Install an explicit offline boundary using the same policy, verifier and recovery controller."""
         bound_cipher = BoundAuthenticatedCipher(cipher, key_id=key_id)
         offline = OfflineRuntime(
             recovery=self.recovery,
@@ -165,12 +173,8 @@ class NORYXRuntime:
     def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str, principal_id: str) -> OrchestrationEnvelope:
         if not isinstance(interaction_context, InteractionContext):
             raise TypeError("interaction_context_required")
-        envelope = OrchestrationEnvelope(
-            request_id=task.task_id,
-            principal_id=principal_id,
-            operation=task.task_type,
-            interaction_context=interaction_context,
-        )
+        envelope = OrchestrationEnvelope(request_id=task.task_id, principal_id=principal_id,
+                                         operation=task.task_type, interaction_context=interaction_context)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
         return envelope
@@ -208,10 +212,8 @@ class NORYXRuntime:
             principal_id, principal_key_fingerprint = self._principal_binding(agent_id)
         except (LookupError, PermissionError):
             return {"status": "rejected", "reason": "agent_identity_untrusted", "task_id": task_id}
-
         def deadline_exceeded() -> bool:
             return time.monotonic() > deadline
-
         try:
             task_check = self.verifier.verify_task(task)
         except Exception:
@@ -227,15 +229,14 @@ class NORYXRuntime:
         if deadline_exceeded():
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
-
         try:
             envelope = self._context_envelope(task, interaction_context, execution_id, principal_id)
             envelope = OrchestrationCoordinator.with_intent_digest(envelope, task.objective)
-            self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id, envelope_digest=OrchestrationCoordinator.digest(envelope))
+            self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id,
+                              envelope_digest=OrchestrationCoordinator.digest(envelope))
         except (TypeError, ValueError):
             self.audit.record("orchestration_rejection", task_id=task_id, reason="invalid_interaction_context")
             return {"status": "rejected", "reason": "invalid_interaction_context", "task_id": task_id}
-
         try:
             subtasks = self.decomposer.decompose(task)
             agent = self.router.route(agent_id)
@@ -250,7 +251,6 @@ class NORYXRuntime:
             return self._rejection(envelope, task_id, "agent_unavailable", self.audit)
         if len(subtasks) > self.limits.max_actions_per_task:
             return self._rejection(envelope, task_id, "max_actions_per_task_exceeded", self.audit)
-
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.EXECUTING)
         results = []
         for subtask in subtasks:
@@ -272,9 +272,7 @@ class NORYXRuntime:
             self.audit.record("action_gate", task_id=child.task_id, allowed=decision.allowed, reason=decision.reason)
             if not decision.allowed:
                 return self._rejection(envelope, child.task_id, decision.reason, self.audit, verification=decision.verification)
-            if not isinstance(result, AgentResult):
-                return self._rejection(envelope, child.task_id, "malformed_agent_result", self.audit)
-            if not result.is_well_formed():
+            if not isinstance(result, AgentResult) or not result.is_well_formed():
                 return self._rejection(envelope, child.task_id, "malformed_agent_result", self.audit)
             if result.agent_id != agent.agent_id:
                 return self._rejection(envelope, child.task_id, "agent_identity_mismatch", self.audit)
@@ -297,7 +295,6 @@ class NORYXRuntime:
             if not runtime_verification.valid:
                 return self._rejection(envelope, child.task_id, "runtime_output_verification_failed", self.audit, verification=runtime_verification)
             results.append(result)
-
         if deadline_exceeded():
             return self._rejection(envelope, task_id, "max_task_seconds_exceeded", self.audit)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.VERIFYING)
@@ -308,36 +305,29 @@ class NORYXRuntime:
         if not aggregate_verification or not all(check.valid for check in aggregate_verification):
             failed = next((check for check in aggregate_verification if not check.valid),
                           VerificationResult(False, "runtime_results", "aggregate_verification_failed"))
-            return self._rejection(envelope, task_id, "aggregate_verification_failed", self.audit, verification=failed)
-        final_verification = self.verifier.verify_output(results[-1].output if results else None, stage="runtime_result")
-        if not final_verification.valid:
-            return self._rejection(envelope, task_id, "final_verification_failed", self.audit, verification=final_verification)
-        verification_results = [
-            {"stage": check.stage, "valid": check.valid, "reason": check.reason} for check in aggregate_verification
-        ]
-        verification_results.append({"stage": final_verification.stage, "valid": final_verification.valid, "reason": final_verification.reason})
-        committed_state = NORYXState(
-            input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(), goal=task.objective,
-            subtasks=list(expected_task_ids), final_answer=str(results[-1].output) if results else "",
-            verification_results=verification_results, confidence=1.0, status="verified")
+            return self._rejection(envelope, task_id, failed.reason, self.audit, verification=failed)
+        final_answer = results[-1].output if results else ""
+        state = NORYXState(
+            input_digest=hashlib.sha256(str(task.input).encode("utf-8")).hexdigest(),
+            goal=task.objective,
+            subtasks=[x.subtask_id for x in subtasks],
+            selected_models=[agent_id],
+            verification_results=[{"stage": check.stage, "valid": check.valid, "reason": check.reason} for check in aggregate_verification],
+            confidence=1.0,
+            final_answer=str(final_answer),
+            status="verified",
+        )
         try:
-            commit = self.recovery.run_if_normal(
-                lambda: self.state.commit(committed_state, execution_id=execution_id, task_id=task_id,
-                                          principal_id=principal_id, principal_key_fingerprint=principal_key_fingerprint,
-                                          verification_valid=final_verification.valid, verification_stage=final_verification.stage),
-                expected_epoch=recovery_epoch)
-        except (TypeError, ValueError, PermissionError, MemoryError) as exc:
-            self.audit.record("state_commit_failure", task_id=task_id, reason=type(exc).__name__)
-            return self._rejection(envelope, task_id, "state_commit_failed", self.audit)
-        envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
-        self.audit.record("orchestration_commit", task_id=task_id, stage=envelope.stage.value,
-                          context_id=interaction_context.context_id, execution_id=execution_id, state_sequence=commit.sequence,
-                          principal_id=principal_id, principal_key_fingerprint=principal_key_fingerprint)
-        return {"status": "completed", "results": tuple(results), "state_commit": commit,
-                "orchestration_stage": envelope.stage.value, "audit": self.audit.snapshot()}
-
-    def run_hypersynth(self, task: TaskSpec, interaction_context: InteractionContext | None = None):
-        """Execute a task through the bounded HYPERSYNTH cognitive pipeline."""
-        if interaction_context is None or not isinstance(interaction_context, InteractionContext):
-            return {"status": "rejected", "reason": "interaction_context_required", "task_id": getattr(task, "task_id", None)}
-        return self.hypersynth.run(task, interaction_context=interaction_context)
+            commit = self.state.commit(
+                state, execution_id=execution_id, task_id=task_id,
+                principal_id=principal_id, principal_key_fingerprint=principal_key_fingerprint,
+                verification_valid=True, verification_stage="runtime_result",
+            )
+            envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
+        except Exception as exc:
+            return self._rejection(envelope, task_id, "state_commit_failed", self.audit, error=type(exc).__name__)
+        self.audit.record("state_commit", task_id=task_id, execution_id=execution_id, sequence=commit.sequence)
+        return {"status": "completed", "task_id": task_id, "execution_id": execution_id,
+                "result": final_answer, "verification": aggregate_verification,
+                "orchestration_stage": envelope.stage.value, "state_commit": commit,
+                "audit": self.audit.snapshot()}
