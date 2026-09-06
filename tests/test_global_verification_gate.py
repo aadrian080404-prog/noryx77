@@ -9,6 +9,7 @@ from ecosystem.completeness import evaluate, require_complete
 
 REQUIRED_MODULES = (
     "core.actions",
+    "core.agent_core",
     "core.authorization_replay",
     "core.control_plane",
     "core.crypto",
