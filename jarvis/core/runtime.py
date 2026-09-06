@@ -92,6 +92,7 @@ class JarvisRuntime:
                     verified_results=True,
                     execution_id=execution_id,
                     request_id=request.request_id,
+                    principal_id=request.principal_id,
                 ),
                 expected_epoch=recovery_epoch,
             )
