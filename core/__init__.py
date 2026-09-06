@@ -4,11 +4,13 @@ from .agents import Agent, DeterministicAgent
 from .alerting import AlertChannel, AlertRouter, AlertSeverity, EscalationPolicy, SecurityAlert
 from .architecture_gate import ArchitectureCompletenessGate, ArchitectureGateResult, ArchitecturePlane, PlaneDefinition, CANONICAL_PLANES
 from .architecture_registry import CANONICAL_DEFINITIONS, canonical_gate, require_structural_completeness
+from .attestation import Attestation, AttestationVerifier, RuntimeIdentity
 from .audit import AuditLog
 from .authorization_replay import AuthorizationReplayGuard
 from .context import ContextManager, ContextSnapshot
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .coordination import AgentAssignment, AgentCoordinator
+from .crypto import AuthenticatedCipher, EncryptedEnvelope, InMemoryKeyProvider, KeyProvider
 from .defense import AccessRequest, DefenseController, DefenseDecision, DefenseMode, ImmutableCoreManifest, OfflineArtifact, OfflineRecoveryCatalog, SegmentationPolicy, SecurityEvent, TrustDecision
 from .decomposition import Subtask, TaskDecomposer
 from .device import CapabilityGrant, DeviceAction, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceRuntimeBoundary, DeviceTrust
@@ -20,6 +22,7 @@ from .evaluation_campaign import CampaignManifest, EvaluationCampaign
 from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
 from .interaction_context import InteractionContext, build_interaction_context
+from .key_lifecycle import ExternalKeyBoundary, KeyLifecycle, KeyRecord, KeyState
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .metacognition import MetacognitiveReflection
@@ -28,6 +31,7 @@ from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthori
 from .observability import EventKind, ObservedEvent, SecurityEventBus
 from .offline import OfflineConflictError, OfflineDeniedError, OfflineExecution, OfflineRuntime, OfflineSnapshot, OfflineState, OfflineSyncQueue, SyncEnvelope
 from .offline_adapters import BoundAuthenticatedCipher, PolicyOfflineAdapter, VerificationOfflineAdapter
+from .offline_anchor import MonotonicAnchor
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage, OrchestrationTransition
 from .personality import ApollonianPersonality, PersonalityProfile
 from .personality_binding import SignedPersonalityBinding, bind_personality, sign_identity_personality_binding, verify_identity_personality_binding, verify_personality_binding
@@ -43,6 +47,8 @@ from .sandbox import Sandbox, SandboxProfile, SandboxState
 from .secure_boot import SecureBootChain, TrustAnchor
 from .security import SecurityBoundary, SecurityDecision
 from .self_improvement import ImprovementPipeline, ImprovementProposal, ImprovementStage
+from .state import NORYXState, StateCommit, StateStore
+from .state_journal import StateJournal
 from .supervisor import AgentDecision, AgentSupervisor
 from .supply_chain import ArtifactManifest, SupplyChainVerifier, manifest_digest
 from .tools import CapabilityRegistry, ToolExecutor
