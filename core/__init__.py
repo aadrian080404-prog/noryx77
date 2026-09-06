@@ -36,7 +36,7 @@ from .planning import Plan, PlanStep, Planner
 from .platform import AssistantIntegrationBoundary, InteractionKind, PlatformAction, PlatformAdapter, PlatformKind, PlatformRequest
 from .policy import PolicyEngine
 from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
-from .recovery_plane import RecoveryController, RecoveryState
+from .recovery import RecoveryController, RecoveryState
 from .router import ResourceRouter
 from .runtime import NORYXRuntime
 from .sandbox import Sandbox, SandboxProfile, SandboxState
