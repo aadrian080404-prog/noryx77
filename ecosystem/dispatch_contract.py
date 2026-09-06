@@ -20,12 +20,14 @@ class DispatchReceipt:
     source: Front
     target: Front
     execution_id: str
+    principal_id: str
     accepted: bool
     reason: str
     evidence_digest: str
     def __post_init__(self) -> None:
         _id(self.intent_id, "intent_id")
         _id(self.execution_id, "execution_id")
+        _id(self.principal_id, "principal_id")
         if not isinstance(self.source, Front) or not isinstance(self.target, Front): raise ValueError("front_required")
         require_dispatch(self.source, self.target)
         if not isinstance(self.accepted, bool): raise TypeError("accepted_bool_required")
@@ -37,4 +39,4 @@ def make_receipt(intent: IntentEnvelope, *, source: Front, target: Front, execut
     if source is not intent.front: raise PermissionError("intent_source_mismatch")
     if not isinstance(evidence, bytes): raise TypeError("evidence_bytes_required")
     if len(evidence) > MAX_EVIDENCE_BYTES: raise ValueError("evidence_size_exceeded")
-    return DispatchReceipt(intent.intent_id, source, target, _id(execution_id, "execution_id"), accepted, reason, sha256(evidence).hexdigest())
+    return DispatchReceipt(intent.intent_id, source, target, _id(execution_id, "execution_id"), _id(intent.principal_id, "principal_id"), accepted, reason, sha256(evidence).hexdigest())
