@@ -84,7 +84,9 @@ class StateStore:
         if not isinstance(state.verification_results, list):
             raise ValueError("invalid_verification_results")
         with self._lock:
-            if len(self._commits) >= self.max_commits and execution_id not in self._commits:
+            if execution_id in self._commits:
+                raise PermissionError("execution_already_committed")
+            if len(self._commits) >= self.max_commits:
                 raise MemoryError("state_capacity_exceeded")
             self._sequence += 1
             snapshot = deepcopy(state)
