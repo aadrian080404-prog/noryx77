@@ -43,13 +43,13 @@ _REQUIRED_SYMBOLS = {
     "core.verification": ("VerificationEngine",),
     "ecosystem.browser_isolation": ("scan_browser_isolation",),
     "ecosystem.global_fabric": ("GlobalMemoryFabric", "GlobalIdentityAuthorizationFabric"),
-    "ecosystem.runtime_dispatch": ("RuntimeDispatch",),
-    "jarvis.core.orchestrator": ("Orchestrator",),
+    "ecosystem.runtime_dispatch": ("dispatch",),
+    "jarvis.core.orchestrator": ("JarvisOrchestrator",),
     "jarvis.core.runtime": ("JarvisRuntime",),
-    "jarvis.core.state": ("StateStore",),
+    "jarvis.core.state": ("JarvisStateStore",),
     "noryx7_runtime.engine": ("RuntimeEngine", "RuntimeResult"),
     "noryx7_runtime.lifecycle": ("ExecutionLifecycle",),
-    "noryx7_runtime.state": ("StateJournal",),
+    "noryx7_runtime.state": ("StateStore",),
     "noryx7_runtime.attestation": ("AttestationSigner",),
 }
 
