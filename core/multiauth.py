@@ -31,9 +31,11 @@ def action_digest(action_id: str, epoch: int, action_statement: bytes = b"") -> 
     h = hashlib.sha256()
     h.update(_DOMAIN)
     raw_id = action_id.encode("utf-8")
-    h.update(len(raw_id).to_bytes(4, "big")); h.update(raw_id)
+    h.update(len(raw_id).to_bytes(4, "big"))
+    h.update(raw_id)
     h.update(epoch.to_bytes(8, "big"))
-    h.update(len(action_statement).to_bytes(8, "big")); h.update(action_statement)
+    h.update(len(action_statement).to_bytes(8, "big"))
+    h.update(action_statement)
     return h.digest()
 
 
@@ -154,7 +156,7 @@ class ThresholdAuthorizer:
     """Requires explicit independent principals for privileged operations."""
 
     def __init__(self, *, required_threshold: int) -> None:
-        if not isinstance(required_threshold, int) or required_threshold < 1 or required_threshold > MAX_PARTIES:
+        if not isinstance(required_threshold, int) or isinstance(required_threshold, bool) or not 1 <= required_threshold <= MAX_PARTIES:
             raise ValueError("invalid_required_threshold")
         self._required = required_threshold
 
@@ -163,6 +165,9 @@ class ThresholdAuthorizer:
         return self._required
 
     def verify(self, proof: AuthorizationProof, *, action_id: str, epoch: int) -> bool:
+        """Return False for malformed proofs rather than leaking an exception."""
+        if not isinstance(proof, AuthorizationProof):
+            return False
         return (
             proof.action_id == action_id
             and proof.epoch == epoch
