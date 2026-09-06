@@ -190,6 +190,8 @@ class OfflineRuntime:
         self._state = OfflineState.ONLINE
         self._lock = threading.RLock()
         self._max_snapshot_age = max_snapshot_age
+        self._highest_snapshot_issued_at: int | None = None
+        self._highest_snapshot_id: str | None = None
 
     def _authenticated_snapshot(self, snapshot: OfflineSnapshot) -> bool:
         if not isinstance(snapshot, OfflineSnapshot) or not snapshot.verify_integrity():
@@ -215,7 +217,14 @@ class OfflineRuntime:
         if snapshot.issued_at > now or now - snapshot.issued_at > self._max_snapshot_age:
             raise OfflineDeniedError("stale_offline_snapshot")
         with self._lock:
+            if self._highest_snapshot_issued_at is not None:
+                if snapshot.issued_at < self._highest_snapshot_issued_at:
+                    raise OfflineDeniedError("offline_snapshot_rollback")
+                if snapshot.issued_at == self._highest_snapshot_issued_at and snapshot.snapshot_id != self._highest_snapshot_id:
+                    raise OfflineDeniedError("offline_snapshot_same_epoch_conflict")
             self._snapshot = snapshot
+            self._highest_snapshot_issued_at = snapshot.issued_at
+            self._highest_snapshot_id = snapshot.snapshot_id
             self._state = OfflineState.READY
 
     def disconnect(self) -> None:
