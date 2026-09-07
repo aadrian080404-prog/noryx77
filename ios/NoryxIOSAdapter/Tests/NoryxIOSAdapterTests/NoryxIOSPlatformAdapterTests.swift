@@ -6,10 +6,22 @@ final class NoryxIOSPlatformAdapterTests: XCTestCase {
         let adapter = try NoryxIOSPlatformAdapter(deviceID: "ios-device", epoch: 7)
         await adapter.grant(capability: "notifications.write", expiresAt: Date(timeIntervalSince1970: 2_000_000_000))
         await adapter.registerHandler(for: "notifications.write") { _ in true }
-        let action = try NoryxPlatformAction(
-            actionID: "a1", deviceID: "ios-device", capability: "notifications.write", payload: "hello", epoch: 7
-        )
+        let action = try NoryxPlatformAction(actionID: "a1", deviceID: "ios-device", capability: "notifications.write", payload: "hello", epoch: 7)
         XCTAssertTrue(try await adapter.execute(action: action))
+    }
+
+    func testReplayIsRejected() async throws {
+        let adapter = try NoryxIOSPlatformAdapter(deviceID: "ios-device")
+        await adapter.grant(capability: "x", expiresAt: Date(timeIntervalSinceNow: 60))
+        await adapter.registerHandler(for: "x") { _ in true }
+        let action = try NoryxPlatformAction(actionID: "replay-1", deviceID: "ios-device", capability: "x", payload: "p", epoch: 0)
+        XCTAssertTrue(try await adapter.execute(action: action))
+        do {
+            _ = try await adapter.execute(action: action)
+            XCTFail("expected replay rejection")
+        } catch {
+            XCTAssertEqual(error as? NoryxAdapterError, .replayedAction)
+        }
     }
 
     func testWrongDeviceIsRejected() async throws {
