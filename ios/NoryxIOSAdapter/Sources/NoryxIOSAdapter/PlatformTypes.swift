@@ -68,4 +68,6 @@ public enum NoryxAdapterError: Error, Equatable {
     case epochMismatch
     case capabilityDenied
     case handlerMissing
+    case replayedAction
+    case replayCapacityExceeded
 }
