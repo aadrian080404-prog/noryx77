@@ -83,7 +83,7 @@ class StateStore:
 
     def commit(self, state: NORYXState, *, execution_id: str, task_id: str,
                verification_valid: bool, verification_stage: str,
-               principal_id: str, principal_key_fingerprint: str) -> StateCommit:
+               principal_id: str, principal_key_fingerprint: str | None = None) -> StateCommit:
         if not isinstance(state, NORYXState):
             raise TypeError("state_required")
         if not self._valid_id(execution_id, self.MAX_EXECUTION_ID_BYTES):
@@ -106,6 +106,8 @@ class StateStore:
             raise ValueError("invalid_verification_results")
         if not self._valid_id(principal_id, self.MAX_PRINCIPAL_ID_BYTES):
             raise ValueError("invalid_principal_id")
+        if principal_key_fingerprint is None:
+            raise PermissionError("complete_identity_binding_required")
         if not self._valid_fingerprint(principal_key_fingerprint):
             raise ValueError("invalid_principal_key_fingerprint")
         with self._lock:
@@ -117,8 +119,6 @@ class StateStore:
             snapshot = deepcopy(state)
             snapshot.status = "committed"
             commit = StateCommit(execution_id, task_id, snapshot, verification_stage, sequence, principal_id, principal_key_fingerprint)
-            # Durable append is performed before publishing the commit in memory.
-            # A failed durable write therefore cannot leave a phantom in-memory commit.
             if self._journal is not None:
                 self._journal.append(commit)
             self._commits[execution_id] = commit
