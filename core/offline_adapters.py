@@ -16,7 +16,7 @@ class PolicyOfflineAdapter:
         self._policy = policy
 
     def authorize(self, *, principal_id: str, operation: str, offline: bool) -> bool:
-        if offline is not True or not isinstance(operation, str) or not operation.strip():
+        if offline is not True or not isinstance(principal_id, str) or not principal_id.strip() or not isinstance(operation, str) or not operation.strip():
             return False
         action = ActionSpec(
             action_id=f"offline:{principal_id}:{operation}",
@@ -65,6 +65,8 @@ class BoundAuthenticatedCipher:
         import base64
         import json
 
+        if not isinstance(envelope, EncryptedEnvelope) or not envelope.is_well_formed():
+            raise ValueError("invalid_encrypted_envelope")
         body = {
             "key_id": envelope.key_id,
             "nonce": base64.b64encode(envelope.nonce).decode("ascii"),
@@ -80,10 +82,12 @@ class BoundAuthenticatedCipher:
         import base64
         import json
 
-        if not isinstance(blob, bytes) or not blob:
+        if not isinstance(blob, bytes) or not blob or not isinstance(aad, bytes):
             raise ValueError("invalid_offline_ciphertext")
         try:
             body = json.loads(blob.decode("utf-8"))
+            if not isinstance(body, dict) or set(body) != {"key_id", "nonce", "ciphertext", "aad", "version", "algorithm"}:
+                raise ValueError("invalid_envelope_fields")
             envelope = EncryptedEnvelope(
                 key_id=body["key_id"],
                 nonce=base64.b64decode(body["nonce"], validate=True),
@@ -92,8 +96,10 @@ class BoundAuthenticatedCipher:
                 version=body["version"],
                 algorithm=body["algorithm"],
             )
-        except (KeyError, TypeError, ValueError, UnicodeDecodeError) as exc:
+        except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("invalid_offline_ciphertext") from exc
-        if envelope.aad != aad or not envelope.is_well_formed():
-            raise ValueError("offline_envelope_invalid")
+        if not envelope.is_well_formed():
+            raise ValueError("invalid_encrypted_envelope")
+        if envelope.aad != aad:
+            raise ValueError("offline_aad_mismatch")
         return envelope
