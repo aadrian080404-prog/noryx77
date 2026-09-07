@@ -1,16 +1,17 @@
 import Foundation
 
-public actor NoryxIOSPlatformAdapter {
+public actor NoryxIOSPlatformAdapter: Sendable {
     public typealias ActionHandler = @Sendable (NoryxPlatformAction) -> Bool
+    public static let maxTextBytes = 1_024
 
-    public nonisolated let deviceID: String
+    public let deviceID: String
     private let clock: @Sendable () -> Date
     private var grants: [String: Date] = [:]
     private var handlers: [String: ActionHandler] = [:]
     private var currentEpoch: UInt64
 
     public init(deviceID: String, epoch: UInt64 = 0, clock: @escaping @Sendable () -> Date = Date.init) throws {
-        guard !deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard Self.validText(deviceID) else {
             throw NoryxAdapterError.invalidRequest
         }
         self.deviceID = deviceID
@@ -19,14 +20,14 @@ public actor NoryxIOSPlatformAdapter {
     }
 
     public func rotateEpoch(to epoch: UInt64) {
-        guard epoch >= currentEpoch else { return }
+        guard epoch > currentEpoch else { return }
         currentEpoch = epoch
         grants.removeAll(keepingCapacity: true)
         handlers.removeAll(keepingCapacity: true)
     }
 
     public func grant(capability: String, expiresAt: Date) {
-        guard !capability.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard Self.validText(capability) else { return }
         grants[capability] = expiresAt
     }
 
@@ -36,7 +37,7 @@ public actor NoryxIOSPlatformAdapter {
     }
 
     public func registerHandler(for capability: String, handler: @escaping ActionHandler) {
-        guard grants[capability] != nil else { return }
+        guard grants[capability] != nil, Self.validText(capability) else { return }
         handlers[capability] = handler
     }
 
@@ -61,5 +62,10 @@ public actor NoryxIOSPlatformAdapter {
             throw NoryxAdapterError.capabilityDenied
         }
         return true
+    }
+
+    private static func validText(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.utf8.count <= maxTextBytes
     }
 }
