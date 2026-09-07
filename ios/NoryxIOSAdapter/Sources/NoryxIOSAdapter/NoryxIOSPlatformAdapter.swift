@@ -1,9 +1,9 @@
 import Foundation
 
-public final class NoryxIOSPlatformAdapter: @unchecked Sendable {
+public actor NoryxIOSPlatformAdapter {
     public typealias ActionHandler = @Sendable (NoryxPlatformAction) -> Bool
 
-    public let deviceID: String
+    public nonisolated let deviceID: String
     private let clock: @Sendable () -> Date
     private var grants: [String: Date] = [:]
     private var handlers: [String: ActionHandler] = [:]
@@ -22,6 +22,7 @@ public final class NoryxIOSPlatformAdapter: @unchecked Sendable {
         guard epoch >= currentEpoch else { return }
         currentEpoch = epoch
         grants.removeAll(keepingCapacity: true)
+        handlers.removeAll(keepingCapacity: true)
     }
 
     public func grant(capability: String, expiresAt: Date) {
