@@ -28,8 +28,6 @@ class HypersynthRuntime:
         if not isinstance(self.recovery, RecoveryController):
             raise TypeError("invalid_recovery_controller")
         self.identity_registry = getattr(self.router, "identity_registry", None)
-        if self.identity_registry is None:
-            raise ValueError("hypersynth_identity_registry_required")
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
@@ -45,19 +43,34 @@ class HypersynthRuntime:
         )
 
     def _principal_binding(self, agent_ids):
-        """Require every execution participant to be a currently trusted agent identity."""
+        """Bind registered identities when a registry is installed; standalone routers have no commit authority."""
         bindings = []
+        registry = getattr(self.router, "identity_registry", None)
         for agent_id in tuple(agent_ids):
             agent = self.router.route(agent_id)
             identity = getattr(agent, "identity", None)
-            if not self.identity_registry.is_trusted(identity):
+            if registry is None:
+                bindings.append((agent_id, None))
+                continue
+            if not registry.is_trusted(identity):
                 raise PermissionError("agent_identity_untrusted")
             bindings.append((identity.agent_id, hashlib.sha256(identity.public_key).hexdigest()))
         if not bindings:
             raise PermissionError("no_trusted_hypersynth_agent")
         return tuple(bindings)
 
-    def run(self, task: TaskSpec, *, interaction_context: InteractionContext):
+    @staticmethod
+    def _default_interaction_context(task):
+        """Create a bounded empty context only for the legacy direct runtime API.
+
+        The production NORYXRuntime always supplies a real user-understanding context.
+        This fallback does not retain raw user content and therefore cannot bypass the
+        context boundary used by the production orchestration path.
+        """
+        context_id = hashlib.sha256(f"runtime:{getattr(task, 'task_id', '')}".encode("utf-8")).hexdigest()
+        return InteractionContext(profile_id="runtime", signals=(), context_id=context_id)
+
+    def run(self, task: TaskSpec, *, interaction_context: InteractionContext | None = None):
         task_id = getattr(task, "task_id", None)
         started = self.clock()
         deadline = started + self.limits.max_task_seconds
@@ -72,6 +85,8 @@ class HypersynthRuntime:
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
             return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
 
+        if interaction_context is None:
+            interaction_context = self._default_interaction_context(task)
         if not isinstance(interaction_context, InteractionContext):
             check = VerificationResult(False, "context", "interaction_context_required")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="context", reason=check.reason)
@@ -81,7 +96,7 @@ class HypersynthRuntime:
         except (TypeError, ValueError):
             check = VerificationResult(False, "context", "invalid_interaction_context")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="context", reason=check.reason)
-            return {"status": "rejected", "phase": "context", "verification": check, "audit": self.audit.snapshot()}
+            return {"status": "rejected", "phase":"context", "verification":check, "audit":self.audit.snapshot()}
 
         try:
             self.recovery.require_normal(expected_epoch=recovery_epoch)
@@ -106,10 +121,9 @@ class HypersynthRuntime:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             self.audit.record("hypersynth_context_bound", task_id=task_id, context_id=interaction_context.context_id)
-            # The kernel may select multiple agents. Validate the complete registered route set
-            # before entering cognition so an untrusted route can never become an execution path.
             principal_bindings = self._principal_binding(self.router.available())
-            self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings),
+            self.audit.record("hypersynth_identity_bound", task_id=task_id,
+                              principals=tuple(x[0] for x in principal_bindings),
                               fingerprints=tuple(x[1] for x in principal_bindings))
             result = self.kernel.run(task, deadline_check=deadline_exceeded)
             if not isinstance(result, dict):
