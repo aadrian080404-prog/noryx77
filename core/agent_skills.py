@@ -16,11 +16,16 @@ MAX_NAME = 128
 MAX_DESCRIPTION = 2048
 
 
+def _default_skill_handler(*_args: object, **_kwargs: object) -> object:
+    """Compatibility no-op for declarative skills without an execution hook."""
+    return None
+
+
 @dataclass(frozen=True)
 class AgentSkill:
     name: str
     description: str
-    handler: Callable[..., object]
+    handler: Callable[..., object] = _default_skill_handler
     risk_class: str = "normal"
     requires_authorization: bool = True
 
