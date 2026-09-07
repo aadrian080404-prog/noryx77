@@ -25,6 +25,7 @@ class SecureChannelTests(unittest.TestCase):
     def test_sequence_rollback_is_rejected(self):
         first = self.sender.send(b"one")
         second = self.sender.send(b"two")
+        self.receiver.receive(first)
         self.receiver.receive(second)
         with self.assertRaisesRegex(ValueError, "replayed_frame"):
             self.receiver.receive(first)
