@@ -21,7 +21,7 @@ def _envelope():
 
 
 def test_reject_from_every_non_terminal_stage():
-    for target in (
+    stage_order = (
         OrchestrationStage.RECEIVED,
         OrchestrationStage.UNDERSTOOD,
         OrchestrationStage.REPRESENTED,
@@ -29,10 +29,12 @@ def test_reject_from_every_non_terminal_stage():
         OrchestrationStage.PLANNED,
         OrchestrationStage.EXECUTING,
         OrchestrationStage.VERIFYING,
-    ):
+    )
+    for target in stage_order:
         envelope = _envelope()
-        if target is not OrchestrationStage.RECEIVED:
-            envelope, _ = OrchestrationCoordinator.transition(envelope, target)
+        target_index = stage_order.index(target)
+        for next_stage in stage_order[1:target_index + 1]:
+            envelope, _ = OrchestrationCoordinator.transition(envelope, next_stage)
         rejected, transition = OrchestrationCoordinator.reject(envelope)
         assert rejected.stage is OrchestrationStage.REJECTED
         assert transition.previous is target

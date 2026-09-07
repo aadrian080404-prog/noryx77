@@ -36,9 +36,6 @@ class ToolExecutor:
         if isinstance(policy_or_gate, ActionGate):
             self.action_gate = policy_or_gate
         else:
-            # Do not validate policy shape here. A malformed policy object must be
-            # rejected by the execution gate itself, not at construction time, so
-            # every failure path remains a controlled verification result.
             security = SecurityBoundary(policy_or_gate, verifier)
             self.action_gate = ActionGate(policy_or_gate, security, RuntimeLimits())
         if not hasattr(verifier, "verify_output") or not callable(verifier.verify_output):
