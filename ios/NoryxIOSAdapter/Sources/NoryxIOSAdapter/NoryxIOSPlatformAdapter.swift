@@ -3,11 +3,13 @@ import Foundation
 public actor NoryxIOSPlatformAdapter: Sendable {
     public typealias ActionHandler = @Sendable (NoryxPlatformAction) -> Bool
     public static let maxTextBytes = 1_024
+    public static let maxConsumedActions = 4_096
 
     public let deviceID: String
     private let clock: @Sendable () -> Date
     private var grants: [String: Date] = [:]
     private var handlers: [String: ActionHandler] = [:]
+    private var consumedActionIDs: Set<String> = []
     private var currentEpoch: UInt64
 
     public init(deviceID: String, epoch: UInt64 = 0, clock: @escaping @Sendable () -> Date = Date.init) throws {
@@ -24,6 +26,7 @@ public actor NoryxIOSPlatformAdapter: Sendable {
         currentEpoch = epoch
         grants.removeAll(keepingCapacity: true)
         handlers.removeAll(keepingCapacity: true)
+        consumedActionIDs.removeAll(keepingCapacity: true)
     }
 
     public func grant(capability: String, expiresAt: Date) {
@@ -58,9 +61,16 @@ public actor NoryxIOSPlatformAdapter: Sendable {
         guard let handler = handlers[action.capability] else {
             throw NoryxAdapterError.handlerMissing
         }
+        guard !consumedActionIDs.contains(action.actionID) else {
+            throw NoryxAdapterError.replayedAction
+        }
+        guard consumedActionIDs.count < Self.maxConsumedActions else {
+            throw NoryxAdapterError.replayCapacityExceeded
+        }
         guard handler(action) == true else {
             throw NoryxAdapterError.capabilityDenied
         }
+        consumedActionIDs.insert(action.actionID)
         return true
     }
 
