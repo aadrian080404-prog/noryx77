@@ -29,6 +29,7 @@ class DispatchReceipt:
         _id(self.execution_id, "execution_id")
         _id(self.principal_id, "principal_id")
         if not isinstance(self.source, Front) or not isinstance(self.target, Front): raise ValueError("front_required")
+        if self.source is self.target: raise ValueError("self_dispatch_denied")
         require_dispatch(self.source, self.target)
         if not isinstance(self.accepted, bool): raise TypeError("accepted_bool_required")
         if not isinstance(self.reason, str) or not self.reason.strip() or len(self.reason.encode("utf-8")) > MAX_REASON_BYTES: raise ValueError("invalid_reason")
