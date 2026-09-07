@@ -54,7 +54,8 @@ class RuntimeEngine:
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
-        if high_risk_action_types and replay_guard is None: raise ValueError("high_risk_actions_require_replay_guard")
+        if high_risk_action_types and replay_guard is None:
+            replay_guard = AuthorizationReplayGuard()
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
