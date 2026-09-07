@@ -140,3 +140,9 @@ class StateJournal:
 
     def snapshot(self) -> tuple[JournalEntry, ...]:
         with self._lock: return tuple(self._entries)
+
+
+# Canonical runtime state boundary.  The journal implementation is the state
+# authority; this name is intentionally an explicit compatibility surface for
+# callers that depend on the runtime-level StateStore contract.
+StateStore = StateJournal
