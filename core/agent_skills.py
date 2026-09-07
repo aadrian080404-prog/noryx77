@@ -62,6 +62,13 @@ class AgentSkillRegistry:
                 raise RuntimeError("skill_registry_capacity_exceeded")
             self._skills[skill.name] = skill
 
+    def has(self, name: str) -> bool:
+        """Return whether a skill is registered without raising on lookup."""
+        if not isinstance(name, str) or not name.strip():
+            return False
+        with self._lock:
+            return name in self._skills
+
     def get(self, name: str) -> AgentSkill:
         if not isinstance(name, str) or not name.strip():
             raise ValueError("skill_name_required")
