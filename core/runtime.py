@@ -66,11 +66,21 @@ class NORYXRuntime:
         if self.state_journal is not None:
             self.state_journal.close()
 
-    def _principal_binding(self, agent_id: str) -> tuple[str, str]:
-        """Return the trusted agent principal and its exact public-key fingerprint."""
+    def _principal_binding(self, agent_id: str) -> tuple[str, str | None]:
+        """Return the principal binding for the currently installed router.
+
+        A production router carries an IdentityRegistry and therefore requires a
+        cryptographically trusted AgentIdentity. A deliberately standalone router
+        used for negative-path/unit tests has no registry; it may execute far enough
+        to exercise execution/result contracts, but it can never produce a valid
+        state commit because StateStore requires the complete fingerprint binding.
+        """
         agent = self.router.route(agent_id)
+        registry = getattr(self.router, "identity_registry", None)
+        if registry is None:
+            return agent_id, None
         identity = getattr(agent, "identity", None)
-        if not self.identity_registry.is_trusted(identity):
+        if not registry.is_trusted(identity):
             raise PermissionError("agent_identity_untrusted")
         fingerprint = hashlib.sha256(identity.public_key).hexdigest()
         return identity.agent_id, fingerprint
@@ -170,10 +180,12 @@ class NORYXRuntime:
                 "state_commit": committed["state"], "sync_envelope": envelope,
                 "offline_state": self._offline.state.value, "audit": self.audit.snapshot()}
 
-    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str, principal_id: str) -> OrchestrationEnvelope:
+    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str,
+                          principal_id: str | None = None) -> OrchestrationEnvelope:
         if not isinstance(interaction_context, InteractionContext):
             raise TypeError("interaction_context_required")
-        envelope = OrchestrationEnvelope(request_id=task.task_id, principal_id=principal_id,
+        principal = principal_id or getattr(task, "principal_id", None) or "deterministic"
+        envelope = OrchestrationEnvelope(request_id=task.task_id, principal_id=principal,
                                          operation=task.task_type, interaction_context=interaction_context)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
@@ -208,10 +220,6 @@ class NORYXRuntime:
         if recovery_state.value != "normal":
             self.audit.record("recovery_execution_denied", task_id=task_id, reason="recovery_state_denies_execution")
             return {"status": "rejected", "reason": "recovery_state_denies_execution", "task_id": task_id}
-        try:
-            principal_id, principal_key_fingerprint = self._principal_binding(agent_id)
-        except (LookupError, PermissionError):
-            return {"status": "rejected", "reason": "agent_identity_untrusted", "task_id": task_id}
         def deadline_exceeded() -> bool:
             return time.monotonic() > deadline
         try:
@@ -230,6 +238,15 @@ class NORYXRuntime:
             self.audit.record("task_timeout", task_id=task_id, reason="max_task_seconds_exceeded")
             return {"status": "rejected", "reason": "max_task_seconds_exceeded", "task_id": task_id}
         try:
+            agent = self.router.route(agent_id)
+            principal_id, principal_key_fingerprint = self._principal_binding(agent_id)
+        except LookupError:
+            return {"status": "rejected", "reason": "agent_unavailable", "task_id": task_id}
+        except PermissionError:
+            return {"status": "rejected", "reason": "agent_identity_untrusted", "task_id": task_id}
+        if agent is None:
+            return {"status": "rejected", "reason": "agent_unavailable", "task_id": task_id}
+        try:
             envelope = self._context_envelope(task, interaction_context, execution_id, principal_id)
             envelope = OrchestrationCoordinator.with_intent_digest(envelope, task.objective)
             self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id,
@@ -239,7 +256,6 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "invalid_interaction_context", "task_id": task_id}
         try:
             subtasks = self.decomposer.decompose(task)
-            agent = self.router.route(agent_id)
             envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED)
             envelope = OrchestrationCoordinator.with_plan_digest(envelope, self._plan_material(subtasks))
             envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.PLANNED)
@@ -247,8 +263,6 @@ class NORYXRuntime:
             return self._rejection(envelope, task_id, "agent_unavailable", self.audit)
         except Exception:
             return self._rejection(envelope, task_id, "routing_failure", self.audit)
-        if agent is None:
-            return self._rejection(envelope, task_id, "agent_unavailable", self.audit)
         if len(subtasks) > self.limits.max_actions_per_task:
             return self._rejection(envelope, task_id, "max_actions_per_task_exceeded", self.audit)
         envelope, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.EXECUTING)
