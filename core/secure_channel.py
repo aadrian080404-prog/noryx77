@@ -1,11 +1,15 @@
 """Authenticated session framing with strict cryptographic identity and replay protection."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
 from threading import Lock
 from typing import Final
+
 from cryptography.hazmat.primitives import hashes, hmac
+
 from .crypto import KEY_SIZE, KeyProvider, derive_subkey
 from .identity import AgentIdentity, IdentityRegistry
 
@@ -14,9 +18,9 @@ MAX_FRAME_SIZE: Final[int] = 16 * 1024 * 1024
 MAX_ID_SIZE: Final[int] = 1024
 PROTOCOL_VERSION: Final[int] = 1
 MAX_SEQUENCE: Final[int] = (1 << 64) - 1
-MAX_REPLAY_WINDOW: Final[int] = 4096
 _DOMAIN: Final[bytes] = b"noryx7/secure-channel/v1/"
 _IDENTITY_BINDING_DOMAIN: Final[bytes] = b"noryx7/secure-channel/identity-binding/v1/"
+
 
 def _field(value: str) -> bytes:
     encoded = value.encode("utf-8")
@@ -24,10 +28,17 @@ def _field(value: str) -> bytes:
         raise ValueError("channel_identity_size_exceeded")
     return len(encoded).to_bytes(4, "big") + encoded
 
+
 def _identity_fingerprint(identity: AgentIdentity) -> bytes:
     if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
         raise ValueError("invalid_channel_identity")
-    return sha256(_IDENTITY_BINDING_DOMAIN + identity.version.to_bytes(2, "big") + _field(identity.agent_id) + identity.public_key).digest()
+    return sha256(
+        _IDENTITY_BINDING_DOMAIN
+        + identity.version.to_bytes(2, "big")
+        + _field(identity.agent_id)
+        + identity.public_key
+    ).digest()
+
 
 @dataclass(frozen=True)
 class SecureFrame:
@@ -47,9 +58,13 @@ class SecureFrame:
             and isinstance(self.mac, bytes) and len(self.mac) == MAC_SIZE and self.version == PROTOCOL_VERSION
         )
 
+
 class SecureChannel:
-    """Symmetric authenticated channel with bounded out-of-order replay protection."""
-    def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str, identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None, peer_identity: AgentIdentity | None = None):
+    """Symmetric authenticated channel with replay defense and thread-safe sequence state."""
+
+    def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str,
+                 identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None,
+                 peer_identity: AgentIdentity | None = None):
         if not isinstance(provider, KeyProvider):
             raise ValueError("key_provider_required")
         for name, value in (("key_id", key_id), ("local_id", local_id), ("peer_id", peer_id), ("session_id", session_id), ("direction", direction)):
@@ -76,8 +91,8 @@ class SecureChannel:
         self._identity_registry = identity_registry
         self._local_identity, self._peer_identity = local_identity, peer_identity
         self._send_sequence, self._last_received = 0, -1
-        self._received_sequences: set[int] = set()
-        self._send_lock, self._receive_lock = Lock(), Lock()
+        self._send_lock = Lock()
+        self._receive_lock = Lock()
 
     def _require_live_trust(self) -> None:
         if self._identity_registry is None:
@@ -92,8 +107,10 @@ class SecureChannel:
     def _identity_binding(self) -> bytes:
         if self._identity_registry is None:
             return b""
-        local_fp, peer_fp = _identity_fingerprint(self._local_identity), _identity_fingerprint(self._peer_identity)
-        return _IDENTITY_BINDING_DOMAIN + b"".join(sorted((local_fp, peer_fp)))
+        local_fp = _identity_fingerprint(self._local_identity)
+        peer_fp = _identity_fingerprint(self._peer_identity)
+        pair = b"".join(sorted((local_fp, peer_fp)))
+        return _IDENTITY_BINDING_DOMAIN + pair
 
     def _channel_key(self) -> bytes:
         try:
@@ -103,7 +120,8 @@ class SecureChannel:
         if not isinstance(root_key, bytes) or len(root_key) != KEY_SIZE:
             raise ValueError("channel_key_required")
         try:
-            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=b"secure-channel/" + self._direction.encode("ascii") + self._identity_binding())
+            context = b"secure-channel/" + self._direction.encode("ascii") + self._identity_binding()
+            return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=context)
         except Exception as exc:
             raise ValueError("channel_key_derivation_failed") from exc
 
@@ -141,9 +159,7 @@ class SecureChannel:
                 raise ValueError("invalid_secure_frame")
             if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
                 raise ValueError("channel_identity_mismatch")
-            if frame.sequence in self._received_sequences:
-                raise ValueError("replayed_frame")
-            if self._last_received >= 0 and frame.sequence + MAX_REPLAY_WINDOW <= self._last_received:
+            if frame.sequence <= self._last_received:
                 raise ValueError("replayed_frame")
             try:
                 expected = self._mac(frame.sender_id, frame.sequence, frame.payload)
@@ -151,11 +167,7 @@ class SecureChannel:
                 raise ValueError("frame_authentication_failed") from exc
             if not compare_digest(expected, frame.mac):
                 raise ValueError("frame_authentication_failed")
-            self._received_sequences.add(frame.sequence)
-            self._last_received = max(self._last_received, frame.sequence)
-            floor = self._last_received - MAX_REPLAY_WINDOW + 1
-            if floor > 0:
-                self._received_sequences = {seq for seq in self._received_sequences if seq >= floor}
+            self._last_received = frame.sequence
             return bytes(frame.payload)
 
     @property
