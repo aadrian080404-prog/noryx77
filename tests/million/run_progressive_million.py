@@ -1,7 +1,7 @@
 """Run exactly 1,000,000 deterministic cases from difficult to extremely difficult."""
 from __future__ import annotations
 
-from test_progressive_difficulty_campaign import TOTAL_CASES, build_case
+from test_progressive_difficulty_campaign import TOTAL_CASES, build_case, verify_case
 
 
 def main() -> int:
@@ -9,9 +9,7 @@ def main() -> int:
     last_difficulty = None
     for index in range(TOTAL_CASES):
         case = build_case(index)
-        digest = case.payload["case_digest"]
-        if not isinstance(digest, str) or len(digest) != 64:
-            raise AssertionError(f"invalid_digest:{index}")
+        verify_case(case)
         if last_difficulty == "estremamente_difficile" and case.difficulty != last_difficulty:
             raise AssertionError(f"difficulty_regression:{index}")
         if index == 333_333 and case.difficulty != "molto_difficile":
