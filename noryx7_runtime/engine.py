@@ -53,9 +53,8 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
+        if high_risk_action_types and replay_guard is None: raise ValueError("high_risk_actions_require_replay_guard")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
-        if high_risk_action_types and replay_guard is None:
-            replay_guard = AuthorizationReplayGuard()
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
@@ -80,16 +79,15 @@ class RuntimeEngine:
             if identity.public_key != public_key: raise PermissionError("adapter identity key mismatch")
             return dispatch(envelope)
         return self._identity_registry.with_trusted_identity(str(self._adapter.agent_id), run_if_trusted)
-    def _authorize_high_risk(self, envelope: ActionEnvelope, action_digest: str) -> None:
+    def _authorize_high_risk(self, envelope: ActionEnvelope, action_statement: bytes) -> None:
         if envelope.action_type not in self._high_risk_action_types: return
         if self._multi_auth_authority is None or self._authorization_provider is None: raise PermissionError("multi_auth_required")
         if self._replay_guard is None: raise PermissionError("replay_guard_required")
-        statement = bytes.fromhex(action_digest)
-        try: proof = self._authorization_provider(envelope, statement)
+        try: proof = self._authorization_provider(envelope, action_statement)
         except Exception as exc: raise PermissionError("authorization_provider_failed") from exc
         if not isinstance(proof, SignedAuthorizationProof): raise PermissionError("authorization_proof_required")
-        if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=statement): raise PermissionError("authorization_proof_invalid")
-        if not self._replay_guard.consume(statement): raise PermissionError("authorization_replay_detected")
+        if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=action_statement): raise PermissionError("authorization_proof_invalid")
+        if not self._replay_guard.consume(action_statement): raise PermissionError("authorization_replay_detected")
     def execute(self, intent: Intent, steps: Sequence[PlanStep], *, executor: Executor | None = None, verifier: Verifier, committer: Committer | None = None, timeout_seconds: float = 30.0, execution_id: str | None = None) -> RuntimeResult:
         if not isinstance(intent, Intent): raise TypeError("intent must be an Intent")
         if not isinstance(steps, Sequence): raise TypeError("steps must be a sequence")
@@ -106,7 +104,8 @@ class RuntimeEngine:
             envelope = ActionEnvelope(context.execution_id, context.principal_id, step.step_id, step.action_type, step.target, dict(step.parameters), uuid4().hex)
             try:
                 action_digest = _digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters, "nonce": envelope.nonce})
-                self._authorize_high_risk(envelope, action_digest)
+                authorization_statement = bytes.fromhex(_digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters}))
+                self._authorize_high_risk(envelope, authorization_statement)
                 if self._state_journal is not None: self._state_journal.reserve_step(envelope.execution_id, envelope.principal_id, envelope.step_id, action_digest)
                 output = self._dispatch(envelope, executor); verified = bool(verifier(envelope, output)); output_digest = _digest(output)
                 agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"; public_key = getattr(self._attestation_signer, "public_key_bytes", None) if self._attestation_signer is not None else None; fingerprint = hashlib.sha256(public_key).hexdigest() if isinstance(public_key, bytes) else hashlib.sha256(b"legacy-executor").hexdigest()
