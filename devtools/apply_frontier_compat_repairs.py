@@ -4,7 +4,7 @@ from pathlib import Path
 def replace(path, old, new, *, count=1):
     p = Path(path)
     s = p.read_text()
-    if new in s and old not in s:
+    if new in s:
         print(f"ALREADY_PATCHED {path}")
         return
     if old not in s:
@@ -13,9 +13,6 @@ def replace(path, old, new, *, count=1):
     print(f"PATCHED {path}")
 
 # Top-level runtime compatibility and normalized context handling.
-replace("core/runtime.py",
-        'from .policy import PolicyEngine\n',
-        'from .policy import PolicyEngine\n')
 replace("core/runtime.py",
         'self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id,',
         'self.audit.record("orchestration_context", task_id=task_id, context_id=envelope.interaction_context.context_id,')
