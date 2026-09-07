@@ -56,6 +56,8 @@ class KeyLifecycle:
                 raise KeyError("unknown_key_id")
             if current.state is KeyState.REVOKED:
                 raise PermissionError("revoked_key_cannot_rotate")
+            if current.state is KeyState.RETIRING:
+                raise PermissionError("retiring_key_cannot_reactivate")
             record = KeyRecord(key_id, current.version + 1, KeyState.ACTIVE)
             self._records[key_id] = record
             return record

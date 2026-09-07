@@ -32,12 +32,20 @@ class IntentEnvelope:
             raise ValueError("payload_digest_invalid")
         if not isinstance(self.principal_id, str) or not self.principal_id.strip() or len(self.principal_id.encode("utf-8")) > MAX_ID_SIZE:
             raise ValueError("principal_id_invalid")
-def make_intent(front: Front, operation: str, payload: bytes, *, principal_id: str) -> IntentEnvelope:
+def make_intent(
+    front: Front,
+    operation: str,
+    payload: bytes,
+    *,
+    principal_id: str | None = None,
+) -> IntentEnvelope:
     if not isinstance(front, Front): raise ValueError("front_required")
     if not isinstance(operation, str) or not operation.strip(): raise ValueError("operation_required")
     if not isinstance(payload, bytes): raise TypeError("payload_bytes_required")
     if len(operation.encode("utf-8")) > MAX_INTENT_SIZE: raise ValueError("operation_size_exceeded")
     if len(payload) > MAX_PAYLOAD_SIZE: raise ValueError("payload_size_exceeded")
+    if principal_id is None:
+        principal_id = front.value
     if not isinstance(principal_id, str) or not principal_id.strip() or len(principal_id.encode("utf-8")) > MAX_ID_SIZE:
         raise ValueError("principal_id_invalid")
     digest = sha256(payload).hexdigest()

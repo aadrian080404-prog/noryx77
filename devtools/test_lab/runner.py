@@ -20,6 +20,7 @@ DEFAULT_TIMEOUT = 900
 
 @dataclass(frozen=True)
 class TestResult:
+    __test__ = False
     name: str
     command: tuple[str, ...]
     returncode: int
@@ -33,6 +34,7 @@ class TestResult:
 
 @dataclass(frozen=True)
 class TestReport:
+    __test__ = False
     passed: bool
     started_at: int
     duration_seconds: float

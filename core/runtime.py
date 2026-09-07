@@ -56,6 +56,28 @@ class NORYXRuntime:
         )
         self._offline: OfflineRuntime | None = None
 
+    def run_hypersynth(
+        self,
+        task: TaskSpec,
+        interaction_context: InteractionContext | None = None,
+    ):
+        recovery_state, _ = self.recovery.snapshot()
+        if recovery_state.value != "normal":
+            self.audit.record(
+                "recovery_execution_denied",
+                task_id=getattr(task, "task_id", None),
+                reason="recovery_state_denies_execution",
+            )
+            return {
+                "status": "rejected",
+                "reason": "recovery_state_denies_execution",
+                "task_id": getattr(task, "task_id", None),
+            }
+        return self.hypersynth.run(
+            task,
+            interaction_context=interaction_context,
+        )
+
     def close(self) -> None:
         """Close external durable resources owned by the runtime."""
         if self.state_journal is not None:
@@ -116,7 +138,8 @@ class NORYXRuntime:
         if not callable(local_executor):
             return {"status": "rejected", "reason": "local_executor_required", "task_id": task.task_id}
         execution_id = task.execution_id or uuid4().hex
-        principal_id, principal_key_fingerprint = self._principal_binding("deterministic")
+        _, principal_key_fingerprint = self._principal_binding("deterministic")
+        principal_id = getattr(task, "principal_id", None) or execution_id
         payload = self._offline_payload(task)
         execution = OfflineExecution(
             execution_id=execution_id,
@@ -128,6 +151,8 @@ class NORYXRuntime:
         )
         committed = {}
         def commit(execution_record, result):
+            if not isinstance(result, (str, bytes)):
+                raise PermissionError("offline_result_unverified")
             verification = self.verifier.verify_output(result, stage="runtime_result")
             if not verification.is_well_formed() or not verification.valid:
                 raise PermissionError("offline_result_unverified")
@@ -195,6 +220,15 @@ class NORYXRuntime:
             except (TypeError, ValueError):
                 audit.record("orchestration_reject_failure", task_id=task_id, reason=reason)
         result = {"status": "rejected", "reason": reason, "task_id": task_id}
+        if "verification" not in extra and reason in {
+            "agent_identity_mismatch",
+            "task_identity_mismatch",
+        }:
+            extra["verification"] = VerificationResult(
+                False,
+                "agent_result",
+                reason,
+            )
         result.update(extra)
         if envelope is not None:
             result["orchestration_stage"] = envelope.stage.value
@@ -239,7 +273,7 @@ class NORYXRuntime:
         try:
             envelope = self._context_envelope(task, interaction_context, execution_id, principal_id)
             envelope = OrchestrationCoordinator.with_intent_digest(envelope, task.objective)
-            self.audit.record("orchestration_context", task_id=task_id, context_id=interaction_context.context_id,
+            self.audit.record("orchestration_context", task_id=task_id, context_id=envelope.interaction_context.context_id,
                               envelope_digest=OrchestrationCoordinator.digest(envelope))
         except (TypeError, ValueError):
             self.audit.record("orchestration_rejection", task_id=task_id, reason="invalid_interaction_context")
@@ -332,6 +366,7 @@ class NORYXRuntime:
             return self._rejection(envelope, task_id, "state_commit_failed", self.audit, error=type(exc).__name__)
         self.audit.record("state_commit", task_id=task_id, execution_id=execution_id, sequence=commit.sequence)
         return {"status": "completed", "task_id": task_id, "execution_id": execution_id,
-                "result": final_answer, "verification": aggregate_verification,
+                "result": final_answer, "results": tuple(results),
+                "verification": aggregate_verification,
                 "orchestration_stage": envelope.stage.value, "state_commit": commit,
                 "audit": self.audit.snapshot()}

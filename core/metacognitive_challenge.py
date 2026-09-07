@@ -214,4 +214,20 @@ class AdaptiveChallengeController:
                 return False
         except Exception:
             return False
-        return evidence.candidate.task_performance > evidence.baseline.task_performance and evidence.candidate.reasoning_robustness >= evidence.baseline.reasoning_robustness
+        no_regression = (
+            evidence.candidate.task_performance
+            >= evidence.baseline.task_performance
+            and
+            evidence.candidate.reasoning_robustness
+            >= evidence.baseline.reasoning_robustness
+        )
+
+        strict_gain = (
+            evidence.candidate.task_performance
+            > evidence.baseline.task_performance
+            or
+            evidence.candidate.reasoning_robustness
+            > evidence.baseline.reasoning_robustness
+        )
+
+        return no_regression and strict_gain

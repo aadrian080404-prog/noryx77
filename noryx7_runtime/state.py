@@ -82,6 +82,20 @@ class StateJournal:
     def reservation(self, execution_id: str, step_id: str) -> StepReservation | None:
         with self._lock: return self._reservations.get((execution_id, step_id))
 
+    def restore_reservation(self, reservation: StepReservation) -> None:
+        if not isinstance(reservation, StepReservation):
+            raise TypeError("step_reservation_required")
+        key = (reservation.execution_id, reservation.step_id)
+        with self._lock:
+            existing = self._reservations.get(key)
+            if existing is not None and existing != reservation:
+                raise ValueError("execution step reservation conflict")
+            self._reservations[key] = reservation
+            self._principals.setdefault(
+                reservation.execution_id,
+                reservation.principal_id,
+            )
+
     def append(self, attestation: Attestation) -> JournalEntry:
         self._validate_attestation(attestation)
         if self._identity_registry is not None:
@@ -137,6 +151,31 @@ class StateJournal:
             except ValueError as exc: raise ValueError("provenance digest is not hexadecimal") from exc
             if len(attestation.provenance_seal) != 32: raise ValueError("provenance seal must be 32 bytes")
         if self._require_signatures and (not isinstance(attestation.signature, bytes) or len(attestation.signature) != 64): raise PermissionError("cannot commit unsigned attestation")
+
+    def rollback_last(self, attestation: Attestation) -> None:
+        """Rollback the most recent journal append for an attestation."""
+        if not isinstance(attestation, Attestation):
+            raise TypeError("attestation_required")
+        key = (attestation.execution_id, attestation.step_id)
+        with self._lock:
+            if not self._entries:
+                raise ValueError("journal_empty")
+            entry = self._entries[-1]
+            if (
+                entry.execution_id != attestation.execution_id
+                or entry.step_id != attestation.step_id
+                or entry.action_digest != attestation.action_digest
+                or entry.output_digest != attestation.output_digest
+            ):
+                raise ValueError("journal_rollback_target_mismatch")
+            self._entries.pop()
+            self._keys.discard(key)
+            self._reservations[key] = StepReservation(
+                attestation.execution_id,
+                attestation.principal_id,
+                attestation.step_id,
+                attestation.action_digest,
+            )
 
     def snapshot(self) -> tuple[JournalEntry, ...]:
         with self._lock: return tuple(self._entries)
