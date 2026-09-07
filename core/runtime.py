@@ -27,12 +27,7 @@ from .verification import VerificationEngine
 
 
 class NORYXRuntime:
-    """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit.
-
-    The state journal is an explicit durability boundary. Production callers should
-    provide a protected persistent path; tests may use a temporary path or leave it
-    unset for the historical in-memory mode.
-    """
+    """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
 
     def __init__(self, limits: RuntimeLimits | None = None, *, state_journal_path: str | None = None):
         self.limits = limits or RuntimeLimits()
@@ -67,14 +62,6 @@ class NORYXRuntime:
             self.state_journal.close()
 
     def _principal_binding(self, agent_id: str) -> tuple[str, str | None]:
-        """Return the principal binding for the currently installed router.
-
-        A production router carries an IdentityRegistry and therefore requires a
-        cryptographically trusted AgentIdentity. A deliberately standalone router
-        used for negative-path/unit tests has no registry; it may execute far enough
-        to exercise execution/result contracts, but it can never produce a valid
-        state commit because StateStore requires the complete fingerprint binding.
-        """
         agent = self.router.route(agent_id)
         registry = getattr(self.router, "identity_registry", None)
         if registry is None:
@@ -87,7 +74,6 @@ class NORYXRuntime:
 
     def configure_offline(self, *, cipher: AuthenticatedCipher, key_id: str,
                           snapshot_authenticator, clock=None) -> OfflineRuntime:
-        """Install an explicit offline boundary using the same policy, verifier and recovery controller."""
         bound_cipher = BoundAuthenticatedCipher(cipher, key_id=key_id)
         offline = OfflineRuntime(
             recovery=self.recovery,
@@ -121,7 +107,6 @@ class NORYXRuntime:
         return payload
 
     def run_offline(self, task: TaskSpec, *, capability: str, local_executor):
-        """Execute an already-authorized local operation without invoking cloud routing."""
         if self._offline is None:
             return {"status": "rejected", "reason": "offline_not_configured", "task_id": getattr(task, "task_id", None)}
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -130,7 +115,6 @@ class NORYXRuntime:
             return {"status": "rejected", "reason": "offline_capability_required", "task_id": task.task_id}
         if not callable(local_executor):
             return {"status": "rejected", "reason": "local_executor_required", "task_id": task.task_id}
-
         execution_id = task.execution_id or uuid4().hex
         principal_id, principal_key_fingerprint = self._principal_binding("deterministic")
         payload = self._offline_payload(task)
@@ -142,7 +126,6 @@ class NORYXRuntime:
             payload_digest=hashlib.sha256(payload).hexdigest(),
             base_state_version=str(self.state.version),
         )
-
         committed = {}
         def commit(execution_record, result):
             verification = self.verifier.verify_output(result, stage="runtime_result")
@@ -162,7 +145,6 @@ class NORYXRuntime:
                 principal_id=principal_id, principal_key_fingerprint=principal_key_fingerprint,
                 verification_valid=verification.valid, verification_stage=verification.stage,
             )
-
         try:
             envelope = self._offline.execute(
                 execution=execution,
@@ -180,10 +162,18 @@ class NORYXRuntime:
                 "state_commit": committed["state"], "sync_envelope": envelope,
                 "offline_state": self._offline.state.value, "audit": self.audit.snapshot()}
 
-    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext, execution_id: str,
+    @staticmethod
+    def _default_interaction_context(task: TaskSpec) -> InteractionContext:
+        context_id = hashlib.sha256(f"runtime:{getattr(task, 'task_id', '')}".encode("utf-8")).hexdigest()
+        return InteractionContext(profile_id="runtime", signals=(), context_id=context_id)
+
+    def _context_envelope(self, task: TaskSpec, interaction_context: InteractionContext | None, execution_id: str,
                           principal_id: str | None = None) -> OrchestrationEnvelope:
+        if interaction_context is None:
+            interaction_context = self._default_interaction_context(task)
         if not isinstance(interaction_context, InteractionContext):
             raise TypeError("interaction_context_required")
+        interaction_context.as_prompt_context()
         principal = principal_id or getattr(task, "principal_id", None) or "deterministic"
         envelope = OrchestrationEnvelope(request_id=task.task_id, principal_id=principal,
                                          operation=task.task_type, interaction_context=interaction_context)
