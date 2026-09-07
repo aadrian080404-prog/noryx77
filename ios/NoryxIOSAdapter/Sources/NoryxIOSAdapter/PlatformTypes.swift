@@ -12,6 +12,7 @@ public enum NoryxInteraction: String, Sendable {
 }
 
 public struct NoryxPlatformRequest: Sendable, Equatable {
+    public static let maxTextBytes = 1_024
     public let requestID: String
     public let deviceID: String
     public let platform: NoryxPlatform
@@ -19,9 +20,7 @@ public struct NoryxPlatformRequest: Sendable, Equatable {
     public let payload: String
 
     public init(requestID: String, deviceID: String, interaction: NoryxInteraction, payload: String) throws {
-        guard !requestID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !payload.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard Self.validText(requestID), Self.validText(deviceID), Self.validText(payload) else {
             throw NoryxAdapterError.invalidRequest
         }
         self.requestID = requestID
@@ -30,9 +29,15 @@ public struct NoryxPlatformRequest: Sendable, Equatable {
         self.interaction = interaction
         self.payload = payload
     }
+
+    private static func validText(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.utf8.count <= maxTextBytes
+    }
 }
 
 public struct NoryxPlatformAction: Sendable, Equatable {
+    public static let maxTextBytes = 1_024
     public let actionID: String
     public let deviceID: String
     public let capability: String
@@ -40,10 +45,7 @@ public struct NoryxPlatformAction: Sendable, Equatable {
     public let epoch: UInt64
 
     public init(actionID: String, deviceID: String, capability: String, payload: String, epoch: UInt64) throws {
-        guard !actionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !deviceID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !capability.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !payload.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard Self.validText(actionID), Self.validText(deviceID), Self.validText(capability), Self.validText(payload) else {
             throw NoryxAdapterError.invalidAction
         }
         self.actionID = actionID
@@ -51,6 +53,11 @@ public struct NoryxPlatformAction: Sendable, Equatable {
         self.capability = capability
         self.payload = payload
         self.epoch = epoch
+    }
+
+    private static func validText(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && value.utf8.count <= maxTextBytes
     }
 }
 
