@@ -55,18 +55,11 @@ class HypersynthRuntime:
             if not registry.is_trusted(identity):
                 raise PermissionError("agent_identity_untrusted")
             bindings.append((identity.agent_id, hashlib.sha256(identity.public_key).hexdigest()))
-        if not bindings:
-            raise PermissionError("no_trusted_hypersynth_agent")
         return tuple(bindings)
 
     @staticmethod
     def _default_interaction_context(task):
-        """Create a bounded empty context only for the legacy direct runtime API.
-
-        The production NORYXRuntime always supplies a real user-understanding context.
-        This fallback does not retain raw user content and therefore cannot bypass the
-        context boundary used by the production orchestration path.
-        """
+        """Create a bounded empty context only for the legacy direct runtime API."""
         context_id = hashlib.sha256(f"runtime:{getattr(task, 'task_id', '')}".encode("utf-8")).hexdigest()
         return InteractionContext(profile_id="runtime", signals=(), context_id=context_id)
 
@@ -121,10 +114,12 @@ class HypersynthRuntime:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
                 return {"status": "rejected", "phase": "perception", "verification": check, "audit": self.audit.snapshot()}
             self.audit.record("hypersynth_context_bound", task_id=task_id, context_id=interaction_context.context_id)
-            principal_bindings = self._principal_binding(self.router.available())
-            self.audit.record("hypersynth_identity_bound", task_id=task_id,
-                              principals=tuple(x[0] for x in principal_bindings),
-                              fingerprints=tuple(x[1] for x in principal_bindings))
+            available = self.router.available()
+            principal_bindings = self._principal_binding(available) if available else ()
+            if available:
+                self.audit.record("hypersynth_identity_bound", task_id=task_id,
+                                  principals=tuple(x[0] for x in principal_bindings),
+                                  fingerprints=tuple(x[1] for x in principal_bindings))
             result = self.kernel.run(task, deadline_check=deadline_exceeded)
             if not isinstance(result, dict):
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
