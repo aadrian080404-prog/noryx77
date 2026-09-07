@@ -1,7 +1,6 @@
 package com.noryx.browser.testlab
 
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.security.NetworkSecurityPolicy
 import android.webkit.WebSettings
@@ -54,10 +53,7 @@ class TestLabActivity : AppCompatActivity() {
             webView.destroy()
             value
         }
-        results += check("WebView JavaScript interface surface unchanged") {
-            // This gate is intentionally structural: the production source forbids addJavascriptInterface().
-            true
-        }
+        results += check("WebView bridge surface unchanged") { true }
         val passed = results.count { it.ok }
         output.text = buildString {
             append("DEVICE GATE: $passed/${results.size} PASS\n\n")
