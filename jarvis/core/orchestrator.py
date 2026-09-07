@@ -33,9 +33,9 @@ class JarvisOrchestrator:
             seen.add(step.step_id)
             dependencies = set(step.dependencies)
             if step.step_id in dependencies:
-                raise ValueError("self_dependency")
+                raise ValueError("dependencies_self_reference")
             if not dependencies.issubset(seen - {step.step_id}):
-                raise ValueError("dependency_order_violation")
+                raise ValueError("dependencies_order_violation")
             if not dependencies.issubset(completed):
                 raise ValueError("unsatisfied_dependencies")
             if not self.authorize_step(request, step):
