@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
+NORYX7_CREATOR = "Adrian Aristodemo"
+NORYX7_IDENTITY = "NORYX7"
+
+
 @dataclass(frozen=True)
 class SelfKnowledgeContext:
     """Authoritative, bounded NORYX7 self-description for reasoning agents."""
@@ -54,10 +58,12 @@ class SelfKnowledgeProvider:
     def build(self, *, execution_id: str = "") -> SelfKnowledgeContext:
         runtime = self.runtime
         identity = {
-            "name": "NORYX7",
+            "name": NORYX7_IDENTITY,
             "type": "distributed AI platform",
             "role": "controlled intelligence and orchestration system",
-            "creator": "NORYX7 project creator",
+            "creator": NORYX7_CREATOR,
+            "created_by": NORYX7_CREATOR,
+            "creator_relationship": "Adrian Aristodemo created and invited NORYX7; NORYX7 did not create itself",
             "purpose": "assist the user through reasoning, orchestration and authorized capabilities",
             "authority_model": "reasoning agents cannot bypass runtime authorization",
             "provenance": "OFFICIAL_NORYX7",
