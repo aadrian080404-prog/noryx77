@@ -15,7 +15,7 @@ class Plan:
 
 class Planner:
     """Deterministic bounded planner; model planners plug in behind this contract."""
-    VALID_ACTION_TYPES = {"compute"}
+    VALID_ACTION_TYPES = {"compute", "web_research", "chess_analyze", "payments", "flights", "insurance"}
     VALID_RISKS = {"normal", "sensitive", "high"}
 
     def __init__(self, max_steps: int = 8):
@@ -26,7 +26,8 @@ class Planner:
     def build(self, task: TaskSpec) -> Plan:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise TypeError("task must be a well-formed TaskSpec")
-        step = PlanStep(f"{task.task_id}:0", task.objective, "compute", task.risk_class)
+        action_type = task.task_type if task.task_type in self.VALID_ACTION_TYPES else "compute"
+        step = PlanStep(f"{task.task_id}:0", task.objective, action_type, task.risk_class)
         return Plan(task.task_id, (step,))
 
     def verify(self, plan: Plan, task: TaskSpec) -> VerificationResult:

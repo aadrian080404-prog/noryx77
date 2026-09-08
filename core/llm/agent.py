@@ -27,6 +27,11 @@ class LLMBackedAgent(Agent):
         "planning",
         "task_understanding",
         "capability_selection",
+        "web_research",
+        "chess_analyze",
+        "payments",
+        "flights",
+        "insurance",
     )
 
     def __init__(

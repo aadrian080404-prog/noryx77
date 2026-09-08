@@ -30,7 +30,7 @@ class Hypersynth:
     """Bounded cognitive kernel with one immutable execution identity per run."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None, tool_executor=None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
@@ -52,6 +52,7 @@ class Hypersynth:
         self.cross_checker = cross_checker or CrossChecker()
         self.metacognition = metacognition or MetacognitionEngine()
         self.recovery = recovery
+        self.tool_executor = tool_executor
         if self.recovery is not None and not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
@@ -170,14 +171,28 @@ class Hypersynth:
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
+            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": task.input, "constraints": dict(task.constraints)}, risk_class=step.risk_class, execution_id=task.execution_id)
             try:
-                operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
-                if self.recovery is not None:
-                    decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
+                capability = self.tool_executor is not None and self.tool_executor.capabilities.resolve(step.action_type) is not None
+                if capability:
+                    operation = lambda: self.tool_executor.execute(action, calls_used=index, execution_id=task.execution_id, principal=getattr(agent, "identity", None))
+                    if self.recovery is not None:
+                        def guarded():
+                            return operation()
+                        _, capability_result = self.recovery.run_if_normal(guarded, expected_epoch=recovery_epoch)
+                    else:
+                        capability_result = operation()
+                    capability_output, capability_check = capability_result
+                    if not capability_check.valid:
+                        return self._reject("execution", task, capability_check, results=tuple(results))
+                    result = AgentResult(agent.agent_id, child.task_id, "completed", capability_output, VerificationResult(True, "agent_result", "capability_result_verified"), task.execution_id)
                 else:
-                    decision, result = operation()
-                if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
+                    operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
+                    if self.recovery is not None:
+                        decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
+                    else:
+                        decision, result = operation()
+                    if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
             except Exception:
                 return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)

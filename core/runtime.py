@@ -77,6 +77,9 @@ class NORYXRuntime:
             memory=self.memory,
             recovery=self.recovery,
         )
+        self.capability_registry = self.hypersynth.tool_executor.capabilities
+        self.tool_executor = self.hypersynth.tool_executor
+        self.frontier_capabilities = self.hypersynth.frontier_capabilities
         self._offline: OfflineRuntime | None = None
 
     def configure_offline(

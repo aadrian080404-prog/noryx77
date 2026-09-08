@@ -13,6 +13,8 @@ from .recovery import RecoveryController, RecoveryState
 from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
+from .tools import ToolExecutor
+from .frontier_capabilities import install_frontier_capabilities
 
 
 class HypersynthRuntime:
@@ -30,6 +32,8 @@ class HypersynthRuntime:
         self.identity_registry = getattr(self.router, "identity_registry", None)
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
+        self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
             self.verifier,
@@ -40,6 +44,7 @@ class HypersynthRuntime:
             audit=self.audit,
             max_steps=self.limits.max_actions_per_task,
             recovery=self.recovery,
+            tool_executor=self.tool_executor,
         )
 
     def _principal_binding(self, agent_ids):
