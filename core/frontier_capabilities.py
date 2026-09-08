@@ -4,7 +4,7 @@ import os
 import re
 import ssl
 from html import unescape
-from urllib.parse import parse_qs, quote_plus, urlsplit
+from urllib.parse import quote_plus, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -20,21 +20,37 @@ class WebResearchCapability:
         self.max_bytes = max_bytes
 
     def __call__(self, target: str, parameters: dict) -> dict:
-        query = str(parameters.get("query") or target or "").strip()
-        url = str(parameters.get("url") or "").strip()
-        if url:
-            return self._fetch(url)
+        target_value = str(target or "").strip()
+        explicit_url = str(parameters.get("url") or "").strip()
+        if explicit_url:
+            return self._fetch(explicit_url)
+        if target_value.startswith(("http://", "https://")):
+            return self._fetch(target_value)
+
+        query = str(parameters.get("query") or target_value).strip()
         if not query:
             raise ValueError("web_research_requires_query_or_url")
-        template = os.environ.get("NORYX7_SEARCH_URL_TEMPLATE", "https://html.duckduckgo.com/html/?q={query}")
+        template = os.environ.get(
+            "NORYX7_SEARCH_URL_TEMPLATE",
+            "https://html.duckduckgo.com/html/?q={query}",
+        )
         search_url = template.format(query=quote_plus(query))
         page = self._fetch(search_url)
         links = []
-        for href, title in re.findall(r'href="([^"]+)"[^>]*>(.*?)</a>', page.get("body", ""), re.I | re.S):
+        for href, title in re.findall(
+            r'href="([^"]+)"[^>]*>(.*?)</a>',
+            page.get("body", ""),
+            re.I | re.S,
+        ):
             clean_title = re.sub(r"<[^>]+>", " ", unescape(title)).strip()
             if clean_title and href.startswith("http"):
                 links.append({"title": clean_title[:300], "url": href[:1000]})
-        return {"status": "completed", "query": query, "source": search_url, "results": links[:10]}
+        return {
+            "status": "completed",
+            "query": query,
+            "source": search_url,
+            "results": links[:10],
+        }
 
     def _fetch(self, url: str) -> dict:
         parts = urlsplit(url)
