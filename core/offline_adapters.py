@@ -37,8 +37,19 @@ class VerificationOfflineAdapter:
         self._verifier = verifier
 
     def verify(self, result: object) -> bool:
+        # Offline runtime accepts only concrete textual/binary results.
+        # Generic opaque objects must fail closed before state commit.
+        if not isinstance(result, (str, bytes)):
+            return False
+        if len(result) == 0:
+            return False
+
         check = self._verifier.verify_output(result, stage="runtime_result")
-        return bool(check.is_well_formed() and check.valid and check.stage == "runtime_result")
+        return bool(
+            check.is_well_formed()
+            and check.valid
+            and check.stage == "runtime_result"
+        )
 
 
 class BoundAuthenticatedCipher:

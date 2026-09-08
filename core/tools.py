@@ -65,7 +65,17 @@ class ToolExecutor:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
 
-        handler = self.capabilities.resolve(action.action_type)
+        # Canonical delegated JARVIS actions use a distinct Core action
+        # type while retaining the original JARVIS capability name in the
+        # action parameters. Resolve only this explicit delegation form
+        # through the shared capability registry.
+        capability_name = action.action_type
+        parameters = dict(action.parameters)
+
+        if action.action_type == "jarvis_capability":
+            capability_name = parameters.pop("__jarvis_capability", None)
+
+        handler = self.capabilities.resolve(capability_name)
         if handler is None:
             return None, VerificationResult(
                 False,

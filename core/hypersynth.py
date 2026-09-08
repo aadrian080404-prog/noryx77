@@ -69,7 +69,7 @@ class Hypersynth:
         if task.execution_id: return task
         return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
 
-    def run(self, task: TaskSpec, *, deadline_check=None):
+    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None):
         task = self._bind_execution(task)
         recovery_epoch = self.recovery.epoch if self.recovery is not None else None
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
@@ -113,7 +113,21 @@ class Hypersynth:
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
         for index, step in enumerate(plan.steps):
-            agent_id = agents[index % len(agents)]
+            agent_id = (
+                preferred_agent
+                if preferred_agent is not None
+                else agents[index % len(agents)]
+            )
+            if preferred_agent is not None and preferred_agent not in agents:
+                return self._reject(
+                    "allocation",
+                    task,
+                    VerificationResult(
+                        False,
+                        "allocation",
+                        "preferred_agent_unavailable",
+                    ),
+                )
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
             try: selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
