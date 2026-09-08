@@ -4,7 +4,7 @@ from typing import Any, Iterable
 
 from core.agents import Agent
 from core.contracts import AgentResult, TaskSpec
-from core.identity import AgentIdentity
+from core.identity import AgentIdentity, AgentIdentityAuthority
 from core.verification import VerificationEngine
 from core.llm.model_fabric_bridge import ModelFabricBridge
 from core.llm.self_knowledge import SelfKnowledgeProvider
@@ -14,8 +14,8 @@ from noryx7_runtime.model_fabric import ModelFabric
 class LLMBackedAgent(Agent):
     """Generative NORYX7 agent with explicit role, mission and capability metadata.
 
-    The model reasons; NORYX7 still owns authorization, tool dispatch, verification
-    and state. Real actions must arrive through capabilities exposed by the runtime.
+    The model reasons; NORYX7 owns authorization, tool dispatch, verification and
+    state. Real actions must arrive through capabilities exposed by the runtime.
     """
 
     agent_id = "noryx7-llm"
@@ -44,7 +44,6 @@ class LLMBackedAgent(Agent):
     ) -> None:
         if model_fabric is None:
             raise ValueError("model_fabric is required")
-
         generate = getattr(model_fabric, "generate", None)
         execute = getattr(model_fabric, "execute", None)
         if not callable(generate) and not callable(execute):
@@ -86,6 +85,43 @@ class LLMBackedAgent(Agent):
         self.self_knowledge = self_knowledge or SelfKnowledgeProvider()
         self.identity = identity
 
+        # The canonical runtime currently constructs this primary agent directly.
+        # When its self-knowledge is runtime-bound, bootstrap a separately identified
+        # secondary reviewer into the same trusted ResourceRouter. This keeps the
+        # primary/secondary fabric real without granting the model independent authority.
+        if self.agent_id == "noryx7-llm":
+            self._bootstrap_secondary()
+
+    def _bootstrap_secondary(self) -> None:
+        runtime = getattr(self.self_knowledge, "runtime", None)
+        router = getattr(runtime, "router", None)
+        registry = getattr(runtime, "identity_registry", None)
+        if router is None or registry is None:
+            return
+        try:
+            if router.get("noryx7-secondary") is not None:
+                return
+        except Exception:
+            return
+        try:
+            secondary_identity, _ = AgentIdentityAuthority.generate("noryx7-secondary")
+            registry.register(secondary_identity)
+            secondary = SecondaryLLMBackedAgent(
+                self.model_fabric,
+                verifier=self.verifier,
+                self_knowledge=self.self_knowledge,
+                identity=secondary_identity,
+            )
+            router.register(secondary)
+        except (ValueError, TypeError):
+            # If another trusted bootstrap won the race, leave the existing fabric intact.
+            try:
+                if router.get("noryx7-secondary") is not None:
+                    return
+            except Exception:
+                pass
+            raise
+
     def describe(self) -> dict[str, object]:
         return {
             "agent_id": self.agent_id,
@@ -101,7 +137,6 @@ class LLMBackedAgent(Agent):
             .build(execution_id=task.execution_id)
             .as_prompt_context()
         )
-
         return (
             "You are an operational reasoning agent inside NORYX7.\n"
             f"Agent ID: {self.agent_id}\n"
@@ -140,7 +175,6 @@ class LLMBackedAgent(Agent):
                 execution_id=task.execution_id,
             )
             return bridge.generate(prompt)
-
         generate = getattr(self.model_fabric, "generate", None)
         if callable(generate):
             return generate(prompt)
@@ -156,7 +190,6 @@ class LLMBackedAgent(Agent):
                 verification=check,
                 execution_id=task.execution_id,
             )
-
         prompt = self._build_prompt(task)
         try:
             output = self._generate(prompt, task)
@@ -169,7 +202,6 @@ class LLMBackedAgent(Agent):
                 verification=None,
                 execution_id=task.execution_id,
             )
-
         if not isinstance(output, str) or not output.strip():
             return AgentResult(
                 self.agent_id,
@@ -179,7 +211,6 @@ class LLMBackedAgent(Agent):
                 verification=None,
                 execution_id=task.execution_id,
             )
-
         output = output.strip()
         output_check = self.verifier.verify_output(output, stage="agent_result")
         return AgentResult(
