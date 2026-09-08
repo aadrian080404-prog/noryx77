@@ -81,6 +81,7 @@ replace(
     "        cross_check = self.cross_checker.verify(task, tuple(results), execution_hypotheses)",
 )
 replace(
+    "core/hypersynth.py",
     "        metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)",
     "        metacognitive_check, reflection = self.metacognition.reflect(task, plan, execution_hypotheses, simulations, tuple(results), output_check)",
 )
