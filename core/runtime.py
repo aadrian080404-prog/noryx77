@@ -36,12 +36,7 @@ class DualPlanner(Planner):
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise TypeError("task must be a well-formed TaskSpec")
         primary = PlanStep(f"{task.task_id}:0", task.objective, "compute", task.risk_class)
-        secondary = PlanStep(
-            f"{task.task_id}:1",
-            "Independently review, cross-check and improve the primary reasoning for: " + task.objective,
-            "compute",
-            task.risk_class,
-        )
+        secondary = PlanStep(f"{task.task_id}:1", "Independently review, cross-check and improve the primary reasoning for: " + task.objective, "compute", task.risk_class)
         return Plan(task.task_id, (primary, secondary))
 
 
@@ -54,83 +49,41 @@ class NORYXRuntime(_BaseNORYXRuntime):
         model_fabric = getattr(self, "_model_fabric", None)
         if model_fabric is None:
             return
-
         old_agents = getattr(self.router, "_agents", None)
         if isinstance(old_agents, dict):
             old_agents.pop("noryx7-llm", None)
-
         primary_identity, _ = AgentIdentityAuthority.generate("noryx7-primary")
         secondary_identity, _ = AgentIdentityAuthority.generate("noryx7-secondary")
         self.identity_registry.register(primary_identity)
         self.identity_registry.register(secondary_identity)
-
-        primary = RoleLLMBackedAgent(
-            model_fabric,
-            verifier=self.verifier,
-            self_knowledge=SelfKnowledgeProvider(runtime=self),
-            identity=primary_identity,
-            agent_id="noryx7-primary",
-            role="primary_reasoner",
-        )
-        secondary = RoleLLMBackedAgent(
-            model_fabric,
-            verifier=self.verifier,
-            self_knowledge=SelfKnowledgeProvider(runtime=self),
-            identity=secondary_identity,
-            agent_id="noryx7-secondary",
-            role="independent_reviewer",
-        )
+        primary = RoleLLMBackedAgent(model_fabric, verifier=self.verifier, self_knowledge=SelfKnowledgeProvider(runtime=self), identity=primary_identity, agent_id="noryx7-primary", role="primary_reasoner")
+        secondary = RoleLLMBackedAgent(model_fabric, verifier=self.verifier, self_knowledge=SelfKnowledgeProvider(runtime=self), identity=secondary_identity, agent_id="noryx7-secondary", role="independent_reviewer")
         self.router.register(primary)
         self.router.register(secondary)
-
         cognitive_router = ResourceRouter(identity_registry=self.identity_registry)
         cognitive_router.register(primary)
         cognitive_router.register(secondary)
         self._cognitive_router = cognitive_router
-        self.hypersynth = HypersynthRuntime(
-            verifier=self.verifier,
-            router=cognitive_router,
-            audit=self.audit,
-            limits=self.limits,
-            memory=self.memory,
-            recovery=self.recovery,
-            planner=DualPlanner(max_steps=2),
-        )
+        self.hypersynth = HypersynthRuntime(verifier=self.verifier, router=cognitive_router, audit=self.audit, limits=self.limits, memory=self.memory, recovery=self.recovery, planner=DualPlanner(max_steps=2))
 
     def run_hypersynth(self, task: TaskSpec, interaction_context=None):
         research = self.research.run(task)
         model_fabric = getattr(self, "_model_fabric", None)
         if model_fabric is None:
             return super().run_hypersynth(task, interaction_context=interaction_context)
-
-        execution_task = replace(
-            task,
-            input={"original_input": task.input, "research": research},
-            constraints={**dict(getattr(task, "constraints", {}) or {}), "noryx7_integrated": True},
-        )
+        execution_task = replace(task, input={"original_input": task.input, "research": research}, constraints={**dict(getattr(task, "constraints", {}) or {}), "noryx7_integrated": True})
         self._model_fabric = None
         try:
             result = super().run_hypersynth(execution_task, interaction_context=interaction_context)
         finally:
             self._model_fabric = model_fabric
-
         if isinstance(result, dict):
             result["research"] = research
             result["agent_topology"] = ("noryx7-primary", "noryx7-secondary")
             if result.get("status") == "completed":
                 try:
                     execution_id = getattr(task, "execution_id", "") or uuid4().hex
-                    key = "research:" + execution_id
-                    self.memory.put(
-                        MemoryItem(
-                            key,
-                            json.dumps(research, sort_keys=True, ensure_ascii=False, default=str),
-                            kind="research",
-                            source=getattr(task, "task_id", ""),
-                            importance=0.6,
-                            execution_id=execution_id,
-                        )
-                    )
+                    self.memory.put(MemoryItem("research:" + execution_id, json.dumps(research, sort_keys=True, ensure_ascii=False, default=str), kind="working", source=getattr(task, "task_id", ""), importance=0.6, execution_id=execution_id))
                 except Exception:
                     pass
         return result
