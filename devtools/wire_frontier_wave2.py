@@ -27,7 +27,6 @@ def ensure_import(path: str, line: str) -> None:
     text = read(path)
     lines = text.splitlines()
     if line in lines:
-        # Deduplicate the exact import while preserving the first occurrence.
         seen = False
         out = []
         for item in lines:
@@ -38,15 +37,13 @@ def ensure_import(path: str, line: str) -> None:
             out.append(item)
         write(path, "\n".join(out) + "\n")
         return
-    marker = "\n\n"
-    head, sep, tail = text.partition(marker)
+    head, sep, tail = text.partition("\n\n")
     if not sep:
         raise SystemExit(f"WIRE_ABORTED: import section missing in {path}")
-    write(path, head + "\n" + line + marker + tail)
+    write(path, head + "\n" + line + "\n\n" + tail)
 
 
-# ---- Reasoning: one verified primary hypothesis plus an explicit alternative ----
-ensure_import("core/reasoning.py", "from .contracts import AgentResult, TaskSpec, VerificationResult")
+# Reasoning: one verified hypothesis with an explicit alternative strategy.
 replace_once(
     "core/reasoning.py",
     "    basis: tuple[str, ...] = ()\n",
@@ -63,13 +60,9 @@ replace_once(
     "            if hypothesis.hypothesis_id in ids: return VerificationResult(False, \"hypothesis\", \"duplicate_hypothesis_id\")\n            if not isinstance(hypothesis.score, (int, float)) or not 0.0 <= float(hypothesis.score) <= 1.0: return VerificationResult(False, \"hypothesis\", \"invalid_hypothesis_score\")\n            if not isinstance(hypothesis.alternative_statement, str) or not hypothesis.alternative_statement.strip(): return VerificationResult(False, \"hypothesis\", \"missing_alternative_hypothesis\")\n",
 )
 if "class HypothesisComparator:" not in read("core/reasoning.py"):
-    write(
-        "core/reasoning.py",
-        read("core/reasoning.py")
-        + '''\n\n@dataclass(frozen=True)\nclass HypothesisComparison:\n    hypothesis_id: str\n    primary_score: float\n    alternative_score: float\n    selected_strategy: str\n    reason: str\n\n\nclass HypothesisComparator:\n    """Bounded comparison of the planned hypothesis against its explicit alternative."""\n    def compare(self, hypotheses: tuple[Hypothesis, ...], simulations: tuple[SimulationResult, ...]) -> tuple[HypothesisComparison, ...]:\n        if not hypotheses or len(hypotheses) != len(simulations):\n            return ()\n        output = []\n        for hypothesis, simulation in zip(hypotheses, simulations):\n            primary = min(1.0, float(hypothesis.score) + (0.35 if simulation.feasible else 0.0) + (0.05 if hypothesis.basis else 0.0))\n            alternative = min(1.0, float(hypothesis.score) + (0.35 if simulation.feasible else 0.0) + 0.02)\n            selected = "primary" if primary >= alternative else "alternative"\n            output.append(HypothesisComparison(hypothesis.hypothesis_id, primary, alternative, selected, "bounded_simulation_comparison"))\n        return tuple(output)\n\n    def verify(self, comparisons: tuple[HypothesisComparison, ...]) -> VerificationResult:\n        if not comparisons:\n            return VerificationResult(False, "hypothesis_comparison", "empty_comparison")\n        if any(not 0.0 <= item.primary_score <= 1.0 or not 0.0 <= item.alternative_score <= 1.0 for item in comparisons):\n            return VerificationResult(False, "hypothesis_comparison", "invalid_comparison_score")\n        if any(item.selected_strategy not in {"primary", "alternative"} for item in comparisons):\n            return VerificationResult(False, "hypothesis_comparison", "invalid_selected_strategy")\n        return VerificationResult(True, "hypothesis_comparison", "comparison_ok")\n''',
-    )
+    write("core/reasoning.py", read("core/reasoning.py") + '''\n\n@dataclass(frozen=True)\nclass HypothesisComparison:\n    hypothesis_id: str\n    primary_score: float\n    alternative_score: float\n    selected_strategy: str\n    reason: str\n\n\nclass HypothesisComparator:\n    """Bounded comparison of the planned hypothesis against its explicit alternative."""\n    def compare(self, hypotheses: tuple[Hypothesis, ...], simulations: tuple[SimulationResult, ...]) -> tuple[HypothesisComparison, ...]:\n        if not hypotheses or len(hypotheses) != len(simulations):\n            return ()\n        output = []\n        for hypothesis, simulation in zip(hypotheses, simulations):\n            primary = min(1.0, float(hypothesis.score) + (0.35 if simulation.feasible else 0.0) + (0.05 if hypothesis.basis else 0.0))\n            alternative = min(1.0, float(hypothesis.score) + (0.35 if simulation.feasible else 0.0) + 0.02)\n            selected = "primary" if primary >= alternative else "alternative"\n            output.append(HypothesisComparison(hypothesis.hypothesis_id, primary, alternative, selected, "bounded_simulation_comparison"))\n        return tuple(output)\n\n    def verify(self, comparisons: tuple[HypothesisComparison, ...]) -> VerificationResult:\n        if not comparisons:\n            return VerificationResult(False, "hypothesis_comparison", "empty_comparison")\n        if any(not 0.0 <= item.primary_score <= 1.0 or not 0.0 <= item.alternative_score <= 1.0 for item in comparisons):\n            return VerificationResult(False, "hypothesis_comparison", "invalid_comparison_score")\n        if any(item.selected_strategy not in {"primary", "alternative"} for item in comparisons):\n            return VerificationResult(False, "hypothesis_comparison", "invalid_selected_strategy")\n        return VerificationResult(True, "hypothesis_comparison", "comparison_ok")\n''')
 
-# ---- HYPERSYNTH imports and collaboration capability ----
+# HYPERSYNTH: real Primary -> Secondary -> Primary collaboration behind ToolExecutor.
 ensure_import("core/hypersynth.py", "from .collaboration import AgentCollaboration")
 ensure_import("core/hypersynth.py", "from .reasoning import HypothesisComparator")
 replace_once(
@@ -80,12 +73,7 @@ replace_once(
 replace_once(
     "core/hypersynth.py",
     "    def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)\n",
-    '''    def _execute_collaboration_capability(self, target, parameters):\n        primary_id = parameters.get("primary_agent_id")\n        secondary_id = parameters.get("secondary_agent_id")\n        primary = self.router.route(primary_id)\n        secondary = self.router.route(secondary_id)\n        collaboration_task = TaskSpec(\n            parameters["task_id"],\n            parameters["task_type"],\n            parameters["objective"],\n            parameters["input"],\n            parameters["constraints"],\n            tuple(parameters["verification_requirements"]),\n            parameters["risk_class"],\n            parameters["execution_id"],\n        )\n        reconciliation, check = self.collaboration.run(collaboration_task, primary, secondary)\n        if not check.valid:\n            raise RuntimeError("collaboration_not_verified")\n        return reconciliation.output\n\n    def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)\n''',
-)
-replace_once(
-    "core/hypersynth.py",
-    "        if len(hypotheses) != len(plan.steps): return self._reject(\"hypothesis\", task, VerificationResult(False, \"hypothesis\", \"hypothesis_plan_mismatch\"))",
-    "        if len(hypotheses) != len(plan.steps): return self._reject(\"hypothesis\", task, VerificationResult(False, \"hypothesis\", \"hypothesis_plan_mismatch\"))",
+    '''    def _execute_collaboration_capability(self, target, parameters):\n        primary = self.router.route(parameters["primary_agent_id"])\n        secondary = self.router.route(parameters["secondary_agent_id"])\n        collaboration_task = TaskSpec(parameters["task_id"], parameters["task_type"], parameters["objective"], parameters["input"], parameters["constraints"], tuple(parameters["verification_requirements"]), parameters["risk_class"], parameters["execution_id"])\n        reconciliation, check = self.collaboration.run(collaboration_task, primary, secondary)\n        if not check.valid:\n            raise RuntimeError("collaboration_not_verified")\n        return reconciliation.output\n\n    def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)\n''',
 )
 replace_once(
     "core/hypersynth.py",
@@ -95,19 +83,12 @@ replace_once(
 replace_once(
     "core/hypersynth.py",
     '            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": task.input, "constraints": dict(task.constraints)}, risk_class=step.risk_class, execution_id=task.execution_id)',
-    '''            use_collaboration = (\n                len(plan.steps) == 1\n                and len(ordered_agents) >= 2\n                and task.task_type not in {"web_research", "chess_analyze", "payments", "flights", "insurance"}\n            )\n            action_type = "agent_collaboration" if use_collaboration else step.action_type\n            parameters = {"input": task.input, "constraints": dict(task.constraints), "execution_id": task.execution_id}\n            if use_collaboration:\n                parameters.update({\n                    "task_id": task.task_id,\n                    "task_type": task.task_type,\n                    "objective": task.objective,\n                    "verification_requirements": tuple(task.verification_requirements),\n                    "risk_class": step.risk_class,\n                    "primary_agent_id": ordered_agents[0],\n                    "secondary_agent_id": ordered_agents[1],\n                })\n            action = ActionSpec("act:" + child.task_id, action_type, target=step.objective, parameters=parameters, risk_class=step.risk_class, execution_id=task.execution_id)''',
+    '''            use_collaboration = len(plan.steps) == 1 and len(ordered_agents) >= 2 and task.task_type not in {"web_research", "chess_analyze", "payments", "flights", "insurance"}\n            action_type = "agent_collaboration" if use_collaboration else step.action_type\n            parameters = {"input": task.input, "constraints": dict(task.constraints), "execution_id": task.execution_id}\n            if use_collaboration:\n                parameters.update({"task_id": task.task_id, "task_type": task.task_type, "objective": task.objective, "verification_requirements": tuple(task.verification_requirements), "risk_class": step.risk_class, "primary_agent_id": ordered_agents[0], "secondary_agent_id": ordered_agents[1]})\n            action = ActionSpec("act:" + child.task_id, action_type, target=step.objective, parameters=parameters, risk_class=step.risk_class, execution_id=task.execution_id)''',
 )
 replace_once(
     "core/hypersynth.py",
     '        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}',
     '        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "hypothesis_comparisons": hypothesis_comparisons, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}',
-)
-
-# Execution identity is explicit at the tool boundary.
-replace_once(
-    "core/hypersynth.py",
-    'parameters={"input": task.input, "constraints": dict(task.constraints)}',
-    'parameters={"input": task.input, "constraints": dict(task.constraints), "execution_id": task.execution_id}',
 )
 
 print("NORYX7 REAL FRONTIER CONNECTIONS WIRED")
