@@ -36,7 +36,7 @@ from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, Orch
 from .personality import ApollonianPersonality, PersonalityProfile
 from .personality_binding import SignedPersonalityBinding, bind_personality, sign_identity_personality_binding, verify_identity_personality_binding, verify_personality_binding
 from .perimeter import PerimeterPolicy, TrafficDirection, TrafficRequest
-from .planning import Plan, PlanStep, PlanStep, Planner
+from .planning import Plan, PlanStep, Planner
 from .platform import AssistantIntegrationBoundary, InteractionKind, PlatformAction, PlatformAdapter, PlatformKind, PlatformRequest
 from .policy import PolicyEngine
 from .reasoning import CrossChecker, Hypothesis, HypothesisEngine, InternalSimulator, SimulationResult
@@ -55,6 +55,6 @@ from .tools import CapabilityRegistry, ToolExecutor
 from .trust_chain import TrustChain, TrustEvidence, channel_binding_digest
 from .user_understanding import SignalKind, UnderstandingConsent, UserContent, UserSignal, UserUnderstandingEngine, UserUnderstandingProfile
 from .verification import VerificationEngine
-from .voice import CommandSpeechRecognizer, CommandSpeechSynthesizer, SpeechVoiceTransport, SpeechRecognizer, SpeechSynthesizer, VoiceGateway, VoiceInteractionResult
+from .voice import CommandSpeechRecognizer, CommandSpeechSynthesizer, SpeechRecognizer, SpeechSynthesizer, SpeechVoiceTransport, VoiceGateway, VoiceInteractionResult
 
 __all__ = [name for name in globals() if not name.startswith("_")]
