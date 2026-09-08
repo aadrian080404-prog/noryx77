@@ -4,7 +4,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Mapping, Protocol, Sequence
 from uuid import uuid4
 
 from .agent_core import AgentInput, AgentResponse, InteractionMode
@@ -12,13 +12,11 @@ from .contracts import TaskSpec
 
 
 class SpeechRecognizer(Protocol):
-    def transcribe(self) -> str:
-        ...
+    def transcribe(self) -> str: ...
 
 
 class SpeechSynthesizer(Protocol):
-    def speak(self, text: str) -> None:
-        ...
+    def speak(self, text: str) -> None: ...
 
 
 class CommandSpeechRecognizer:
@@ -33,10 +31,7 @@ class CommandSpeechRecognizer:
         self.command = tuple(
             command
             or shlex.split(
-                os.environ.get(
-                    "NORYX7_STT_COMMAND",
-                    "termux-speech-to-text",
-                )
+                os.environ.get("NORYX7_STT_COMMAND", "termux-speech-to-text")
             )
         )
         if not self.command:
@@ -73,7 +68,6 @@ class CommandSpeechRecognizer:
         transcript = completed.stdout.strip()
         if not transcript:
             raise RuntimeError("stt_empty_transcript")
-
         return transcript
 
 
@@ -89,10 +83,7 @@ class CommandSpeechSynthesizer:
         self.command = tuple(
             command
             or shlex.split(
-                os.environ.get(
-                    "NORYX7_TTS_COMMAND",
-                    "termux-tts-speak",
-                )
+                os.environ.get("NORYX7_TTS_COMMAND", "termux-tts-speak")
             )
         )
         if not self.command:
@@ -130,12 +121,8 @@ class CommandSpeechSynthesizer:
             raise RuntimeError("tts_failed")
 
 
-class VoiceTransport:
-    """
-    Converts a verified AgentResponse into speech.
-
-    The response is never modified before speech output.
-    """
+class SpeechVoiceTransport:
+    """Verified AgentResponse -> speech output boundary."""
 
     def __init__(self, synthesizer: SpeechSynthesizer) -> None:
         if not hasattr(synthesizer, "speak") or not callable(synthesizer.speak):
@@ -163,12 +150,7 @@ class VoiceInteractionResult:
 
 
 class VoiceGateway:
-    """
-    Real voice ingress/egress boundary.
-
-    STT happens before NORYXRuntime.
-    TTS happens only after the canonical runtime returns a verified result.
-    """
+    """Canonical voice ingress/egress boundary around NORYXRuntime."""
 
     def __init__(
         self,
@@ -178,9 +160,7 @@ class VoiceGateway:
     ) -> None:
         if runtime is None or not hasattr(runtime, "run_hypersynth"):
             raise TypeError("noryx_runtime_required")
-        if not hasattr(recognizer, "transcribe") or not callable(
-            recognizer.transcribe
-        ):
+        if not hasattr(recognizer, "transcribe") or not callable(recognizer.transcribe):
             raise TypeError("speech_recognizer_required")
         if not hasattr(synthesizer, "speak") or not callable(synthesizer.speak):
             raise TypeError("speech_synthesizer_required")
@@ -188,14 +168,11 @@ class VoiceGateway:
         self.runtime = runtime
         self.recognizer = recognizer
         self.synthesizer = synthesizer
-        self.transport = VoiceTransport(synthesizer)
+        self.transport = SpeechVoiceTransport(synthesizer)
 
     def listen(self) -> AgentInput:
         transcript = self.recognizer.transcribe()
-        return AgentInput(
-            content=transcript,
-            mode=InteractionMode.VOICE,
-        )
+        return AgentInput(content=transcript, mode=InteractionMode.VOICE)
 
     def run(
         self,
@@ -206,14 +183,12 @@ class VoiceGateway:
         context: Mapping[str, object] | None = None,
     ) -> VoiceInteractionResult:
         request = self.listen()
-
         execution_id = execution_id or uuid4().hex
 
-        constraints = {
+        constraints: dict[str, object] = {
             "interaction_mode": InteractionMode.VOICE.value,
             "voice_input": True,
         }
-
         if context:
             constraints["interaction_context"] = dict(context)
 
@@ -227,7 +202,6 @@ class VoiceGateway:
         )
 
         runtime_result = self.runtime.run_hypersynth(task)
-
         if not isinstance(runtime_result, dict):
             raise RuntimeError("voice_runtime_result_invalid")
 
@@ -237,7 +211,6 @@ class VoiceGateway:
             )
 
         final_answer = runtime_result.get("result")
-
         if not isinstance(final_answer, str) or not final_answer.strip():
             raise RuntimeError("voice_runtime_output_invalid")
 
@@ -246,7 +219,6 @@ class VoiceGateway:
             mode=InteractionMode.VOICE,
             verified=True,
         )
-
         response = self.transport.deliver(response)
 
         return VoiceInteractionResult(
