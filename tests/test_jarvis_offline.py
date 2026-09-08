@@ -4,6 +4,7 @@ import pytest
 
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider, KEY_SIZE
 from core.offline import OfflineSnapshot
+from core.offline_adapters import BoundAuthenticatedCipher
 from jarvis.core.contracts import ActionResult, Plan, PlanStep, Request
 from jarvis.core.runtime import JarvisRuntime
 
@@ -33,9 +34,9 @@ def test_jarvis_offline_requires_explicit_configuration():
 
 def test_jarvis_offline_binds_snapshot_identity_and_commits_verified_result():
     runtime = JarvisRuntime()
+    runtime.grant("principal-1", "jarvis.execute", "offline")
     provider = InMemoryKeyProvider({"offline": b"K" * KEY_SIZE})
-    cipher = AuthenticatedCipher(provider)
-    binding = runtime.configure_offline(cipher=__import__('core.offline_adapters', fromlist=['BoundAuthenticatedCipher']).BoundAuthenticatedCipher(cipher, key_id="offline"), clock=lambda: 100, snapshot_authenticator=lambda snap: snap.principal_id == "principal-1")
+    binding = runtime.configure_offline(cipher=BoundAuthenticatedCipher(AuthenticatedCipher(provider), key_id="offline"), clock=lambda: 100, snapshot_authenticator=lambda snap: snap.principal_id == "principal-1")
     binding.install_snapshot(_snapshot("principal-1"))
     request = Request("do local", "principal-1", "req-2")
     plan = Plan("req-2", (PlanStep("s1", "compute", "local", {}),))
@@ -46,9 +47,9 @@ def test_jarvis_offline_binds_snapshot_identity_and_commits_verified_result():
 
 def test_jarvis_offline_rejects_wrong_snapshot_identity_before_local_execution():
     runtime = JarvisRuntime()
+    runtime.grant("principal-2", "jarvis.execute", "offline")
     provider = InMemoryKeyProvider({"offline": b"K" * KEY_SIZE})
-    cipher = AuthenticatedCipher(provider)
-    binding = runtime.configure_offline(cipher=__import__('core.offline_adapters', fromlist=['BoundAuthenticatedCipher']).BoundAuthenticatedCipher(cipher, key_id="offline"), clock=lambda: 100, snapshot_authenticator=lambda snap: True)
+    binding = runtime.configure_offline(cipher=BoundAuthenticatedCipher(AuthenticatedCipher(provider), key_id="offline"), clock=lambda: 100, snapshot_authenticator=lambda snap: True)
     binding.install_snapshot(_snapshot("principal-1"))
     request = Request("do local", "principal-2", "req-3")
     plan = Plan("req-3", (PlanStep("s1", "compute", "local", {}),))
