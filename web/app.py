@@ -5,7 +5,7 @@ import uuid
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
@@ -15,11 +15,7 @@ from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
 
 
-app = FastAPI(
-    title="NORYX7 API",
-    version="0.1.0",
-)
-
+app = FastAPI(title="NORYX7 API", version="0.1.0")
 WEB_DIR = Path(__file__).resolve().parent
 INDEX_FILE = WEB_DIR / "index.html"
 ROBOTS_FILE = WEB_DIR / "robots.txt"
@@ -32,10 +28,8 @@ class ChatRequest(BaseModel):
 @lru_cache(maxsize=1)
 def get_runtime() -> NORYXRuntime:
     api_key = os.environ.get("OPENROUTER_API_KEY")
-
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
-
     adapter = OpenRouterAdapter(api_key=api_key)
     fabric = ModelFabric([adapter], runtime_id=f"api-{uuid.uuid4().hex}")
     return NORYXRuntime(model_fabric=fabric)
@@ -52,21 +46,19 @@ def root():
 def robots():
     if ROBOTS_FILE.is_file():
         return FileResponse(ROBOTS_FILE, media_type="text/plain; charset=utf-8")
-    return PlainTextResponse("User-agent: *\nAllow: /\n")
+    return PlainTextResponse("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
-def sitemap():
-    return Response(
-        content=(
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-            '<url><loc>/</loc></url>'
-            '<url><loc>/health</loc></url>'
-            '</urlset>'
-        ),
-        media_type="application/xml",
+def sitemap(request: Request):
+    base = str(request.base_url).rstrip("/")
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f'<url><loc>{base}/</loc></url>'
+        '</urlset>'
     )
+    return Response(content=content, media_type="application/xml")
 
 
 @app.get("/health")
