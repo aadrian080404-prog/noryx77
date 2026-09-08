@@ -15,7 +15,8 @@ def build_runtime() -> OperationalNORYXRuntime:
         raise RuntimeError("OPENROUTER_API_KEY non configurata")
     adapter = OpenRouterAdapter(model="openrouter/free", api_key=key, timeout_seconds=120.0)
     fabric = ModelFabric([adapter], runtime_id=f"noryx7-operational-{uuid.uuid4().hex}")
-    return OperationalNORYXRuntime(model_fabric=fabric)
+    journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
+    return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
 
 
 def main() -> None:
@@ -24,6 +25,7 @@ def main() -> None:
     for status in runtime.agent_runtime.status():
         print(f"{status.agent_id}: {status.state} ({status.role})")
     print("Primary -> Secondary -> Primary: ENABLED")
+    print("State journal:", os.environ.get("NORYX7_STATE_JOURNAL_PATH") or "in-memory")
     print("Type 'esci' to stop.")
     try:
         while True:
