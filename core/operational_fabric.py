@@ -26,9 +26,7 @@ class OperationalAgentFabric:
         for agent_id in self.available():
             try:
                 agent = self.router.get(agent_id)
-                identity = getattr(agent, "identity", None)
-                trusted = self.router.identity_is_trusted(identity) if identity is not None else False
-                if trusted:
+                if self.router.identity_is_trusted(agent_id) and agent is not None:
                     result.append(agent_id)
             except Exception:
                 continue
