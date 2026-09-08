@@ -73,13 +73,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showError() {
-        binding.errorMessage.visibility = View.VISIBLE
-        binding.retry.visibility = View.VISIBLE
+        binding.errorPanel.visibility = View.VISIBLE
     }
 
     private fun clearError() {
-        binding.errorMessage.visibility = View.GONE
-        binding.retry.visibility = View.GONE
+        binding.errorPanel.visibility = View.GONE
         binding.address.error = null
     }
 

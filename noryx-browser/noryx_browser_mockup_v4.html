@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>NORYX Browser v0.1 — v4</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Space+Grotesk:wght@400;500;600&display=swap');
+  @property --ang { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @property --ang2 { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #000; font-family: 'Space Grotesk', Arial, sans-serif;
+    display: flex; flex-wrap: wrap; gap: 60px; justify-content: center; align-items: flex-start;
+    padding: 70px 40px 110px;
+  }
+  .col { display: flex; flex-direction: column; align-items: center; }
+  .caption {
+    text-align: center; color: #4C5568; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.12em; margin-top: 20px; text-transform: uppercase;
+  }
+  .phone {
+    width: 340px; height: 726px; background: #030308; border-radius: 44px; border: 1px solid #1A1F2B;
+    box-shadow: 0 0 0 8px #050608, 0 50px 100px rgba(0,0,0,0.7);
+    position: relative; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .notch { width: 120px; height: 24px; background: #030308; border-radius: 0 0 18px 18px; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 10; border: 1px solid #1A1F2B; border-top: none; }
+  .statusbar { display: flex; justify-content: space-between; padding: 32px 24px 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #E6ECF5; position: relative; z-index: 5; }
+  .statusbar .icons { display: flex; gap: 8px; color: #7C8698; }
+  .content { flex: 1; position: relative; z-index: 2; overflow: hidden; }
+
+  /* ============ 1. BOOT — ambient blue glow like the museum piece ============ */
+  .ambientglow {
+    position: absolute; inset: -30%; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 340px 420px at 50% 38%, rgba(90,140,255,0.35), transparent 60%),
+                radial-gradient(ellipse 500px 500px at 50% 90%, rgba(30,60,140,0.25), transparent 65%);
+  }
+  .boot { display: flex; flex-direction: column; align-items: center; padding-top: 70px; height: 100%; position: relative; z-index: 2; }
+  .ringstage { width: 250px; height: 250px; perspective: 900px; position: relative; margin-top: 20px; }
+  .ringspin { position: absolute; inset: 0; transform-style: preserve-3d; animation: spin 10s linear infinite; }
+  @keyframes spin { from { transform: rotateX(74deg) rotateZ(0deg); } to { transform: rotateX(74deg) rotateZ(360deg); } }
+  .ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 1px solid #BFE0FF; transform: translate(-50%, -50%); box-shadow: 0 0 20px rgba(191,224,255,0.7); }
+  .r1 { width: 220px; height: 220px; opacity: 0.9; } .r2 { width: 168px; height: 168px; opacity: 0.55; } .r3 { width: 120px; height: 120px; opacity: 0.3; }
+  .core { position: absolute; left: 50%; top: 44%; transform: translate(-50%,-50%); z-index: 5; text-align: center; }
+  .core .wordmark { font-family: 'Fraunces', serif; font-size: 27px; font-weight: 600; color: #F2F5FB; letter-spacing: 0.01em; }
+  .core .wordmark span { color: #BFE0FF; text-shadow: 0 0 22px rgba(191,224,255,1); }
+  .core .tagline { color: #7C8698; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; margin-top: 6px; text-transform: uppercase; }
+  .bootlog { margin-top: 46px; width: 100%; padding: 0 30px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #8FE3B4; line-height: 1.9; min-height: 90px; }
+  .bootlog .dim { color: #5D6779; }
+
+  /* ============ 2. HOME — fanned tab-card stack like ZSearch ============ */
+  .home2 { height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 46px; position: relative; z-index: 2; }
+  .home2wordmark { font-family: 'Fraunces', serif; font-size: 18px; color: #E9EEF7; letter-spacing: 0.01em; }
+  .home2wordmark span { color: #7AC4FF; }
+  .home2tag { color: #4C5568; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.12em; margin-top: 2px; margin-bottom: 30px; }
+  .fanstage { width: 100%; height: 190px; position: relative; perspective: 700px; }
+  .fancard {
+    position: absolute; left: 50%; top: 10px; width: 168px; height: 168px;
+    background: linear-gradient(160deg, #12305C, #0A1830);
+    border: 1px solid rgba(122,196,255,0.4); border-radius: 12px;
+    box-shadow: 0 0 24px rgba(90,150,255,0.25);
+    padding: 12px; display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace; color: #CFE3FF; font-size: 9.5px;
+    transition: transform 0.3s;
+  }
+  .fc1 { transform: translate(-50%, 0) rotate(-11deg) translateX(-58px); z-index: 1; opacity: 0.7; }
+  .fc2 { transform: translate(-50%, -6px) rotate(-3deg) translateX(-14px); z-index: 2; opacity: 0.9; }
+  .fc3 { transform: translate(-50%, -10px) rotate(6deg) translateX(30px); z-index: 3; }
+  .fc4 { transform: translate(-50%, -2px) rotate(14deg) translateX(70px); z-index: 1; opacity: 0.65; }
+  .fancard .dot3 { color: #5D6779; letter-spacing: 2px; }
+  .searchpill2 {
+    width: 100%; margin-top: 26px; border-radius: 24px; padding: 1.4px;
+    background: conic-gradient(from var(--ang), transparent 0deg, #BFE0FF 25deg, #7AC4FF 55deg, transparent 100deg, transparent 360deg);
+    animation: rotate-ang 2.6s linear infinite;
+  }
+  @keyframes rotate-ang { to { --ang: 360deg; } }
+  .searchpill2-inner { background: rgba(6,9,14,0.95); border-radius: 22.6px; padding: 13px 18px; display: flex; align-items: center; gap: 10px; color: #7C8698; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .telemetry2 { margin-top: auto; margin-bottom: 24px; width: 100%; padding: 0 26px; border-top: 1px solid rgba(122,196,255,0.12); padding-top: 12px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: #3A4150; }
+  .telemetry2 .ok { color: #6FE3A0; }
+
+  /* ============ 3. BROWSING — comet border ============ */
+  .addressbar { margin: 12px 16px 0; position: relative; z-index: 3; border-radius: 13px; padding: 1.6px;
+    background: conic-gradient(from var(--ang2), transparent 0deg, #7AC4FF 18deg, #E9F5FF 32deg, #7AC4FF 46deg, transparent 90deg, transparent 360deg);
+    animation: rotate-ang2 2.4s linear infinite; }
+  @keyframes rotate-ang2 { to { --ang2: 360deg; } }
+  .addressbar-inner { background: rgba(6,9,14,0.96); border-radius: 11.4px; display: flex; align-items: center; gap: 9px; padding: 10.5px 12px; }
+  .lock { width: 15px; height: 15px; flex-shrink: 0; color: #7AC4FF; animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { filter: drop-shadow(0 0 3px rgba(122,196,255,0.5)); } 50% { filter: drop-shadow(0 0 10px rgba(122,196,255,1)); } }
+  .url { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #DCE7F5; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .url .scheme { color: #4C5568; }
+  .tabcount { width: 22px; height: 22px; border: 1.4px solid #7AC4FF; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7AC4FF; flex-shrink: 0; }
+  .menudots { display: flex; flex-direction: column; gap: 2.5px; padding: 2px; flex-shrink: 0; }
+  .menudots span { width: 3px; height: 3px; border-radius: 50%; background: #5D6779; }
+  .page { height: 100%; background: #F4F1EA; display: flex; flex-direction: column; }
+  .page-chrome { background: #E9E5DB; padding: 16px 18px 12px; }
+  .page-chrome .h { width: 58%; height: 12px; background: #C9C3B4; border-radius: 3px; margin-bottom: 8px; }
+  .page-chrome .h2 { width: 34%; height: 8px; background: #D6D1C4; border-radius: 3px; }
+  .page-body { flex: 1; padding: 20px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .line { height: 8px; background: #E3DFD3; border-radius: 3px; }
+  .line.w1 { width: 92%; } .line.w2 { width: 78%; } .line.w3 { width: 85%; }
+  .imgblock { height: 108px; background: #DAD5C7; border-radius: 8px; margin: 6px 0 10px; }
+
+  /* ============ 4. SECURITY WARNING — glitch/breach style ============ */
+  .warnscreen { height: 100%; background: #050505; position: relative; z-index: 2; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 30px; }
+  .streaks { position: absolute; inset: 0; opacity: 0.5; }
+  .streaks div { position: absolute; height: 1px; background: rgba(255,70,70,0.5); width: 140%; }
+  .s1 { top: 20%; left: -20%; transform: rotate(18deg); }
+  .s2 { top: 55%; left: -20%; transform: rotate(-12deg); opacity: 0.3; }
+  .s3 { top: 80%; left: -20%; transform: rotate(9deg); opacity: 0.4; }
+  .warnglitch { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, transparent 1px, transparent 3px); mix-blend-mode: overlay; animation: flick 4s steps(2) infinite; }
+  @keyframes flick { 0%,92%,100% { opacity: 1; } 93% { opacity: 0.3; } 94% { opacity: 1; } }
+  .warnicon { width: 54px; height: 54px; color: #FF5252; filter: drop-shadow(0 0 14px rgba(255,82,82,0.7)); z-index: 3; animation: pulse2 1.6s ease-in-out infinite; }
+  @keyframes pulse2 { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .warntitle { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 17px; letter-spacing: 0.04em; color: #FF6B6B; margin-top: 18px; z-index: 3; text-align: center; }
+  .warnsub { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #8A929F; margin-top: 10px; text-align: center; line-height: 1.7; z-index: 3; }
+  .warnsub .red { color: #FF6B6B; }
+  .warnlog { margin-top: 26px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: #5D6779; z-index: 3; line-height: 1.8; }
+  .warnbtn { margin-top: 30px; border: 1px solid rgba(255,82,82,0.5); color: #FF9B9B; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 10px 22px; border-radius: 8px; z-index: 3; background: rgba(255,82,82,0.06); }
+
+  .toolbar { position: relative; z-index: 3; display: flex; justify-content: space-around; align-items: center; padding: 14px 10px 28px; background: rgba(2,2,3,0.9); border-top: 1px solid rgba(122,196,255,0.15); }
+  .toolbar .btn { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; color: #6B7386; }
+  .toolbar .btn.active { color: #7AC4FF; filter: drop-shadow(0 0 5px rgba(122,196,255,0.6)); }
+  .toolbar .btn.tabs { border: 1.6px solid #7AC4FF; border-radius: 8px; font-size: 11px; font-weight: 700; color: #7AC4FF; font-family: 'JetBrains Mono', monospace; box-shadow: 0 0 8px rgba(122,196,255,0.3); }
+</style>
+</head>
+<body>
+
+  <div class="col">
+    <div class="phone">
+      <div class="ambientglow"></div>
+      <div class="notch"></div>
+      <div class="statusbar"><span>09:41</span><div class="icons"><span>SIG</span><span>WIFI</span><span>100%</span></div></div>
+      <div class="content boot">
+        <div class="ringstage">
+          <div class="ringspin"><div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div></div>
+          <div class="core"><div class="wordmark">NORYX<span>7</span></div><div class="tagline">Browser · v0.1</div></div>
+        </div>
+        <div class="bootlog" id="bootlog"></div>
+      </div>
+    </div>
+    <div class="caption">avvio · bagliore ambientale + anello</div>
+  </div>
+
+  <div class="col">
+    <div class="phone">
+      <div class="ambientglow" style="opacity:0.5;"></div>
+      <div class="notch"></div>
+      <div class="statusbar"><span>09:41</span><div class="icons"><span>SIG</span><span>WIFI</span><span>100%</span></div></div>
+      <div class="content home2">
+        <div class="home2wordmark">NORYX<span>7</span></div>
+        <div class="home2tag">le tue schede aperte</div>
+        <div class="fanstage">
+          <div class="fancard fc1"><span>2024 · docs.rs</span><span class="dot3">•••</span></div>
+          <div class="fancard fc2"><span>anthropic.com</span><span class="dot3">•••</span></div>
+          <div class="fancard fc3"><span>github.com/noryx7</span><span class="dot3">•••</span></div>
+          <div class="fancard fc4"><span>wikipedia.org</span><span class="dot3">•••</span></div>
+        </div>
+        <div class="searchpill2">
+          <div class="searchpill2-inner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            cerca_tra_le_tue_schede
+          </div>
+        </div>
+        <div class="telemetry2"><span>schede aperte: <span class="ok">4</span></span><span>tls: <span class="ok">attivo</span></span></div>
+      </div>
+      <div class="toolbar">
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+        <div class="btn active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V9.5z"/></svg></div>
+        <div class="btn tabs">4</div>
+        <div class="btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></div>
+      </div>
+    </div>
+    <div class="caption">tab recenti · ventaglio in prospettiva</div>
+  </div>
+
+  <div class="col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>09:41</span><div class="icons"><span>SIG</span><span>WIFI</span><span>100%</span></div></div>
+      <div class="addressbar">
+        <div class="addressbar-inner">
+          <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+          <div class="url"><span class="scheme">https://</span>noryx7.dev/docs/architecture</div>
+          <div class="tabcount">4</div>
+          <div class="menudots"><span></span><span></span><span></span></div>
+        </div>
+      </div>
+      <div class="content" style="margin-top: 12px;">
+        <div class="page">
+          <div class="page-chrome"><div class="h"></div><div class="h2"></div></div>
+          <div class="page-body"><div class="imgblock"></div><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div><div class="line w1"></div></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="btn active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V9.5z"/></svg></div>
+        <div class="btn tabs">4</div>
+        <div class="btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></div>
+      </div>
+    </div>
+    <div class="caption">navigazione · bordo cometa animato</div>
+  </div>
+
+  <div class="col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="statusbar"><span>09:41</span><div class="icons"><span>SIG</span><span>WIFI</span><span>100%</span></div></div>
+      <div class="content">
+        <div class="warnscreen">
+          <div class="streaks"><div class="s1"></div><div class="s2"></div><div class="s3"></div></div>
+          <div class="warnglitch"></div>
+          <svg class="warnicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2L2 21h20L12 2z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17.5" r="0.8" fill="currentColor"/></svg>
+          <div class="warntitle">connessione non sicura</div>
+          <div class="warnsub">il certificato di <span class="red">noryx7-test.dev</span> non è valido.<br>i dati inviati a questo sito potrebbero essere esposti.</div>
+          <div class="warnlog">&gt; certificate_chain: <span style="color:#FF6B6B">invalid</span><br>&gt; connessione: bloccata</div>
+          <div class="warnbtn">torna alla sicurezza</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="btn active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+        <div class="btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V9.5z"/></svg></div>
+        <div class="btn tabs">4</div>
+        <div class="btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg></div>
+      </div>
+    </div>
+    <div class="caption">avviso sicurezza · glitch da terminale</div>
+  </div>
+
+<script>
+  const log = document.getElementById('bootlog');
+  const seq = [
+    { text: '&gt; inizializzazione ambiente...' },
+    { text: '&gt; tls_handshake: <span style="color:#8FE3B4">ok</span>' },
+    { text: '&gt; javascript_interface: <span class="dim">disabilitata</span>' },
+    { text: '&gt; nessun tracker rilevato' }
+  ];
+  let i = 0;
+  function typeNext() {
+    if (i >= seq.length) { i = 0; log.innerHTML = ''; }
+    const div = document.createElement('div');
+    log.appendChild(div);
+    const full = seq[i].text;
+    let pos = 0;
+    const plain = full.replace(/<[^>]+>/g, '');
+    const iv = setInterval(() => {
+      pos++;
+      div.textContent = plain.slice(0, pos);
+      if (pos >= plain.length) {
+        clearInterval(iv);
+        div.innerHTML = full;
+        i++;
+        setTimeout(typeNext, 500);
+      }
+    }, 28);
+  }
+  typeNext();
+</script>
+</body>
+</html>

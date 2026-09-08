@@ -1,14 +1,225 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-        <Button android:id="@+id/back" android:text="‹" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <Button android:id="@+id/forward" android:text="›" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <EditText android:id="@+id/address" android:hint="URL o ricerca" android:singleLine="true" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"/>
-        <Button android:id="@+id/reload" android:text="↻" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-        <Button android:id="@+id/home" android:text="⌂" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#030308">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#030308">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:gravity="center_vertical"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#E9EEF7"
+                android:textSize="17sp"
+                android:fontFamily="serif"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/securityStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TLS • ATTIVO"
+                android:textColor="#6FE3A0"
+                android:textSize="9sp"
+                android:fontFamily="monospace"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
+            android:layout_marginBottom="10dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:gravity="center_vertical"
+            android:background="#080D16">
+
+            <TextView
+                android:layout_width="22dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="⌕"
+                android:textColor="#7AC4FF"
+                android:textSize="20sp"/>
+
+            <EditText
+                android:id="@+id/address"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="URL o ricerca"
+                android:hintTextColor="#4C5568"
+                android:textColor="#DCE7F5"
+                android:singleLine="true"
+                android:textSize="12sp"
+                android:fontFamily="monospace"/>
+
+            <TextView
+                android:id="@+id/tabcount"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:gravity="center"
+                android:text="1"
+                android:textColor="#7AC4FF"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:background="#0A1424"/>
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:max="100"
+            android:visibility="gone"/>
     </LinearLayout>
-    <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content"/>
-    <TextView android:id="@+id/errorMessage" android:text="Impossibile caricare la pagina." android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content"/>
-    <Button android:id="@+id/retry" android:text="Riprova" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
-    <WebView android:id="@+id/webView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#000000">
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <LinearLayout
+            android:id="@+id/errorPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingStart="30dp"
+            android:paddingEnd="30dp"
+            android:background="#050505"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:gravity="center"
+                android:text="!"
+                android:textColor="#FF5252"
+                android:textSize="36sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"/>
+
+            <TextView
+                android:id="@+id/errorTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="connessione non sicura"
+                android:textColor="#FF6B6B"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"/>
+
+            <TextView
+                android:id="@+id/errorMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:text="Impossibile caricare la pagina."
+                android:textColor="#8A929F"
+                android:textSize="11sp"
+                android:fontFamily="monospace"/>
+
+            <Button
+                android:id="@+id/retry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="26dp"
+                android:text="TORNA ALLA SICUREZZA"
+                android:textColor="#FF9B9B"
+                android:textSize="10sp"
+                android:fontFamily="monospace"
+                android:textAllCaps="false"
+                android:backgroundTint="#160A0A"/>
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="76dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:weightSum="5"
+        android:background="#020203"
+        android:paddingTop="8dp"
+        android:paddingBottom="18dp">
+
+        <Button
+            android:id="@+id/back"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="‹"
+            android:textColor="#6B7386"
+            android:textSize="28sp"
+            android:background="@android:color/transparent"/>
+
+        <Button
+            android:id="@+id/forward"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="›"
+            android:textColor="#6B7386"
+            android:textSize="28sp"
+            android:background="@android:color/transparent"/>
+
+        <Button
+            android:id="@+id/home"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="⌂"
+            android:textColor="#7AC4FF"
+            android:textSize="24sp"
+            android:background="@android:color/transparent"/>
+
+        <Button
+            android:id="@+id/tabs"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:text="1"
+            android:textColor="#7AC4FF"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:backgroundTint="#07101D"/>
+
+        <Button
+            android:id="@+id/reload"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="↻"
+            android:textColor="#6B7386"
+            android:textSize="24sp"
+            android:background="@android:color/transparent"/>
+    </LinearLayout>
+
 </LinearLayout>

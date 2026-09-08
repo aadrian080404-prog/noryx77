@@ -7,6 +7,7 @@ from uuid import uuid4
 from .actions import ActionGate
 from .agents import DeterministicAgent
 from .llm.agent import LLMBackedAgent
+from .llm.self_knowledge import SelfKnowledgeProvider
 from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .crypto import AuthenticatedCipher
@@ -62,6 +63,7 @@ class NORYXRuntime:
                 LLMBackedAgent(
                     model_fabric,
                     verifier=self.verifier,
+                    self_knowledge=SelfKnowledgeProvider(runtime=self),
                     identity=llm_identity,
                 )
             )

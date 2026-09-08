@@ -55,5 +55,12 @@ from .tools import CapabilityRegistry, ToolExecutor
 from .trust_chain import TrustChain, TrustEvidence, channel_binding_digest
 from .user_understanding import SignalKind, UnderstandingConsent, UserContent, UserSignal, UserUnderstandingEngine, UserUnderstandingProfile
 from .verification import VerificationEngine
+from .voice import (
+    CommandSpeechRecognizer,
+    CommandSpeechSynthesizer,
+    VoiceGateway,
+    VoiceInteractionResult,
+    VoiceTransport,
+)
 
 __all__ = [name for name in globals() if not name.startswith("_")]
