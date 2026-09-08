@@ -182,6 +182,23 @@ class HypersynthRuntime:
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
                 self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
                 return {"status":"rejected","phase":"execution","verification":check,"audit":self.audit.snapshot()}
+            if result.get("status") == "rejected" and result.get("verification") is not None:
+                kernel_check = result.get("verification")
+                kernel_results = result.get("results", ())
+                if (
+                    isinstance(kernel_check, VerificationResult)
+                    and kernel_check.reason == "output_limit_exceeded"
+                    and isinstance(kernel_results, tuple)
+                    and kernel_results
+                ):
+                    final_kernel_result = kernel_results[-1]
+                    structured_output = getattr(final_kernel_result, "output", None)
+                    if not self.limits.validate_output_items(structured_output):
+                        check = VerificationResult(False, "limits", "output_item_limit_exceeded")
+                        self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                        result["verification"] = check
+                        result["audit"] = self.audit.snapshot()
+                        return result
             if deadline_exceeded() and result.get("status") == "completed":
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
