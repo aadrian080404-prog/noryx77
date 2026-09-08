@@ -18,7 +18,7 @@ class AgentMission:
     safety_boundary: str
 
 
-NORYX7_FOUNDER: Final[str] = "Adrian"
+NORYX7_FOUNDER: Final[str] = "Adrian Aristodemo"
 NORYX7_MISSION: Final[AgentMission] = AgentMission(
     founder=NORYX7_FOUNDER,
     project="NORYX7",

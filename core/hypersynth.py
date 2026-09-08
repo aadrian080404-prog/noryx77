@@ -112,26 +112,59 @@ class Hypersynth:
         agents = self.router.available()
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
-        for index, step in enumerate(plan.steps):
-            agent_id = (
-                preferred_agent
-                if preferred_agent is not None
-                else agents[index % len(agents)]
+        if preferred_agent is not None and preferred_agent not in agents:
+            return self._reject(
+                "allocation",
+                task,
+                VerificationResult(
+                    False,
+                    "allocation",
+                    "preferred_agent_unavailable",
+                ),
             )
-            if preferred_agent is not None and preferred_agent not in agents:
+
+        ordered_agents = list(agents)
+        if preferred_agent is not None:
+            ordered_agents.remove(preferred_agent)
+            ordered_agents.insert(0, preferred_agent)
+
+        for index, step in enumerate(plan.steps):
+            agent_id = ordered_agents[index % len(ordered_agents)]
+            child = TaskSpec(
+                step.step_id,
+                task.task_type,
+                step.objective,
+                task.input,
+                task.constraints,
+                task.verification_requirements,
+                step.risk_class,
+                task.execution_id,
+            )
+            try:
+                selected, decision = self.supervisor.select(
+                    child,
+                    preferred=agent_id,
+                )
+            except Exception:
                 return self._reject(
                     "allocation",
                     task,
                     VerificationResult(
                         False,
                         "allocation",
-                        "preferred_agent_unavailable",
+                        "agent_selection_failure",
                     ),
                 )
-            child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
-            try: selected, decision = self.supervisor.select(child, preferred=agent_id)
-            except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
-            if not decision.accepted or selected is None: return self._reject("allocation", task, VerificationResult(False, "allocation", decision.reason))
+            if not decision.accepted or selected is None:
+                return self._reject(
+                    "allocation",
+                    task,
+                    VerificationResult(
+                        False,
+                        "allocation",
+                        decision.reason,
+                    ),
+                )
             assignments.append((selected, child, step))
         results = []
         for index, (agent, child, step) in enumerate(assignments):

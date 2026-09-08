@@ -20,7 +20,7 @@ class LLMBackedAgent(Agent):
 
     agent_id = "noryx7-llm"
     role = "primary"
-    creator = "NORYX7"
+    creator = "Adrian Aristodemo"
     purpose = "general reasoning, task execution planning and user assistance"
     capabilities = (
         "reasoning",

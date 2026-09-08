@@ -128,3 +128,13 @@ Backup created during that repair:
 ## Current conclusion
 
 The JARVIS authorization/runtime integration block is VERIFIED. Do not repeatedly re-test or bypass this layer unless a new regression appears. Next work should connect the remaining architectural structures using their real repository contracts and existing tests.
+
+### Frontier native agent mesh
+
+- System identity: `NORYX7`
+- Creator/founder/inviter: `Adrian Aristodemo`
+- Primary agent: `noryx7-llm`
+- Secondary agent: `noryx7-secondary`
+- Agent execution remains behind authorization, ActionGate, Supervisor and verification.
+- HYPERSYNTH allocation rotates across trusted available agents instead of pinning
+  every step to the preferred agent.
