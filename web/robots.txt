@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Sitemap: https://noryx7.onrender.com/sitemap.xml
+Sitemap: /sitemap.xml
