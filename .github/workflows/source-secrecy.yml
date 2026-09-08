@@ -1,0 +1,52 @@
+name: NORYX7 Source Secrecy
+
+on:
+  pull_request:
+  push:
+    branches: [main, architecture-freeze-2026-09-06]
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect committed secrets and private keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}'
+          if git grep -n -I -E "$pattern" -- . ':!.github/workflows/source-secrecy.yml'; then
+            echo 'Potential credential/private-key material detected in tracked source.' >&2
+            exit 1
+          fi
+
+      - name: Detect secret-like filenames
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden=0
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .env|.env.*|*.pem|*.key|*.p12|*.pfx|*.jks|*.keystore|*credentials*.json|*service-account*.json)
+                echo "Forbidden secret-like tracked file: $path" >&2
+                forbidden=1
+                ;;
+            esac
+          done < <(git ls-files -z)
+          exit "$forbidden"
+
+      - name: Verify source-protection boundary exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/SOURCE_PROTECTION.md
+          test -f .github/CODEOWNERS
+          grep -q '@adrianatlas03-coder' .github/CODEOWNERS

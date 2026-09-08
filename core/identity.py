@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import threading
-from typing import Final
+from typing import Callable, Final, TypeVar
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -17,6 +17,7 @@ SIGNATURE_SIZE: Final[int] = 64
 MAX_ID_SIZE: Final[int] = 1024
 MAX_STATEMENT_SIZE: Final[int] = 16 * 1024 * 1024
 _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
+T = TypeVar("T")
 
 
 def _identity_field(value: str) -> bytes:
@@ -100,6 +101,23 @@ class IdentityRegistry:
             return False
         with self._lock:
             return self._keys.get(identity.agent_id) == identity.public_key
+
+    def with_trusted_identity(self, agent_id: str, callback: Callable[[AgentIdentity], T]) -> T:
+        """Run a short verification/commit critical section against one live key.
+
+        Revocation and key replacement cannot interleave with the callback. The
+        callback is intended for bounded cryptographic verification and state
+        commit only; it must not perform external I/O or invoke agent code.
+        """
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("invalid_agent_id")
+        if not callable(callback):
+            raise TypeError("callback must be callable")
+        with self._lock:
+            public_key = self._keys.get(agent_id)
+            if public_key is None:
+                raise PermissionError("agent_identity_not_trusted")
+            return callback(AgentIdentity(agent_id, bytes(public_key)))
 
 
 class AgentIdentityAuthority:

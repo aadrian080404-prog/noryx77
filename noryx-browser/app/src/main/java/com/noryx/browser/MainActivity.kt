@@ -1,0 +1,100 @@
+package com.noryx.browser
+
+import android.content.Intent
+import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import com.noryx.browser.databinding.ActivityMainBinding
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var controller: BrowserController
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        configureWebView()
+        controller = BrowserController(binding.webView)
+        binding.back.setOnClickListener { controller.goBack() }
+        binding.forward.setOnClickListener { controller.goForward() }
+        binding.reload.setOnClickListener { clearError(); controller.reload() }
+        binding.home.setOnClickListener { clearError(); controller.loadHome() }
+        binding.retry.setOnClickListener { clearError(); controller.reload() }
+        configureDebugTestLab()
+        binding.address.setOnEditorActionListener { _, _, _ ->
+            clearError()
+            try {
+                controller.navigateInput(binding.address.text.toString())
+            } catch (error: IllegalArgumentException) {
+                showError()
+            }
+            true
+        }
+        if (savedInstanceState == null) controller.loadHome()
+        updateNavigationState()
+    }
+
+    private fun configureDebugTestLab() {
+        if (!BuildConfig.DEBUG) return
+        val id = resources.getIdentifier("debugTestLab", "id", packageName)
+        if (id == 0) return
+        findViewById<View>(id)?.setOnClickListener {
+            startActivity(Intent(this, Class.forName("com.noryx.browser.testlab.TestLabActivity")))
+        }
+    }
+
+    private fun configureWebView() {
+        binding.webView.settings.javaScriptEnabled = true
+        binding.webView.settings.domStorageEnabled = true
+        binding.webView.settings.allowFileAccess = false
+        binding.webView.settings.allowContentAccess = false
+        binding.webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        binding.webView.webViewClient = NoryxWebViewClient(
+            onNavigationChanged = { state ->
+                runOnUiThread {
+                    binding.address.setText(state.url)
+                    binding.back.isEnabled = state.canGoBack
+                    binding.forward.isEnabled = state.canGoForward
+                }
+            },
+            onError = { runOnUiThread { showError() } },
+        )
+        binding.webView.webChromeClient = NoryxWebChromeClient { p ->
+            binding.progress.progress = p
+            binding.progress.visibility = if (p < 100) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun updateNavigationState() {
+        binding.back.isEnabled = binding.webView.canGoBack()
+        binding.forward.isEnabled = binding.webView.canGoForward()
+        binding.address.setText(binding.webView.url.orEmpty())
+    }
+
+    private fun showError() {
+        binding.errorPanel.visibility = View.VISIBLE
+    }
+
+    private fun clearError() {
+        binding.errorPanel.visibility = View.GONE
+        binding.address.error = null
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        binding.webView.saveState(outState)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        binding.webView.restoreState(savedInstanceState)
+        updateNavigationState()
+    }
+
+    override fun onDestroy() {
+        binding.webView.stopLoading()
+        binding.webView.destroy()
+        super.onDestroy()
+    }
+}

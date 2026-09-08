@@ -2,7 +2,7 @@ name: NORYX7 Foundation Verification
 
 on:
   push:
-    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening"]
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "architecture-freeze-2026-09-06"]
   pull_request:
   workflow_dispatch:
 
@@ -16,8 +16,8 @@ concurrency:
 jobs:
   foundation:
     name: Foundation — compile, tests, verification
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -25,17 +25,27 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      - name: Install security dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.2"
+      - name: Install security and test dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt -r requirements-test.txt
       - name: Verify installed dependency set
         run: python -m pip check
       - name: Compile Python sources
-        run: python -m compileall -q core
-      - name: Run complete test suite
+        run: python -m compileall -q core noryx7_runtime ecosystem jarvis
+      - name: Run complete pytest suite
         shell: bash
         run: |
           set -o pipefail
-          python -m unittest discover -s . -p 'test*.py' -v 2>&1 | tee test-output.txt
+          python -m pytest core noryx7_runtime ecosystem jarvis tests -q 2>&1 | tee test-output.txt
+      - name: Verify NORYX Browser
+        working-directory: noryx-browser
+        run: gradle test assembleDebug --no-daemon
       - name: Publish verification summary
         if: always()
         shell: bash
@@ -47,7 +57,7 @@ jobs:
             echo "Branch: ${GITHUB_REF_NAME}"
             echo "Job status: ${{ job.status }}"
             echo ""
-            echo "### Test output (tail)"
+            echo "### Python test output (tail)"
             echo '```text'
             tail -n 120 test-output.txt 2>/dev/null || true
             echo '```'

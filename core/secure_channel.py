@@ -18,6 +18,7 @@ MAX_FRAME_SIZE: Final[int] = 16 * 1024 * 1024
 MAX_ID_SIZE: Final[int] = 1024
 PROTOCOL_VERSION: Final[int] = 1
 MAX_SEQUENCE: Final[int] = (1 << 64) - 1
+REPLAY_WINDOW: Final[int] = 4096
 _DOMAIN: Final[bytes] = b"noryx7/secure-channel/v1/"
 _IDENTITY_BINDING_DOMAIN: Final[bytes] = b"noryx7/secure-channel/identity-binding/v1/"
 
@@ -60,7 +61,7 @@ class SecureFrame:
 
 
 class SecureChannel:
-    """Symmetric authenticated channel with replay defense and thread-safe sequence state."""
+    """Symmetric authenticated channel with bounded out-of-order replay defense."""
 
     def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str,
                  identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None,
@@ -91,6 +92,7 @@ class SecureChannel:
         self._identity_registry = identity_registry
         self._local_identity, self._peer_identity = local_identity, peer_identity
         self._send_sequence, self._last_received = 0, -1
+        self._received_sequences: set[int] = set()
         self._send_lock = Lock()
         self._receive_lock = Lock()
 
@@ -159,7 +161,9 @@ class SecureChannel:
                 raise ValueError("invalid_secure_frame")
             if frame.sender_id != self._peer_id or frame.session_id != self._session_id:
                 raise ValueError("channel_identity_mismatch")
-            if frame.sequence <= self._last_received:
+            if frame.sequence in self._received_sequences:
+                raise ValueError("replayed_frame")
+            if self._last_received >= 0 and frame.sequence + REPLAY_WINDOW <= self._last_received:
                 raise ValueError("replayed_frame")
             try:
                 expected = self._mac(frame.sender_id, frame.sequence, frame.payload)
@@ -167,7 +171,14 @@ class SecureChannel:
                 raise ValueError("frame_authentication_failed") from exc
             if not compare_digest(expected, frame.mac):
                 raise ValueError("frame_authentication_failed")
-            self._last_received = frame.sequence
+            self._received_sequences.add(frame.sequence)
+            if frame.sequence > self._last_received:
+                self._last_received = frame.sequence
+            floor = self._last_received - REPLAY_WINDOW + 1
+            if floor > 0:
+                self._received_sequences.intersection_update(
+                    sequence for sequence in self._received_sequences if sequence >= floor
+                )
             return bytes(frame.payload)
 
     @property

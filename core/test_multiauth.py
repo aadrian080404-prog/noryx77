@@ -19,6 +19,11 @@ def test_high_risk_action_requires_threshold_and_current_epoch():
     assert not auth.verify(proof, action_id="other", epoch=4)
 
 
+def test_malformed_legacy_proof_fails_closed():
+    auth = ThresholdAuthorizer(required_threshold=2)
+    assert not auth.verify(object(), action_id="delete-root", epoch=4)
+
+
 def test_duplicate_approvers_are_rejected():
     with pytest.raises(ValueError):
         AuthorizationProof("x", ("a", "a"), 2, 1)
@@ -43,9 +48,11 @@ def _authority(threshold=2):
 def test_signed_approvals_bind_to_exact_action_epoch_and_statement():
     auth, private = _authority()
     statement = b"canonical-action-v1"
-    approvals = tuple(sign_approval(p, private[p], action_id="delete-root", epoch=7, action_statement=statement) for p in ("a", "b"))
+    approvals = tuple(
+        sign_approval(p, private[p], action_id="delete-root", epoch=7, action_statement=statement)
+        for p in ("a", "b")
+    )
     proof = SignedAuthorizationProof("delete-root", 7, statement, approvals, 2)
-
     assert auth.verify(proof, action_id="delete-root", epoch=7, action_statement=statement)
     assert not auth.verify(proof, action_id="delete-root", epoch=8, action_statement=statement)
     assert not auth.verify(proof, action_id="delete-root", epoch=7, action_statement=b"different")
@@ -56,14 +63,21 @@ def test_signed_approval_forgery_and_untrusted_key_are_rejected():
     auth, private = _authority()
     statement = b"action"
     valid = sign_approval("a", private["a"], action_id="x", epoch=1, action_statement=statement)
-    forged = SignedApproval("a", private["b"].public_key().public_bytes_raw(), valid.signature)
+    forged = SignedApproval("b", private["b"].public_key().public_bytes_raw(), valid.signature)
     unknown_key = Ed25519PrivateKey.generate()
     unknown = sign_approval("z", unknown_key, action_id="x", epoch=1, action_statement=statement)
-
-    with pytest.raises(ValueError, match="duplicate_approver"):
-        SignedAuthorizationProof("x", 1, statement, (forged, valid), 2)
-    with pytest.raises(ValueError, match="duplicate_approver"):
-        SignedAuthorizationProof("x", 1, statement, (valid, unknown), 2)
+    assert not auth.verify(
+        SignedAuthorizationProof("x", 1, statement, (forged, valid), 2),
+        action_id="x",
+        epoch=1,
+        action_statement=statement,
+    )
+    assert not auth.verify(
+        SignedAuthorizationProof("x", 1, statement, (valid, unknown), 2),
+        action_id="x",
+        epoch=1,
+        action_statement=statement,
+    )
 
 
 def test_revoke_invalidates_future_authorization():
@@ -77,6 +91,6 @@ def test_revoke_invalidates_future_authorization():
 
 def test_signed_proof_rejects_duplicate_approver_ids():
     auth, private = _authority()
-    a = sign_approval("a", private["a"], action_id="x", epoch=1)
+    approval = sign_approval("a", private["a"], action_id="x", epoch=1)
     with pytest.raises(ValueError):
-        SignedAuthorizationProof("x", 1, b"", (a, a), 2)
+        SignedAuthorizationProof("x", 1, b"", (approval, approval), 2)

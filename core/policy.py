@@ -5,7 +5,8 @@ class PolicyEngine:
     """Central authorization boundary; malformed or unknown actions are denied by default."""
 
     ALLOWED_ACTIONS = {
-        "observe", "search", "navigate", "compute", "create", "transform", "store"
+        "observe", "search", "navigate", "compute", "create", "transform", "store",
+        "jarvis_capability",
     }
     HIGH_RISK = {"execute_external", "publish", "financial", "delete_external", "system_change"}
 

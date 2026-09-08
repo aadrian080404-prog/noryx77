@@ -14,6 +14,7 @@ from .reasoning import CrossChecker, HypothesisEngine, InternalSimulator
 from .security import SecurityBoundary
 from .supervisor import AgentSupervisor
 from .metacognition import MetacognitionEngine
+from .recovery import RecoveryController
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ class Hypersynth:
     """Bounded cognitive kernel with one immutable execution identity per run."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
@@ -50,6 +51,8 @@ class Hypersynth:
         self.simulator = simulator or InternalSimulator()
         self.cross_checker = cross_checker or CrossChecker()
         self.metacognition = metacognition or MetacognitionEngine()
+        self.recovery = recovery
+        if self.recovery is not None and not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
     def _reject(self, phase, task, check, **extra):
@@ -66,8 +69,9 @@ class Hypersynth:
         if task.execution_id: return task
         return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
 
-    def run(self, task: TaskSpec, *, deadline_check=None):
+    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None):
         task = self._bind_execution(task)
+        recovery_epoch = self.recovery.epoch if self.recovery is not None else None
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
         try: task_check = self.verifier.verify_task(task)
         except Exception: return self._reject("perception", task, VerificationResult(False, "contract", "task_verification_failure"))
@@ -76,6 +80,9 @@ class Hypersynth:
             return self._reject("perception", task, check)
         timeout = self._deadline_rejection(task, "perception", deadline_check)
         if timeout: return timeout
+        if self.recovery is not None:
+            try: self.recovery.require_normal(expected_epoch=recovery_epoch)
+            except PermissionError as exc: return self._reject("perception", task, VerificationResult(False, "recovery", str(exc)))
         subtasks = self._decompose(task)
         if isinstance(subtasks, dict): return subtasks
         timeout = self._deadline_rejection(task, "context", deadline_check)
@@ -106,7 +113,21 @@ class Hypersynth:
         if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
         for index, step in enumerate(plan.steps):
-            agent_id = agents[index % len(agents)]
+            agent_id = (
+                preferred_agent
+                if preferred_agent is not None
+                else agents[index % len(agents)]
+            )
+            if preferred_agent is not None and preferred_agent not in agents:
+                return self._reject(
+                    "allocation",
+                    task,
+                    VerificationResult(
+                        False,
+                        "allocation",
+                        "preferred_agent_unavailable",
+                    ),
+                )
             child = TaskSpec(step.step_id, task.task_type, step.objective, task.input, task.constraints, task.verification_requirements, step.risk_class, task.execution_id)
             try: selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception: return self._reject("allocation", task, VerificationResult(False, "allocation", "agent_selection_failure"))
@@ -118,9 +139,12 @@ class Hypersynth:
             if timeout: return dict(timeout, results=tuple(results))
             action = ActionSpec("act:" + child.task_id, step.action_type, risk_class=step.risk_class, execution_id=task.execution_id)
             try:
-                decision, result = self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
-                if not decision.allowed:
-                    return self._reject("execution", task, decision.verification, results=tuple(results))
+                operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
+                if self.recovery is not None:
+                    decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
+                else:
+                    decision, result = operation()
+                if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
             except Exception:
                 return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
@@ -132,6 +156,9 @@ class Hypersynth:
             results.append(result)
         timeout = self._deadline_rejection(task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
+        if self.recovery is not None:
+            try: self.recovery.require_normal(expected_epoch=recovery_epoch)
+            except PermissionError as exc: return self._reject("verification", task, VerificationResult(False, "recovery", str(exc)), results=tuple(results))
         cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
         if not cross_check.valid: return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
         if len({r.task_id for r in results}) == 1:
@@ -153,6 +180,9 @@ class Hypersynth:
                 self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=task.task_id, importance=0.5, execution_id=task.execution_id))
             except Exception:
                 return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        if self.recovery is not None:
+            try: self.recovery.require_normal(expected_epoch=recovery_epoch)
+            except PermissionError as exc: return self._reject("metacognition", task, VerificationResult(False, "recovery", str(exc)), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
         return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
 
