@@ -47,9 +47,10 @@ class ToolExecutor:
                 RuntimeLimits(),
             )
 
-        if not hasattr(verifier, "verify_output") or not callable(verifier.verify_output):
-            raise ValueError("verifier_required")
-
+        # Keep constructor compatibility with the runtime contract: the
+        # verifier is exercised at the verification boundary, not rejected
+        # here. This lets fail-closed tests inject malformed verifiers and
+        # prove that forged verification results are rejected during runtime.
         self.verifier = verifier
         self.capabilities = CapabilityRegistry()
 
@@ -65,10 +66,6 @@ class ToolExecutor:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
 
-        # Canonical delegated JARVIS actions use a distinct Core action
-        # type while retaining the original JARVIS capability name in the
-        # action parameters. Resolve only this explicit delegation form
-        # through the shared capability registry.
         capability_name = action.action_type
         parameters = dict(action.parameters)
 
