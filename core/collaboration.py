@@ -129,6 +129,7 @@ class AgentCollaboration:
             raise RuntimeError("critique_output_missing")
         normalized = critique_output.strip()
         first, _, _ = normalized.partition(" ")
+        first = first.rstrip(":").upper()
         if first not in {"APPROVE", "REJECT"}:
             raise RuntimeError("unstructured_critique")
         critique = Critique(
