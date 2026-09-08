@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 
 from core.offline import OfflineExecution, OfflineRuntime, OfflineSnapshot
 from jarvis.core.contracts import ActionResult, Plan, Request
@@ -19,7 +20,7 @@ class JarvisOfflinePolicy:
     def authorize(self, *, principal_id: str, operation: str, offline: bool) -> bool:
         if offline is not True or not principal_id or operation != "jarvis.execute":
             return False
-        return True
+        return self._policy.authorize(principal_id, "jarvis.execute", "offline")
 
 
 class JarvisOfflineVerifier:
@@ -64,7 +65,7 @@ class JarvisOfflineBinding:
             principal_id=request.principal_id,
             operation="jarvis.execute",
             capability="jarvis.execute",
-            payload_digest=__import__("hashlib").sha256(payload).hexdigest(),
+            payload_digest=hashlib.sha256(payload).hexdigest(),
             base_state_version=snapshot_state_version,
         )
 
