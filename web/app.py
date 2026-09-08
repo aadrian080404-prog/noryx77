@@ -32,7 +32,8 @@ def get_runtime() -> OperationalNORYXRuntime:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
     adapter = OpenRouterAdapter(api_key=api_key)
     fabric = ModelFabric([adapter], runtime_id=f"api-{uuid.uuid4().hex}")
-    return OperationalNORYXRuntime(model_fabric=fabric)
+    journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
+    return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
 
 
 @app.get("/", include_in_schema=False)
@@ -63,7 +64,13 @@ def sitemap(request: Request):
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "noryx7"}
+    runtime = get_runtime()
+    statuses = runtime.agent_runtime.status()
+    return {
+        "status": "healthy" if runtime.agent_runtime.online else "degraded",
+        "service": "noryx7",
+        "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
+    }
 
 
 @app.post("/api/chat")
@@ -83,7 +90,9 @@ def chat(request: ChatRequest):
     )
 
     try:
-        result = get_runtime().run_hypersynth(task)
+        runtime = get_runtime()
+        runtime.heartbeat_agents()
+        result = runtime.run_hypersynth(task)
         if not isinstance(result, dict):
             raise RuntimeError("malformed_runtime_result")
         if result.get("status") != "completed":
@@ -104,12 +113,8 @@ def chat(request: ChatRequest):
             "verification": verification.__dict__ if hasattr(verification, "__dict__") else verification,
             "orchestration_stage": result.get("orchestration_stage"),
             "agent_runtime": [
-                {
-                    "agent_id": item.agent_id,
-                    "role": item.role,
-                    "state": item.state,
-                }
-                for item in get_runtime().agent_runtime.status()
+                {"agent_id": item.agent_id, "role": item.role, "state": item.state}
+                for item in runtime.agent_runtime.status()
             ],
         }
     except HTTPException:
