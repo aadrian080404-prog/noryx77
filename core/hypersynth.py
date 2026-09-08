@@ -171,7 +171,15 @@ class Hypersynth:
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": task.input, "constraints": dict(task.constraints)}, risk_class=step.risk_class, execution_id=task.execution_id)
+            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={
+                    "input": task.input,
+                    "constraints": dict(task.constraints),
+                    "task_id": child.task_id,
+                    "task_type": child.task_type,
+                    "verification_requirements": tuple(child.verification_requirements),
+                    "risk_class": child.risk_class,
+                    "execution_id": task.execution_id,
+                }, risk_class=step.risk_class, execution_id=task.execution_id)
             try:
                 capability = self.tool_executor is not None and self.tool_executor.capabilities.resolve(step.action_type) is not None
                 if capability:
