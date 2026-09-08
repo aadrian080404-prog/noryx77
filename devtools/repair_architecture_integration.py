@@ -8,14 +8,19 @@ def patch(path: str, replacements: list[tuple[str, str]]) -> None:
     text = target.read_text(encoding="utf-8")
     original = text
     for old, new in replacements:
+        if new in text:
+            print(f"ALREADY APPLIED: {path}")
+            continue
         count = text.count(old)
         if count != 1:
             raise SystemExit(f"PATCH ABORTED: {path}: expected 1 match, found {count}: {old[:120]!r}")
         text = text.replace(old, new, 1)
+        print(f"PATCHED BLOCK: {path}")
     if text == original:
-        raise SystemExit(f"PATCH ABORTED: {path}: no changes")
+        print(f"NO NEW CHANGES: {path}")
+        return
     target.write_text(text, encoding="utf-8")
-    print(f"PATCHED: {path}")
+    print(f"UPDATED: {path}")
 
 
 patch("core/hypersynth.py", [
