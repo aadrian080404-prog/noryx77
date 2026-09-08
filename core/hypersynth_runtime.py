@@ -28,38 +28,25 @@ class HypersynthRuntime:
         self.clock = clock or time.monotonic
         self.policy = PolicyEngine()
         self.recovery = recovery or RecoveryController()
-        if not isinstance(self.recovery, RecoveryController):
-            raise TypeError("invalid_recovery_controller")
+        if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
         self.identity_registry = getattr(self.router, "identity_registry", None)
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.collaboration = AgentCollaboration(self.verifier)
-        self.tool_executor.capabilities.register(
-            "agent_collaboration",
-            self._execute_agent_collaboration,
-            risk_class="normal",
-        )
+        self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
-            self.verifier,
-            self.router,
-            planner=planner,
-            action_gate=self.action_gate,
-            memory=self.memory,
-            audit=self.audit,
-            max_steps=self.limits.max_actions_per_task,
-            recovery=self.recovery,
-            tool_executor=self.tool_executor,
+            self.verifier, self.router, planner=planner, action_gate=self.action_gate,
+            memory=self.memory, audit=self.audit, max_steps=self.limits.max_actions_per_task,
+            recovery=self.recovery, tool_executor=self.tool_executor,
         )
 
     def _execute_agent_collaboration(self, target, parameters):
         """Run Primary -> Secondary -> Primary inside the canonical tool boundary."""
-        if not isinstance(target, str) or not target.strip():
-            raise ValueError("collaboration_target_required")
-        if not isinstance(parameters, dict):
-            raise TypeError("collaboration_parameters_required")
+        if not isinstance(target, str) or not target.strip(): raise ValueError("collaboration_target_required")
+        if not isinstance(parameters, dict): raise TypeError("collaboration_parameters_required")
         task_id = parameters.get("task_id")
         task_type = parameters.get("task_type", "compute")
         execution_id = parameters.get("execution_id")
@@ -67,35 +54,15 @@ class HypersynthRuntime:
         constraints = parameters.get("constraints", {})
         verification_requirements = parameters.get("verification_requirements", ())
         risk_class = parameters.get("risk_class", "normal")
-        if not all(isinstance(value, str) and value.strip() for value in (task_id, task_type, execution_id)):
-            raise ValueError("collaboration_task_identity_required")
-        if not isinstance(constraints, dict) or not isinstance(verification_requirements, (tuple, list)):
-            raise ValueError("invalid_collaboration_task_contract")
-        task = TaskSpec(
-            task_id,
-            task_type,
-            target,
-            task_input,
-            constraints,
-            tuple(verification_requirements),
-            risk_class,
-            execution_id,
-        )
+        if not all(isinstance(value, str) and value.strip() for value in (task_id, task_type, execution_id)): raise ValueError("collaboration_task_identity_required")
+        if not isinstance(constraints, dict) or not isinstance(verification_requirements, (tuple, list)): raise ValueError("invalid_collaboration_task_contract")
+        task = TaskSpec(task_id, task_type, target, task_input, constraints, tuple(verification_requirements), risk_class, execution_id)
         primary = self.router.get("noryx7-llm")
         secondary = self.router.get("noryx7-secondary")
-        if primary is None or secondary is None:
-            raise RuntimeError("primary_secondary_unavailable")
+        if primary is None or secondary is None: raise RuntimeError("primary_secondary_unavailable")
         reconciliation, check = self.collaboration.run(task, primary, secondary)
-        if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid:
-            raise RuntimeError("collaboration_not_verified")
-        self.audit.record(
-            "agent_collaboration_completed",
-            task_id=task_id,
-            execution_id=execution_id,
-            primary_agent=primary.agent_id,
-            secondary_agent=secondary.agent_id,
-            output_digest=reconciliation.proposal_digest,
-        )
+        if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid: raise RuntimeError("collaboration_not_verified")
+        self.audit.record("agent_collaboration_completed", task_id=task_id, execution_id=execution_id, primary_agent=primary.agent_id, secondary_agent=secondary.agent_id, output_digest=reconciliation.proposal_digest)
         return reconciliation.output
 
     def _principal_binding(self, agent_ids):
@@ -108,8 +75,7 @@ class HypersynthRuntime:
             if registry is None:
                 bindings.append((agent_id, None))
                 continue
-            if not registry.is_trusted(identity):
-                raise PermissionError("agent_identity_untrusted")
+            if not registry.is_trusted(identity): raise PermissionError("agent_identity_untrusted")
             bindings.append((identity.agent_id, hashlib.sha256(identity.public_key).hexdigest()))
         return tuple(bindings)
 
@@ -126,27 +92,22 @@ class HypersynthRuntime:
         recovery_state, recovery_epoch = self.recovery.snapshot()
         self.audit.record("hypersynth_start", task_id=task_id, context_id=getattr(interaction_context, "context_id", None))
 
-        def deadline_exceeded():
-            return self.clock() > deadline
+        def deadline_exceeded(): return self.clock() > deadline
 
         if recovery_state is not RecoveryState.NORMAL:
             check = VerificationResult(False, "recovery", "recovery_state_denies_execution")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="recovery", reason=check.reason)
-            return {"status": "rejected", "phase": "recovery", "verification": check, "audit": self.audit.snapshot()}
-
-        if interaction_context is None:
-            interaction_context = self._default_interaction_context(task)
+            return {"status":"rejected","phase":"recovery","verification":check,"audit":self.audit.snapshot()}
+        if interaction_context is None: interaction_context = self._default_interaction_context(task)
         if not isinstance(interaction_context, InteractionContext):
             check = VerificationResult(False, "context", "interaction_context_required")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="context", reason=check.reason)
-            return {"status": "rejected", "phase": "context", "verification": check, "audit": self.audit.snapshot()}
-        try:
-            interaction_context.as_prompt_context()
+            return {"status":"rejected","phase":"context","verification":check,"audit":self.audit.snapshot()}
+        try: interaction_context.as_prompt_context()
         except (TypeError, ValueError):
             check = VerificationResult(False, "context", "invalid_interaction_context")
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="context", reason=check.reason)
-            return {"status": "rejected", "phase":"context", "verification":check, "audit":self.audit.snapshot()}
-
+            return {"status":"rejected","phase":"context","verification":check,"audit":self.audit.snapshot()}
         try:
             self.recovery.require_normal(expected_epoch=recovery_epoch)
             task_check = self.verifier.verify_task(task)
@@ -172,33 +133,23 @@ class HypersynthRuntime:
             self.audit.record("hypersynth_context_bound", task_id=task_id, context_id=interaction_context.context_id)
             available = self.router.available()
             principal_bindings = self._principal_binding(available) if available else ()
-            if available:
-                self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings), fingerprints=tuple(x[1] for x in principal_bindings))
-            if preferred_agent is None:
-                result = self.kernel.run(task, deadline_check=deadline_exceeded)
-            else:
-                result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent)
+            if available: self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings), fingerprints=tuple(x[1] for x in principal_bindings))
+            result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent) if preferred_agent is not None else self.kernel.run(task, deadline_check=deadline_exceeded)
             if not isinstance(result, dict):
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
                 self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
                 return {"status":"rejected","phase":"execution","verification":check,"audit":self.audit.snapshot()}
-            if result.get("status") == "rejected" and result.get("verification") is not None:
-                kernel_check = result.get("verification")
-                kernel_results = result.get("results", ())
-                if (
-                    isinstance(kernel_check, VerificationResult)
-                    and kernel_check.reason == "output_limit_exceeded"
-                    and isinstance(kernel_results, tuple)
-                    and kernel_results
-                ):
-                    final_kernel_result = kernel_results[-1]
-                    structured_output = getattr(final_kernel_result, "output", None)
-                    if not self.limits.validate_output_items(structured_output):
-                        check = VerificationResult(False, "limits", "output_item_limit_exceeded")
-                        self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                        result["verification"] = check
-                        result["audit"] = self.audit.snapshot()
-                        return result
+            kernel_check = result.get("verification")
+            kernel_results = result.get("results", ())
+            if result.get("status") == "rejected" and isinstance(kernel_check, VerificationResult) and kernel_check.reason == "output_limit_exceeded" and isinstance(kernel_results, (tuple, list)) and kernel_results:
+                final_kernel_result = kernel_results[-1]
+                structured_output = getattr(final_kernel_result, "output", None)
+                if not self.limits.validate_output_items(structured_output):
+                    check = VerificationResult(False, "limits", "output_item_limit_exceeded")
+                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                    result["verification"] = check
+                    result["audit"] = self.audit.snapshot()
+                    return result
             if deadline_exceeded() and result.get("status") == "completed":
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
@@ -220,7 +171,11 @@ class HypersynthRuntime:
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
                 final_output = output[-1].output if output else None
-                if not self.limits.validate_output_items(final_output) or not self.limits.validate_output(final_output):
+                if not self.limits.validate_output_items(final_output):
+                    check = VerificationResult(False, "limits", "output_item_limit_exceeded")
+                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
+                    return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
+                if not self.limits.validate_output(final_output):
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
                     return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
