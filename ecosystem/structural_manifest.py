@@ -6,8 +6,9 @@ from typing import Final
 
 FRONT_REQUIRED_PATHS: Final[dict[str, tuple[str, ...]]] = {
     "jarvis": (
-        "jarvis/core/contracts.py", "jarvis/core/orchestrator.py", "jarvis/core/runtime.py", "jarvis/core/recovery.py",
+        "jarvis/core/contracts.py", "jarvis/core/orchestrator.py", "jarvis/core/runtime.py", "jarvis/core/offline.py", "jarvis/core/recovery.py",
         "jarvis/core/state.py", "jarvis/core/provider.py", "jarvis/core/decomposition.py", "jarvis/security", "jarvis/tools", "jarvis/memory",
+        "tests/test_jarvis_offline.py",
     ),
     "browser": (
         "noryx-browser/settings.gradle.kts", "noryx-browser/build.gradle.kts", "noryx-browser/app/build.gradle.kts",
