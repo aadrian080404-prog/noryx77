@@ -3,6 +3,7 @@ from .orchestrator import JarvisOrchestrator
 from .policy import Policy
 from .recovery import RecoveryController, RecoveryState
 from .state import JarvisState, JarvisStateStore
+from .offline import JarvisOfflineBinding
 from jarvis.security.audit import AuditLog
 from jarvis.tools.registry import CapabilityRegistry
 
@@ -18,6 +19,18 @@ class JarvisRuntime:
         self.recovery = recovery or RecoveryController()
         if not isinstance(self.recovery, RecoveryController):
             raise TypeError("invalid_recovery_controller")
+        self.offline = None
+
+    def configure_offline(self, *, cipher, clock, snapshot_authenticator) -> JarvisOfflineBinding:
+        self.offline = JarvisOfflineBinding.build(
+            policy=self.orchestrator.policy,
+            recovery=self.recovery,
+            state=self.state,
+            cipher=cipher,
+            clock=clock,
+            snapshot_authenticator=snapshot_authenticator,
+        )
+        return self.offline
 
     def grant(self, principal_id: str, capability: str, target: str) -> None:
         if not isinstance(self.orchestrator.policy, Policy):
@@ -36,6 +49,20 @@ class JarvisRuntime:
         expected = tuple(step.step_id for step in plan.steps)
         actual = tuple(result.step_id for result in results)
         return actual == expected and all(result.success is True for result in results)
+
+    def execute_offline(self, *, request: Request, plan: Plan, snapshot_state_version: str, local_execute):
+        if self.offline is None:
+            raise RuntimeError("offline_runtime_not_configured")
+        if not isinstance(snapshot_state_version, str) or not snapshot_state_version.strip():
+            raise ValueError("snapshot_state_version_required")
+        result = self.offline.execute(
+            request=request,
+            plan=plan,
+            local_execute=local_execute,
+            snapshot_state_version=snapshot_state_version,
+        )
+        self.audit.record("offline_execution_committed", request.principal_id, request.request_id)
+        return result
 
     def execute(self, request: Request, plan: Plan):
         if not isinstance(request, Request) or not isinstance(plan, Plan):
