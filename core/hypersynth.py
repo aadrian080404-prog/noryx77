@@ -58,7 +58,12 @@ class Hypersynth:
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
     def _reject(self, phase, task, check, **extra):
         self.audit.record("hypersynth_rejected", task_id=getattr(task, "task_id", None), phase=phase, reason=check.reason, execution_id=getattr(task, "execution_id", ""))
-        result = {"status": "rejected", "phase": phase, "verification": check}; result.update(extra); return result
+        result = {
+            "status": "rejected",
+            "phase": phase,
+            "verification": check,
+            "execution_id": getattr(task, "execution_id", ""),
+        }; result.update(extra); return result
     @staticmethod
     def _accepts_verification(check, stage: str) -> bool: return isinstance(check, VerificationResult) and check.is_well_formed() and check.valid and check.stage == stage
     def _deadline_rejection(self, task, phase, deadline_check):
@@ -187,7 +192,7 @@ class Hypersynth:
                     if self.recovery is not None:
                         def guarded():
                             return operation()
-                        _, capability_result = self.recovery.run_if_normal(guarded, expected_epoch=recovery_epoch)
+                        capability_result = self.recovery.run_if_normal(guarded, expected_epoch=recovery_epoch)
                     else:
                         capability_result = operation()
                     capability_output, capability_check = capability_result
