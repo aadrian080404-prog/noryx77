@@ -3,6 +3,7 @@ import time
 
 from .actions import ActionGate
 from .audit import AuditLog
+from .collaboration import AgentCollaboration
 from .contracts import TaskSpec, VerificationResult
 from .hypersynth import Hypersynth
 from .interaction_context import InteractionContext
@@ -34,6 +35,12 @@ class HypersynthRuntime:
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
+        self.collaboration = AgentCollaboration(self.verifier)
+        self.tool_executor.capabilities.register(
+            "agent_collaboration",
+            self._execute_agent_collaboration,
+            risk_class="normal",
+        )
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
             self.verifier,
@@ -46,6 +53,50 @@ class HypersynthRuntime:
             recovery=self.recovery,
             tool_executor=self.tool_executor,
         )
+
+    def _execute_agent_collaboration(self, target, parameters):
+        """Run Primary -> Secondary -> Primary inside the canonical tool boundary."""
+        if not isinstance(target, str) or not target.strip():
+            raise ValueError("collaboration_target_required")
+        if not isinstance(parameters, dict):
+            raise TypeError("collaboration_parameters_required")
+        task_id = parameters.get("task_id")
+        task_type = parameters.get("task_type", "compute")
+        execution_id = parameters.get("execution_id")
+        task_input = parameters.get("input")
+        constraints = parameters.get("constraints", {})
+        verification_requirements = parameters.get("verification_requirements", ())
+        risk_class = parameters.get("risk_class", "normal")
+        if not all(isinstance(value, str) and value.strip() for value in (task_id, task_type, execution_id)):
+            raise ValueError("collaboration_task_identity_required")
+        if not isinstance(constraints, dict) or not isinstance(verification_requirements, (tuple, list)):
+            raise ValueError("invalid_collaboration_task_contract")
+        task = TaskSpec(
+            task_id,
+            task_type,
+            target,
+            task_input,
+            constraints,
+            tuple(verification_requirements),
+            risk_class,
+            execution_id,
+        )
+        primary = self.router.get("noryx7-llm")
+        secondary = self.router.get("noryx7-secondary")
+        if primary is None or secondary is None:
+            raise RuntimeError("primary_secondary_unavailable")
+        reconciliation, check = self.collaboration.run(task, primary, secondary)
+        if not isinstance(check, VerificationResult) or not check.is_well_formed() or not check.valid:
+            raise RuntimeError("collaboration_not_verified")
+        self.audit.record(
+            "agent_collaboration_completed",
+            task_id=task_id,
+            execution_id=execution_id,
+            primary_agent=primary.agent_id,
+            secondary_agent=secondary.agent_id,
+            output_digest=reconciliation.proposal_digest,
+        )
+        return reconciliation.output
 
     def _principal_binding(self, agent_ids):
         """Bind registered identities when a registry is installed; standalone routers have no commit authority."""
@@ -68,13 +119,7 @@ class HypersynthRuntime:
         context_id = hashlib.sha256(f"runtime:{getattr(task, 'task_id', '')}".encode("utf-8")).hexdigest()
         return InteractionContext(profile_id="runtime", signals=(), context_id=context_id)
 
-    def run(
-        self,
-        task: TaskSpec,
-        *,
-        interaction_context: InteractionContext | None = None,
-        preferred_agent=None,
-    ):
+    def run(self, task: TaskSpec, *, interaction_context: InteractionContext | None = None, preferred_agent=None):
         task_id = getattr(task, "task_id", None)
         started = self.clock()
         deadline = started + self.limits.max_task_seconds
@@ -108,111 +153,67 @@ class HypersynthRuntime:
             if not isinstance(task_check, VerificationResult) or not task_check.is_well_formed():
                 check = VerificationResult(False, "contract", "invalid_task_verification")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
-                return {
-                    "status": "rejected",
-                    "phase": "perception",
-                    "verification": check,
-                    "execution_id": getattr(task, "execution_id", None),
-                    "audit": self.audit.snapshot(),
-                }
+                return {"status":"rejected","phase":"perception","verification":check,"execution_id":getattr(task,"execution_id",None),"audit":self.audit.snapshot()}
             if not task_check.valid:
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=task_check.reason)
-                return {
-                    "status": "rejected",
-                    "phase": "perception",
-                    "verification": task_check,
-                    "execution_id": getattr(task, "execution_id", None),
-                    "audit": self.audit.snapshot(),
-                }
+                return {"status":"rejected","phase":"perception","verification":task_check,"execution_id":getattr(task,"execution_id",None),"audit":self.audit.snapshot()}
             if deadline_exceeded():
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
-                return {
-                    "status": "rejected",
-                    "phase": "perception",
-                    "verification": check,
-                    "execution_id": getattr(task, "execution_id", None),
-                    "audit": self.audit.snapshot(),
-                }
+                return {"status":"rejected","phase":"perception","verification":check,"execution_id":getattr(task,"execution_id",None),"audit":self.audit.snapshot()}
             if not self.limits.validate_input(task.input):
                 check = VerificationResult(False, "limits", "input_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
-                return {
-                    "status": "rejected",
-                    "phase": "perception",
-                    "verification": check,
-                    "execution_id": getattr(task, "execution_id", None),
-                    "audit": self.audit.snapshot(),
-                }
+                return {"status":"rejected","phase":"perception","verification":check,"execution_id":getattr(task,"execution_id",None),"audit":self.audit.snapshot()}
             if not self.limits.validate_input(task.objective):
                 check = VerificationResult(False, "limits", "objective_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="perception", reason=check.reason)
-                return {
-                    "status": "rejected",
-                    "phase": "perception",
-                    "verification": check,
-                    "execution_id": getattr(task, "execution_id", None),
-                    "audit": self.audit.snapshot(),
-                }
+                return {"status":"rejected","phase":"perception","verification":check,"execution_id":getattr(task,"execution_id",None),"audit":self.audit.snapshot()}
             self.audit.record("hypersynth_context_bound", task_id=task_id, context_id=interaction_context.context_id)
             available = self.router.available()
             principal_bindings = self._principal_binding(available) if available else ()
             if available:
-                self.audit.record("hypersynth_identity_bound", task_id=task_id,
-                                  principals=tuple(x[0] for x in principal_bindings),
-                                  fingerprints=tuple(x[1] for x in principal_bindings))
+                self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings), fingerprints=tuple(x[1] for x in principal_bindings))
             if preferred_agent is None:
-                result = self.kernel.run(
-                    task,
-                    deadline_check=deadline_exceeded,
-                )
+                result = self.kernel.run(task, deadline_check=deadline_exceeded)
             else:
-                result = self.kernel.run(
-                    task,
-                    deadline_check=deadline_exceeded,
-                    preferred_agent=preferred_agent,
-                )
+                result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent)
             if not isinstance(result, dict):
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
                 self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
-                return {"status": "rejected", "phase": "execution", "verification": check, "audit": self.audit.snapshot()}
+                return {"status":"rejected","phase":"execution","verification":check,"audit":self.audit.snapshot()}
             if deadline_exceeded() and result.get("status") == "completed":
                 check = VerificationResult(False, "limits", "task_time_limit_exceeded")
                 self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
             self.recovery.require_normal(expected_epoch=recovery_epoch)
             if result.get("status") == "completed":
                 result_check = result.get("verification")
-                if (not isinstance(result_check, VerificationResult) or not result_check.is_well_formed()
-                        or not result_check.valid or result_check.stage != "hypersynth_result"):
+                if (not isinstance(result_check, VerificationResult) or not result_check.is_well_formed() or not result_check.valid or result_check.stage != "hypersynth_result"):
                     check = VerificationResult(False, "runtime", "invalid_kernel_verification")
                     self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
                 output = result.get("results", ())
                 if not isinstance(output, tuple):
                     check = VerificationResult(False, "runtime", "malformed_kernel_results")
                     self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
                 if not self.limits.validate_count(len(output), self.limits.max_output_items):
                     check = VerificationResult(False, "limits", "output_item_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
                 final_output = output[-1].output if output else None
-                if not self.limits.validate_output_items(final_output):
-                    check = VerificationResult(False, "limits", "output_item_limit_exceeded")
-                    self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
-                if not self.limits.validate_output(final_output):
+                if not self.limits.validate_output_items(final_output) or not self.limits.validate_output(final_output):
                     check = VerificationResult(False, "limits", "output_limit_exceeded")
                     self.audit.record("hypersynth_rejected", task_id=task_id, phase="verification", reason=check.reason)
-                    return {"status": "rejected", "phase": "verification", "verification": check, "audit": self.audit.snapshot()}
+                    return {"status":"rejected","phase":"verification","verification":check,"audit":self.audit.snapshot()}
         except PermissionError as exc:
             check = VerificationResult(False, "identity", str(exc))
             self.audit.record("hypersynth_rejected", task_id=task_id, phase="identity", reason=check.reason)
-            return {"status": "rejected", "phase": "identity", "verification": check, "audit": self.audit.snapshot()}
+            return {"status":"rejected","phase":"identity","verification":check,"audit":self.audit.snapshot()}
         except Exception:
             check = VerificationResult(False, "runtime", "controlled_runtime_failure")
             self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)
-            return {"status": "rejected", "phase": "execution", "reason": check.reason, "verification": check, "audit": self.audit.snapshot()}
+            return {"status":"rejected","phase":"execution","reason":check.reason,"verification":check,"audit":self.audit.snapshot()}
         result["audit"] = self.audit.snapshot()
         return result
