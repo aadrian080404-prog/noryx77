@@ -90,14 +90,16 @@ def run_self_test() -> int:
             chess = runtime.capability_registry.resolve("chess_analyze")
             if chess is None:
                 raise AssertionError("chess_capability_not_registered")
+            chess_result = chess("start", {"depth": 1})
+            if chess_result.get("status") != "completed" or not chess_result.get("legal_moves"):
+                raise AssertionError("chess_capability_not_executing")
 
-            unconfigured_provider = ExternalProviderCapability(
-                "payments",
-                endpoint_env="NORYX7_PAYMENTS_ENDPOINT",
-                token_env="NORYX7_PAYMENTS_TOKEN",
-            )
+            unconfigured_provider = ExternalProviderCapability("payments", "NORYX7_PAYMENTS")
             try:
-                unconfigured_provider.execute({"operation": "self-test"}, execution_id=result["execution_id"])
+                unconfigured_provider(
+                    "self-test",
+                    {"operation": "self-test", "execution_id": result["execution_id"]},
+                )
             except Exception as exc:
                 if type(exc).__name__ != "CapabilityUnavailable":
                     raise AssertionError(f"provider_fail_closed_wrong_error:{type(exc).__name__}")
@@ -112,7 +114,7 @@ def run_self_test() -> int:
             print("HYPERSYNTH: EXECUTED")
             print("Primary -> Secondary -> Primary: VERIFIED")
             print("State journal: PERSIST + RECOVER PASS")
-            print("Chess capability: REGISTERED")
+            print("Chess capability: EXECUTED")
             print("High-risk provider without credentials: FAIL-CLOSED")
             return 0
         finally:
