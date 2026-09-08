@@ -9,6 +9,8 @@ def replace(path: str, old: str, new: str) -> None:
     target = ROOT / path
     text = target.read_text(encoding="utf-8")
     count = text.count(old)
+    if count == 0 and new in text:
+        return
     if count != 1:
         raise SystemExit(f"WIRE_ABORTED: expected one anchor in {path}, got {count}: {old[:120]!r}")
     target.write_text(text.replace(old, new, 1), encoding="utf-8")
