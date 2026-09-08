@@ -1,17 +1,21 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def patch(path, replacements):
+def patch(path: str, replacements: list[tuple[str, str]]) -> None:
     target = ROOT / path
     text = target.read_text(encoding="utf-8")
     original = text
     for old, new in replacements:
         count = text.count(old)
         if count != 1:
-            raise SystemExit(f"PATCH ABORTED: {path}: expected 1 match, found {count}: {old[:100]!r}")
-        text = text.replace(old, new)
+            raise SystemExit(
+                f"PATCH ABORTED: {path}: expected 1 match, found {count}: {old[:100]!r}"
+            )
+        text = text.replace(old, new, 1)
     if text == original:
         raise SystemExit(f"PATCH ABORTED: {path}: no changes")
     target.write_text(text, encoding="utf-8")
