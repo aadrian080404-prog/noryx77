@@ -15,18 +15,27 @@ class Plan:
 
 class Planner:
     """Deterministic bounded planner; model planners plug in behind this contract."""
-    VALID_ACTION_TYPES = {"compute", "web_research", "chess_analyze", "payments", "flights", "insurance"}
+    VALID_ACTION_TYPES = {"compute", "agent_collaboration", "web_research", "chess_analyze", "payments", "flights", "insurance"}
     VALID_RISKS = {"normal", "sensitive", "high"}
 
-    def __init__(self, max_steps: int = 8):
+    def __init__(self, max_steps: int = 8, *, collaboration_enabled: bool = False):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
+        if not isinstance(collaboration_enabled, bool):
+            raise ValueError("collaboration_enabled must be bool")
         self.max_steps = max_steps
+        self.collaboration_enabled = collaboration_enabled
 
     def build(self, task: TaskSpec) -> Plan:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise TypeError("task must be a well-formed TaskSpec")
-        action_type = task.task_type if task.task_type in self.VALID_ACTION_TYPES else "compute"
+        frontier = {"web_research", "chess_analyze", "payments", "flights", "insurance"}
+        if task.task_type in frontier:
+            action_type = task.task_type
+        elif self.collaboration_enabled:
+            action_type = "agent_collaboration"
+        else:
+            action_type = "compute"
         step = PlanStep(f"{task.task_id}:0", task.objective, action_type, task.risk_class)
         return Plan(task.task_id, (step,))
 
