@@ -1,7 +1,7 @@
 # NORYX7 — Current Operational State
 
 Date: 2026-09-09
-Branch: `integration-wave-8-model-fabric-authorization-2026-09-09` (Wave 8 prepared from main)
+Branch: `integration-wave-8-model-fabric-authorization-2026-09-09` (Wave 8 + routing authorization hardening)
 
 ## Mission
 
@@ -60,6 +60,16 @@ The model dispatch boundary is now connected to the canonical system fabric. `Op
 
 The existing `ModelFabric` runtime binding, request digest, result integrity/MAC checks and model capability filtering remain authoritative. Wave 8 adds the canonical cross-component authorization boundary without replacing those checks.
 
+### Routing authorization hardening — Wave 8 branch continuation
+
+`ResourceRouter` now accepts the canonical system fabric as an optional authorization boundary. Once attached, every protected route re-validates the selected agent's trusted identity and explicit capability before returning the agent. Routing metadata cannot grant authority; the requested capability is checked against the already-bound canonical agent session.
+
+`OperationalNORYXRuntime` attaches its single `CanonicalSystemFabric` to the router before operational dispatch and binds the deterministic agent for `execute`, while primary/secondary agents receive `execute` plus `model:execute`. This closes the previous gap where identity-aware routing and canonical authorization existed as separate controls.
+
+`ResourceRouter.route_provenance()` exposes only agent ID, capability and a public-key fingerprint digest, allowing routing provenance to be recorded without raw keys or credentials.
+
+Focused routing tests cover denied capabilities, key isolation, digest-only provenance and attempted capability escalation through route metadata.
+
 ## Verified historically
 
 ### JARVIS vertical execution
@@ -78,7 +88,7 @@ A complete test using an explicit policy grant succeeded historically:
 - state commit: PASS
 - final state: `committed`
 
-These results are historical and are not a fresh verification of the current Wave 8 branch.
+These results are historical and are not a fresh verification of the current integration branch.
 
 ### Policy security
 
@@ -114,6 +124,7 @@ If a protected path rejects an operation, first determine whether the rejection 
 - `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
 - `noryx7_runtime/model_fabric.py` owns provider-neutral model routing, runtime binding, request/result integrity and model capability filtering.
 - `core/llm/model_fabric_bridge.py` is the canonical LLM-to-ModelFabric dispatch boundary.
+- `core/router.py` is now capable of enforcing canonical agent authorization at route selection.
 - Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
 
 ## Known-good integration commits
@@ -125,7 +136,7 @@ If a protected path rejects an operation, first determine whether the rejection 
 
 ## Current verification status
 
-Wave 8 implementation is prepared on the integration branch. Focused Wave 8 tests have been added but have not been executed in this environment, so no fresh PASS claim is made. Live Render verification is also not available from the current environment.
+Wave 8 implementation plus routing authorization hardening is present on the integration branch. Focused Wave 8/routing tests have been added but have not been executed in this environment, so no fresh PASS claim is made. Live Render verification is also not available from the current environment.
 
 ## Current rule
 
