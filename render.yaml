@@ -9,3 +9,7 @@ services:
     envVars:
       - key: OPENROUTER_API_KEY
         sync: false
+      - key: NORYX_GATEWAY_BOOTSTRAP_TOKEN
+        sync: false
+      - key: NORYX_GATEWAY_SIGNING_SECRET
+        sync: false
