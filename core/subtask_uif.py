@@ -31,6 +31,12 @@ class SubtaskRouteSet:
     routes: tuple[SubtaskRoute, ...]
     verification: VerificationResult
 
+    def route_for(self, subtask_id: str) -> SubtaskRoute | None:
+        for item in self.routes:
+            if item.subtask_id == subtask_id:
+                return item
+        return None
+
 
 class SubtaskUIFRouter:
     """Route each bounded subtask independently; routing never grants authority."""
@@ -87,3 +93,82 @@ class SubtaskUIFRouter:
             }
         )
         return constraints
+
+    @staticmethod
+    def aggregate_verification(
+        task: TaskSpec,
+        routes: SubtaskRouteSet,
+        results: tuple[Any, ...],
+    ) -> VerificationResult:
+        """Fail closed unless every routed subtask has one verified result."""
+        from .contracts import AgentResult
+
+        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+            return VerificationResult(False, "subtask_aggregate", "invalid_task")
+
+        if (
+            not isinstance(routes, SubtaskRouteSet)
+            or routes.task_id != task.task_id
+            or not routes.verification.valid
+        ):
+            return VerificationResult(
+                False,
+                "subtask_aggregate",
+                "subtask_routes_not_verified",
+            )
+
+        if not isinstance(results, tuple) or len(results) != len(routes.routes):
+            return VerificationResult(
+                False,
+                "subtask_aggregate",
+                "subtask_result_count_mismatch",
+            )
+
+        expected = tuple(item.subtask_id for item in routes.routes)
+        actual = tuple(getattr(item, "task_id", "") for item in results)
+
+        if actual != expected:
+            return VerificationResult(
+                False,
+                "subtask_aggregate",
+                "subtask_result_order_mismatch",
+            )
+
+        for result in results:
+            if not isinstance(result, AgentResult):
+                return VerificationResult(
+                    False,
+                    "subtask_aggregate",
+                    "subtask_result_invalid",
+                )
+
+            if result.execution_id != task.execution_id:
+                return VerificationResult(
+                    False,
+                    "subtask_aggregate",
+                    "subtask_execution_identity_mismatch",
+                )
+
+            if result.status != "completed":
+                return VerificationResult(
+                    False,
+                    "subtask_aggregate",
+                    "subtask_not_completed",
+                )
+
+            if (
+                not isinstance(result.verification, VerificationResult)
+                or not result.verification.is_well_formed()
+                or not result.verification.valid
+            ):
+                return VerificationResult(
+                    False,
+                    "subtask_aggregate",
+                    "subtask_verification_failed",
+                )
+
+        return VerificationResult(
+            True,
+            "subtask_aggregate",
+            "subtask_aggregate_verified",
+        )
