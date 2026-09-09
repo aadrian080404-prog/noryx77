@@ -4,6 +4,7 @@ import os
 import uuid
 
 from core.contracts import TaskSpec
+from core.limits import RuntimeLimits
 from core.operational_runtime import OperationalNORYXRuntime
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
@@ -16,7 +17,13 @@ def build_runtime() -> OperationalNORYXRuntime:
     adapter = OpenRouterAdapter(model="openrouter/free", api_key=key, timeout_seconds=120.0)
     fabric = ModelFabric([adapter], runtime_id=f"noryx7-operational-{uuid.uuid4().hex}")
     journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
-    return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
+    task_seconds = float(os.environ.get("NORYX7_MAX_TASK_SECONDS", "120.0"))
+    limits = RuntimeLimits(max_task_seconds=task_seconds)
+    return OperationalNORYXRuntime(
+        limits=limits,
+        model_fabric=fabric,
+        state_journal_path=journal_path,
+    )
 
 
 def main() -> None:
