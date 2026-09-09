@@ -7,6 +7,7 @@ from .jarvis_runtime_bridge import JarvisRuntimeBridge
 from .operational_fabric import OperationalAgentFabric
 from .planning import Planner
 from .runtime import NORYXRuntime
+from .system_fabric import CanonicalSystemFabric
 from noryx7_runtime.engine import RuntimeEngine
 
 
@@ -19,6 +20,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         if model_fabric is None:
             raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric)
+        self.system_fabric = CanonicalSystemFabric()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
         self._jarvis_bridge: JarvisRuntimeBridge | None = None
@@ -26,8 +28,6 @@ class OperationalNORYXRuntime(NORYXRuntime):
             max_steps=min(self.limits.max_actions_per_task, 2),
             collaboration_enabled=True,
         )
-        # HYPERSYNTH allocation/execution now traverses the same operational fabric
-        # (supervisor -> trusted router -> live agent) rather than a parallel selector.
         self.hypersynth.kernel.supervisor = self.agent_fabric
         statuses = self.agent_runtime.start()
         status_ids = {item.agent_id for item in statuses}
@@ -65,12 +65,14 @@ class OperationalNORYXRuntime(NORYXRuntime):
             authorization=authorization,
             principal=principal,
             policy=policy,
+            system_fabric=self.system_fabric,
         )
         self._jarvis_bridge = bridge
         self.audit.record(
             "jarvis_runtime_bridge_bound",
             runtime_id=runtime_engine.runtime_id,
             principal_id=principal.agent_id,
+            system_fabric="canonical",
         )
         return bridge
 
