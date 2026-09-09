@@ -3,14 +3,14 @@ from __future__ import annotations
 from uuid import uuid4
 
 from core.contracts import TaskSpec
-from core.runtime import NORYXRuntime
+from core.operational_runtime import OperationalNORYXRuntime
 
 
 class RuntimeAdapter:
-    """Translate an authenticated browser request into the canonical runtime."""
+    """Translate an authenticated browser request into the canonical operational runtime."""
 
-    def __init__(self, runtime: NORYXRuntime | None = None):
-        self.runtime = runtime or NORYXRuntime()
+    def __init__(self, runtime: OperationalNORYXRuntime | None = None):
+        self.runtime = runtime or OperationalNORYXRuntime()
 
     def execute(
         self,
@@ -21,15 +21,12 @@ class RuntimeAdapter:
     ) -> dict:
         if not isinstance(client_id, str) or not client_id.strip():
             raise PermissionError("client_identity_required")
-
         if not isinstance(text, str) or not text.strip():
             raise ValueError("browser_input_required")
-
         if len(text.encode("utf-8")) > 8192:
             raise ValueError("browser_input_too_large")
 
         execution_id = execution_id or uuid4().hex
-
         task = TaskSpec(
             task_id="browser:" + execution_id,
             task_type="browser_request",
@@ -44,27 +41,19 @@ class RuntimeAdapter:
             execution_id=execution_id,
         )
 
+        self.runtime.heartbeat_agents()
         result = self.runtime.run_hypersynth(task)
-
         if not isinstance(result, dict):
             raise RuntimeError("runtime_result_malformed")
-
         if result.get("status") != "completed":
             verification = result.get("verification")
-            reason = getattr(
-                verification,
-                "reason",
-                None,
-            ) or result.get("reason") or "runtime_rejected"
+            reason = getattr(verification, "reason", None) or result.get("reason") or "runtime_rejected"
             raise PermissionError(str(reason))
 
         answer = result.get("result")
-
         if not isinstance(answer, str) or not answer.strip():
             raise RuntimeError("runtime_answer_invalid")
-
         verification = result.get("verification")
-
         if not getattr(verification, "valid", False):
             raise PermissionError("runtime_result_unverified")
 
