@@ -13,9 +13,7 @@ def patch(path: str, replacements: list[tuple[str, str]]) -> None:
             continue
         count = text.count(old)
         if count != 1:
-            raise SystemExit(
-                f"PATCH ABORTED: {path}: expected 1 match, found {count}: {old[:180]!r}"
-            )
+            raise SystemExit(f"PATCH ABORTED: {path}: expected 1 match, found {count}: {old[:180]!r}")
         text = text.replace(old, new, 1)
         print(f"PATCHED BLOCK: {path}")
     if text == original:
@@ -27,14 +25,30 @@ def patch(path: str, replacements: list[tuple[str, str]]) -> None:
 
 patch("core/agents.py", [
     (
-        "    def run(self, task: TaskSpec) -> AgentResult:\n        raise NotImplementedError\n",
-        "    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:\n        raise NotImplementedError\n",
+        "class Agent:\n    agent_id = \"base\"\n\n    def run(self, task: TaskSpec) -> AgentResult:\n",
+        "class Agent:\n    agent_id = \"base\"\n\n    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:\n",
     ),
     (
-        "    def run(self, task: TaskSpec) -> AgentResult:\n        check = self.verifier.verify_task(task)\n",
-        "    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:\n        check = self.verifier.verify_task(task)\n",
+        "class DeterministicAgent(Agent):\n    agent_id = \"deterministic\"\n\n    def __init__(self, verifier: VerificationEngine | None = None, identity: AgentIdentity | None = None):\n",
+        "class DeterministicAgent(Agent):\n    agent_id = \"deterministic\"\n\n    def __init__(self, verifier: VerificationEngine | None = None, identity: AgentIdentity | None = None):\n",
     ),
 ])
+
+# The deterministic agent's signature is patched independently because the base
+# signature has the same method prefix.
+path = ROOT / "core/agents.py"
+text = path.read_text(encoding="utf-8")
+old = "    def run(self, task: TaskSpec) -> AgentResult:\n        check = self.verifier.verify_task(task)\n"
+new = "    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:\n        check = self.verifier.verify_task(task)\n"
+if new not in text:
+    if text.count(old) != 1:
+        raise SystemExit(f"PATCH ABORTED: core/agents.py: deterministic run signature match={text.count(old)}")
+    text = text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+    print("PATCHED BLOCK: core/agents.py")
+else:
+    print("ALREADY APPLIED: core/agents.py deterministic run signature")
+
 
 patch("core/llm/agent.py", [
     (
@@ -59,14 +73,6 @@ patch("core/hypersynth.py", [
     (
         "    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None):\n",
         "    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None, interaction_context=None):\n",
-    ),
-    (
-        "                else:\n                        decision, result = operation()\n",
-        "                else:\n                        decision, result = operation()\n",
-    ),
-    (
-        "                    if self.recovery is not None:\n                        decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)\n                    else:\n                        decision, result = operation()\n",
-        "                    if self.recovery is not None:\n                        decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)\n                    else:\n                        decision, result = operation()\n",
     ),
     (
         "                    operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)\n",
