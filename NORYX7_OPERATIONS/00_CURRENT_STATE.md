@@ -1,11 +1,11 @@
 # NORYX7 — Current Operational State
 
 Date: 2026-09-09
-Branch: `integration-wave-8-model-fabric-authorization-2026-09-09` (Wave 8 + routing authorization hardening)
+Branch: `integration-wave-9-runtime-system-fabric-2026-09-09` (Wave 9 runtime/HYPERSYNTH system-fabric binding)
 
 ## Mission
 
-NORYX7 is being integrated as a distributed agentic AI architecture, not as a simple chatbot. The architecture separates intelligence, planning, policy, authorization, capabilities, execution, verification, state, recovery and memory.
+NORYX7 is an existing implementation being integrated, verified and hardened as a distributed agentic AI architecture, not as a simple chatbot. The architecture separates intelligence, planning, policy, authorization, capabilities, execution, verification, state, recovery and memory.
 
 ## Canonical architecture
 
@@ -70,6 +70,14 @@ The existing `ModelFabric` runtime binding, request digest, result integrity/MAC
 
 Focused routing tests cover denied capabilities, key isolation, digest-only provenance and attempted capability escalation through route metadata.
 
+### Wave 9 — Runtime → HYPERSYNTH canonical fabric binding
+
+The operational runtime now explicitly exposes the same `CanonicalSystemFabric` instance to its HYPERSYNTH runtime facade after constructing the operational fabric. The HYPERSYNTH router and operational runtime therefore share one canonical authorization boundary rather than parallel fabric instances.
+
+This is additive: HYPERSYNTH retains its local `PolicyEngine`, `SecurityBoundary`, `ActionGate`, verification and recovery controls. The canonical fabric remains an integration boundary and does not replace those local safety mechanisms.
+
+An audit event, `hypersynth_system_fabric_bound`, records the binding without persisting raw credentials or payloads. The next integration target is to make HYPERSYNTH lifecycle/provenance admission consume this shared boundary directly, without creating a second authority path.
+
 ## Verified historically
 
 ### JARVIS vertical execution
@@ -120,11 +128,12 @@ If a protected path rejects an operation, first determine whether the rejection 
 - RuntimeEngine receives the actual action payload from the bridge, not the JARVIS `ActionResult` wrapper.
 - JARVIS StateStore requires `results` as a list at commit time.
 - RecoveryController is implemented in `core/recovery.py`.
-- `core/system_fabric.py` owns the cross-component system-fabric boundary and now exposes explicit agent identity binding/authorization.
+- `core/system_fabric.py` owns the cross-component system-fabric boundary and explicit agent identity binding/authorization.
 - `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
 - `noryx7_runtime/model_fabric.py` owns provider-neutral model routing, runtime binding, request/result integrity and model capability filtering.
 - `core/llm/model_fabric_bridge.py` is the canonical LLM-to-ModelFabric dispatch boundary.
-- `core/router.py` is now capable of enforcing canonical agent authorization at route selection.
+- `core/router.py` enforces canonical agent authorization at protected route selection when attached to the system fabric.
+- `core/operational_runtime.py` exposes the canonical fabric to HYPERSYNTH and uses the same instance for operational routing.
 - Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
 
 ## Known-good integration commits
@@ -136,7 +145,7 @@ If a protected path rejects an operation, first determine whether the rejection 
 
 ## Current verification status
 
-Wave 8 implementation plus routing authorization hardening is present on the integration branch. Focused Wave 8/routing tests have been added but have not been executed in this environment, so no fresh PASS claim is made. Live Render verification is also not available from the current environment.
+Wave 9 runtime/HYPERSYNTH fabric binding is implemented on `integration-wave-9-runtime-system-fabric-2026-09-09`. The change has not been executed in this environment, so no fresh PASS claim is made. Live Render verification is also not available from the current environment.
 
 ## Current rule
 
