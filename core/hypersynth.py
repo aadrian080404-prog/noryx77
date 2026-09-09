@@ -16,6 +16,7 @@ from .security import SecurityBoundary
 from .supervisor import AgentSupervisor
 from .metacognition import MetacognitionEngine
 from .recovery import RecoveryController
+from .universal_intelligence import DomainAssessment, Evidence, UniversalIntelligenceFabric
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ class Hypersynth:
     """Bounded cognitive kernel with one immutable execution identity per run."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None, tool_executor=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None, tool_executor=None, universal_intelligence=None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
@@ -54,6 +55,8 @@ class Hypersynth:
         self.metacognition = metacognition or MetacognitionEngine()
         self.recovery = recovery
         self.tool_executor = tool_executor
+        self.universal_intelligence = universal_intelligence or UniversalIntelligenceFabric()
+        if not isinstance(self.universal_intelligence, UniversalIntelligenceFabric): raise TypeError("invalid_universal_intelligence_fabric")
         if self.recovery is not None and not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
@@ -90,192 +93,145 @@ class Hypersynth:
         if self.recovery is not None:
             try: self.recovery.require_normal(expected_epoch=recovery_epoch)
             except PermissionError as exc: return self._reject("perception", task, VerificationResult(False, "recovery", str(exc)))
-        subtasks = self._decompose(task)
+        try:
+            specialist_route = self.universal_intelligence.route(task)
+        except Exception:
+            return self._reject("perception", task, VerificationResult(False, "universal_intelligence", "specialist_route_failure"))
+        self.audit.record("universal_intelligence_route", task_id=task.task_id, execution_id=task.execution_id, domain=specialist_route.domain, strategy=specialist_route.strategy, budget=specialist_route.budget, rationale=specialist_route.rationale)
+        routed_constraints = dict(task.constraints)
+        routed_constraints.update({
+            "_noryx7_specialist_domain": specialist_route.domain,
+            "_noryx7_cognitive_strategy": specialist_route.strategy,
+            "_noryx7_cognitive_budget": specialist_route.budget,
+        })
+        routed_task = TaskSpec(task.task_id, task.task_type, task.objective, task.input, routed_constraints, task.verification_requirements, task.risk_class, task.execution_id)
+        subtasks = self._decompose(routed_task)
         if isinstance(subtasks, dict): return subtasks
-        timeout = self._deadline_rejection(task, "context", deadline_check)
+        timeout = self._deadline_rejection(routed_task, "context", deadline_check)
         if timeout: return timeout
         context = self.context_manager.build(
-            task.task_id,
-            {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)},
-            source_ids=(task.task_id,),
-            execution_id=task.execution_id,
+            routed_task.task_id,
+            {"input": routed_task.input, "objective": routed_task.objective, "subtasks": tuple(s.subtask_id for s in subtasks), "specialist_route": specialist_route},
+            source_ids=(routed_task.task_id,),
+            execution_id=routed_task.execution_id,
         )
-        timeout = self._deadline_rejection(task, "planning", deadline_check)
+        timeout = self._deadline_rejection(routed_task, "planning", deadline_check)
         if timeout: return timeout
-        try: plan = self.planner.build(task); plan_check = self.planner.verify(plan, task)
+        try: plan = self.planner.build(routed_task); plan_check = self.planner.verify(plan, routed_task)
         except Exception: plan_check, plan = VerificationResult(False, "planning", "planner_failure"), None
-        if not self._accepts_verification(plan_check, "plan"): return self._reject("planning", task, plan_check if isinstance(plan_check, VerificationResult) and plan_check.is_well_formed() else VerificationResult(False, "plan", "invalid_plan_verification"))
-        if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
-        timeout = self._deadline_rejection(task, "hypothesis", deadline_check)
+        if not self._accepts_verification(plan_check, "plan"): return self._reject("planning", routed_task, plan_check if isinstance(plan_check, VerificationResult) and plan_check.is_well_formed() else VerificationResult(False, "plan", "invalid_plan_verification"))
+        if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", routed_task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
+        timeout = self._deadline_rejection(routed_task, "hypothesis", deadline_check)
         if timeout: return timeout
-        try: hypotheses = self.hypothesis_engine.generate(task, plan); hypothesis_check = self.hypothesis_engine.verify(hypotheses, task)
-        except Exception: return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
-        if not self._accepts_verification(hypothesis_check, "hypothesis"): return self._reject("hypothesis", task, hypothesis_check if isinstance(hypothesis_check, VerificationResult) and hypothesis_check.is_well_formed() else VerificationResult(False, "hypothesis", "invalid_hypothesis_verification"))
-        if len(hypotheses) != len(plan.steps): return self._reject("hypothesis", task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
-        timeout = self._deadline_rejection(task, "simulation", deadline_check)
+        try: hypotheses = self.hypothesis_engine.generate(routed_task, plan); hypothesis_check = self.hypothesis_engine.verify(hypotheses, routed_task)
+        except Exception: return self._reject("hypothesis", routed_task, VerificationResult(False, "hypothesis", "hypothesis_failure"))
+        if not self._accepts_verification(hypothesis_check, "hypothesis"): return self._reject("hypothesis", routed_task, hypothesis_check if isinstance(hypothesis_check, VerificationResult) and hypothesis_check.is_well_formed() else VerificationResult(False, "hypothesis", "invalid_hypothesis_verification"))
+        if len(hypotheses) != len(plan.steps): return self._reject("hypothesis", routed_task, VerificationResult(False, "hypothesis", "hypothesis_plan_mismatch"))
+        timeout = self._deadline_rejection(routed_task, "simulation", deadline_check)
         if timeout: return timeout
-        try: simulations = self.simulator.simulate(task, hypotheses); simulation_check = self.simulator.verify(simulations)
-        except Exception: return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_failure"))
-        if not self._accepts_verification(simulation_check, "simulation"): return self._reject("simulation", task, simulation_check if isinstance(simulation_check, VerificationResult) and simulation_check.is_well_formed() else VerificationResult(False, "simulation", "invalid_simulation_verification"))
-        if tuple(s.hypothesis_id for s in simulations) != tuple(h.hypothesis_id for h in hypotheses): return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
-        if len(simulations) != len(hypotheses): return self._reject("simulation", task, VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"))
-        timeout = self._deadline_rejection(task, "allocation", deadline_check)
+        try: simulations = self.simulator.simulate(routed_task, hypotheses); simulation_check = self.simulator.verify(simulations)
+        except Exception: return self._reject("simulation", routed_task, VerificationResult(False, "simulation", "simulation_failure"))
+        if not self._accepts_verification(simulation_check, "simulation"): return self._reject("simulation", routed_task, simulation_check if isinstance(simulation_check, VerificationResult) and simulation_check.is_well_formed() else VerificationResult(False, "simulation", "invalid_simulation_verification"))
+        if tuple(s.hypothesis_id for s in simulations) != tuple(h.hypothesis_id for h in hypotheses): return self._reject("simulation", routed_task, VerificationResult(False, "simulation", "simulation_hypothesis_id_mismatch"))
+        if len(simulations) != len(hypotheses): return self._reject("simulation", routed_task, VerificationResult(False, "simulation", "simulation_hypothesis_mismatch"))
+        timeout = self._deadline_rejection(routed_task, "allocation", deadline_check)
         if timeout: return timeout
         agents = self.router.available()
-        if not agents: return self._reject("allocation", task, VerificationResult(False, "allocation", "no_agents_available"))
+        if not agents: return self._reject("allocation", routed_task, VerificationResult(False, "allocation", "no_agents_available"))
         assignments = []
         if preferred_agent is not None and preferred_agent not in agents:
-            return self._reject(
-                "allocation",
-                task,
-                VerificationResult(
-                    False,
-                    "allocation",
-                    "preferred_agent_unavailable",
-                ),
-            )
-
+            return self._reject("allocation", routed_task, VerificationResult(False, "allocation", "preferred_agent_unavailable"))
         ordered_agents = list(agents)
         if preferred_agent is not None:
             ordered_agents.remove(preferred_agent)
             ordered_agents.insert(0, preferred_agent)
-
         for index, step in enumerate(plan.steps):
             agent_id = ordered_agents[index % len(ordered_agents)]
-            child = TaskSpec(
-                step.step_id,
-                task.task_type,
-                step.objective,
-                task.input,
-                task.constraints,
-                task.verification_requirements,
-                step.risk_class,
-                task.execution_id,
-            )
+            child = TaskSpec(step.step_id, routed_task.task_type, step.objective, routed_task.input, routed_task.constraints, routed_task.verification_requirements, step.risk_class, routed_task.execution_id)
             try:
-                selected, decision = self.supervisor.select(
-                    child,
-                    preferred=agent_id,
-                )
+                selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception:
-                return self._reject(
-                    "allocation",
-                    task,
-                    VerificationResult(
-                        False,
-                        "allocation",
-                        "agent_selection_failure",
-                    ),
-                )
+                return self._reject("allocation", routed_task, VerificationResult(False, "allocation", "agent_selection_failure"))
             if not decision.accepted or selected is None:
-                return self._reject(
-                    "allocation",
-                    task,
-                    VerificationResult(
-                        False,
-                        "allocation",
-                        decision.reason,
-                    ),
-                )
+                return self._reject("allocation", routed_task, VerificationResult(False, "allocation", decision.reason))
             assignments.append((selected, child, step))
         results = []
         for index, (agent, child, step) in enumerate(assignments):
-            timeout = self._deadline_rejection(task, "execution", deadline_check)
+            timeout = self._deadline_rejection(routed_task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={
-                    "input": task.input,
-                    "constraints": dict(task.constraints),
-                    "task_id": child.task_id,
-                    "task_type": child.task_type,
-                    "verification_requirements": tuple(child.verification_requirements),
-                    "risk_class": child.risk_class,
-                    "execution_id": task.execution_id,
-                }, risk_class=step.risk_class, execution_id=task.execution_id)
+            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": routed_task.input, "constraints": dict(routed_task.constraints), "task_id": child.task_id, "task_type": child.task_type, "verification_requirements": tuple(child.verification_requirements), "risk_class": child.risk_class, "execution_id": routed_task.execution_id}, risk_class=step.risk_class, execution_id=routed_task.execution_id)
             try:
                 capability = self.tool_executor is not None and self.tool_executor.capabilities.resolve(step.action_type) is not None
                 if capability:
-                    operation = lambda: self.tool_executor.execute(action, calls_used=index, execution_id=task.execution_id, principal=getattr(agent, "identity", None))
+                    operation = lambda: self.tool_executor.execute(action, calls_used=index, execution_id=routed_task.execution_id, principal=getattr(agent, "identity", None))
                     if self.recovery is not None:
-                        def guarded():
-                            return operation()
+                        def guarded(): return operation()
                         capability_result = self.recovery.run_if_normal(guarded, expected_epoch=recovery_epoch)
-                    else:
-                        capability_result = operation()
+                    else: capability_result = operation()
                     capability_output, capability_check = capability_result
-                    if not capability_check.valid:
-                        return self._reject("execution", task, capability_check, results=tuple(results))
-                    result = AgentResult(agent.agent_id, child.task_id, "completed", capability_output, VerificationResult(True, "agent_result", "capability_result_verified"), task.execution_id)
+                    if not capability_check.valid: return self._reject("execution", routed_task, capability_check, results=tuple(results))
+                    result = AgentResult(agent.agent_id, child.task_id, "completed", capability_output, VerificationResult(True, "agent_result", "capability_result_verified"), routed_task.execution_id)
                 else:
                     run_parameters = inspect.signature(agent.run).parameters
-                    accepts_context = (
-                        "interaction_context" in run_parameters
-                        or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in run_parameters.values())
-                    )
+                    accepts_context = "interaction_context" in run_parameters or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in run_parameters.values())
                     if interaction_context is not None and accepts_context:
-                        operation = lambda: self.action_gate.authorize_and_execute(
-                            action,
-                            lambda: agent.run(child, interaction_context=interaction_context),
-                            calls_used=index,
-                            execution_id=task.execution_id,
-                        )
+                        operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child, interaction_context=interaction_context), calls_used=index, execution_id=routed_task.execution_id)
                     else:
-                        operation = lambda: self.action_gate.authorize_and_execute(
-                            action,
-                            lambda: agent.run(child),
-                            calls_used=index,
-                            execution_id=task.execution_id,
-                        )
-                    if self.recovery is not None:
-                        decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
-                    else:
-                        decision, result = operation()
+                        operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=routed_task.execution_id)
+                    if self.recovery is not None: decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
+                    else: decision, result = operation()
                     if not decision.allowed:
                         check = decision.verification
-                        if check.reason == "execution_failure":
-                            check = VerificationResult(False, "execution", "execution_failure")
-                        return self._reject("execution", task, check, results=tuple(results))
+                        if check.reason == "execution_failure": check = VerificationResult(False, "execution", "execution_failure")
+                        return self._reject("execution", routed_task, check, results=tuple(results))
             except Exception:
-                return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
-            timeout = self._deadline_rejection(task, "execution", deadline_check)
+                return self._reject("execution", routed_task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
+            timeout = self._deadline_rejection(routed_task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
             admission = self.supervisor.admit(child, result, selected_agent_id=agent.agent_id)
-            if not admission.valid: return self._reject("verification", task, admission, results=tuple(results))
-            if not isinstance(result, AgentResult): return self._reject("verification", task, VerificationResult(False, "agent_result", "malformed_agent_result"), results=tuple(results))
-            if result.execution_id != task.execution_id: return self._reject("verification", task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
+            if not admission.valid: return self._reject("verification", routed_task, admission, results=tuple(results))
+            if not isinstance(result, AgentResult): return self._reject("verification", routed_task, VerificationResult(False, "agent_result", "malformed_agent_result"), results=tuple(results))
+            if result.execution_id != routed_task.execution_id: return self._reject("verification", routed_task, VerificationResult(False, "agent_result", "execution_identity_mismatch"), results=tuple(results))
             results.append(result)
-        timeout = self._deadline_rejection(task, "verification", deadline_check)
+        timeout = self._deadline_rejection(routed_task, "verification", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         if self.recovery is not None:
             try: self.recovery.require_normal(expected_epoch=recovery_epoch)
-            except PermissionError as exc: return self._reject("verification", task, VerificationResult(False, "recovery", str(exc)), results=tuple(results))
-        cross_check = self.cross_checker.verify(task, tuple(results), hypotheses)
-        if not cross_check.valid: return self._reject("verification", task, cross_check, results=tuple(results), hypotheses=hypotheses)
+            except PermissionError as exc: return self._reject("verification", routed_task, VerificationResult(False, "recovery", str(exc)), results=tuple(results))
+        cross_check = self.cross_checker.verify(routed_task, tuple(results), hypotheses)
+        if not cross_check.valid: return self._reject("verification", routed_task, cross_check, results=tuple(results), hypotheses=hypotheses)
         if len({r.task_id for r in results}) == 1:
             consensus = self._verify_consensus(tuple(results))
-            if not consensus.valid: return self._reject("verification", task, consensus, results=tuple(results))
-        timeout = self._deadline_rejection(task, "metacognition", deadline_check)
+            if not consensus.valid: return self._reject("verification", routed_task, consensus, results=tuple(results))
+        evidence = tuple(Evidence(f"{r.agent_id}:{r.task_id}", r.agent_id, str(r.output), 1.0 if r.verification and r.verification.valid else 0.0) for r in results)
+        uif_assessment = DomainAssessment(specialist_route.domain, str(results[-1].output), evidence=evidence, confidence=1.0, uncertainty=0.0, contradictions=(), risk_level="normal", strategy=specialist_route.strategy)
+        fabric_result = self.universal_intelligence.assess(routed_task, (uif_assessment,), budget=specialist_route.budget)
+        self.audit.record("universal_intelligence_assessed", task_id=routed_task.task_id, execution_id=routed_task.execution_id, domain=specialist_route.domain, evidence_coverage=fabric_result.evidence_coverage, commit_eligible=fabric_result.commit_eligible, verification_reason=fabric_result.verification.reason)
+        if not fabric_result.commit_eligible:
+            return self._reject("verification", routed_task, VerificationResult(False, "universal_intelligence", "fabric_commit_denied"), results=tuple(results), hypotheses=hypotheses, simulations=simulations, universal_intelligence=fabric_result)
+        timeout = self._deadline_rejection(routed_task, "metacognition", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         final_output = results[-1].output
         try: output_check = self.verifier.verify_output(final_output, stage="hypersynth_result")
-        except Exception: return self._reject("verification", task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
-        if not self._accepts_verification(output_check, "hypersynth_result"): return self._reject("verification", task, output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification"), results=tuple(results))
-        metacognitive_check, reflection = self.metacognition.reflect(task, plan, hypotheses, simulations, tuple(results), output_check)
-        if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid: return self._reject("metacognition", task, metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
-        if metacognitive_check.stage != "metacognition": return self._reject("metacognition", task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        except Exception: return self._reject("verification", routed_task, VerificationResult(False, "hypersynth_result", "output_verification_failure"), results=tuple(results))
+        if not self._accepts_verification(output_check, "hypersynth_result"): return self._reject("verification", routed_task, output_check if isinstance(output_check, VerificationResult) and output_check.is_well_formed() else VerificationResult(False, "hypersynth_result", "invalid_output_verification"), results=tuple(results))
+        metacognitive_check, reflection = self.metacognition.reflect(routed_task, plan, hypotheses, simulations, tuple(results), output_check)
+        if not isinstance(metacognitive_check, VerificationResult) or not metacognitive_check.is_well_formed() or not metacognitive_check.valid: return self._reject("metacognition", routed_task, metacognitive_check if isinstance(metacognitive_check, VerificationResult) else VerificationResult(False, "metacognition", "invalid_metacognition_result"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        if metacognitive_check.stage != "metacognition": return self._reject("metacognition", routed_task, VerificationResult(False, "metacognition", "metacognition_stage_mismatch"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         if self.memory is not None:
             try:
                 from .memory import MemoryItem
-                memory_key = "task:" + task.execution_id + ":" + task.task_id
-                self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=task.task_id, importance=0.5, execution_id=task.execution_id))
-                execution_key = "execution:" + task.execution_id + ":final"
-                self.memory.put(MemoryItem(execution_key, final_output, kind="working", source=task.task_id, importance=0.7, execution_id=task.execution_id))
+                memory_key = "task:" + routed_task.execution_id + ":" + routed_task.task_id
+                self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=routed_task.task_id, importance=0.5, execution_id=routed_task.execution_id))
+                execution_key = "execution:" + routed_task.execution_id + ":final"
+                self.memory.put(MemoryItem(execution_key, final_output, kind="working", source=routed_task.task_id, importance=0.7, execution_id=routed_task.execution_id))
             except Exception:
-                return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+                return self._reject("verification", routed_task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         if self.recovery is not None:
             try: self.recovery.require_normal(expected_epoch=recovery_epoch)
-            except PermissionError as exc: return self._reject("metacognition", task, VerificationResult(False, "recovery", str(exc)), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
-        final_state = self._state("metacognition", task, context, confidence=reflection.confidence)
-        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": task.execution_id, "audit": self.audit.snapshot()}
+            except PermissionError as exc: return self._reject("metacognition", routed_task, VerificationResult(False, "recovery", str(exc)), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
+        final_state = self._state("metacognition", routed_task, context, confidence=reflection.confidence)
+        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": routed_task.execution_id, "universal_intelligence": fabric_result, "specialist_route": specialist_route, "audit": self.audit.snapshot()}
 
     def _decompose(self, task):
         try: subtasks = self.decomposer.decompose(task)
