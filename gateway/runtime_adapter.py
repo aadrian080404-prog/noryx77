@@ -39,9 +39,7 @@ class RuntimeAdapter:
                 "_noryx7_origin": "noryx-browser",
                 "_noryx7_client_id": client_id,
             },
-            verification_requirements=(
-                "runtime_result",
-            ),
+            verification_requirements=("runtime_result",),
             risk_class="normal",
             execution_id=execution_id,
         )
@@ -76,22 +74,8 @@ class RuntimeAdapter:
             "execution_id": result.get("execution_id"),
             "result": answer,
             "verification": {
-                "stage": getattr(
-                    verification,
-                    "stage",
-                    "",
-                ),
-                "valid": bool(
-                    getattr(
-                        verification,
-                        "valid",
-                        False,
-                    )
-                ),
-                "reason": getattr(
-                    verification,
-                    "reason",
-                    "",
-                ),
+                "stage": getattr(verification, "stage", ""),
+                "valid": bool(getattr(verification, "valid", False)),
+                "reason": getattr(verification, "reason", ""),
             },
         }
