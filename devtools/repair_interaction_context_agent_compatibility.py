@@ -20,8 +20,8 @@ def patch(path: str, old: str, new: str) -> None:
 
 patch(
     "core/hypersynth.py",
-    "                    operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child, interaction_context=interaction_context), calls_used=index, execution_id=task.execution_id)\n",
     "                    operation = lambda: self.action_gate.authorize_and_execute(\n                        action,\n                        (\n                            lambda: agent.run(child, interaction_context=interaction_context)\n                            if interaction_context is not None\n                            else lambda: agent.run(child)\n                        )(),\n                        calls_used=index,\n                        execution_id=task.execution_id,\n                    )\n",
+    "                    if interaction_context is None:\n                        operation = lambda: self.action_gate.authorize_and_execute(\n                            action,\n                            lambda: agent.run(child),\n                            calls_used=index,\n                            execution_id=task.execution_id,\n                        )\n                    else:\n                        operation = lambda: self.action_gate.authorize_and_execute(\n                            action,\n                            lambda: agent.run(child, interaction_context=interaction_context),\n                            calls_used=index,\n                            execution_id=task.execution_id,\n                        )\n",
 )
 
 print("INTERACTION CONTEXT AGENT COMPATIBILITY = REPAIRED")
