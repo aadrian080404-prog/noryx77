@@ -13,3 +13,5 @@ services:
         sync: false
       - key: NORYX_GATEWAY_SIGNING_SECRET
         sync: false
+      - key: NORYX_BROWSER_PAIRING_CODE
+        sync: false

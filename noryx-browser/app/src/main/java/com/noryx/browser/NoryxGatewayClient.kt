@@ -7,19 +7,19 @@ import java.net.URL
 
 class NoryxGatewayClient internal constructor(
     private val baseUrl: String,
-    private val bootstrapToken: String,
+    private val pairingCodeProvider: () -> String,
     private val clientId: String,
     private val transport: Transport,
 ) {
     constructor(
         baseUrl: String,
-        bootstrapToken: String,
+        pairingCodeProvider: () -> String,
         clientId: String,
         connectTimeoutMs: Int = 5000,
         readTimeoutMs: Int = 30000,
     ) : this(
         baseUrl = baseUrl,
-        bootstrapToken = bootstrapToken,
+        pairingCodeProvider = pairingCodeProvider,
         clientId = clientId,
         transport = HttpUrlConnectionTransport(
             baseUrl = baseUrl,
@@ -36,17 +36,18 @@ class NoryxGatewayClient internal constructor(
             baseUrl.startsWith("https://") ||
                 (BuildConfig.DEBUG && baseUrl.startsWith("http://"))
         ) { "gateway_https_required" }
-        require(bootstrapToken.isNotBlank()) { "gateway_bootstrap_required" }
         require(clientId.isNotBlank()) { "gateway_client_id_required" }
 
+        val pairingCode = pairingCodeProvider().trim()
+        require(pairingCode.isNotBlank()) { "gateway_pairing_required" }
         val body = JSONObject()
-            .put("bootstrap_token", bootstrapToken)
+            .put("pairing_code", pairingCode)
             .put("client_id", clientId)
             .toString()
 
-        val response = transport.request("POST", "/v1/session", body, null)
+        val response = transport.request("POST", "/v1/browser/session", body, null)
         if (response.code !in 200..299) {
-            throw GatewayException("gateway_auth_failed:${response.code}")
+            throw GatewayException("gateway_browser_auth_failed:${response.code}")
         }
 
         val json = parseObject(response.body)
@@ -55,7 +56,7 @@ class NoryxGatewayClient internal constructor(
 
         sessionToken = token
         return SessionResult(
-            authenticated = json.optBoolean("authenticated", false),
+            authenticated = json.optBoolean("authenticated", true),
             clientId = json.optString("client_id", clientId),
         )
     }
@@ -131,12 +132,7 @@ class NoryxGatewayClient internal constructor(
         private val connectTimeoutMs: Int,
         private val readTimeoutMs: Int,
     ) : Transport {
-        override fun request(
-            method: String,
-            path: String,
-            body: String,
-            bearerToken: String?,
-        ): Response {
+        override fun request(method: String, path: String, body: String, bearerToken: String?): Response {
             val url = URL(baseUrl.trimEnd('/') + path)
             val connection = url.openConnection() as HttpURLConnection
             try {
@@ -148,9 +144,7 @@ class NoryxGatewayClient internal constructor(
                 connection.doOutput = true
                 connection.setRequestProperty("Accept", "application/json")
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                if (!bearerToken.isNullOrBlank()) {
-                    connection.setRequestProperty("Authorization", "Bearer $bearerToken")
-                }
+                if (!bearerToken.isNullOrBlank()) connection.setRequestProperty("Authorization", "Bearer $bearerToken")
                 val bytes = body.toByteArray(Charsets.UTF_8)
                 connection.setFixedLengthStreamingMode(bytes.size)
                 connection.outputStream.use { it.write(bytes) }

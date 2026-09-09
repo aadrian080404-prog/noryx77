@@ -16,6 +16,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var controller: BrowserController
     private lateinit var gatewayExecutor: ExecutorService
     private var gatewayClient: NoryxGatewayClient? = null
+    private var browserPairingCode: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,12 +64,7 @@ class MainActivity : AppCompatActivity() {
         val id = resources.getIdentifier("debugTestLab", "id", packageName)
         if (id == 0) return
         findViewById<View>(id)?.setOnClickListener {
-            startActivity(
-                Intent(
-                    this,
-                    Class.forName("com.noryx.browser.testlab.TestLabActivity"),
-                ),
-            )
+            startActivity(Intent(this, Class.forName("com.noryx.browser.testlab.TestLabActivity")))
         }
     }
 
@@ -101,16 +97,59 @@ class MainActivity : AppCompatActivity() {
                 }
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 input.isEnabled = false
-                executeGatewayRequest(text, dialog)
+                ensureGatewaySession(text, dialog)
             }
         }
         dialog.show()
     }
 
+    private fun ensureGatewaySession(text: String, requestDialog: AlertDialog) {
+        if (gatewayClient != null) {
+            executeGatewayRequest(text, requestDialog)
+            return
+        }
+
+        val pairingInput = EditText(this).apply {
+            hint = "Codice di pairing"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(32, 24, 32, 24)
+        }
+        val pairingDialog = AlertDialog.Builder(this)
+            .setTitle("Collega NORYX7 Browser")
+            .setMessage("Inserisci il codice di pairing fornito dall'amministratore NORYX7. Il codice non viene salvato nell'app.")
+            .setView(pairingInput)
+            .setNegativeButton("Annulla") { _, _ ->
+                requestDialog.dismiss()
+            }
+            .setPositiveButton("Collega", null)
+            .create()
+
+        pairingDialog.setOnShowListener {
+            pairingDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val code = pairingInput.text.toString().trim()
+                if (code.isEmpty()) {
+                    pairingInput.error = "Codice richiesto"
+                    return@setOnClickListener
+                }
+                browserPairingCode = code
+                pairingInput.isEnabled = false
+                pairingDialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                gatewayClient = NoryxGatewayClient(
+                    baseUrl = getString(R.string.noryx_gateway_url),
+                    pairingCodeProvider = { browserPairingCode.orEmpty() },
+                    clientId = getString(R.string.noryx_gateway_client_id),
+                )
+                pairingDialog.dismiss()
+                executeGatewayRequest(text, requestDialog)
+            }
+        }
+        pairingDialog.show()
+    }
+
     private fun executeGatewayRequest(text: String, dialog: AlertDialog) {
         gatewayExecutor.execute {
             try {
-                val client = gatewayClient ?: createGatewayClient().also { gatewayClient = it }
+                val client = gatewayClient ?: throw NoryxGatewayClient.GatewayException("gateway_session_required")
                 val result = client.execute(text)
                 runOnUiThread {
                     dialog.dismiss()
@@ -133,19 +172,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createGatewayClient(): NoryxGatewayClient = NoryxGatewayClient(
-        baseUrl = getString(R.string.noryx_gateway_url),
-        bootstrapToken = getString(R.string.noryx_gateway_bootstrap_token),
-        clientId = getString(R.string.noryx_gateway_client_id),
-    )
-
     private fun configureWebView() {
         binding.webView.settings.javaScriptEnabled = true
         binding.webView.settings.domStorageEnabled = true
         binding.webView.settings.allowFileAccess = false
         binding.webView.settings.allowContentAccess = false
-        binding.webView.settings.mixedContentMode =
-            android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        binding.webView.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
         binding.webView.webViewClient = NoryxWebViewClient(
             onNavigationChanged = { state ->
                 runOnUiThread {
