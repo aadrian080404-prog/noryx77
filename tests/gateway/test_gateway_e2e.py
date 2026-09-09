@@ -7,6 +7,13 @@ from gateway.server import NoryxGateway
 
 
 class FakeRuntime:
+    def heartbeat_agents(self):
+        return {
+            "deterministic": "ONLINE",
+            "noryx7-llm": "ONLINE",
+            "noryx7-secondary": "ONLINE",
+        }
+
     def run_hypersynth(self, task):
         from core.contracts import VerificationResult
 
