@@ -16,6 +16,8 @@ from .security import SecurityBoundary
 from .supervisor import AgentSupervisor
 from .metacognition import MetacognitionEngine
 from .recovery import RecoveryController
+from .subtask_uif import SubtaskUIFRouter
+from .subtask_verification import verify_subtasks
 from .universal_intelligence import DomainAssessment, Evidence, UniversalIntelligenceFabric
 
 
@@ -57,6 +59,7 @@ class Hypersynth:
         self.tool_executor = tool_executor
         self.universal_intelligence = universal_intelligence or UniversalIntelligenceFabric()
         if not isinstance(self.universal_intelligence, UniversalIntelligenceFabric): raise TypeError("invalid_universal_intelligence_fabric")
+        self.subtask_uif_router = SubtaskUIFRouter(self.universal_intelligence)
         if self.recovery is not None and not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
@@ -107,11 +110,21 @@ class Hypersynth:
         routed_task = TaskSpec(task.task_id, task.task_type, task.objective, task.input, routed_constraints, task.verification_requirements, task.risk_class, task.execution_id)
         subtasks = self._decompose(routed_task)
         if isinstance(subtasks, dict): return subtasks
+        try:
+            subtask_routes = self.subtask_uif_router.route(routed_task, subtasks)
+        except Exception:
+            return self._reject("context", routed_task, VerificationResult(False, "subtask_routing", "subtask_route_failure"))
+        if not subtask_routes.verification.is_well_formed() or not subtask_routes.verification.valid:
+            return self._reject("context", routed_task, subtask_routes.verification, subtask_routes=subtask_routes)
+        route_by_id = {item.subtask_id: item for item in subtask_routes.routes}
+        if tuple(route_by_id) != tuple(s.subtask_id for s in subtasks):
+            return self._reject("context", routed_task, VerificationResult(False, "subtask_routing", "subtask_route_coverage_invalid"), subtask_routes=subtask_routes)
+        self.audit.record("subtask_uif_routed", task_id=routed_task.task_id, execution_id=routed_task.execution_id, routes=tuple({"subtask_id": item.subtask_id, "domain": item.route.domain, "strategy": item.route.strategy, "budget": item.route.budget, "route_authority": item.route_authority} for item in subtask_routes.routes))
         timeout = self._deadline_rejection(routed_task, "context", deadline_check)
         if timeout: return timeout
         context = self.context_manager.build(
             routed_task.task_id,
-            {"input": routed_task.input, "objective": routed_task.objective, "subtasks": tuple(s.subtask_id for s in subtasks), "specialist_route": specialist_route},
+            {"input": routed_task.input, "objective": routed_task.objective, "subtasks": tuple(s.subtask_id for s in subtasks), "specialist_route": specialist_route, "subtask_routes": subtask_routes},
             source_ids=(routed_task.task_id,),
             execution_id=routed_task.execution_id,
         )
@@ -147,7 +160,14 @@ class Hypersynth:
             ordered_agents.insert(0, preferred_agent)
         for index, step in enumerate(plan.steps):
             agent_id = ordered_agents[index % len(ordered_agents)]
-            child = TaskSpec(step.step_id, routed_task.task_type, step.objective, routed_task.input, routed_task.constraints, routed_task.verification_requirements, step.risk_class, routed_task.execution_id)
+            route = route_by_id.get(step.step_id)
+            if route is None:
+                return self._reject("allocation", routed_task, VerificationResult(False, "subtask_routing", "subtask_route_missing"), subtask_routes=subtask_routes)
+            try:
+                child_constraints = self.subtask_uif_router.constraints_for(routed_task, route)
+            except Exception:
+                return self._reject("allocation", routed_task, VerificationResult(False, "subtask_routing", "subtask_route_constraints_failure"), subtask_routes=subtask_routes)
+            child = TaskSpec(step.step_id, routed_task.task_type, step.objective, routed_task.input, child_constraints, routed_task.verification_requirements, step.risk_class, routed_task.execution_id)
             try:
                 selected, decision = self.supervisor.select(child, preferred=agent_id)
             except Exception:
@@ -159,7 +179,7 @@ class Hypersynth:
         for index, (agent, child, step) in enumerate(assignments):
             timeout = self._deadline_rejection(routed_task, "execution", deadline_check)
             if timeout: return dict(timeout, results=tuple(results))
-            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": routed_task.input, "constraints": dict(routed_task.constraints), "task_id": child.task_id, "task_type": child.task_type, "verification_requirements": tuple(child.verification_requirements), "risk_class": child.risk_class, "execution_id": routed_task.execution_id}, risk_class=step.risk_class, execution_id=routed_task.execution_id)
+            action = ActionSpec("act:" + child.task_id, step.action_type, target=step.objective, parameters={"input": routed_task.input, "constraints": dict(child.constraints), "task_id": child.task_id, "task_type": child.task_type, "verification_requirements": tuple(child.verification_requirements), "risk_class": child.risk_class, "execution_id": routed_task.execution_id}, risk_class=step.risk_class, execution_id=routed_task.execution_id)
             try:
                 capability = self.tool_executor is not None and self.tool_executor.capabilities.resolve(step.action_type) is not None
                 if capability:
@@ -203,12 +223,16 @@ class Hypersynth:
         if len({r.task_id for r in results}) == 1:
             consensus = self._verify_consensus(tuple(results))
             if not consensus.valid: return self._reject("verification", routed_task, consensus, results=tuple(results))
-        evidence = tuple(Evidence(f"{r.agent_id}:{r.task_id}", r.agent_id, str(r.output), 1.0 if r.verification and r.verification.valid else 0.0) for r in results)
+        subtask_gate = verify_subtasks(subtask_routes, tuple(results))
+        self.audit.record("subtask_verification", task_id=routed_task.task_id, execution_id=routed_task.execution_id, evidence=tuple({"subtask_id": item.subtask_id, "agent_id": item.agent_id, "verified": item.verified} for item in subtask_gate.evidence), commit_eligible=subtask_gate.commit_eligible, verification_reason=subtask_gate.verification.reason)
+        if not subtask_gate.commit_eligible:
+            return self._reject("verification", routed_task, subtask_gate.verification, results=tuple(results), hypotheses=hypotheses, simulations=simulations, subtask_routes=subtask_routes, subtask_verification=subtask_gate)
+        evidence = tuple(Evidence(f"{item.agent_id}:{item.subtask_id}", item.agent_id, item.output, 1.0 if item.verified else 0.0) for item in subtask_gate.evidence)
         uif_assessment = DomainAssessment(specialist_route.domain, str(results[-1].output), evidence=evidence, confidence=1.0, uncertainty=0.0, contradictions=(), risk_level="normal", strategy=specialist_route.strategy)
         fabric_result = self.universal_intelligence.assess(routed_task, (uif_assessment,), budget=specialist_route.budget)
         self.audit.record("universal_intelligence_assessed", task_id=routed_task.task_id, execution_id=routed_task.execution_id, domain=specialist_route.domain, evidence_coverage=fabric_result.evidence_coverage, commit_eligible=fabric_result.commit_eligible, verification_reason=fabric_result.verification.reason)
         if not fabric_result.commit_eligible:
-            return self._reject("verification", routed_task, VerificationResult(False, "universal_intelligence", "fabric_commit_denied"), results=tuple(results), hypotheses=hypotheses, simulations=simulations, universal_intelligence=fabric_result)
+            return self._reject("verification", routed_task, VerificationResult(False, "universal_intelligence", "fabric_commit_denied"), results=tuple(results), hypotheses=hypotheses, simulations=simulations, universal_intelligence=fabric_result, subtask_routes=subtask_routes, subtask_verification=subtask_gate)
         timeout = self._deadline_rejection(routed_task, "metacognition", deadline_check)
         if timeout: return dict(timeout, results=tuple(results))
         final_output = results[-1].output
@@ -231,7 +255,7 @@ class Hypersynth:
             try: self.recovery.require_normal(expected_epoch=recovery_epoch)
             except PermissionError as exc: return self._reject("metacognition", routed_task, VerificationResult(False, "recovery", str(exc)), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         final_state = self._state("metacognition", routed_task, context, confidence=reflection.confidence)
-        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": routed_task.execution_id, "universal_intelligence": fabric_result, "specialist_route": specialist_route, "audit": self.audit.snapshot()}
+        return {"status": "completed", "phase": final_state.phase, "state": final_state, "context": context, "plan": plan, "hypotheses": hypotheses, "simulations": simulations, "results": tuple(results), "verification": output_check, "reflection": reflection, "execution_id": routed_task.execution_id, "universal_intelligence": fabric_result, "specialist_route": specialist_route, "subtask_routes": subtask_routes, "subtask_verification": subtask_gate, "audit": self.audit.snapshot()}
 
     def _decompose(self, task):
         try: subtasks = self.decomposer.decompose(task)
