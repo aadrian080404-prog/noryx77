@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
-from core.contracts import TaskSpec
+from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 from core.operational_runtime import OperationalNORYXRuntime
 from gateway.auth import SessionError
 from gateway.server import NoryxGateway
@@ -17,10 +17,11 @@ from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
 
-app = FastAPI(title="NORYX7 API", version="0.1.0")
+app = FastAPI(title="NORYX7 API", version="0.2.0")
 WEB_DIR = Path(__file__).resolve().parent
 INDEX_FILE = WEB_DIR / "index.html"
 ROBOTS_FILE = WEB_DIR / "robots.txt"
+WEB_CLIENT_ID = "noryx-web"
 
 
 class ChatRequest(BaseModel):
@@ -53,6 +54,20 @@ def get_gateway() -> NoryxGateway:
     return NoryxGateway(runtime_adapter=RuntimeAdapter(runtime=get_runtime()))
 
 
+def _web_session_token() -> str:
+    bootstrap = os.environ.get("NORYX_GATEWAY_BOOTSTRAP_TOKEN", "")
+    if not bootstrap:
+        raise RuntimeError("NORYX_GATEWAY_BOOTSTRAP_TOKEN is not configured")
+    result = get_gateway().create_session(
+        bootstrap_token=bootstrap,
+        client_id=WEB_CLIENT_ID,
+    )
+    token = result.get("session_token")
+    if not isinstance(token, str) or not token:
+        raise RuntimeError("web_gateway_session_invalid")
+    return token
+
+
 @app.get("/", include_in_schema=False)
 def root():
     if not INDEX_FILE.is_file():
@@ -74,6 +89,17 @@ def sitemap(request: Request):
     return Response(content=content, media_type="application/xml")
 
 
+@app.get("/api/identity")
+def identity():
+    return {
+        "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
+        "creator": CANONICAL_SYSTEM_IDENTITY.creator,
+        "creator_role": CANONICAL_SYSTEM_IDENTITY.creator_role,
+        "creator_relationship": CANONICAL_SYSTEM_IDENTITY.creator_relationship,
+        "provenance": CANONICAL_SYSTEM_IDENTITY.provenance,
+    }
+
+
 @app.get("/health")
 def health():
     runtime = get_runtime()
@@ -81,6 +107,8 @@ def health():
     return {
         "status": "healthy" if runtime.agent_runtime.online else "degraded",
         "service": "noryx7",
+        "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
+        "creator": CANONICAL_SYSTEM_IDENTITY.creator,
         "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
     }
 
@@ -137,33 +165,30 @@ def chat(request: ChatRequest):
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
-    execution_id = f"api-exec-{uuid.uuid4().hex}"
-    task = TaskSpec(task_id=f"api-task-{uuid.uuid4().hex}", task_type="chat", objective=message, input=message, risk_class="normal", execution_id=execution_id)
     try:
-        runtime = get_runtime()
-        runtime.heartbeat_agents()
-        result = runtime.run_hypersynth(task)
-        if not isinstance(result, dict):
-            raise RuntimeError("malformed_runtime_result")
-        if result.get("status") != "completed":
-            verification = result.get("verification")
-            reason = result.get("reason") or "noryx7_execution_rejected"
-            if verification is not None:
-                reason = getattr(verification, "reason", None) or reason
-            raise HTTPException(status_code=502, detail=reason)
-        response = result.get("result")
-        if not isinstance(response, str) or not response.strip():
-            raise RuntimeError("empty_noryx7_response")
-        verification = result.get("verification")
+        result = get_gateway().execute(
+            session_token=_web_session_token(),
+            text=message,
+            execution_id=f"web-exec-{uuid.uuid4().hex}",
+        )
         return {
-            "response": response,
-            "task_id": result.get("task_id"),
-            "execution_id": result.get("execution_id"),
-            "verification": verification.__dict__ if hasattr(verification, "__dict__") else verification,
-            "orchestration_stage": result.get("orchestration_stage"),
-            "agent_runtime": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in runtime.agent_runtime.status()],
+            "response": result["result"],
+            "system_id": result["system_id"],
+            "creator": result["creator"],
+            "task_id": result["task_id"],
+            "execution_id": result["execution_id"],
+            "client_id": result["client_id"],
+            "verification": result["verification"],
+            "agent_runtime": [
+                {"agent_id": item.agent_id, "role": item.role, "state": item.state}
+                for item in get_runtime().agent_runtime.status()
+            ],
         }
-    except HTTPException:
-        raise
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="web_gateway_runtime_failure") from exc
