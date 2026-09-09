@@ -1,5 +1,4 @@
 <resources>
     <string name="noryx_gateway_url">https://noryx7.onrender.com</string>
-    <string name="noryx_gateway_bootstrap_token" translatable="false">noryx7-browser-v1</string>
     <string name="noryx_gateway_client_id" translatable="false">noryx-browser-android</string>
 </resources>
