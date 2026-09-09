@@ -69,6 +69,10 @@ class JarvisRuntimeBridge:
         intent = Intent(text=request.text, principal_id=request.principal_id, intent_id=request.request_id)
 
         if self.system_fabric is not None:
+            # Bind the execution agent itself once, then authorize its explicit
+            # capability. User/session identity remains separately bound below.
+            self.system_fabric.bind_agent_identity(self.principal, capabilities=("execute",))
+            self.system_fabric.authorize_agent(self.principal, "execute")
             self.system_fabric.bind_session(
                 session_id="jarvis:" + request.request_id,
                 client_id=request.principal_id,
@@ -81,10 +85,12 @@ class JarvisRuntimeBridge:
                 execution_id=request.request_id,
                 client_id=request.principal_id,
                 phase="jarvis_received",
-                metadata={"steps": len(plan.steps)},
+                metadata={"steps": len(plan.steps), "agent_id": self.principal.agent_id},
             )
 
         def executor(envelope: Any) -> Any:
+            if self.system_fabric is not None:
+                self.system_fabric.authorize_agent(self.principal, "execute")
             if not self.policy.authorize(request.principal_id, envelope.action_type, envelope.target):
                 raise PermissionError("capability_denied")
             action = ActionSpec(
@@ -132,6 +138,6 @@ class JarvisRuntimeBridge:
                 execution_id=request.request_id,
                 client_id=request.principal_id,
                 phase=phase,
-                metadata={"status": runtime_result.status.value, "result_count": len(results)},
+                metadata={"status": runtime_result.status.value, "result_count": len(results), "agent_id": self.principal.agent_id},
             )
         return tuple(results)

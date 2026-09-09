@@ -15,6 +15,7 @@ from ecosystem.global_fabric import (
     IdentityAuthorization,
     MemoryLevel,
 )
+from .identity import AgentIdentity
 from .system_identity import CANONICAL_SYSTEM_IDENTITY
 
 
@@ -33,6 +34,13 @@ class CanonicalSystemFabric:
         if not isinstance(token, str) or not token:
             raise ValueError("session_token_required")
         return "session:" + sha256(token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def agent_session_id(identity: AgentIdentity) -> str:
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise ValueError("invalid_agent_identity")
+        fingerprint = sha256(identity.public_key).hexdigest()
+        return "agent:" + identity.agent_id + ":" + fingerprint
 
     def bind_session(
         self,
@@ -61,6 +69,35 @@ class CanonicalSystemFabric:
         )
         self.identity.bind(authorization)
         return authorization
+
+    def bind_agent_identity(
+        self,
+        identity: AgentIdentity,
+        *,
+        capabilities: tuple[str, ...] = ("execute",),
+    ) -> IdentityAuthorization:
+        """Bind a cryptographically well-formed agent to the global identity fabric.
+
+        This records identity/capability membership without granting authority to
+        the agent implicitly: callers still need an explicit capability check.
+        The public-key fingerprint makes key replacement produce a distinct binding.
+        """
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise ValueError("invalid_agent_identity")
+        if not isinstance(capabilities, tuple) or not capabilities:
+            raise ValueError("invalid_agent_capabilities")
+        session_id = self.agent_session_id(identity)
+        return self.bind_session(
+            session_id=session_id,
+            client_id=identity.agent_id,
+            device_id="agent-runtime",
+            role="agent",
+            capabilities=capabilities,
+        )
+
+    def authorize_agent(self, identity: AgentIdentity, capability: str) -> IdentityAuthorization:
+        """Require a previously bound agent identity and explicit capability."""
+        return self.authorize(self.agent_session_id(identity), capability)
 
     def authorize(self, session_id: str, capability: str) -> IdentityAuthorization:
         return self.identity.authorize(session_id, capability, self.policy_digest)
