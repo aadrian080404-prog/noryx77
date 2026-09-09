@@ -1,7 +1,7 @@
 # NORYX7 — Current Operational State
 
-Date: 2026-09-08
-Branch: `frontier-hardening-2026-09-07`
+Date: 2026-09-09
+Branch: `main`
 
 ## Mission
 
@@ -28,7 +28,23 @@ USER / TEXT / VOICE / BROWSER / API
 
 Not every request must traverse every subsystem; orchestration selects the required path while preserving the security and verification boundaries.
 
-## Verified today
+## Integrated boundaries
+
+### Wave 4 — Web runtime unification
+
+The active web surface routes execution through the canonical gateway/runtime path instead of directly invoking the runtime.
+
+### Wave 5 — Canonical system fabric
+
+`CanonicalSystemFabric` is shared by the operational runtime, gateway and JARVIS bridge. Gateway sessions are bound to global identity authorization; execution provenance is recorded through the global memory fabric using digests rather than raw payload persistence.
+
+### Wave 6 — Android Browser enrollment
+
+The Android Browser no longer ships a gateway bootstrap credential. Browser enrollment uses a dedicated server-side pairing secret (`NORYX_BROWSER_PAIRING_CODE`) and receives a normal short-lived gateway session. The resulting browser identity is bound into `CanonicalSystemFabric` with the `execute` capability only.
+
+The pairing code is entered at runtime and is not persisted by the Android client. The server-side pairing secret must be configured in the deployment environment before browser enrollment can succeed.
+
+## Verified historically
 
 ### JARVIS vertical execution
 
@@ -46,11 +62,11 @@ A complete test using an explicit policy grant succeeded:
 - state commit: PASS
 - final state: `committed`
 
-Observed result: one successful `ActionResult`, handler invoked exactly through the registered capability, and committed state present.
+These results are historical and are not a fresh verification of the current main branch.
 
 ### Policy security
 
-Verified:
+Previously verified:
 
 - deny-by-default: PASS
 - explicit grant: PASS
@@ -61,21 +77,9 @@ Verified:
 - capability isolation: PASS
 - target isolation: PASS
 
-### Existing repository security suites
+### Previously established regression baselines
 
-`core/test_authorization_grants.py`: 12 passed.
-
-Combined security/adversarial suites:
-
-`core/test_security_contracts.py`
-`core/test_adversarial_boundaries.py`
-`core/test_hypersynth_adversarial.py`
-
-Result: 45 passed.
-
-### Previously established baseline
-
-The latest known full regression baseline was 702 passed, 0 failures/errors. Do not treat this as a fresh run unless explicitly rerun after new repository changes.
+Older regression results exist in repository history. Do not treat them as a fresh run after Wave 6.
 
 ## Security principle
 
@@ -94,17 +98,20 @@ If a protected path rejects an operation, first determine whether the rejection 
 - RuntimeEngine receives the actual action payload from the bridge, not the JARVIS `ActionResult` wrapper.
 - JARVIS StateStore requires `results` as a list at commit time.
 - RecoveryController is implemented in `core/recovery.py`.
+- `core/system_fabric.py` owns the cross-component system-fabric boundary.
+- `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
+- Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
 
-## Known-good commits
+## Known-good integration commits
 
-Recent relevant repository history includes:
+- `81b68c8` — Wave 4 web/runtime unification
+- `f46904f` — Wave 5 canonical system fabric integration
+- `b6808f4` — Wave 6 secure Android browser enrollment
 
-- `6d171ef` — harden runtime invariants and lifecycle safety
-- `8b1a723` — align replay rollback test with concurrent channel semantics
-- `4fb7658` — restore bounded concurrent replay protection
-- `663c08f` — fix remaining runtime, offline and secure-channel contract failures
-- `059917c` — consolidated zero-failure compatibility repair v2
+## Current verification status
+
+Wave 6 changes and tests are committed to `main`, but the new Wave 6 tests were not executed in this environment. Live Render verification is also not available from the current environment.
 
 ## Current rule
 
-Continue integration component-by-component. Diagnose the real contract first, make the smallest necessary change, run a focused test, then run the relevant regression suite.
+Continue integration by identifying the next real disconnected boundary, inspect its existing contract first, make the smallest necessary change, run a focused test when execution is available, then run the relevant regression suite. Never claim repository or deployment verification that has not actually occurred.
