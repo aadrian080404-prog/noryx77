@@ -34,7 +34,7 @@ class Hypersynth:
     """Bounded cognitive kernel with one immutable execution identity per run."""
     PHASES = ("perception", "context", "planning", "hypothesis", "simulation", "allocation", "execution", "verification", "metacognition")
 
-    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None, tool_executor=None, universal_intelligence=None):
+    def __init__(self, verifier, router, *, planner=None, decomposer=None, context_manager=None, action_gate=None, supervisor=None, memory=None, audit=None, max_steps=8, max_agents=2, hypothesis_engine=None, simulator=None, cross_checker=None, metacognition=None, recovery=None, tool_executor=None, universal_intelligence=None, subtask_uif_router=None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1: raise ValueError("max_steps must be a positive integer")
         if isinstance(max_agents, bool) or not isinstance(max_agents, int) or max_agents < 1: raise ValueError("max_agents must be a positive integer")
         self.verifier, self.router, self.max_steps, self.max_agents = verifier, router, max_steps, max_agents
@@ -59,7 +59,8 @@ class Hypersynth:
         self.tool_executor = tool_executor
         self.universal_intelligence = universal_intelligence or UniversalIntelligenceFabric()
         if not isinstance(self.universal_intelligence, UniversalIntelligenceFabric): raise TypeError("invalid_universal_intelligence_fabric")
-        self.subtask_uif_router = SubtaskUIFRouter(self.universal_intelligence)
+        self.subtask_uif_router = subtask_uif_router or SubtaskUIFRouter(self.universal_intelligence)
+        if not isinstance(self.subtask_uif_router, SubtaskUIFRouter): raise TypeError("invalid_subtask_uif_router")
         if self.recovery is not None and not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
 
     def _state(self, phase, task, context, confidence=0.0): return CognitiveState(phase, task.task_id, context=context, confidence=confidence, execution_id=task.execution_id)
@@ -119,7 +120,7 @@ class Hypersynth:
         route_by_id = {item.subtask_id: item for item in subtask_routes.routes}
         if tuple(route_by_id) != tuple(s.subtask_id for s in subtasks):
             return self._reject("context", routed_task, VerificationResult(False, "subtask_routing", "subtask_route_coverage_invalid"), subtask_routes=subtask_routes)
-        self.audit.record("subtask_uif_routed", task_id=routed_task.task_id, execution_id=routed_task.execution_id, routes=tuple({"subtask_id": item.subtask_id, "domain": item.route.domain, "strategy": item.route.strategy, "budget": item.route.budget, "route_authority": item.route_authority} for item in subtask_routes.routes))
+        self.audit.record("subtask_uif_routes", task_id=routed_task.task_id, execution_id=routed_task.execution_id, routes=tuple({"subtask_id": item.subtask_id, "domain": item.route.domain, "strategy": item.route.strategy, "budget": item.route.budget, "route_authority": item.route_authority} for item in subtask_routes.routes))
         timeout = self._deadline_rejection(routed_task, "context", deadline_check)
         if timeout: return timeout
         context = self.context_manager.build(
@@ -224,7 +225,7 @@ class Hypersynth:
             consensus = self._verify_consensus(tuple(results))
             if not consensus.valid: return self._reject("verification", routed_task, consensus, results=tuple(results))
         subtask_gate = verify_subtasks(subtask_routes, tuple(results))
-        self.audit.record("subtask_verification", task_id=routed_task.task_id, execution_id=routed_task.execution_id, evidence=tuple({"subtask_id": item.subtask_id, "agent_id": item.agent_id, "verified": item.verified} for item in subtask_gate.evidence), commit_eligible=subtask_gate.commit_eligible, verification_reason=subtask_gate.verification.reason)
+        self.audit.record("subtask_uif_aggregate", task_id=routed_task.task_id, execution_id=routed_task.execution_id, evidence=tuple({"subtask_id": item.subtask_id, "agent_id": item.agent_id, "verified": item.verified} for item in subtask_gate.evidence), commit_eligible=subtask_gate.commit_eligible, verification_reason=subtask_gate.verification.reason)
         if not subtask_gate.commit_eligible:
             return self._reject("verification", routed_task, subtask_gate.verification, results=tuple(results), hypotheses=hypotheses, simulations=simulations, subtask_routes=subtask_routes, subtask_verification=subtask_gate)
         evidence = tuple(Evidence(f"{item.agent_id}:{item.subtask_id}", item.agent_id, item.output, 1.0 if item.verified else 0.0) for item in subtask_gate.evidence)
