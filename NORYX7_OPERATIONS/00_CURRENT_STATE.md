@@ -1,7 +1,7 @@
 # NORYX7 — Current Operational State
 
 Date: 2026-09-09
-Branch: `main`
+Branch: `main` (Wave 7 prepared on integration branch)
 
 ## Mission
 
@@ -44,11 +44,19 @@ The Android Browser no longer ships a gateway bootstrap credential. Browser enro
 
 The pairing code is entered at runtime and is not persisted by the Android client. The server-side pairing secret must be configured in the deployment environment before browser enrollment can succeed.
 
+### Wave 7 — Agent identity fabric binding
+
+The canonical system fabric now has an explicit agent-identity binding contract. A well-formed `AgentIdentity` is mapped to a key-fingerprint-bound synthetic agent session and must hold an explicit capability before a protected agent execution path may proceed.
+
+The JARVIS bridge now binds and authorizes its execution principal through the canonical system fabric before RuntimeEngine dispatch, and re-checks the explicit `execute` capability at the execution boundary. This supplements, rather than replaces, the existing cryptographic `AuthorizationAuthority`, `ActionGate`, policy and security checks.
+
+The binding is fail-closed and does not implicitly grant authority. Key replacement produces a distinct binding because the public-key fingerprint is part of the agent session identity.
+
 ## Verified historically
 
 ### JARVIS vertical execution
 
-A complete test using an explicit policy grant succeeded:
+A complete test using an explicit policy grant succeeded historically:
 
 - JARVIS policy grant: PASS
 - JARVIS execute: PASS
@@ -77,10 +85,6 @@ Previously verified:
 - capability isolation: PASS
 - target isolation: PASS
 
-### Previously established regression baselines
-
-Older regression results exist in repository history. Do not treat them as a fresh run after Wave 6.
-
 ## Security principle
 
 The security layer is intentionally fail-closed and deny-by-default. Do not weaken policy, bypass authorization, auto-grant capabilities, remove checks, or modify tests merely to make an integration test pass.
@@ -98,7 +102,7 @@ If a protected path rejects an operation, first determine whether the rejection 
 - RuntimeEngine receives the actual action payload from the bridge, not the JARVIS `ActionResult` wrapper.
 - JARVIS StateStore requires `results` as a list at commit time.
 - RecoveryController is implemented in `core/recovery.py`.
-- `core/system_fabric.py` owns the cross-component system-fabric boundary.
+- `core/system_fabric.py` owns the cross-component system-fabric boundary and now exposes explicit agent identity binding/authorization.
 - `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
 - Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
 
@@ -110,7 +114,7 @@ If a protected path rejects an operation, first determine whether the rejection 
 
 ## Current verification status
 
-Wave 6 changes and tests are committed to `main`, but the new Wave 6 tests were not executed in this environment. Live Render verification is also not available from the current environment.
+Wave 7 implementation is prepared on the integration branch. The new Wave 7 tests have not been executed in this environment, so no fresh PASS claim is made here. Live Render verification is also not available from the current environment.
 
 ## Current rule
 
