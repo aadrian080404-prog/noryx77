@@ -14,7 +14,8 @@ from .crypto import AuthenticatedCipher
 from .decomposition import TaskDecomposer
 from .hypersynth_runtime import HypersynthRuntime
 from .identity import AgentIdentityAuthority, IdentityRegistry
-from .interaction_context import InteractionContext
+from .interaction_context import InteractionContext, build_interaction_context
+from .user_understanding import UnderstandingConsent, UserContent, UserUnderstandingEngine
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .offline import OfflineExecution, OfflineRuntime, OfflineSnapshot
@@ -38,9 +39,13 @@ class NORYXRuntime:
         *,
         state_journal_path: str | None = None,
         model_fabric=None,
+        user_understanding: UserUnderstandingEngine | None = None,
     ):
         self.limits = limits or RuntimeLimits()
         self._model_fabric = model_fabric
+        if user_understanding is not None and not isinstance(user_understanding, UserUnderstandingEngine):
+            raise TypeError("invalid_user_understanding_engine")
+        self.user_understanding = user_understanding
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
         self.recovery = RecoveryController()
@@ -262,6 +267,22 @@ class NORYXRuntime:
         envelope = None
 
         try:
+            if interaction_context is None and self.user_understanding is not None:
+                content = UserContent(
+                    content_id=task_id or execution_id,
+                    text=str(getattr(task, "input", "")),
+                    source="runtime_task_input",
+                )
+                profile = self.user_understanding.build_profile((content,))
+                interaction_context = build_interaction_context(profile)
+                self.audit.record(
+                    "user_understanding_derived",
+                    task_id=task_id,
+                    execution_id=execution_id,
+                    profile_id=profile.profile_id,
+                    context_id=interaction_context.context_id,
+                    consent=self.user_understanding.consent.value,
+                )
             envelope = self._context_envelope(
                 task,
                 interaction_context,
