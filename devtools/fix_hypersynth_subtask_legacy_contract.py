@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+TARGET = ROOT / "core" / "hypersynth.py"
+
+text = TARGET.read_text(encoding="utf-8")
+anchor = '        if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", routed_task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))\n'
+insert = '''        if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", routed_task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))\n\n        # Legacy/custom planners may materialize more execution steps than the\n        # decomposer emitted when the task has no explicit structured subtasks.\n        # Preserve the canonical decomposition contract for explicit subtasks,\n        # while deriving bounded subtask identities from the verified plan for\n        # legacy planners. Every executable plan step must still receive its own\n        # UIF route before allocation.\n        planned_subtask_ids = tuple(step.step_id for step in plan.steps)\n        decomposed_subtask_ids = tuple(item.subtask_id for item in subtasks)\n        if planned_subtask_ids != decomposed_subtask_ids:\n            if routed_task.constraints.get("subtasks") is not None:\n                return self._reject(\n                    "planning",\n                    routed_task,\n                    VerificationResult(False, "planning", "subtask_plan_coverage_invalid"),\n                    subtask_routes=subtask_routes,\n                )\n            try:\n                planned_subtasks = tuple(\n                    Subtask(step.step_id, step.objective, routed_task.task_type, step.dependencies)\n                    for step in plan.steps\n                )\n                subtask_routes = self.subtask_uif_router.route(routed_task, planned_subtasks)\n            except Exception:\n                return self._reject(\n                    "planning",\n                    routed_task,\n                    VerificationResult(False, "subtask_routing", "subtask_plan_route_failure"),\n                )\n            if not subtask_routes.verification.is_well_formed() or not subtask_routes.verification.valid:\n                return self._reject("planning", routed_task, subtask_routes.verification, subtask_routes=subtask_routes)\n            subtasks = planned_subtasks\n            route_by_id = {item.subtask_id: item for item in subtask_routes.routes}\n            self.audit.record(\n                "subtask_uif_legacy_planner_reconciled",\n                task_id=routed_task.task_id,\n                execution_id=routed_task.execution_id,\n                planned_subtasks=planned_subtask_ids,\n            )\n            context = self.context_manager.build(\n                routed_task.task_id,\n                {\n                    "input": routed_task.input,\n                    "objective": routed_task.objective,\n                    "subtasks": planned_subtask_ids,\n                    "specialist_route": specialist_route,\n                    "subtask_routes": subtask_routes,\n                },\n                source_ids=(routed_task.task_id,),\n                execution_id=routed_task.execution_id,\n            )\n'''
+if "subtask_uif_legacy_planner_reconciled" not in text:
+    if text.count(anchor) != 1:
+        raise SystemExit(f"PATCH_ABORTED: expected exactly one planning anchor, found {text.count(anchor)}")
+    text = text.replace(anchor, insert, 1)
+    TARGET.write_text(text, encoding="utf-8")
+    print("HYPERSYNTH LEGACY PLANNER/SUBTASK COVERAGE = RECONCILED")
+else:
+    print("HYPERSYNTH LEGACY PLANNER/SUBTASK COVERAGE = ALREADY_RECONCILED")
