@@ -11,9 +11,10 @@ from pydantic import BaseModel
 
 from core.contracts import TaskSpec
 from core.operational_runtime import OperationalNORYXRuntime
+from gateway.server import NoryxGateway
+from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
-
 
 app = FastAPI(title="NORYX7 API", version="0.1.0")
 WEB_DIR = Path(__file__).resolve().parent
@@ -25,6 +26,16 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class GatewaySessionRequest(BaseModel):
+    bootstrap_token: str
+    client_id: str
+
+
+class GatewayExecuteRequest(BaseModel):
+    input: str
+    execution_id: str | None = None
+
+
 @lru_cache(maxsize=1)
 def get_runtime() -> OperationalNORYXRuntime:
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -34,6 +45,13 @@ def get_runtime() -> OperationalNORYXRuntime:
     fabric = ModelFabric([adapter], runtime_id=f"api-{uuid.uuid4().hex}")
     journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
     return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
+
+
+@lru_cache(maxsize=1)
+def get_gateway() -> NoryxGateway:
+    return NoryxGateway(
+        runtime_adapter=RuntimeAdapter(runtime=get_runtime()),
+    )
 
 
 @app.get("/", include_in_schema=False)
@@ -69,8 +87,51 @@ def health():
     return {
         "status": "healthy" if runtime.agent_runtime.online else "degraded",
         "service": "noryx7",
-        "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
+        "agents": [
+            {"agent_id": item.agent_id, "role": item.role, "state": item.state}
+            for item in statuses
+        ],
     }
+
+
+@app.get("/v1/health")
+def gateway_health():
+    return get_gateway().health()
+
+
+@app.post("/v1/session")
+def gateway_session(request: GatewaySessionRequest):
+    try:
+        return get_gateway().create_session(
+            bootstrap_token=request.bootstrap_token,
+            client_id=request.client_id,
+        )
+    except Exception as exc:
+        from gateway.auth import SessionError
+        if isinstance(exc, SessionError):
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="gateway_auth_failure") from exc
+
+
+@app.post("/v1/execute")
+def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
+    authorization = http_request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization_required")
+    try:
+        return get_gateway().execute(
+            session_token=authorization[7:],
+            text=request.input,
+        )
+    except Exception as exc:
+        from gateway.auth import SessionError
+        if isinstance(exc, SessionError):
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        if isinstance(exc, PermissionError):
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if isinstance(exc, ValueError):
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="gateway_runtime_failure") from exc
 
 
 @app.post("/api/chat")
