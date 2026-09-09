@@ -22,15 +22,16 @@ class OperationalNORYXRuntime(NORYXRuntime):
             raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric)
         self.system_fabric = CanonicalSystemFabric()
-        for agent_id in self.REQUIRED_AGENT_IDS:
+        # The canonical fabric is created after the base runtime, so attach the
+        # same authorization boundary to routing before any operational dispatch.
+        self.router.attach_system_fabric(self.system_fabric)
+        for agent_id in ("deterministic", *sorted(self.REQUIRED_AGENT_IDS)):
             agent = self.router.get(agent_id)
             identity = getattr(agent, "identity", None)
             if not isinstance(identity, AgentIdentity):
-                raise RuntimeError("agent_identity_required_for_model_execution")
-            self.system_fabric.bind_agent_identity(
-                identity,
-                capabilities=("execute", self.MODEL_EXECUTE_CAPABILITY),
-            )
+                raise RuntimeError("agent_identity_required_for_operational_routing")
+            capabilities = ("execute", self.MODEL_EXECUTE_CAPABILITY) if agent_id in self.REQUIRED_AGENT_IDS else ("execute",)
+            self.system_fabric.bind_agent_identity(identity, capabilities=capabilities)
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
         self._jarvis_bridge: JarvisRuntimeBridge | None = None
