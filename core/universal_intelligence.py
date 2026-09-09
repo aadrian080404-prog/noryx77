@@ -108,11 +108,18 @@ class UniversalIntelligenceFabric:
         """Select a bounded cognitive route; this changes cognition, never authority."""
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
+        objective = task.objective.lower()
+        task_input = (task.input or "").lower()
         text = f"{task.task_type} {task.objective} {task.input or ''}".lower()
         domain = "general_reasoning"
         best_score = 0
         for candidate, keywords in self._DOMAIN_KEYWORDS.items():
-            score = sum(1 for keyword in keywords if keyword in text)
+            # The objective is the primary semantic signal; input is supporting
+            # context. This prevents generic context such as "analyze the code"
+            # from overriding an explicit domain named in the user's objective.
+            objective_score = sum(1 for keyword in keywords if keyword in objective)
+            input_score = sum(1 for keyword in keywords if keyword in task_input)
+            score = objective_score * 3 + input_score
             if score > best_score:
                 best_score, domain = score, candidate
         if task.risk_class.lower() in {"high", "critical"}:
@@ -127,7 +134,7 @@ class UniversalIntelligenceFabric:
         else:
             budget = "standard"
             strategy = "standard"
-        return SpecialistRoute(domain, strategy, budget, f"deterministic keyword/risk routing; domain_score={best_score}")
+        return SpecialistRoute(domain, strategy, budget, f"deterministic objective/context/risk routing; domain_score={best_score}")
 
     def assess(self, task: TaskSpec, assessments: tuple[DomainAssessment, ...], *, budget: str = "standard") -> FabricResult:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
