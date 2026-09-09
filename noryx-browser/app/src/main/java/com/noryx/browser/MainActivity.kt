@@ -5,112 +5,71 @@ import android.os.Bundle
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.noryx.browser.databinding.ActivityMainBinding
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var controller: BrowserController
-
-    // DIAGNOSTIC: Gateway executor temporarily disabled.
-    // DIAGNOSTIC: Gateway client temporarily disabled.
+    private lateinit var gatewayExecutor: ExecutorService
+    private var gatewayClient: NoryxGatewayClient? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        gatewayExecutor = Executors.newSingleThreadExecutor()
 
         configureWebView()
-
         controller = BrowserController(binding.webView)
 
-        binding.back.setOnClickListener {
-            controller.goBack()
-        }
-
-        binding.forward.setOnClickListener {
-            controller.goForward()
-        }
-
+        binding.back.setOnClickListener { controller.goBack() }
+        binding.forward.setOnClickListener { controller.goForward() }
         binding.reload.setOnClickListener {
             clearError()
             controller.reload()
         }
-
         binding.home.setOnClickListener {
             clearError()
             controller.loadHome()
         }
-
         binding.retry.setOnClickListener {
             clearError()
             controller.reload()
         }
-
+        binding.tabs.setOnClickListener { showGatewayDialog() }
+        binding.tabs.contentDescription = "NORYX7 Gateway"
         configureDebugTestLab()
-        // DIAGNOSTIC: Gateway integration temporarily disabled.
 
         binding.address.setOnEditorActionListener { _, _, _ ->
             clearError()
-
             try {
                 controller.navigateInput(binding.address.text.toString())
             } catch (_: IllegalArgumentException) {
                 showError()
             }
-
             true
         }
 
-        if (savedInstanceState == null) {
-            controller.loadHome()
-        }
-
+        if (savedInstanceState == null) controller.loadHome()
         updateNavigationState()
     }
 
     private fun configureDebugTestLab() {
         if (!BuildConfig.DEBUG) return
-
-        val id = resources.getIdentifier(
-            "debugTestLab",
-            "id",
-            packageName,
-        )
-
+        val id = resources.getIdentifier("debugTestLab", "id", packageName)
         if (id == 0) return
-
         findViewById<View>(id)?.setOnClickListener {
             startActivity(
                 Intent(
                     this,
-                    Class.forName(
-                        "com.noryx.browser.testlab.TestLabActivity",
-                    ),
+                    Class.forName("com.noryx.browser.testlab.TestLabActivity"),
                 ),
             )
         }
-    }
-
-    /**
-     * Debug-only bridge to the NORYX7 Gateway.
-     *
-     * Browser remains a transport/UI layer:
-     * no HYPERSYNTH logic, no model routing, no cognitive processing.
-     */
-    private fun configureGatewayDebugAction() {
-        if (!BuildConfig.DEBUG) return
-
-        binding.tabs.setOnClickListener {
-            showGatewayDialog()
-        }
-
-        binding.tabs.contentDescription = "NORYX Gateway"
     }
 
     private fun showGatewayDialog() {
@@ -120,19 +79,11 @@ class MainActivity : AppCompatActivity() {
             maxLines = 6
             setPadding(32, 24, 32, 24)
         }
-
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(24, 0, 24, 0)
-            addView(
-                input,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ),
-            )
+            addView(input)
         }
-
         val dialog = AlertDialog.Builder(this)
             .setTitle("NORYX7 Gateway")
             .setMessage("Richiesta → Gateway → Runtime → risposta verificata")
@@ -144,53 +95,37 @@ class MainActivity : AppCompatActivity() {
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val text = input.text.toString().trim()
-
                 if (text.isEmpty()) {
                     input.error = "Inserisci una richiesta"
                     return@setOnClickListener
                 }
-
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 input.isEnabled = false
-
                 executeGatewayRequest(text, dialog)
             }
         }
-
         dialog.show()
     }
 
-    private fun executeGatewayRequest(
-        text: String,
-        dialog: AlertDialog,
-    ) {
+    private fun executeGatewayRequest(text: String, dialog: AlertDialog) {
         gatewayExecutor.execute {
             try {
-                val client = gatewayClient ?: createGatewayClient().also {
-                    gatewayClient = it
-                }
-
+                val client = gatewayClient ?: createGatewayClient().also { gatewayClient = it }
                 val result = client.execute(text)
-
                 runOnUiThread {
                     dialog.dismiss()
-
                     AlertDialog.Builder(this)
                         .setTitle("NORYX7 — Risposta verificata")
-                        .setMessage(result as CharSequence)
+                        .setMessage(result.result)
                         .setPositiveButton("OK", null)
                         .show()
                 }
             } catch (error: Exception) {
                 runOnUiThread {
                     dialog.dismiss()
-
                     AlertDialog.Builder(this)
                         .setTitle("Gateway rifiutato")
-                        .setMessage(
-                            error.message
-                                ?: "Impossibile completare la richiesta.",
-                        )
+                        .setMessage(error.message ?: "Impossibile completare la richiesta.")
                         .setPositiveButton("OK", null)
                         .show()
                 }
@@ -198,31 +133,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createGatewayClient(): NoryxGatewayClient {
-        val baseUrl = getDebugString("noryx_gateway_url")
-        val bootstrapToken = getDebugString("noryx_gateway_bootstrap_token")
-        val clientId = getDebugString("noryx_gateway_client_id")
-
-        return NoryxGatewayClient(
-            baseUrl = baseUrl,
-            bootstrapToken = bootstrapToken,
-            clientId = clientId,
-        )
-    }
-
-    private fun getDebugString(name: String): String {
-        val id = resources.getIdentifier(
-            name,
-            "string",
-            packageName,
-        )
-
-        require(id != 0) {
-            "Missing debug gateway resource: $name"
-        }
-
-        return getString(id)
-    }
+    private fun createGatewayClient(): NoryxGatewayClient = NoryxGatewayClient(
+        baseUrl = getString(R.string.noryx_gateway_url),
+        bootstrapToken = getString(R.string.noryx_gateway_bootstrap_token),
+        clientId = getString(R.string.noryx_gateway_client_id),
+    )
 
     private fun configureWebView() {
         binding.webView.settings.javaScriptEnabled = true
@@ -231,7 +146,6 @@ class MainActivity : AppCompatActivity() {
         binding.webView.settings.allowContentAccess = false
         binding.webView.settings.mixedContentMode =
             android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-
         binding.webView.webViewClient = NoryxWebViewClient(
             onNavigationChanged = { state ->
                 runOnUiThread {
@@ -240,17 +154,11 @@ class MainActivity : AppCompatActivity() {
                     binding.forward.isEnabled = state.canGoForward
                 }
             },
-            onError = {
-                runOnUiThread {
-                    showError()
-                }
-            },
+            onError = { runOnUiThread { showError() } },
         )
-
         binding.webView.webChromeClient = NoryxWebChromeClient { progress ->
             binding.progress.progress = progress
-            binding.progress.visibility =
-                if (progress < 100) View.VISIBLE else View.GONE
+            binding.progress.visibility = if (progress < 100) View.VISIBLE else View.GONE
         }
     }
 
@@ -260,9 +168,7 @@ class MainActivity : AppCompatActivity() {
         binding.address.setText(binding.webView.url.orEmpty())
     }
 
-    private fun showError() {
-        binding.errorPanel.visibility = View.VISIBLE
-    }
+    private fun showError() { binding.errorPanel.visibility = View.VISIBLE }
 
     private fun clearError() {
         binding.errorPanel.visibility = View.GONE
@@ -281,7 +187,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // DIAGNOSTIC: Gateway executor disabled.
+        gatewayExecutor.shutdownNow()
         binding.webView.stopLoading()
         binding.webView.destroy()
         super.onDestroy()
