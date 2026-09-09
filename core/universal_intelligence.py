@@ -84,8 +84,9 @@ class UniversalIntelligenceFabric:
         domains = [item.domain for item in assessments]
         if len(domains) != len(set(domains)):
             return self._rejected(task.task_id, "duplicate_domain_assessment")
+        allowed_strategies = set(self.STRATEGIES) | {"standard"}
         strategies = {item.strategy for item in assessments}
-        if not strategies.issubset(self.STRATEGIES | {"standard"}):
+        if not strategies.issubset(allowed_strategies):
             return self._rejected(task.task_id, "invalid_cognitive_strategy")
 
         evidence_items = [item for assessment in assessments for item in assessment.evidence]
