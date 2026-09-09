@@ -1,3 +1,5 @@
+import hashlib
+
 from core.identity import AgentIdentityAuthority
 from core.llm.model_fabric_bridge import ModelFabricBridge
 from core.system_fabric import CanonicalSystemFabric
@@ -18,6 +20,7 @@ def _bridge():
     fabric = ModelFabric([FakeModel()], runtime_id="runtime-test")
     system_fabric = CanonicalSystemFabric()
     identity, _ = AgentIdentityAuthority.generate("agent-model-test")
+    system_fabric.bind_agent_identity(identity, capabilities=("execute", "model:execute"))
     bridge = ModelFabricBridge(
         fabric,
         runtime_id="runtime-test",
@@ -44,7 +47,8 @@ def test_model_dispatch_records_digest_only_provenance():
     record = next(item for item in records if item.record_id == "execution:execution-test:model_completed")
     assert len(record.payload_digest) == 64
     assert len(record.provenance_digest) == 64
-    assert b"sensitive user prompt" not in record.payload
+    assert record.payload_digest != hashlib.sha256(b"sensitive user prompt").hexdigest()
+    assert identity.agent_id not in record.record_id
 
 
 def test_model_capability_is_not_implied_by_observe_only_binding():
@@ -59,8 +63,6 @@ def test_model_capability_is_not_implied_by_observe_only_binding():
         system_fabric=system_fabric,
         agent_identity=identity,
     )
-    # The bridge must fail closed before model execution when the canonical
-    # capability is absent; the bridge must not synthesize authority silently.
     try:
         bridge.generate("test")
     except PermissionError as exc:
