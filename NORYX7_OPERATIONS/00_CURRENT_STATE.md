@@ -1,7 +1,7 @@
 # NORYX7 — Current Operational State
 
 Date: 2026-09-09
-Branch: `main` (Wave 7 prepared on integration branch)
+Branch: `integration-wave-8-model-fabric-authorization-2026-09-09` (Wave 8 prepared from main)
 
 ## Mission
 
@@ -48,9 +48,17 @@ The pairing code is entered at runtime and is not persisted by the Android clien
 
 The canonical system fabric now has an explicit agent-identity binding contract. A well-formed `AgentIdentity` is mapped to a key-fingerprint-bound synthetic agent session and must hold an explicit capability before a protected agent execution path may proceed.
 
-The JARVIS bridge now binds and authorizes its execution principal through the canonical system fabric before RuntimeEngine dispatch, and re-checks the explicit `execute` capability at the execution boundary. This supplements, rather than replaces, the existing cryptographic `AuthorizationAuthority`, `ActionGate`, policy and security checks.
+The JARVIS bridge binds and authorizes its execution principal through the canonical system fabric before RuntimeEngine dispatch, and re-checks the explicit `execute` capability at the execution boundary. This supplements, rather than replaces, the existing cryptographic `AuthorizationAuthority`, `ActionGate`, policy and security checks.
 
 The binding is fail-closed and does not implicitly grant authority. Key replacement produces a distinct binding because the public-key fingerprint is part of the agent session identity.
+
+### Wave 8 — Model Fabric authorization and provenance
+
+The model dispatch boundary is now connected to the canonical system fabric. `OperationalNORYXRuntime` explicitly binds the primary and secondary LLM agent identities with `execute` plus `model:execute` before bringing the operational agent runtime online.
+
+`ModelFabricBridge` requires the already-bound `model:execute` capability before calling `ModelFabric.execute()`. The bridge does not auto-grant or elevate privileges. Model execution provenance is recorded through `CanonicalSystemFabric.record_execution()` using request/result/model/runtime metadata; the global fabric stores only digests, not raw prompts or model output.
+
+The existing `ModelFabric` runtime binding, request digest, result integrity/MAC checks and model capability filtering remain authoritative. Wave 8 adds the canonical cross-component authorization boundary without replacing those checks.
 
 ## Verified historically
 
@@ -70,7 +78,7 @@ A complete test using an explicit policy grant succeeded historically:
 - state commit: PASS
 - final state: `committed`
 
-These results are historical and are not a fresh verification of the current main branch.
+These results are historical and are not a fresh verification of the current Wave 8 branch.
 
 ### Policy security
 
@@ -104,6 +112,8 @@ If a protected path rejects an operation, first determine whether the rejection 
 - RecoveryController is implemented in `core/recovery.py`.
 - `core/system_fabric.py` owns the cross-component system-fabric boundary and now exposes explicit agent identity binding/authorization.
 - `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
+- `noryx7_runtime/model_fabric.py` owns provider-neutral model routing, runtime binding, request/result integrity and model capability filtering.
+- `core/llm/model_fabric_bridge.py` is the canonical LLM-to-ModelFabric dispatch boundary.
 - Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
 
 ## Known-good integration commits
@@ -111,10 +121,11 @@ If a protected path rejects an operation, first determine whether the rejection 
 - `81b68c8` — Wave 4 web/runtime unification
 - `f46904f` — Wave 5 canonical system fabric integration
 - `b6808f4` — Wave 6 secure Android browser enrollment
+- `1a20e44` — Wave 7 agent identity fabric integration
 
 ## Current verification status
 
-Wave 7 implementation is prepared on the integration branch. The new Wave 7 tests have not been executed in this environment, so no fresh PASS claim is made here. Live Render verification is also not available from the current environment.
+Wave 8 implementation is prepared on the integration branch. Focused Wave 8 tests have been added but have not been executed in this environment, so no fresh PASS claim is made. Live Render verification is also not available from the current environment.
 
 ## Current rule
 
