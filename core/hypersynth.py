@@ -135,6 +135,57 @@ class Hypersynth:
         except Exception: plan_check, plan = VerificationResult(False, "planning", "planner_failure"), None
         if not self._accepts_verification(plan_check, "plan"): return self._reject("planning", routed_task, plan_check if isinstance(plan_check, VerificationResult) and plan_check.is_well_formed() else VerificationResult(False, "plan", "invalid_plan_verification"))
         if not plan.steps or len(plan.steps) > self.max_agents: return self._reject("planning", routed_task, VerificationResult(False, "planning", "plan_exceeds_execution_bound"))
+
+        # Legacy/custom planners may materialize more execution steps than the
+        # decomposer emitted when the task has no explicit structured subtasks.
+        # Preserve the canonical decomposition contract for explicit subtasks,
+        # while deriving bounded subtask identities from the verified plan for
+        # legacy planners. Every executable plan step must still receive its own
+        # UIF route before allocation.
+        planned_subtask_ids = tuple(step.step_id for step in plan.steps)
+        decomposed_subtask_ids = tuple(item.subtask_id for item in subtasks)
+        if planned_subtask_ids != decomposed_subtask_ids:
+            if routed_task.constraints.get("subtasks") is not None:
+                return self._reject(
+                    "planning",
+                    routed_task,
+                    VerificationResult(False, "planning", "subtask_plan_coverage_invalid"),
+                    subtask_routes=subtask_routes,
+                )
+            try:
+                planned_subtasks = tuple(
+                    Subtask(step.step_id, step.objective, routed_task.task_type, step.dependencies)
+                    for step in plan.steps
+                )
+                subtask_routes = self.subtask_uif_router.route(routed_task, planned_subtasks)
+            except Exception:
+                return self._reject(
+                    "planning",
+                    routed_task,
+                    VerificationResult(False, "subtask_routing", "subtask_plan_route_failure"),
+                )
+            if not subtask_routes.verification.is_well_formed() or not subtask_routes.verification.valid:
+                return self._reject("planning", routed_task, subtask_routes.verification, subtask_routes=subtask_routes)
+            subtasks = planned_subtasks
+            route_by_id = {item.subtask_id: item for item in subtask_routes.routes}
+            self.audit.record(
+                "subtask_uif_legacy_planner_reconciled",
+                task_id=routed_task.task_id,
+                execution_id=routed_task.execution_id,
+                planned_subtasks=planned_subtask_ids,
+            )
+            context = self.context_manager.build(
+                routed_task.task_id,
+                {
+                    "input": routed_task.input,
+                    "objective": routed_task.objective,
+                    "subtasks": planned_subtask_ids,
+                    "specialist_route": specialist_route,
+                    "subtask_routes": subtask_routes,
+                },
+                source_ids=(routed_task.task_id,),
+                execution_id=routed_task.execution_id,
+            )
         timeout = self._deadline_rejection(routed_task, "hypothesis", deadline_check)
         if timeout: return timeout
         try: hypotheses = self.hypothesis_engine.generate(routed_task, plan); hypothesis_check = self.hypothesis_engine.verify(hypotheses, routed_task)
