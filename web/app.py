@@ -89,8 +89,13 @@ def health():
 def gateway_health():
     try:
         return get_gateway().health()
-    except Exception:
-        raise HTTPException(status_code=503, detail="gateway_runtime_unhealthy")
+    except Exception as exc:
+        import logging
+        logging.getLogger("noryx7.gateway").exception("Gateway health initialization failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"gateway_runtime_unhealthy:{type(exc).__name__}",
+        ) from exc
 
 
 @app.post("/v1/session")
