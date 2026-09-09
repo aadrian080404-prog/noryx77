@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import time
 
 from .actions import ActionGate
@@ -134,7 +135,15 @@ class HypersynthRuntime:
             available = self.router.available()
             principal_bindings = self._principal_binding(available) if available else ()
             if available: self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings), fingerprints=tuple(x[1] for x in principal_bindings))
-            result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent) if preferred_agent is not None else self.kernel.run(task, deadline_check=deadline_exceeded)
+            kernel_parameters = inspect.signature(self.kernel.run).parameters
+            kernel_accepts_context = (
+                "interaction_context" in kernel_parameters
+                or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in kernel_parameters.values())
+            )
+            if kernel_accepts_context:
+                result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent, interaction_context=interaction_context) if preferred_agent is not None else self.kernel.run(task, deadline_check=deadline_exceeded, interaction_context=interaction_context)
+            else:
+                result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent) if preferred_agent is not None else self.kernel.run(task, deadline_check=deadline_exceeded)
             if not isinstance(result, dict):
                 check = VerificationResult(False, "runtime", "malformed_kernel_result")
                 self.audit.record("hypersynth_failure", task_id=task_id, reason=check.reason)

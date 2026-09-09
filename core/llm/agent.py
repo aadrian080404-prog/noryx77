@@ -136,7 +136,7 @@ class LLMBackedAgent(Agent):
             "capabilities": self.capabilities,
         }
 
-    def _build_prompt(self, task: TaskSpec) -> str:
+    def _build_prompt(self, task: TaskSpec, interaction_context=None) -> str:
         system_context = (
             self.self_knowledge
             .build(execution_id=task.execution_id)
@@ -167,6 +167,13 @@ class LLMBackedAgent(Agent):
             f"Task type: {task.task_type}\n"
             f"Objective: {task.objective}\n"
             f"User input: {task.input!r}\n"
+            + (
+                "=== USER INTERACTION CONTEXT ===\n"
+                + interaction_context.as_prompt_context()
+                + "\n=== END USER INTERACTION CONTEXT ===\n"
+                if interaction_context is not None
+                else ""
+            )
         )
 
     def _generate(self, prompt: str, task: TaskSpec) -> str:
@@ -185,7 +192,7 @@ class LLMBackedAgent(Agent):
             return generate(prompt)
         raise TypeError("model_fabric_generate_unavailable")
 
-    def run(self, task: TaskSpec) -> AgentResult:
+    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
         check = self.verifier.verify_task(task)
         if not check.valid:
             return AgentResult(
@@ -195,7 +202,7 @@ class LLMBackedAgent(Agent):
                 verification=check,
                 execution_id=task.execution_id,
             )
-        prompt = self._build_prompt(task)
+        prompt = self._build_prompt(task, interaction_context=interaction_context)
         try:
             output = self._generate(prompt, task)
         except Exception:

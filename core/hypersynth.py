@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
+import inspect
 
 from .actions import ActionGate, ActionSpec
 from .audit import AuditLog
@@ -75,7 +76,7 @@ class Hypersynth:
         if task.execution_id: return task
         return TaskSpec(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, uuid4().hex)
 
-    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None):
+    def run(self, task: TaskSpec, *, deadline_check=None, preferred_agent=None, interaction_context=None):
         task = self._bind_execution(task)
         recovery_epoch = self.recovery.epoch if self.recovery is not None else None
         self.audit.record("hypersynth_start", task_id=getattr(task, "task_id", None), execution_id=getattr(task, "execution_id", ""))
@@ -205,7 +206,25 @@ class Hypersynth:
                         return self._reject("execution", task, capability_check, results=tuple(results))
                     result = AgentResult(agent.agent_id, child.task_id, "completed", capability_output, VerificationResult(True, "agent_result", "capability_result_verified"), task.execution_id)
                 else:
-                    operation = lambda: self.action_gate.authorize_and_execute(action, lambda: agent.run(child), calls_used=index, execution_id=task.execution_id)
+                    run_parameters = inspect.signature(agent.run).parameters
+                    accepts_context = (
+                        "interaction_context" in run_parameters
+                        or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in run_parameters.values())
+                    )
+                    if interaction_context is not None and accepts_context:
+                        operation = lambda: self.action_gate.authorize_and_execute(
+                            action,
+                            lambda: agent.run(child, interaction_context=interaction_context),
+                            calls_used=index,
+                            execution_id=task.execution_id,
+                        )
+                    else:
+                        operation = lambda: self.action_gate.authorize_and_execute(
+                            action,
+                            lambda: agent.run(child),
+                            calls_used=index,
+                            execution_id=task.execution_id,
+                        )
                     if self.recovery is not None:
                         decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
                     else:
