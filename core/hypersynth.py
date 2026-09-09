@@ -37,7 +37,7 @@ class Hypersynth:
         bounded_steps = min(max_steps, max_agents)
         self.planner = planner or Planner(max_steps=bounded_steps)
         self.decomposer = decomposer or TaskDecomposer()
-        self.context_manager = context_manager or ContextManager()
+        self.context_manager = context_manager or ContextManager(memory=memory)
         if action_gate is None:
             policy = PolicyEngine()
             security = SecurityBoundary(policy, verifier)
@@ -93,7 +93,12 @@ class Hypersynth:
         if isinstance(subtasks, dict): return subtasks
         timeout = self._deadline_rejection(task, "context", deadline_check)
         if timeout: return timeout
-        context = self.context_manager.build(task.task_id, {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)}, source_ids=(task.task_id,))
+        context = self.context_manager.build(
+            task.task_id,
+            {"input": task.input, "objective": task.objective, "subtasks": tuple(s.subtask_id for s in subtasks)},
+            source_ids=(task.task_id,),
+            execution_id=task.execution_id,
+        )
         timeout = self._deadline_rejection(task, "planning", deadline_check)
         if timeout: return timeout
         try: plan = self.planner.build(task); plan_check = self.planner.verify(plan, task)
@@ -205,7 +210,11 @@ class Hypersynth:
                         decision, result = self.recovery.run_if_normal(operation, expected_epoch=recovery_epoch)
                     else:
                         decision, result = operation()
-                    if not decision.allowed: return self._reject("execution", task, decision.verification, results=tuple(results))
+                    if not decision.allowed:
+                        check = decision.verification
+                        if check.reason == "execution_failure":
+                            check = VerificationResult(False, "execution", "execution_failure")
+                        return self._reject("execution", task, check, results=tuple(results))
             except Exception:
                 return self._reject("execution", task, VerificationResult(False, "execution", "agent_execution_failure"), results=tuple(results))
             timeout = self._deadline_rejection(task, "execution", deadline_check)
@@ -239,6 +248,8 @@ class Hypersynth:
                 from .memory import MemoryItem
                 memory_key = "task:" + task.execution_id + ":" + task.task_id
                 self.memory.put(MemoryItem(memory_key, final_output, kind="working", source=task.task_id, importance=0.5, execution_id=task.execution_id))
+                execution_key = "execution:" + task.execution_id + ":final"
+                self.memory.put(MemoryItem(execution_key, final_output, kind="working", source=task.task_id, importance=0.7, execution_id=task.execution_id))
             except Exception:
                 return self._reject("verification", task, VerificationResult(False, "memory", "memory_persistence_failure"), results=tuple(results), hypotheses=hypotheses, simulations=simulations)
         if self.recovery is not None:
