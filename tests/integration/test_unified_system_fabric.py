@@ -10,7 +10,9 @@ def test_system_fabric_binds_and_authorizes_session():
         role="client",
     )
     assert binding.identity_id == "noryx-web"
-    assert fabric.authorize("session:test", "execute").client_id if hasattr(fabric.authorize("session:test", "execute"), "client_id") else True
+    authorized = fabric.authorize("session:test", "execute")
+    assert authorized.identity_id == "noryx-web"
+    assert authorized.session_id == "session:test"
 
 
 def test_system_fabric_records_digest_only_execution_metadata():
