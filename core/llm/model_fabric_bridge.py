@@ -13,7 +13,8 @@ class ModelFabricBridge:
 
     Il bridge concede al modello esclusivamente capacità generativa.
     Quando il runtime espone identità e fabric canonico, la dispatch del modello
-    è inoltre vincolata a una capability esplicita e produce provenance digest-only.
+    è inoltre vincolata a una capability già assegnata e produce provenance
+    digest-only. Il bridge non eleva mai i privilegi dell'agente.
     """
 
     MODEL_EXECUTE_CAPABILITY = "model:execute"
@@ -64,19 +65,12 @@ class ModelFabricBridge:
         if self._system_fabric is not None:
             identity = self._agent_identity
             assert identity is not None
-            self._system_fabric.bind_agent_identity(
-                identity,
-                capabilities=("execute", self.MODEL_EXECUTE_CAPABILITY),
-            )
             self._system_fabric.authorize_agent(identity, self.MODEL_EXECUTE_CAPABILITY)
 
         result = self._fabric.execute(request)
-
         output = getattr(result, "output", None)
-
         if not isinstance(output, str):
             raise RuntimeError("model_fabric_non_text_output")
-
         output = output.strip()
         if not output:
             raise RuntimeError("model_fabric_empty_output")
