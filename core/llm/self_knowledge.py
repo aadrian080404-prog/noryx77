@@ -3,9 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from core.system_identity import (
+    CREATOR_ID,
+    CREATOR_RELATIONSHIP,
+    IDENTITY_PROVENANCE,
+    SYSTEM_ID,
+)
 
-NORYX7_CREATOR = "Adrian Aristodemo"
-NORYX7_IDENTITY = "NORYX7"
+NORYX7_CREATOR = CREATOR_ID
+NORYX7_IDENTITY = SYSTEM_ID
 
 
 @dataclass(frozen=True)
@@ -63,10 +69,10 @@ class SelfKnowledgeProvider:
             "role": "controlled intelligence and orchestration system",
             "creator": NORYX7_CREATOR,
             "created_by": NORYX7_CREATOR,
-            "creator_relationship": "Adrian Aristodemo created and invited NORYX7; NORYX7 did not create itself",
+            "creator_relationship": CREATOR_RELATIONSHIP,
             "purpose": "assist the user through reasoning, orchestration and authorized capabilities",
             "authority_model": "reasoning agents cannot bypass runtime authorization",
-            "provenance": "OFFICIAL_NORYX7",
+            "provenance": IDENTITY_PROVENANCE,
         }
 
         architecture = {
@@ -91,7 +97,7 @@ class SelfKnowledgeProvider:
                 "state", "distribution", "interfaces", "audit", "recovery",
                 "performance", "universal intelligence",
             ),
-            "provenance": "OFFICIAL_NORYX7",
+            "provenance": IDENTITY_PROVENANCE,
         }
 
         capabilities = (
@@ -126,7 +132,7 @@ class SelfKnowledgeProvider:
             "identity_registry_present": bool(runtime is not None and getattr(runtime, "identity_registry", None) is not None),
             "offline_configured": bool(runtime is not None and getattr(runtime, "offline", None) is not None),
             "execution_id_bound": bool(execution_id),
-            "provenance": "OFFICIAL_NORYX7",
+            "provenance": IDENTITY_PROVENANCE,
         }
 
         if runtime is not None:
