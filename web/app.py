@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from core.contracts import TaskSpec
 from core.operational_runtime import OperationalNORYXRuntime
+from gateway.auth import SessionError
 from gateway.server import NoryxGateway
 from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
@@ -49,9 +50,7 @@ def get_runtime() -> OperationalNORYXRuntime:
 
 @lru_cache(maxsize=1)
 def get_gateway() -> NoryxGateway:
-    return NoryxGateway(
-        runtime_adapter=RuntimeAdapter(runtime=get_runtime()),
-    )
+    return NoryxGateway(runtime_adapter=RuntimeAdapter(runtime=get_runtime()))
 
 
 @app.get("/", include_in_schema=False)
@@ -71,32 +70,27 @@ def robots():
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap(request: Request):
     base = str(request.base_url).rstrip("/")
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f'<url><loc>{base}/</loc></url>'
-        '</urlset>'
-    )
+    content = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + f'<url><loc>{base}/</loc></url></urlset>'
     return Response(content=content, media_type="application/xml")
 
 
 @app.get("/health")
 def health():
     runtime = get_runtime()
-    statuses = runtime.agent_runtime.status()
+    statuses = runtime.heartbeat_agents()
     return {
         "status": "healthy" if runtime.agent_runtime.online else "degraded",
         "service": "noryx7",
-        "agents": [
-            {"agent_id": item.agent_id, "role": item.role, "state": item.state}
-            for item in statuses
-        ],
+        "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
     }
 
 
 @app.get("/v1/health")
 def gateway_health():
-    return get_gateway().health()
+    try:
+        return get_gateway().health()
+    except Exception:
+        raise HTTPException(status_code=503, detail="gateway_runtime_unhealthy")
 
 
 @app.post("/v1/session")
@@ -106,10 +100,9 @@ def gateway_session(request: GatewaySessionRequest):
             bootstrap_token=request.bootstrap_token,
             client_id=request.client_id,
         )
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
-        from gateway.auth import SessionError
-        if isinstance(exc, SessionError):
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail="gateway_auth_failure") from exc
 
 
@@ -122,15 +115,15 @@ def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
         return get_gateway().execute(
             session_token=authorization[7:],
             text=request.input,
+            execution_id=request.execution_id,
         )
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        from gateway.auth import SessionError
-        if isinstance(exc, SessionError):
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
-        if isinstance(exc, PermissionError):
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-        if isinstance(exc, ValueError):
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise HTTPException(status_code=500, detail="gateway_runtime_failure") from exc
 
 
@@ -139,17 +132,8 @@ def chat(request: ChatRequest):
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
-
     execution_id = f"api-exec-{uuid.uuid4().hex}"
-    task = TaskSpec(
-        task_id=f"api-task-{uuid.uuid4().hex}",
-        task_type="chat",
-        objective=message,
-        input=message,
-        risk_class="normal",
-        execution_id=execution_id,
-    )
-
+    task = TaskSpec(task_id=f"api-task-{uuid.uuid4().hex}", task_type="chat", objective=message, input=message, risk_class="normal", execution_id=execution_id)
     try:
         runtime = get_runtime()
         runtime.heartbeat_agents()
@@ -162,7 +146,6 @@ def chat(request: ChatRequest):
             if verification is not None:
                 reason = getattr(verification, "reason", None) or reason
             raise HTTPException(status_code=502, detail=reason)
-
         response = result.get("result")
         if not isinstance(response, str) or not response.strip():
             raise RuntimeError("empty_noryx7_response")
@@ -173,10 +156,7 @@ def chat(request: ChatRequest):
             "execution_id": result.get("execution_id"),
             "verification": verification.__dict__ if hasattr(verification, "__dict__") else verification,
             "orchestration_stage": result.get("orchestration_stage"),
-            "agent_runtime": [
-                {"agent_id": item.agent_id, "role": item.role, "state": item.state}
-                for item in runtime.agent_runtime.status()
-            ],
+            "agent_runtime": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in runtime.agent_runtime.status()],
         }
     except HTTPException:
         raise
