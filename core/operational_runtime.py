@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from .actions import AuthorizationAuthority
 from .agent_runtime import AgentRuntime
+from .identity import AgentIdentity
+from .jarvis_runtime_bridge import JarvisRuntimeBridge
 from .operational_fabric import OperationalAgentFabric
 from .planning import Planner
 from .runtime import NORYXRuntime
+from noryx7_runtime.engine import RuntimeEngine
 
 
 class OperationalNORYXRuntime(NORYXRuntime):
@@ -17,6 +21,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric)
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
+        self._jarvis_bridge: JarvisRuntimeBridge | None = None
         self.hypersynth.kernel.planner = Planner(
             max_steps=min(self.limits.max_actions_per_task, 2),
             collaboration_enabled=True,
@@ -43,6 +48,41 @@ class OperationalNORYXRuntime(NORYXRuntime):
             required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)),
             operational_fabric=tuple(sorted(fabric_ids)),
         )
+
+    def configure_jarvis_bridge(
+        self,
+        *,
+        runtime_engine: RuntimeEngine,
+        authorization: AuthorizationAuthority,
+        principal: AgentIdentity,
+        policy,
+    ) -> JarvisRuntimeBridge:
+        """Bind the standalone JARVIS execution plane to this runtime's canonical controls."""
+        bridge = JarvisRuntimeBridge(
+            runtime_engine=runtime_engine,
+            tool_executor=self.tool_executor,
+            verifier=self.verifier,
+            authorization=authorization,
+            principal=principal,
+            policy=policy,
+        )
+        self._jarvis_bridge = bridge
+        self.audit.record(
+            "jarvis_runtime_bridge_bound",
+            runtime_id=runtime_engine.runtime_id,
+            principal_id=principal.agent_id,
+        )
+        return bridge
+
+    @property
+    def jarvis_bridge(self) -> JarvisRuntimeBridge | None:
+        return self._jarvis_bridge
+
+    def execute_jarvis(self, request, plan):
+        """Execute a JARVIS request/plan only after the bridge has been explicitly bound."""
+        if self._jarvis_bridge is None:
+            raise RuntimeError("jarvis_bridge_not_configured")
+        return self._jarvis_bridge.execute(request, plan)
 
     def heartbeat_agents(self):
         statuses = self.agent_runtime.heartbeat()

@@ -128,16 +128,26 @@ class AgentCollaboration:
         if not isinstance(critique_output, str) or not critique_output.strip():
             raise RuntimeError("critique_output_missing")
         normalized = critique_output.strip()
-        first, _, _ = normalized.partition(" ")
-        first = first.rstrip(":").upper()
-        if first not in {"APPROVE", "REJECT"}:
+
+        # Real LLM providers may prepend harmless Markdown formatting
+        # (for example "## APPROVE") while still providing an explicit
+        # machine-readable verdict. Accept only an explicit verdict on the
+        # first non-empty line; never infer approval from free-form prose.
+        first_line = next(
+            (line.strip() for line in normalized.splitlines() if line.strip()),
+            "",
+        )
+        verdict_token = first_line.lstrip("#>*` ").split(None, 1)[0]
+        verdict_token = verdict_token.rstrip(":,;.!?").upper()
+
+        if verdict_token not in {"APPROVE", "REJECT"}:
             raise RuntimeError("unstructured_critique")
         critique = Critique(
             task.execution_id,
             task.task_id,
             secondary_id,
             primary_id,
-            first == "APPROVE",
+            verdict_token == "APPROVE",
             normalized,
             self._digest(normalized),
         )
