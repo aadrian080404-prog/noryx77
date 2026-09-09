@@ -8,12 +8,11 @@ front before reaching another front.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Mapping, TypeVar
+from hashlib import sha256
+from typing import Callable, Mapping
 
 from .boundaries import Front, IntentEnvelope
 from .runtime_dispatch import DispatchResult, dispatch
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -43,44 +42,23 @@ class RuntimeWiring:
     def registered_fronts(self) -> frozenset[Front]:
         return frozenset(self._adapters)
 
-    def invoke(self, intent: IntentEnvelope, *, execution_id: str) -> DispatchResult:
-        if not isinstance(intent, IntentEnvelope):
-            raise TypeError("intent_required")
-        if not isinstance(execution_id, str) or not execution_id.strip():
-            raise ValueError("invalid_execution_id")
-        target = intent.front
-        target_adapter = self._adapters[target]
-        if target is Front.ORCHESTRATION:
-            return dispatch(
-                intent,
-                source=Front.ORCHESTRATION,
-                target=Front.ORCHESTRATION,
-                execution_id=execution_id,
-                handler=lambda: target_adapter.invoke(intent.operation, b"", execution_id),
-            )
-        orchestration = self._adapters[Front.ORCHESTRATION]
-        payload = intent.payload_digest.encode("ascii")
-        return dispatch(
-            intent,
-            source=Front.ORCHESTRATION,
-            target=target,
-            execution_id=execution_id,
-            handler=lambda: orchestration.invoke(
-                f"dispatch:{target.value}:{intent.operation}", payload, execution_id
-            ),
+    @staticmethod
+    def _intent(operation: str, payload: bytes, *, execution_id: str) -> IntentEnvelope:
+        return IntentEnvelope(
+            intent_id=f"wiring:{execution_id}",
+            front=Front.ORCHESTRATION,
+            operation=operation,
+            payload_digest=sha256(payload).hexdigest(),
         )
 
     def invoke_target(self, target: Front, operation: str, payload: bytes, *, execution_id: str) -> DispatchResult:
-        if target is Front.ORCHESTRATION:
-            raise PermissionError("orchestration_must_enter_via_invoke")
         if not isinstance(target, Front):
             raise TypeError("invalid_target_front")
-        intent = IntentEnvelope(
-            intent_id=f"wiring:{execution_id}:{target.value}",
-            front=Front.ORCHESTRATION,
-            operation=operation,
-            payload_digest=__import__("hashlib").sha256(payload).hexdigest(),
-        )
+        if target is Front.ORCHESTRATION:
+            raise PermissionError("orchestration_must_enter_via_invoke")
+        if not isinstance(payload, bytes):
+            raise TypeError("payload_bytes_required")
+        intent = self._intent(operation, payload, execution_id=execution_id)
         return dispatch(
             intent,
             source=Front.ORCHESTRATION,
@@ -88,3 +66,18 @@ class RuntimeWiring:
             execution_id=execution_id,
             handler=lambda: self._adapters[target].invoke(operation, payload, execution_id),
         )
+
+    def invoke(self, intent: IntentEnvelope, *, execution_id: str) -> DispatchResult:
+        if not isinstance(intent, IntentEnvelope):
+            raise TypeError("intent_required")
+        if not isinstance(execution_id, str) or not execution_id.strip():
+            raise ValueError("invalid_execution_id")
+        if intent.front is Front.ORCHESTRATION:
+            return dispatch(
+                intent,
+                source=Front.ORCHESTRATION,
+                target=Front.ORCHESTRATION,
+                execution_id=execution_id,
+                handler=lambda: self._adapters[Front.ORCHESTRATION].invoke(intent.operation, b"", execution_id),
+            )
+        return self.invoke_target(intent.front, intent.operation, intent.payload_digest.encode("ascii"), execution_id=execution_id)
