@@ -12,6 +12,7 @@ from .universal_intelligence import SpecialistRoute, UniversalIntelligenceFabric
 class SubtaskRoute:
     subtask_id: str
     route: SpecialistRoute
+    route_authority: bool = False
 
     def is_well_formed(self) -> bool:
         return (
@@ -19,6 +20,8 @@ class SubtaskRoute:
             and bool(self.subtask_id.strip())
             and isinstance(self.route, SpecialistRoute)
             and self.route.is_well_formed()
+            and isinstance(self.route_authority, bool)
+            and self.route_authority is False
         )
 
 
@@ -56,14 +59,14 @@ class SubtaskUIFRouter:
                 task.input,
                 task.constraints,
                 task.verification_requirements,
-                subtask_risk := task.risk_class,
+                task.risk_class,
                 task.execution_id,
             )
             try:
                 route = self.fabric.route(child)
             except Exception:
                 return SubtaskRouteSet(task.task_id, tuple(routes), VerificationResult(False, "subtask_routing", "subtask_route_failure"))
-            routes.append(SubtaskRoute(subtask.subtask_id, route))
+            routes.append(SubtaskRoute(subtask.subtask_id, route, False))
             seen.add(subtask.subtask_id)
         return SubtaskRouteSet(task.task_id, tuple(routes), VerificationResult(True, "subtask_routing", "subtask_routes_ok"))
 
