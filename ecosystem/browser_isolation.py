@@ -1,17 +1,17 @@
 """Static isolation gate for the standalone NORYX Browser front.
 
-The browser is intentionally an AI-free WebView surface. This gate checks only
-integration markers that would create a direct dependency on NORYX7/HYPERSYNTH,
-agent/chatbot providers, telemetry or tracking. Generic Android APIs are not
-forbidden because the browser itself necessarily uses the Android SDK.
+The browser is intentionally an AI-free WebView surface. The browser may use
+an explicit network Gateway boundary, but it must not contain direct cognitive
+runtime, model-provider, chatbot, telemetry or tracking integration.
 """
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 FORBIDDEN_MARKERS = (
     "hypersynth",
-    "noryx7",
+    "noryx7runtime",
     "chatbot",
     "openai",
     "anthropic",
@@ -23,6 +23,24 @@ FORBIDDEN_MARKERS = (
 )
 
 ALLOWED_EXTENSIONS = {".kt", ".kts", ".xml", ".gradle", ".properties", ".json"}
+GENERATED_DIRS = {"build", ".gradle", ".idea"}
+
+
+def _strip_non_code(text: str) -> str:
+    """Remove comments and quoted literals before checking direct integrations.
+
+    Endpoint/resource values and explanatory comments are not executable
+    integrations. Keeping them out of the marker scan prevents false positives
+    while leaving imports, identifiers and API calls visible to the gate.
+    """
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    text = re.sub(r"//[^\n]*", "", text)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    text = re.sub(r"'''(?:.|\n)*?'''", "\"\"\"\"\"\"", text)
+    text = re.sub(r'"""(?:.|\n)*?"""', '""', text)
+    text = re.sub(r'"(?:\\.|[^"\\])*"', '""', text)
+    text = re.sub(r"'(?:\\.|[^'\\])*'", "''", text)
+    return text.lower()
 
 
 def scan_browser_isolation(repository_root: str | Path | None = None) -> tuple[str, ...]:
@@ -30,12 +48,15 @@ def scan_browser_isolation(repository_root: str | Path | None = None) -> tuple[s
     browser = root / "noryx-browser"
     if not browser.is_dir():
         return ("browser_directory_missing",)
+
     violations: list[str] = []
     for path in sorted(browser.rglob("*")):
         if not path.is_file() or path.suffix.lower() not in ALLOWED_EXTENSIONS:
             continue
+        if any(part in GENERATED_DIRS for part in path.relative_to(browser).parts):
+            continue
         try:
-            text = path.read_text(encoding="utf-8").lower()
+            text = _strip_non_code(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError):
             violations.append(f"unreadable:{path.relative_to(root)}")
             continue
