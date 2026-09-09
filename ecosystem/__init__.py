@@ -8,6 +8,7 @@ from .global_scale import (
     LanguageContext, LanguageFabric, ObservabilityFabric, ResourceBudget, ResourceController,
     SelfHealingController, SyntheticScenario, SyntheticTestingGrid, WorkClass, WorkRequest,
 )
+from .runtime_wiring import FrontAdapter, RuntimeWiring
 
 __all__ = [
     "CLOSURE_CONTRACTS", "FrontClosure", "require_contract_shape",
@@ -16,4 +17,5 @@ __all__ = [
     "ElasticComputeFabric", "EventFabric", "GlobalControlPlane", "GlobalTrafficRouter", "Health",
     "LanguageContext", "LanguageFabric", "ObservabilityFabric", "ResourceBudget", "ResourceController",
     "SelfHealingController", "SyntheticScenario", "SyntheticTestingGrid", "WorkClass", "WorkRequest",
+    "FrontAdapter", "RuntimeWiring",
 ]
