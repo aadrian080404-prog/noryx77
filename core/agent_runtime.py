@@ -17,12 +17,7 @@ class AgentRuntimeStatus:
 
 
 class AgentRuntime:
-    """Operational lifecycle registry for the agents hosted by one NORYX7 runtime.
-
-    ONLINE means the agent is registered, identity-trusted and routable by the
-    current runtime. It does not claim that an external model provider exists;
-    provider availability remains a separate execution concern.
-    """
+    """Operational lifecycle registry for agents hosted by one NORYX7 runtime."""
 
     def __init__(self, router, identity_registry, *, clock=time.monotonic):
         if router is None or identity_registry is None or not callable(clock):
@@ -41,21 +36,16 @@ class AgentRuntime:
             for agent_id in self.router.available():
                 agent = self.router.get(agent_id)
                 identity = getattr(agent, "identity", None)
-                if identity is None or not self.identity_registry.is_trusted(identity):
-                    state = "UNTRUSTED"
-                else:
-                    state = "ONLINE"
-                statuses.append(
-                    AgentRuntimeStatus(
-                        agent_id=agent_id,
-                        role=str(getattr(agent, "role", "system")),
-                        state=state,
-                        creator=str(getattr(agent, "creator", "NORYX7")),
-                        purpose=str(getattr(agent, "purpose", "runtime execution")),
-                        capabilities=tuple(getattr(agent, "capabilities", ())),
-                        last_heartbeat=now,
-                    )
-                )
+                state = "ONLINE" if identity is not None and self.identity_registry.is_trusted(identity) else "UNTRUSTED"
+                statuses.append(AgentRuntimeStatus(
+                    agent_id=agent_id,
+                    role=str(getattr(agent, "role", "system")),
+                    state=state,
+                    creator=str(getattr(agent, "creator", "NORYX7")),
+                    purpose=str(getattr(agent, "purpose", "runtime execution")),
+                    capabilities=tuple(getattr(agent, "capabilities", ())),
+                    last_heartbeat=now,
+                ))
             self._states = {item.agent_id: item for item in statuses}
             self._online = bool(statuses) and all(item.state == "ONLINE" for item in statuses)
             return tuple(statuses)
@@ -68,17 +58,15 @@ class AgentRuntime:
                 agent = self.router.get(agent_id)
                 identity = getattr(agent, "identity", None)
                 trusted = identity is not None and self.identity_registry.is_trusted(identity)
-                refreshed.append(
-                    AgentRuntimeStatus(
-                        agent_id=current.agent_id,
-                        role=current.role,
-                        state="ONLINE" if trusted else "UNTRUSTED",
-                        creator=current.creator,
-                        purpose=current.purpose,
-                        capabilities=current.capabilities,
-                        last_heartbeat=now,
-                    )
-                )
+                refreshed.append(AgentRuntimeStatus(
+                    agent_id=current.agent_id,
+                    role=current.role,
+                    state="ONLINE" if trusted else "UNTRUSTED",
+                    creator=current.creator,
+                    purpose=current.purpose,
+                    capabilities=current.capabilities,
+                    last_heartbeat=now,
+                ))
             self._states = {item.agent_id: item for item in refreshed}
             self._online = bool(refreshed) and all(item.state == "ONLINE" for item in refreshed)
             return tuple(refreshed)
@@ -88,15 +76,10 @@ class AgentRuntime:
             self._online = False
             self._states = {
                 agent_id: AgentRuntimeStatus(
-                    agent_id=item.agent_id,
-                    role=item.role,
-                    state="OFFLINE",
-                    creator=item.creator,
-                    purpose=item.purpose,
-                    capabilities=item.capabilities,
-                    last_heartbeat=item.last_heartbeat,
-                )
-                for agent_id, item in self._states.items()
+                    agent_id=item.agent_id, role=item.role, state="OFFLINE",
+                    creator=item.creator, purpose=item.purpose,
+                    capabilities=item.capabilities, last_heartbeat=item.last_heartbeat,
+                ) for agent_id, item in self._states.items()
             }
 
     @property

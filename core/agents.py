@@ -6,7 +6,7 @@ from .verification import VerificationEngine
 class Agent:
     agent_id = "base"
 
-    def run(self, task: TaskSpec) -> AgentResult:
+    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
         raise NotImplementedError
 
 
@@ -20,7 +20,7 @@ class DeterministicAgent(Agent):
                 raise ValueError("invalid_deterministic_agent_identity")
         self.identity = identity
 
-    def run(self, task: TaskSpec) -> AgentResult:
+    def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
         check = self.verifier.verify_task(task)
         if not check.valid:
             return AgentResult(self.agent_id, task.task_id, "rejected", verification=check, execution_id=task.execution_id)

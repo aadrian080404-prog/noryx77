@@ -20,7 +20,6 @@ class FakeOperationalModel:
 def test_operational_runtime_starts_primary_and_secondary_online():
     fabric = ModelFabric([FakeOperationalModel()], runtime_id="operational-test")
     runtime = OperationalNORYXRuntime(model_fabric=fabric)
-
     statuses = runtime.agent_runtime.status()
     assert {item.agent_id for item in statuses} >= {"noryx7-llm", "noryx7-secondary"}
     assert all(item.state == "ONLINE" for item in statuses)
@@ -40,9 +39,7 @@ def test_operational_runtime_executes_primary_secondary_primary_through_tool_mes
         risk_class="normal",
         execution_id="execution-operational-e2e",
     )
-
     result = runtime.run_hypersynth(task)
-
     assert result["status"] == "completed"
     assert result["execution_id"] == task.execution_id
     assert result["results"][-1].output.startswith("RECONCILED:")

@@ -12,16 +12,16 @@
 <body>
 <header class="top"><div class="brand">NORYX7</div><div id="status" class="status">● online</div></header>
 <main class="shell">
-<section class="intro"><h1>NORYX7</h1><p>Interfaccia pubblica del runtime. Scrivi una richiesta per avviare un'esecuzione.</p></section>
+<section class="intro"><h1>NORYX7</h1><p>Interfaccia del runtime operativo. Ogni richiesta passa dal kernel e dai confini di autorizzazione e verifica.</p></section>
 <section id="chat" class="chat" aria-live="polite"></section>
 <div id="error" class="error" hidden></div>
 <form id="composer" class="composer"><textarea id="input" aria-label="Messaggio" placeholder="Scrivi a NORYX7…" required></textarea><button id="send" type="submit">Invia</button></form>
-<div class="foot">NORYX7 Runtime · HTTPS API</div>
+<div class="foot">NORYX7 Runtime · HTTPS API · Primary / Secondary</div>
 </main>
 <script>
-const chat=document.getElementById('chat'), form=document.getElementById('composer'), input=document.getElementById('input'), send=document.getElementById('send'), error=document.getElementById('error');
+const chat=document.getElementById('chat'),form=document.getElementById('composer'),input=document.getElementById('input'),send=document.getElementById('send'),error=document.getElementById('error');
 function add(text,kind,meta=''){const el=document.createElement('div');el.className='msg '+kind;el.textContent=text;chat.appendChild(el);if(meta){const m=document.createElement('div');m.className='meta';m.textContent=meta;chat.appendChild(m)}el.scrollIntoView({behavior:'smooth',block:'end'});}
-form.addEventListener('submit',async e=>{e.preventDefault();const message=input.value.trim();if(!message)return;error.hidden=true;add(message,'user');input.value='';send.disabled=true;send.textContent='…';try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.detail||`HTTP ${r.status}`);add(data.response,'assistant',data.execution_id?`execution: ${data.execution_id}`:'');}catch(err){error.textContent='Errore: '+err.message;error.hidden=false;}finally{send.disabled=false;send.textContent='Invia';input.focus();}});
+form.addEventListener('submit',async e=>{e.preventDefault();const message=input.value.trim();if(!message)return;error.hidden=true;add(message,'user');input.value='';send.disabled=true;send.textContent='…';try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.detail||`HTTP ${r.status}`);const states=(data.agent_runtime||[]).map(x=>`${x.agent_id}:${x.state}`).join(' · ');add(data.response,'assistant',data.execution_id?`execution: ${data.execution_id}${states?' · '+states:''}`:'');}catch(err){error.textContent='Errore: '+err.message;error.hidden=false;}finally{send.disabled=false;send.textContent='Invia';input.focus();}});
 input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});
 </script>
 </body>

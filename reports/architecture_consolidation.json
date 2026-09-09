@@ -1,0 +1,139 @@
+{
+  "capabilities": {
+    "context": {
+      "direct": [
+        "core/context.py"
+      ],
+      "expected": [
+        "core/context.py"
+      ],
+      "resolved": [
+        "core/context.py"
+      ],
+      "status": "resolved"
+    },
+    "hypersynth": {
+      "direct": [
+        "core/hypersynth.py"
+      ],
+      "expected": [
+        "core/hypersynth.py"
+      ],
+      "resolved": [
+        "core/hypersynth.py"
+      ],
+      "status": "resolved"
+    },
+    "memory": {
+      "direct": [
+        "core/memory.py"
+      ],
+      "expected": [
+        "core/memory.py"
+      ],
+      "resolved": [
+        "core/memory.py"
+      ],
+      "status": "resolved"
+    },
+    "orchestration": {
+      "direct": [],
+      "expected": [
+        "core/orchestrator.py"
+      ],
+      "resolved": [
+        "core/agent_fabric.py",
+        "core/operational_fabric.py",
+        "core/orchestration.py",
+        "core/test_agent_fabric.py",
+        "core/test_security_contracts.py",
+        "ecosystem/dispatch_contract.py",
+        "ecosystem/isolation.py",
+        "ecosystem/orchestration.py",
+        "ecosystem/runtime_dispatch.py",
+        "jarvis/core/orchestrator.py",
+        "noryx7_runtime/engine.py",
+        "noryx7_runtime/test_engine.py",
+        "noryx7_runtime/test_engine_lifecycle.py",
+        "noryx7_runtime/test_engine_replay.py"
+      ],
+      "status": "resolved"
+    },
+    "planning": {
+      "direct": [
+        "core/planning.py"
+      ],
+      "expected": [
+        "core/planning.py"
+      ],
+      "resolved": [
+        "core/planning.py"
+      ],
+      "status": "resolved"
+    },
+    "reasoning": {
+      "direct": [
+        "core/reasoning.py"
+      ],
+      "expected": [
+        "core/reasoning.py"
+      ],
+      "resolved": [
+        "core/reasoning.py"
+      ],
+      "status": "resolved"
+    },
+    "recovery": {
+      "direct": [
+        "core/recovery.py"
+      ],
+      "expected": [
+        "core/recovery.py"
+      ],
+      "resolved": [
+        "core/recovery.py"
+      ],
+      "status": "resolved"
+    },
+    "runtime": {
+      "direct": [
+        "core/runtime.py"
+      ],
+      "expected": [
+        "core/runtime.py"
+      ],
+      "resolved": [
+        "core/runtime.py"
+      ],
+      "status": "resolved"
+    },
+    "simulation": {
+      "direct": [],
+      "expected": [
+        "core/simulation.py"
+      ],
+      "resolved": [
+        "core/cyber_range.py",
+        "core/reasoning.py",
+        "core/test_cyber_range.py",
+        "core/test_hypersynth.py",
+        "core/test_hypersynth_verifier_boundaries.py"
+      ],
+      "status": "resolved"
+    },
+    "verification": {
+      "direct": [
+        "core/verification.py"
+      ],
+      "expected": [
+        "core/verification.py"
+      ],
+      "resolved": [
+        "core/verification.py"
+      ],
+      "status": "resolved"
+    }
+  },
+  "python_files": 199,
+  "root": "/data/data/com.termux/files/home/noryx7"
+}

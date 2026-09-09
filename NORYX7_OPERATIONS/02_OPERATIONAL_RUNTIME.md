@@ -10,11 +10,11 @@ For ordinary model tasks when a model fabric is configured, the planner selects 
 
 `Primary -> Secondary critique -> Primary reconciliation -> verification`
 
-The collaboration capability is itself dispatched by the canonical `ToolExecutor`, so it does not create a parallel authority path.
+The collaboration capability is dispatched through the canonical operational fabric, so it does not create a parallel authority path.
 
 ## Online agents
 
-`OperationalNORYXRuntime` starts the hosted agent lifecycle after the runtime has created and cryptographically trusted both model agents.
+`OperationalNORYXRuntime` starts the hosted agent lifecycle after the runtime has created and cryptographically trusted the required model agents.
 
 - `noryx7-llm`: Primary
 - `noryx7-secondary`: Secondary
@@ -29,9 +29,10 @@ The collaboration capability is itself dispatched by the canonical `ToolExecutor
 
 The operational acceptance tests verify:
 
-- both agents are online;
+- both required agents are online;
 - Primary/Secondary identities are distinct and trusted;
 - ordinary model tasks use the collaboration capability;
 - the collaboration result is verified;
 - the same execution identity survives the full handshake;
-- the completion is visible in runtime audit state.
+- the operational fabric is present and online;
+- completion is visible in runtime audit state.

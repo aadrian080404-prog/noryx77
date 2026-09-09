@@ -10,10 +10,12 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 from core.contracts import TaskSpec
-from core.runtime import NORYXRuntime
+from core.operational_runtime import OperationalNORYXRuntime
+from gateway.auth import SessionError
+from gateway.server import NoryxGateway
+from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
-
 
 app = FastAPI(title="NORYX7 API", version="0.1.0")
 WEB_DIR = Path(__file__).resolve().parent
@@ -25,14 +27,30 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class GatewaySessionRequest(BaseModel):
+    bootstrap_token: str
+    client_id: str
+
+
+class GatewayExecuteRequest(BaseModel):
+    input: str
+    execution_id: str | None = None
+
+
 @lru_cache(maxsize=1)
-def get_runtime() -> NORYXRuntime:
+def get_runtime() -> OperationalNORYXRuntime:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
     adapter = OpenRouterAdapter(api_key=api_key)
     fabric = ModelFabric([adapter], runtime_id=f"api-{uuid.uuid4().hex}")
-    return NORYXRuntime(model_fabric=fabric)
+    journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
+    return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
+
+
+@lru_cache(maxsize=1)
+def get_gateway() -> NoryxGateway:
+    return NoryxGateway(runtime_adapter=RuntimeAdapter(runtime=get_runtime()))
 
 
 @app.get("/", include_in_schema=False)
@@ -46,24 +64,72 @@ def root():
 def robots():
     if ROBOTS_FILE.is_file():
         return FileResponse(ROBOTS_FILE, media_type="text/plain; charset=utf-8")
-    return PlainTextResponse("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n")
+    return PlainTextResponse("User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: /sitemap.xml\n")
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap(request: Request):
     base = str(request.base_url).rstrip("/")
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f'<url><loc>{base}/</loc></url>'
-        '</urlset>'
-    )
+    content = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + f'<url><loc>{base}/</loc></url></urlset>'
     return Response(content=content, media_type="application/xml")
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "noryx7"}
+    runtime = get_runtime()
+    statuses = runtime.heartbeat_agents()
+    return {
+        "status": "healthy" if runtime.agent_runtime.online else "degraded",
+        "service": "noryx7",
+        "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
+    }
+
+
+@app.get("/v1/health")
+def gateway_health():
+    try:
+        return get_gateway().health()
+    except Exception as exc:
+        import logging
+        logging.getLogger("noryx7.gateway").exception("Gateway health initialization failed")
+        raise HTTPException(
+            status_code=503,
+            detail=f"gateway_runtime_unhealthy:{type(exc).__name__}",
+        ) from exc
+
+
+@app.post("/v1/session")
+def gateway_session(request: GatewaySessionRequest):
+    try:
+        return get_gateway().create_session(
+            bootstrap_token=request.bootstrap_token,
+            client_id=request.client_id,
+        )
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="gateway_auth_failure") from exc
+
+
+@app.post("/v1/execute")
+def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
+    authorization = http_request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization_required")
+    try:
+        return get_gateway().execute(
+            session_token=authorization[7:],
+            text=request.input,
+            execution_id=request.execution_id,
+        )
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="gateway_runtime_failure") from exc
 
 
 @app.post("/api/chat")
@@ -71,46 +137,32 @@ def chat(request: ChatRequest):
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
-
     execution_id = f"api-exec-{uuid.uuid4().hex}"
-    task = TaskSpec(
-        task_id=f"api-task-{uuid.uuid4().hex}",
-        task_type="chat",
-        objective=message,
-        input=message,
-        risk_class="normal",
-        execution_id=execution_id,
-    )
-
+    task = TaskSpec(task_id=f"api-task-{uuid.uuid4().hex}", task_type="chat", objective=message, input=message, risk_class="normal", execution_id=execution_id)
     try:
-        result = get_runtime().run_hypersynth(task)
+        runtime = get_runtime()
+        runtime.heartbeat_agents()
+        result = runtime.run_hypersynth(task)
         if not isinstance(result, dict):
             raise RuntimeError("malformed_runtime_result")
-
         if result.get("status") != "completed":
             verification = result.get("verification")
             reason = result.get("reason") or "noryx7_execution_rejected"
             if verification is not None:
                 reason = getattr(verification, "reason", None) or reason
             raise HTTPException(status_code=502, detail=reason)
-
         response = result.get("result")
         if not isinstance(response, str) or not response.strip():
             raise RuntimeError("empty_noryx7_response")
-
         verification = result.get("verification")
         return {
             "response": response,
             "task_id": result.get("task_id"),
             "execution_id": result.get("execution_id"),
-            "verification": (
-                verification.__dict__
-                if hasattr(verification, "__dict__")
-                else verification
-            ),
+            "verification": verification.__dict__ if hasattr(verification, "__dict__") else verification,
             "orchestration_stage": result.get("orchestration_stage"),
+            "agent_runtime": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in runtime.agent_runtime.status()],
         }
-
     except HTTPException:
         raise
     except Exception as exc:

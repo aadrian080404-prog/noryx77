@@ -63,7 +63,7 @@
                 android:layout_weight="1"
                 android:background="@android:color/transparent"
                 android:hint="URL o ricerca"
-                android:hintTextColor="#4C5568"
+                android:textColorHint="#4C5568"
                 android:textColor="#DCE7F5"
                 android:singleLine="true"
                 android:textSize="12sp"

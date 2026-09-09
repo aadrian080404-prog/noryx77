@@ -1,0 +1,2634 @@
+{
+  "generated_at": "2026-09-09T00:03:34.979727+00:00",
+  "root": "/data/data/com.termux/files/home/noryx7",
+  "python": "3.14.6 (main, Jul  5 2026, 10:35:55) [Clang 21.0.0 (https://android.googlesource.com/toolchain/llvm-project 5e96669f0",
+  "git": {
+    "branch": "frontier-hardening-2026-09-07",
+    "head": "089de18",
+    "status": " M core/hypersynth.py\n?? devtools/audit_next_architecture_phase.py\n?? devtools/consolidate_architecture_phase.py\n?? reports/\n",
+    "recent_commits": "089de18 make architecture repair idempotent\n3b41d9d repair architecture integration contracts\n34b9804 fix context-memory integration contract\n48aa834 harden deterministic architecture integration patch\n3585542 correct memory hydration scope in single-pass integration\n80f8ec6 add single-pass remaining architecture integration\n2b7e1eb integrate memory retrieval into HYPERSYNTH context\nb602321 fix operational recovery result propagation and rejection identity\n"
+  },
+  "scan": {
+    "directories": [
+      "core",
+      "noryx7_runtime",
+      "ecosystem",
+      "jarvis",
+      "tools",
+      "tests"
+    ],
+    "python_modules": 252,
+    "classes": 468,
+    "functions": 1729,
+    "imports": 1208,
+    "syntax_errors": []
+  },
+  "key_architecture_files": {
+    "core/hypersynth.py": true,
+    "core/context.py": true,
+    "core/memory.py": true,
+    "core/runtime.py": true,
+    "core/orchestrator.py": false,
+    "core/verification.py": true,
+    "core/recovery.py": true,
+    "core/planning.py": true,
+    "core/reasoning.py": true,
+    "core/simulation.py": false
+  },
+  "modules": [
+    "core/__init__.py",
+    "core/actions.py",
+    "core/adversarial.py",
+    "core/agent_core.py",
+    "core/agent_fabric.py",
+    "core/agent_identity.py",
+    "core/agent_mesh.py",
+    "core/agent_runtime.py",
+    "core/agent_skills.py",
+    "core/agents.py",
+    "core/alerting.py",
+    "core/architecture_gate.py",
+    "core/architecture_registry.py",
+    "core/attestation.py",
+    "core/audit.py",
+    "core/authorization_replay.py",
+    "core/collaboration.py",
+    "core/context.py",
+    "core/contracts.py",
+    "core/control_plane.py",
+    "core/coordination.py",
+    "core/crypto.py",
+    "core/cyber_range.py",
+    "core/decomposition.py",
+    "core/defense.py",
+    "core/device.py",
+    "core/distributed.py",
+    "core/egress.py",
+    "core/errors.py",
+    "core/evaluation.py",
+    "core/evaluation_campaign.py",
+    "core/finch.py",
+    "core/frontier_capabilities.py",
+    "core/hypersynth.py",
+    "core/hypersynth_runtime.py",
+    "core/identity.py",
+    "core/interaction_context.py",
+    "core/jarvis_runtime_bridge.py",
+    "core/key_lifecycle.py",
+    "core/limits.py",
+    "core/llm/__init__.py",
+    "core/llm/agent.py",
+    "core/llm/model_fabric_bridge.py",
+    "core/llm/self_knowledge.py",
+    "core/memory.py",
+    "core/memory_hierarchy.py",
+    "core/metacognition.py",
+    "core/metacognitive_challenge.py",
+    "core/multiauth.py",
+    "core/observability.py",
+    "core/offline.py",
+    "core/offline_adapters.py",
+    "core/offline_anchor.py",
+    "core/operational_fabric.py",
+    "core/operational_runtime.py",
+    "core/orchestration.py",
+    "core/perimeter.py",
+    "core/personality.py",
+    "core/personality_binding.py",
+    "core/planning.py",
+    "core/platform.py",
+    "core/policy.py",
+    "core/reasoning.py",
+    "core/recovery.py",
+    "core/resource_router.py",
+    "core/router.py",
+    "core/runtime.py",
+    "core/sandbox.py",
+    "core/secure_boot.py",
+    "core/secure_channel.py",
+    "core/secure_memory.py",
+    "core/secure_storage.py",
+    "core/security.py",
+    "core/security_integration.py",
+    "core/self_improvement.py",
+    "core/state.py",
+    "core/state_journal.py",
+    "core/supervisor.py",
+    "core/supply_chain.py",
+    "core/test_adversarial_boundaries.py",
+    "core/test_agent_core.py",
+    "core/test_agent_fabric.py",
+    "core/test_agent_skills.py",
+    "core/test_alerting.py",
+    "core/test_authorization_grants.py",
+    "core/test_authorization_replay.py",
+    "core/test_boundaries.py",
+    "core/test_context_boundaries.py",
+    "core/test_control_plane.py",
+    "core/test_control_plane_observability_failure.py",
+    "core/test_coordination_boundaries.py",
+    "core/test_crypto.py",
+    "core/test_cyber_range.py",
+    "core/test_defense.py",
+    "core/test_device.py",
+    "core/test_egress.py",
+    "core/test_finch.py",
+    "core/test_foundation.py",
+    "core/test_frontier_integration_wave.py",
+    "core/test_hypersynth.py",
+    "core/test_hypersynth_acceptance.py",
+    "core/test_hypersynth_adversarial.py",
+    "core/test_hypersynth_adversarial_v2.py",
+    "core/test_hypersynth_boundary.py",
+    "core/test_hypersynth_decomposition_boundaries.py",
+    "core/test_hypersynth_runtime_contract.py",
+    "core/test_hypersynth_verifier_boundaries.py",
+    "core/test_identity.py",
+    "core/test_identity_boundaries.py",
+    "core/test_memory_boundaries.py",
+    "core/test_multiauth.py",
+    "core/test_observability.py",
+    "core/test_offline_snapshot_rollback.py",
+    "core/test_platform.py",
+    "core/test_reasoning.py",
+    "core/test_runtime_boundaries.py",
+    "core/test_secure_channel.py",
+    "core/test_secure_memory.py",
+    "core/test_secure_storage.py",
+    "core/test_security_contracts.py",
+    "core/test_security_integration.py",
+    "core/test_security_policy_contract.py",
+    "core/test_state_journal_integration.py",
+    "core/test_supervisor.py",
+    "core/test_supervisor_identity_boundary.py",
+    "core/test_tools_gate.py",
+    "core/test_voice.py",
+    "core/tools.py",
+    "core/trust_chain.py",
+    "core/user_understanding.py",
+    "core/verification.py",
+    "core/voice.py",
+    "noryx7_runtime/__init__.py",
+    "noryx7_runtime/adapters.py",
+    "noryx7_runtime/attestation.py",
+    "noryx7_runtime/capabilities.py",
+    "noryx7_runtime/contracts.py",
+    "noryx7_runtime/engine.py",
+    "noryx7_runtime/lifecycle.py",
+    "noryx7_runtime/model_adapters/__init__.py",
+    "noryx7_runtime/model_adapters/openrouter.py",
+    "noryx7_runtime/model_fabric.py",
+    "noryx7_runtime/recovery.py",
+    "noryx7_runtime/scheduler.py",
+    "noryx7_runtime/state.py",
+    "noryx7_runtime/test_adapters.py",
+    "noryx7_runtime/test_attestation.py",
+    "noryx7_runtime/test_capabilities_security.py",
+    "noryx7_runtime/test_engine.py",
+    "noryx7_runtime/test_engine_lifecycle.py",
+    "noryx7_runtime/test_engine_multiauth.py",
+    "noryx7_runtime/test_engine_replay.py",
+    "noryx7_runtime/test_engine_state_commit.py",
+    "noryx7_runtime/test_journal_chain_attacks.py",
+    "noryx7_runtime/test_lifecycle.py",
+    "noryx7_runtime/test_model_fabric.py",
+    "noryx7_runtime/test_model_fabric_execution_binding.py",
+    "noryx7_runtime/test_platform_egress.py",
+    "noryx7_runtime/test_recovery.py",
+    "noryx7_runtime/test_runtime_continuity.py",
+    "noryx7_runtime/test_state_security.py",
+    "ecosystem/__init__.py",
+    "ecosystem/boundaries.py",
+    "ecosystem/browser_isolation.py",
+    "ecosystem/closure_contract.py",
+    "ecosystem/completeness.py",
+    "ecosystem/dispatch_contract.py",
+    "ecosystem/front_runtime.py",
+    "ecosystem/global_closure.py",
+    "ecosystem/global_fabric.py",
+    "ecosystem/global_scale.py",
+    "ecosystem/isolation.py",
+    "ecosystem/orchestration.py",
+    "ecosystem/runtime_dispatch.py",
+    "ecosystem/structural_manifest.py",
+    "ecosystem/test_global_fabric.py",
+    "jarvis/__init__.py",
+    "jarvis/core/__init__.py",
+    "jarvis/core/contracts.py",
+    "jarvis/core/decomposition.py",
+    "jarvis/core/orchestrator.py",
+    "jarvis/core/policy.py",
+    "jarvis/core/provider.py",
+    "jarvis/core/recovery.py",
+    "jarvis/core/runtime.py",
+    "jarvis/core/state.py",
+    "jarvis/memory/__init__.py",
+    "jarvis/memory/store.py",
+    "jarvis/providers/__init__.py",
+    "jarvis/providers/base.py",
+    "jarvis/security/__init__.py",
+    "jarvis/security/audit.py",
+    "jarvis/security/authorization.py",
+    "jarvis/tests/test_audit_integrity.py",
+    "jarvis/tests/test_boundaries.py",
+    "jarvis/tests/test_runtime.py",
+    "jarvis/tools/__init__.py",
+    "jarvis/tools/registry.py",
+    "tools/integrate_memory_context.py",
+    "tests/__init__.py",
+    "tests/million/run_progressive_million.py",
+    "tests/million/test_progressive_difficulty_campaign.py",
+    "tests/million_scale_campaign.py",
+    "tests/real_runtime_scale_smoke.py",
+    "tests/real_runtime_state_journal_smoke.py",
+    "tests/test_aggregate_verification.py",
+    "tests/test_attestation.py",
+    "tests/test_boundary_hardening.py",
+    "tests/test_browser_isolation.py",
+    "tests/test_closure_contract.py",
+    "tests/test_device_capability_identity_binding.py",
+    "tests/test_dispatch_contract.py",
+    "tests/test_ecosystem_boundaries.py",
+    "tests/test_evaluation_campaign.py",
+    "tests/test_front_runtime.py",
+    "tests/test_frontier_compatibility.py",
+    "tests/test_frontier_invariants.py",
+    "tests/test_global_fabric.py",
+    "tests/test_global_infrastructure_closure.py",
+    "tests/test_global_scale.py",
+    "tests/test_global_verification_gate.py",
+    "tests/test_interaction_context.py",
+    "tests/test_isolation.py",
+    "tests/test_jarvis_orchestrator_hardening.py",
+    "tests/test_jarvis_recovery.py",
+    "tests/test_jarvis_state.py",
+    "tests/test_key_lifecycle.py",
+    "tests/test_metacognitive_challenge.py",
+    "tests/test_million_scale_campaign.py",
+    "tests/test_offline.py",
+    "tests/test_offline_anchor.py",
+    "tests/test_operational_runtime.py",
+    "tests/test_orchestration.py",
+    "tests/test_personality_binding.py",
+    "tests/test_recovery_atomicity.py",
+    "tests/test_recovery_canonical.py",
+    "tests/test_recovery_epoch.py",
+    "tests/test_recovery_security_boundary.py",
+    "tests/test_runtime_boundaries.py",
+    "tests/test_runtime_dispatch.py",
+    "tests/test_runtime_identity_binding.py",
+    "tests/test_runtime_offline.py",
+    "tests/test_runtime_replay_policy.py",
+    "tests/test_state_commit_replay.py",
+    "tests/test_state_journal.py",
+    "tests/test_structural_completeness.py",
+    "tests/test_structural_manifest.py",
+    "tests/test_supply_chain_strictness.py",
+    "tests/test_test_lab.py",
+    "tests/test_transactional_boundary_marker.py",
+    "tests/test_trust_chain.py",
+    "tests/test_user_understanding.py"
+  ],
+  "classes": [
+    {
+      "file": "core/actions.py",
+      "name": "ActionDecision",
+      "line": 16
+    },
+    {
+      "file": "core/actions.py",
+      "name": "AuthorizationGrant",
+      "line": 23
+    },
+    {
+      "file": "core/actions.py",
+      "name": "AuthorizationAuthority",
+      "line": 36
+    },
+    {
+      "file": "core/actions.py",
+      "name": "ActionGate",
+      "line": 226
+    },
+    {
+      "file": "core/adversarial.py",
+      "name": "AttackScenario",
+      "line": 11
+    },
+    {
+      "file": "core/adversarial.py",
+      "name": "AttackOutcome",
+      "line": 22
+    },
+    {
+      "file": "core/adversarial.py",
+      "name": "AdversarialEngine",
+      "line": 29
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentPhase",
+      "line": 10
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "InteractionMode",
+      "line": 12
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentInput",
+      "line": 14
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentContext",
+      "line": 22
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentPlan",
+      "line": 25
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentResponse",
+      "line": 30
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentBrain",
+      "line": 32
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentTransport",
+      "line": 40
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "TextTransport",
+      "line": 42
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "VoiceTransport",
+      "line": 44
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentOperatingManual",
+      "line": 46
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentCore",
+      "line": 48
+    },
+    {
+      "file": "core/agent_core.py",
+      "name": "AgentRegistry",
+      "line": 90
+    },
+    {
+      "file": "core/agent_fabric.py",
+      "name": "AgentBinding",
+      "line": 15
+    },
+    {
+      "file": "core/agent_fabric.py",
+      "name": "AgentFabric",
+      "line": 26
+    },
+    {
+      "file": "core/agent_identity.py",
+      "name": "AgentMission",
+      "line": 8
+    },
+    {
+      "file": "core/agent_mesh.py",
+      "name": "AgentRole",
+      "line": 5
+    },
+    {
+      "file": "core/agent_mesh.py",
+      "name": "AgentNode",
+      "line": 7
+    },
+    {
+      "file": "core/agent_mesh.py",
+      "name": "AgentTask",
+      "line": 9
+    },
+    {
+      "file": "core/agent_mesh.py",
+      "name": "AgentMesh",
+      "line": 10
+    },
+    {
+      "file": "core/agent_runtime.py",
+      "name": "AgentRuntimeStatus",
+      "line": 9
+    },
+    {
+      "file": "core/agent_runtime.py",
+      "name": "AgentRuntime",
+      "line": 19
+    },
+    {
+      "file": "core/agent_skills.py",
+      "name": "AgentSkill",
+      "line": 25
+    },
+    {
+      "file": "core/agent_skills.py",
+      "name": "AgentSkillRegistry",
+      "line": 45
+    },
+    {
+      "file": "core/agents.py",
+      "name": "Agent",
+      "line": 6
+    },
+    {
+      "file": "core/agents.py",
+      "name": "DeterministicAgent",
+      "line": 13
+    },
+    {
+      "file": "core/alerting.py",
+      "name": "AlertSeverity",
+      "line": 22
+    },
+    {
+      "file": "core/alerting.py",
+      "name": "AlertChannel",
+      "line": 29
+    },
+    {
+      "file": "core/alerting.py",
+      "name": "SecurityAlert",
+      "line": 36
+    },
+    {
+      "file": "core/alerting.py",
+      "name": "EscalationPolicy",
+      "line": 59
+    },
+    {
+      "file": "core/alerting.py",
+      "name": "AlertRouter",
+      "line": 74
+    },
+    {
+      "file": "core/architecture_gate.py",
+      "name": "ArchitecturePlane",
+      "line": 10
+    },
+    {
+      "file": "core/architecture_gate.py",
+      "name": "PlaneDefinition",
+      "line": 39
+    },
+    {
+      "file": "core/architecture_gate.py",
+      "name": "ArchitectureGateResult",
+      "line": 60
+    },
+    {
+      "file": "core/architecture_gate.py",
+      "name": "ArchitectureCompletenessGate",
+      "line": 66
+    },
+    {
+      "file": "core/attestation.py",
+      "name": "Attestation",
+      "line": 15
+    },
+    {
+      "file": "core/attestation.py",
+      "name": "AttestationVerifier",
+      "line": 23
+    },
+    {
+      "file": "core/attestation.py",
+      "name": "RuntimeIdentity",
+      "line": 30
+    },
+    {
+      "file": "core/audit.py",
+      "name": "AuditCheckpoint",
+      "line": 14
+    },
+    {
+      "file": "core/audit.py",
+      "name": "AuditLog",
+      "line": 35
+    },
+    {
+      "file": "core/authorization_replay.py",
+      "name": "AuthorizationReplayGuard",
+      "line": 10
+    },
+    {
+      "file": "core/collaboration.py",
+      "name": "Proposal",
+      "line": 11
+    },
+    {
+      "file": "core/collaboration.py",
+      "name": "Critique",
+      "line": 20
+    },
+    {
+      "file": "core/collaboration.py",
+      "name": "Reconciliation",
+      "line": 31
+    },
+    {
+      "file": "core/collaboration.py",
+      "name": "AgentCollaboration",
+      "line": 42
+    },
+    {
+      "file": "core/context.py",
+      "name": "ContextSnapshot",
+      "line": 6
+    },
+    {
+      "file": "core/context.py",
+      "name": "ContextManager",
+      "line": 12
+    },
+    {
+      "file": "core/contracts.py",
+      "name": "TaskSpec",
+      "line": 6
+    },
+    {
+      "file": "core/contracts.py",
+      "name": "ActionSpec",
+      "line": 30
+    },
+    {
+      "file": "core/contracts.py",
+      "name": "VerificationResult",
+      "line": 52
+    },
+    {
+      "file": "core/contracts.py",
+      "name": "AgentResult",
+      "line": 69
+    },
+    {
+      "file": "core/control_plane.py",
+      "name": "ControlPlaneStatus",
+      "line": 21
+    },
+    {
+      "file": "core/control_plane.py",
+      "name": "Noryx7ControlPlane",
+      "line": 27
+    },
+    {
+      "file": "core/coordination.py",
+      "name": "AgentAssignment",
+      "line": 13
+    },
+    {
+      "file": "core/coordination.py",
+      "name": "AgentCoordinator",
+      "line": 20
+    },
+    {
+      "file": "core/crypto.py",
+      "name": "EncryptedEnvelope",
+      "line": 40
+    },
+    {
+      "file": "core/crypto.py",
+      "name": "KeyProvider",
+      "line": 62
+    },
+    {
+      "file": "core/crypto.py",
+      "name": "InMemoryKeyProvider",
+      "line": 69
+    },
+    {
+      "file": "core/crypto.py",
+      "name": "AuthenticatedCipher",
+      "line": 93
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "AttackPhase",
+      "line": 19
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "SyntheticTarget",
+      "line": 31
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "OwnerAuthorization",
+      "line": 46
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "SimulatedAction",
+      "line": 60
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "SimulationReport",
+      "line": 68
+    },
+    {
+      "file": "core/cyber_range.py",
+      "name": "CyberRange",
+      "line": 74
+    },
+    {
+      "file": "core/decomposition.py",
+      "name": "Subtask",
+      "line": 6
+    },
+    {
+      "file": "core/decomposition.py",
+      "name": "TaskDecomposer",
+      "line": 11
+    },
+    {
+      "file": "core/defense.py",
+      "name": "DefenseMode",
+      "line": 31
+    },
+    {
+      "file": "core/defense.py",
+      "name": "TrustDecision",
+      "line": 38
+    },
+    {
+      "file": "core/defense.py",
+      "name": "AccessRequest",
+      "line": 45
+    },
+    {
+      "file": "core/defense.py",
+      "name": "DefenseDecision",
+      "line": 63
+    },
+    {
+      "file": "core/defense.py",
+      "name": "SecurityEvent",
+      "line": 70
+    },
+    {
+      "file": "core/defense.py",
+      "name": "OfflineArtifact",
+      "line": 88
+    },
+    {
+      "file": "core/defense.py",
+      "name": "SegmentationPolicy",
+      "line": 103
+    },
+    {
+      "file": "core/defense.py",
+      "name": "DefenseController",
+      "line": 131
+    },
+    {
+      "file": "core/defense.py",
+      "name": "ImmutableCoreManifest",
+      "line": 235
+    },
+    {
+      "file": "core/defense.py",
+      "name": "OfflineRecoveryCatalog",
+      "line": 258
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceTrust",
+      "line": 21
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceRole",
+      "line": 28
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceIdentity",
+      "line": 35
+    },
+    {
+      "file": "core/device.py",
+      "name": "CapabilityGrant",
+      "line": 47
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceCapabilityGate",
+      "line": 62
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceAction",
+      "line": 92
+    },
+    {
+      "file": "core/device.py",
+      "name": "DeviceRuntimeBoundary",
+      "line": 106
+    },
+    {
+      "file": "core/distributed.py",
+      "name": "NodeRole",
+      "line": 8
+    },
+    {
+      "file": "core/distributed.py",
+      "name": "NodeDescriptor",
+      "line": 17
+    },
+    {
+      "file": "core/distributed.py",
+      "name": "ShardDescriptor",
+      "line": 24
+    },
+    {
+      "file": "core/distributed.py",
+      "name": "DistributedTopology",
+      "line": 30
+    },
+    {
+      "file": "core/egress.py",
+      "name": "EgressRequest",
+      "line": 11
+    },
+    {
+      "file": "core/egress.py",
+      "name": "EgressPolicy",
+      "line": 27
+    },
+    {
+      "file": "core/errors.py",
+      "name": "NORYXError",
+      "line": 1
+    },
+    {
+      "file": "core/errors.py",
+      "name": "ContractViolation",
+      "line": 5
+    },
+    {
+      "file": "core/errors.py",
+      "name": "PolicyDenied",
+      "line": 9
+    },
+    {
+      "file": "core/errors.py",
+      "name": "RouteError",
+      "line": 13
+    },
+    {
+      "file": "core/errors.py",
+      "name": "VerificationFailure",
+      "line": 17
+    },
+    {
+      "file": "core/evaluation.py",
+      "name": "EvaluationDimension",
+      "line": 9
+    },
+    {
+      "file": "core/evaluation.py",
+      "name": "EvaluationResult",
+      "line": 24
+    },
+    {
+      "file": "core/evaluation.py",
+      "name": "EvaluationMatrix",
+      "line": 31
+    },
+    {
+      "file": "core/evaluation_campaign.py",
+      "name": "CampaignManifest",
+      "line": 16
+    },
+    {
+      "file": "core/evaluation_campaign.py",
+      "name": "EvaluationCampaign",
+      "line": 24
+    },
+    {
+      "file": "core/finch.py",
+      "name": "Observation",
+      "line": 32
+    },
+    {
+      "file": "core/finch.py",
+      "name": "Relevance",
+      "line": 52
+    },
+    {
+      "file": "core/finch.py",
+      "name": "Anomaly",
+      "line": 59
+    },
+    {
+      "file": "core/finch.py",
+      "name": "Forecast",
+      "line": 66
+    },
+    {
+      "file": "core/finch.py",
+      "name": "GraphSnapshot",
+      "line": 74
+    },
+    {
+      "file": "core/finch.py",
+      "name": "EventGraph",
+      "line": 80
+    },
+    {
+      "file": "core/finch.py",
+      "name": "MachineInspiredAnalyzer",
+      "line": 116
+    },
+    {
+      "file": "core/frontier_capabilities.py",
+      "name": "CapabilityUnavailable",
+      "line": 13
+    },
+    {
+      "file": "core/frontier_capabilities.py",
+      "name": "WebResearchCapability",
+      "line": 17
+    },
+    {
+      "file": "core/frontier_capabilities.py",
+      "name": "ChessCapability",
+      "line": 93
+    },
+    {
+      "file": "core/frontier_capabilities.py",
+      "name": "ExternalProviderCapability",
+      "line": 183
+    },
+    {
+      "file": "core/hypersynth.py",
+      "name": "CognitiveState",
+      "line": 21
+    },
+    {
+      "file": "core/hypersynth.py",
+      "name": "Hypersynth",
+      "line": 29
+    },
+    {
+      "file": "core/hypersynth_runtime.py",
+      "name": "HypersynthRuntime",
+      "line": 21
+    },
+    {
+      "file": "core/identity.py",
+      "name": "AgentIdentity",
+      "line": 31
+    },
+    {
+      "file": "core/identity.py",
+      "name": "AgentAttestation",
+      "line": 48
+    },
+    {
+      "file": "core/identity.py",
+      "name": "IdentityRegistry",
+      "line": 78
+    },
+    {
+      "file": "core/identity.py",
+      "name": "AgentIdentityAuthority",
+      "line": 123
+    },
+    {
+      "file": "core/interaction_context.py",
+      "name": "InteractionContext",
+      "line": 12
+    },
+    {
+      "file": "core/jarvis_runtime_bridge.py",
+      "name": "JarvisRuntimeBridge",
+      "line": 15
+    },
+    {
+      "file": "core/key_lifecycle.py",
+      "name": "KeyState",
+      "line": 13
+    },
+    {
+      "file": "core/key_lifecycle.py",
+      "name": "KeyRecord",
+      "line": 20
+    },
+    {
+      "file": "core/key_lifecycle.py",
+      "name": "ExternalKeyBoundary",
+      "line": 26
+    },
+    {
+      "file": "core/key_lifecycle.py",
+      "name": "KeyLifecycle",
+      "line": 33
+    },
+    {
+      "file": "core/limits.py",
+      "name": "RuntimeLimits",
+      "line": 6
+    },
+    {
+      "file": "core/llm/agent.py",
+      "name": "LLMBackedAgent",
+      "line": 14
+    },
+    {
+      "file": "core/llm/agent.py",
+      "name": "SecondaryLLMBackedAgent",
+      "line": 231
+    },
+    {
+      "file": "core/llm/model_fabric_bridge.py",
+      "name": "ModelFabricBridge",
+      "line": 8
+    },
+    {
+      "file": "core/llm/self_knowledge.py",
+      "name": "SelfKnowledgeContext",
+      "line": 12
+    },
+    {
+      "file": "core/llm/self_knowledge.py",
+      "name": "SelfKnowledgeProvider",
+      "line": 49
+    },
+    {
+      "file": "core/memory.py",
+      "name": "MemoryItem",
+      "line": 9
+    },
+    {
+      "file": "core/memory.py",
+      "name": "MemoryStore",
+      "line": 18
+    },
+    {
+      "file": "core/memory_hierarchy.py",
+      "name": "MemoryLevel",
+      "line": 5
+    },
+    {
+      "file": "core/memory_hierarchy.py",
+      "name": "MemoryRecord",
+      "line": 7
+    },
+    {
+      "file": "core/memory_hierarchy.py",
+      "name": "MemoryHierarchy",
+      "line": 8
+    },
+    {
+      "file": "core/metacognition.py",
+      "name": "MetacognitiveReflection",
+      "line": 11
+    },
+    {
+      "file": "core/metacognition.py",
+      "name": "MetacognitionEngine",
+      "line": 25
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ChallengeDomain",
+      "line": 11
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ChallengeSpec",
+      "line": 21
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ChallengeTrace",
+      "line": 44
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ChallengeScore",
+      "line": 71
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ChallengeVerification",
+      "line": 89
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "IndependentChallengeVerifier",
+      "line": 104
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "PipelineChallengeVerifier",
+      "line": 125
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "MetacognitiveChallengeEvaluator",
+      "line": 162
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "ImprovementEvidence",
+      "line": 183
+    },
+    {
+      "file": "core/metacognitive_challenge.py",
+      "name": "AdaptiveChallengeController",
+      "line": 190
+    },
+    {
+      "file": "core/multiauth.py",
+      "name": "AuthorizationProof",
+      "line": 43
+    },
+    {
+      "file": "core/multiauth.py",
+      "name": "SignedApproval",
+      "line": 65
+    },
+    {
+      "file": "core/multiauth.py",
+      "name": "SignedAuthorizationProof",
+      "line": 79
+    },
+    {
+      "file": "core/multiauth.py",
+      "name": "SignedApprovalAuthority",
+      "line": 102
+    },
+    {
+      "file": "core/multiauth.py",
+      "name": "ThresholdAuthorizer",
+      "line": 155
+    },
+    {
+      "file": "core/observability.py",
+      "name": "EventKind",
+      "line": 10
+    },
+    {
+      "file": "core/observability.py",
+      "name": "ObservedEvent",
+      "line": 22
+    },
+    {
+      "file": "core/observability.py",
+      "name": "SecurityEventBus",
+      "line": 31
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineState",
+      "line": 17
+    },
+    {
+      "file": "core/offline.py",
+      "name": "RecoveryLike",
+      "line": 28
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineCipher",
+      "line": 32
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflinePolicy",
+      "line": 36
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineVerifier",
+      "line": 39
+    },
+    {
+      "file": "core/offline.py",
+      "name": "MonotonicAnchorLike",
+      "line": 42
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineConflictError",
+      "line": 45
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineDeniedError",
+      "line": 48
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineSnapshot",
+      "line": 60
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineExecution",
+      "line": 96
+    },
+    {
+      "file": "core/offline.py",
+      "name": "SyncEnvelope",
+      "line": 113
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineSyncQueue",
+      "line": 119
+    },
+    {
+      "file": "core/offline.py",
+      "name": "OfflineRuntime",
+      "line": 179
+    },
+    {
+      "file": "core/offline_adapters.py",
+      "name": "PolicyOfflineAdapter",
+      "line": 10
+    },
+    {
+      "file": "core/offline_adapters.py",
+      "name": "VerificationOfflineAdapter",
+      "line": 31
+    },
+    {
+      "file": "core/offline_adapters.py",
+      "name": "BoundAuthenticatedCipher",
+      "line": 55
+    },
+    {
+      "file": "core/offline_anchor.py",
+      "name": "MonotonicAnchor",
+      "line": 8
+    },
+    {
+      "file": "core/operational_fabric.py",
+      "name": "OperationalAgentFabric",
+      "line": 7
+    },
+    {
+      "file": "core/operational_runtime.py",
+      "name": "OperationalNORYXRuntime",
+      "line": 9
+    },
+    {
+      "file": "core/orchestration.py",
+      "name": "OrchestrationStage",
+      "line": 22
+    },
+    {
+      "file": "core/orchestration.py",
+      "name": "OrchestrationEnvelope",
+      "line": 35
+    },
+    {
+      "file": "core/orchestration.py",
+      "name": "OrchestrationTransition",
+      "line": 70
+    },
+    {
+      "file": "core/orchestration.py",
+      "name": "OrchestrationCoordinator",
+      "line": 89
+    },
+    {
+      "file": "core/perimeter.py",
+      "name": "TrafficDirection",
+      "line": 9
+    },
+    {
+      "file": "core/perimeter.py",
+      "name": "TrafficRequest",
+      "line": 15
+    },
+    {
+      "file": "core/perimeter.py",
+      "name": "PerimeterPolicy",
+      "line": 23
+    },
+    {
+      "file": "core/personality.py",
+      "name": "PersonalityProfile",
+      "line": 17
+    },
+    {
+      "file": "core/personality.py",
+      "name": "ApollonianPersonality",
+      "line": 44
+    },
+    {
+      "file": "core/personality_binding.py",
+      "name": "SignedPersonalityBinding",
+      "line": 58
+    },
+    {
+      "file": "core/planning.py",
+      "name": "PlanStep",
+      "line": 5
+    },
+    {
+      "file": "core/planning.py",
+      "name": "Plan",
+      "line": 12
+    },
+    {
+      "file": "core/planning.py",
+      "name": "Planner",
+      "line": 16
+    },
+    {
+      "file": "core/platform.py",
+      "name": "PlatformKind",
+      "line": 24
+    },
+    {
+      "file": "core/platform.py",
+      "name": "InteractionKind",
+      "line": 31
+    },
+    {
+      "file": "core/platform.py",
+      "name": "PlatformRequest",
+      "line": 39
+    },
+    {
+      "file": "core/platform.py",
+      "name": "PlatformAction",
+      "line": 53
+    },
+    {
+      "file": "core/platform.py",
+      "name": "PlatformAdapter",
+      "line": 69
+    },
+    {
+      "file": "core/platform.py",
+      "name": "AssistantIntegrationBoundary",
+      "line": 79
+    },
+    {
+      "file": "core/policy.py",
+      "name": "PolicyEngine",
+      "line": 4
+    },
+    {
+      "file": "core/reasoning.py",
+      "name": "Hypothesis",
+      "line": 8
+    },
+    {
+      "file": "core/reasoning.py",
+      "name": "SimulationResult",
+      "line": 16
+    },
+    {
+      "file": "core/reasoning.py",
+      "name": "HypothesisEngine",
+      "line": 22
+    },
+    {
+      "file": "core/reasoning.py",
+      "name": "InternalSimulator",
+      "line": 41
+    },
+    {
+      "file": "core/reasoning.py",
+      "name": "CrossChecker",
+      "line": 62
+    },
+    {
+      "file": "core/recovery.py",
+      "name": "RecoveryState",
+      "line": 9
+    },
+    {
+      "file": "core/recovery.py",
+      "name": "RecoveryController",
+      "line": 21
+    },
+    {
+      "file": "core/resource_router.py",
+      "name": "ResourceTier",
+      "line": 5
+    },
+    {
+      "file": "core/resource_router.py",
+      "name": "ResourceRequest",
+      "line": 7
+    },
+    {
+      "file": "core/resource_router.py",
+      "name": "ResourceRouter",
+      "line": 8
+    },
+    {
+      "file": "core/router.py",
+      "name": "ResourceRouter",
+      "line": 5
+    },
+    {
+      "file": "core/runtime.py",
+      "name": "NORYXRuntime",
+      "line": 32
+    },
+    {
+      "file": "core/sandbox.py",
+      "name": "SandboxState",
+      "line": 8
+    },
+    {
+      "file": "core/sandbox.py",
+      "name": "SandboxProfile",
+      "line": 17
+    },
+    {
+      "file": "core/sandbox.py",
+      "name": "Sandbox",
+      "line": 25
+    },
+    {
+      "file": "core/secure_boot.py",
+      "name": "TrustAnchor",
+      "line": 9
+    },
+    {
+      "file": "core/secure_boot.py",
+      "name": "SecureBootChain",
+      "line": 14
+    },
+    {
+      "file": "core/secure_channel.py",
+      "name": "SecureFrame",
+      "line": 45
+    },
+    {
+      "file": "core/secure_channel.py",
+      "name": "SecureChannel",
+      "line": 63
+    },
+    {
+      "file": "core/secure_memory.py",
+      "name": "EncryptedMemoryStore",
+      "line": 22
+    },
+    {
+      "file": "core/secure_storage.py",
+      "name": "StoredCiphertext",
+      "line": 17
+    },
+    {
+      "file": "core/secure_storage.py",
+      "name": "EncryptedRecordStore",
+      "line": 22
+    },
+    {
+      "file": "core/security.py",
+      "name": "SecurityDecision",
+      "line": 8
+    },
+    {
+      "file": "core/security.py",
+      "name": "SecurityBoundary",
+      "line": 14
+    },
+    {
+      "file": "core/security_integration.py",
+      "name": "SecurityEnvelope",
+      "line": 8
+    },
+    {
+      "file": "core/security_integration.py",
+      "name": "DefenseGate",
+      "line": 20
+    },
+    {
+      "file": "core/self_improvement.py",
+      "name": "ImprovementStage",
+      "line": 8
+    },
+    {
+      "file": "core/self_improvement.py",
+      "name": "ImprovementProposal",
+      "line": 19
+    },
+    {
+      "file": "core/self_improvement.py",
+      "name": "ImprovementPipeline",
+      "line": 26
+    },
+    {
+      "file": "core/state.py",
+      "name": "NORYXState",
+      "line": 12
+    },
+    {
+      "file": "core/state.py",
+      "name": "StateCommit",
+      "line": 32
+    },
+    {
+      "file": "core/state.py",
+      "name": "StateStore",
+      "line": 44
+    },
+    {
+      "file": "core/state_journal.py",
+      "name": "StateJournal",
+      "line": 19
+    },
+    {
+      "file": "core/supervisor.py",
+      "name": "AgentDecision",
+      "line": 7
+    },
+    {
+      "file": "core/supervisor.py",
+      "name": "AgentSupervisor",
+      "line": 13
+    },
+    {
+      "file": "core/supply_chain.py",
+      "name": "ArtifactManifest",
+      "line": 15
+    },
+    {
+      "file": "core/supply_chain.py",
+      "name": "SupplyChainVerifier",
+      "line": 44
+    },
+    {
+      "file": "core/test_adversarial_boundaries.py",
+      "name": "AdversarialBoundaryTests",
+      "line": 11
+    },
+    {
+      "file": "core/test_agent_core.py",
+      "name": "Brain",
+      "line": 6
+    },
+    {
+      "file": "core/test_agent_core.py",
+      "name": "DeniedBrain",
+      "line": 28
+    },
+    {
+      "file": "core/test_agent_core.py",
+      "name": "BadVerifier",
+      "line": 36
+    },
+    {
+      "file": "core/test_agent_core.py",
+      "name": "UnverifiedBrain",
+      "line": 50
+    },
+    {
+      "file": "core/test_agent_fabric.py",
+      "name": "Brain",
+      "line": 8
+    },
+    {
+      "file": "core/test_agent_fabric.py",
+      "name": "ContextBrain",
+      "line": 33
+    },
+    {
+      "file": "core/test_authorization_grants.py",
+      "name": "AuthorizationGrantTests",
+      "line": 11
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "FoundationBoundaryTests",
+      "line": 14
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "NoPolicy",
+      "line": 42
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "ExplodingPolicy",
+      "line": 53
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "ForgedPolicy",
+      "line": 70
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "InvalidVerifier",
+      "line": 80
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "WrongStageVerifier",
+      "line": 90
+    },
+    {
+      "file": "core/test_boundaries.py",
+      "name": "BrokenProvider",
+      "line": 207
+    },
+    {
+      "file": "core/test_context_boundaries.py",
+      "name": "ContextBoundaryTests",
+      "line": 6
+    },
+    {
+      "file": "core/test_coordination_boundaries.py",
+      "name": "CoordinationBoundaryTests",
+      "line": 12
+    },
+    {
+      "file": "core/test_coordination_boundaries.py",
+      "name": "IdentityAgent",
+      "line": 135
+    },
+    {
+      "file": "core/test_coordination_boundaries.py",
+      "name": "ForgingAgent",
+      "line": 27
+    },
+    {
+      "file": "core/test_coordination_boundaries.py",
+      "name": "WrongStageAgent",
+      "line": 39
+    },
+    {
+      "file": "core/test_coordination_boundaries.py",
+      "name": "RevokingAgent",
+      "line": 121
+    },
+    {
+      "file": "core/test_crypto.py",
+      "name": "CryptoBoundaryTests",
+      "line": 16
+    },
+    {
+      "file": "core/test_defense.py",
+      "name": "DefenseInfrastructureTests",
+      "line": 17
+    },
+    {
+      "file": "core/test_egress.py",
+      "name": "EgressTests",
+      "line": 5
+    },
+    {
+      "file": "core/test_finch.py",
+      "name": "MachineInspiredTests",
+      "line": 6
+    },
+    {
+      "file": "core/test_foundation.py",
+      "name": "FoundationTests",
+      "line": 12
+    },
+    {
+      "file": "core/test_frontier_integration_wave.py",
+      "name": "FakeModel",
+      "line": 10
+    },
+    {
+      "file": "core/test_frontier_integration_wave.py",
+      "name": "FrontierIntegrationWaveTests",
+      "line": 20
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "HypersynthTests",
+      "line": 19
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "CapturingAgent",
+      "line": 57
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "BrokenAgent",
+      "line": 152
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "NullAgent",
+      "line": 160
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "ForgingAgent",
+      "line": 168
+    },
+    {
+      "file": "core/test_hypersynth.py",
+      "name": "TamperingSimulator",
+      "line": 176
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "TwoStepPlanner",
+      "line": 17
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "ThreeStepPlanner",
+      "line": 27
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "EchoAgent",
+      "line": 35
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "NullAgent",
+      "line": 45
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "HypersynthAcceptanceTests",
+      "line": 52
+    },
+    {
+      "file": "core/test_hypersynth_acceptance.py",
+      "name": "ExplodingVerifier",
+      "line": 98
+    },
+    {
+      "file": "core/test_hypersynth_adversarial.py",
+      "name": "RejectingVerifier",
+      "line": 12
+    },
+    {
+      "file": "core/test_hypersynth_adversarial.py",
+      "name": "AdversarialBoundaryTests",
+      "line": 23
+    },
+    {
+      "file": "core/test_hypersynth_adversarial_v2.py",
+      "name": "HypersynthAdversarialTests",
+      "line": 7
+    },
+    {
+      "file": "core/test_hypersynth_boundary.py",
+      "name": "HypersynthBoundaryTests",
+      "line": 7
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "HypersynthDecompositionBoundaryTests",
+      "line": 10
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "ForgedDecomposer",
+      "line": 18
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "ForgedDecomposer",
+      "line": 27
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "ForgedDecomposer",
+      "line": 36
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "ForgedDecomposer",
+      "line": 45
+    },
+    {
+      "file": "core/test_hypersynth_decomposition_boundaries.py",
+      "name": "ForgedDecomposer",
+      "line": 55
+    },
+    {
+      "file": "core/test_hypersynth_runtime_contract.py",
+      "name": "ForgedVerifier",
+      "line": 7
+    },
+    {
+      "file": "core/test_hypersynth_runtime_contract.py",
+      "name": "RuntimeResultContractTests",
+      "line": 12
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "HypersynthVerifierBoundaryTests",
+      "line": 11
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ExplodingVerifier",
+      "line": 21
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ForgedStageVerifier",
+      "line": 32
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ForgedPlanVerifier",
+      "line": 43
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ForgedPlanner",
+      "line": 52
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ForgedHypothesisEngine",
+      "line": 69
+    },
+    {
+      "file": "core/test_hypersynth_verifier_boundaries.py",
+      "name": "ForgedSimulation",
+      "line": 89
+    },
+    {
+      "file": "core/test_identity.py",
+      "name": "AgentIdentityTests",
+      "line": 10
+    },
+    {
+      "file": "core/test_identity_boundaries.py",
+      "name": "IdentityBoundAgent",
+      "line": 14
+    },
+    {
+      "file": "core/test_identity_boundaries.py",
+      "name": "IdentityBoundaryTests",
+      "line": 25
+    },
+    {
+      "file": "core/test_memory_boundaries.py",
+      "name": "MemoryBoundaryTests",
+      "line": 6
+    },
+    {
+      "file": "core/test_observability.py",
+      "name": "SecurityEventBusTests",
+      "line": 6
+    },
+    {
+      "file": "core/test_offline_snapshot_rollback.py",
+      "name": "Cipher",
+      "line": 9
+    },
+    {
+      "file": "core/test_offline_snapshot_rollback.py",
+      "name": "Recovery",
+      "line": 18
+    },
+    {
+      "file": "core/test_offline_snapshot_rollback.py",
+      "name": "Policy",
+      "line": 26
+    },
+    {
+      "file": "core/test_offline_snapshot_rollback.py",
+      "name": "Verifier",
+      "line": 31
+    },
+    {
+      "file": "core/test_platform.py",
+      "name": "FakeAdapter",
+      "line": 17
+    },
+    {
+      "file": "core/test_reasoning.py",
+      "name": "CrossCheckerTests",
+      "line": 7
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "RuntimeBoundaryTests",
+      "line": 14
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "FailingAgent",
+      "line": 41
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "ForgingAgent",
+      "line": 52
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "ForgingAgent",
+      "line": 62
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "ForgingAgent",
+      "line": 71
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "IncompleteAgent",
+      "line": 80
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "ForgingAgent",
+      "line": 89
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "LargeOutputAgent",
+      "line": 115
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "StructuredOutputAgent",
+      "line": 124
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "FakeClock",
+      "line": 133
+    },
+    {
+      "file": "core/test_runtime_boundaries.py",
+      "name": "AdvancingAgent",
+      "line": 136
+    },
+    {
+      "file": "core/test_secure_channel.py",
+      "name": "SecureChannelTests",
+      "line": 9
+    },
+    {
+      "file": "core/test_secure_channel.py",
+      "name": "BrokenProvider",
+      "line": 65
+    },
+    {
+      "file": "core/test_secure_memory.py",
+      "name": "EncryptedMemoryStoreTests",
+      "line": 8
+    },
+    {
+      "file": "core/test_secure_storage.py",
+      "name": "EncryptedRecordStoreTests",
+      "line": 7
+    },
+    {
+      "file": "core/test_security_contracts.py",
+      "name": "SecurityContractTests",
+      "line": 14
+    },
+    {
+      "file": "core/test_security_contracts.py",
+      "name": "TaskContractTests",
+      "line": 250
+    },
+    {
+      "file": "core/test_security_contracts.py",
+      "name": "ExplodingPolicy",
+      "line": 234
+    },
+    {
+      "file": "core/test_security_contracts.py",
+      "name": "ExplodingSecurity",
+      "line": 242
+    },
+    {
+      "file": "core/test_security_policy_contract.py",
+      "name": "SecurityPolicyContractTests",
+      "line": 8
+    },
+    {
+      "file": "core/test_security_policy_contract.py",
+      "name": "ForgedPolicy",
+      "line": 10
+    },
+    {
+      "file": "core/test_security_policy_contract.py",
+      "name": "ForgedPolicy",
+      "line": 21
+    },
+    {
+      "file": "core/test_supervisor.py",
+      "name": "SupervisorAdmissionTests",
+      "line": 10
+    },
+    {
+      "file": "core/test_supervisor.py",
+      "name": "ExplodingVerifier",
+      "line": 55
+    },
+    {
+      "file": "core/test_supervisor.py",
+      "name": "InvalidVerifier",
+      "line": 66
+    },
+    {
+      "file": "core/test_supervisor_identity_boundary.py",
+      "name": "ForgingRouter",
+      "line": 8
+    },
+    {
+      "file": "core/test_supervisor_identity_boundary.py",
+      "name": "SupervisorIdentityBoundaryTests",
+      "line": 19
+    },
+    {
+      "file": "core/test_supervisor_identity_boundary.py",
+      "name": "MissingIdentityRouter",
+      "line": 34
+    },
+    {
+      "file": "core/test_tools_gate.py",
+      "name": "ToolExecutorGateTests",
+      "line": 12
+    },
+    {
+      "file": "core/tools.py",
+      "name": "CapabilityRegistry",
+      "line": 8
+    },
+    {
+      "file": "core/tools.py",
+      "name": "ToolExecutor",
+      "line": 34
+    },
+    {
+      "file": "core/trust_chain.py",
+      "name": "TrustEvidence",
+      "line": 82
+    },
+    {
+      "file": "core/trust_chain.py",
+      "name": "TrustChain",
+      "line": 92
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "UnderstandingConsent",
+      "line": 13
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "SignalKind",
+      "line": 18
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "UserContent",
+      "line": 26
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "UserSignal",
+      "line": 38
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "UserUnderstandingProfile",
+      "line": 51
+    },
+    {
+      "file": "core/user_understanding.py",
+      "name": "UserUnderstandingEngine",
+      "line": 63
+    },
+    {
+      "file": "core/verification.py",
+      "name": "VerificationEngine",
+      "line": 4
+    },
+    {
+      "file": "core/voice.py",
+      "name": "SpeechRecognizer",
+      "line": 14
+    },
+    {
+      "file": "core/voice.py",
+      "name": "SpeechSynthesizer",
+      "line": 18
+    },
+    {
+      "file": "core/voice.py",
+      "name": "CommandSpeechRecognizer",
+      "line": 22
+    },
+    {
+      "file": "core/voice.py",
+      "name": "CommandSpeechSynthesizer",
+      "line": 74
+    },
+    {
+      "file": "core/voice.py",
+      "name": "SpeechVoiceTransport",
+      "line": 124
+    },
+    {
+      "file": "core/voice.py",
+      "name": "VoiceInteractionResult",
+      "line": 145
+    },
+    {
+      "file": "core/voice.py",
+      "name": "VoiceGateway",
+      "line": 152
+    },
+    {
+      "file": "noryx7_runtime/adapters.py",
+      "name": "ExecutionAdapter",
+      "line": 12
+    },
+    {
+      "file": "noryx7_runtime/adapters.py",
+      "name": "CapabilityAdapter",
+      "line": 19
+    },
+    {
+      "file": "noryx7_runtime/adapters.py",
+      "name": "PlatformExecutionAdapter",
+      "line": 39
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "AttestationSigner",
+      "line": 19
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "AttestationVerifier",
+      "line": 24
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "Ed25519AttestationSigner",
+      "line": 125
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "Ed25519AttestationVerifier",
+      "line": 159
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "IdentityBoundAttestationVerifier",
+      "line": 186
+    },
+    {
+      "file": "noryx7_runtime/attestation.py",
+      "name": "AttestationChainVerifier",
+      "line": 211
+    },
+    {
+      "file": "noryx7_runtime/capabilities.py",
+      "name": "Capability",
+      "line": 14
+    },
+    {
+      "file": "noryx7_runtime/capabilities.py",
+      "name": "CapabilityBroker",
+      "line": 33
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "ExecutionStatus",
+      "line": 9
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "Intent",
+      "line": 19
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "ExecutionContext",
+      "line": 32
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "PlanStep",
+      "line": 47
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "ActionEnvelope",
+      "line": 62
+    },
+    {
+      "file": "noryx7_runtime/contracts.py",
+      "name": "Attestation",
+      "line": 73
+    },
+    {
+      "file": "noryx7_runtime/engine.py",
+      "name": "RuntimeResult",
+      "line": 30
+    },
+    {
+      "file": "noryx7_runtime/engine.py",
+      "name": "RuntimeEngine",
+      "line": 37
+    },
+    {
+      "file": "noryx7_runtime/lifecycle.py",
+      "name": "LifecycleError",
+      "line": 8
+    },
+    {
+      "file": "noryx7_runtime/lifecycle.py",
+      "name": "ExecutionLifecycle",
+      "line": 23
+    },
+    {
+      "file": "noryx7_runtime/model_adapters/openrouter.py",
+      "name": "OpenRouterAdapter",
+      "line": 12
+    },
+    {
+      "file": "noryx7_runtime/model_fabric.py",
+      "name": "ModelAdapter",
+      "line": 11
+    },
+    {
+      "file": "noryx7_runtime/model_fabric.py",
+      "name": "ModelRequest",
+      "line": 28
+    },
+    {
+      "file": "noryx7_runtime/model_fabric.py",
+      "name": "ModelCandidate",
+      "line": 50
+    },
+    {
+      "file": "noryx7_runtime/model_fabric.py",
+      "name": "FabricResult",
+      "line": 58
+    },
+    {
+      "file": "noryx7_runtime/model_fabric.py",
+      "name": "ModelFabric",
+      "line": 71
+    },
+    {
+      "file": "noryx7_runtime/recovery.py",
+      "name": "RecoveryError",
+      "line": 10
+    },
+    {
+      "file": "noryx7_runtime/recovery.py",
+      "name": "RuntimeRecovery",
+      "line": 14
+    },
+    {
+      "file": "noryx7_runtime/scheduler.py",
+      "name": "ScheduledStep",
+      "line": 10
+    },
+    {
+      "file": "noryx7_runtime/scheduler.py",
+      "name": "Scheduler",
+      "line": 15
+    },
+    {
+      "file": "noryx7_runtime/state.py",
+      "name": "AttestationVerifier",
+      "line": 13
+    },
+    {
+      "file": "noryx7_runtime/state.py",
+      "name": "JournalEntry",
+      "line": 18
+    },
+    {
+      "file": "noryx7_runtime/state.py",
+      "name": "StepReservation",
+      "line": 35
+    },
+    {
+      "file": "noryx7_runtime/state.py",
+      "name": "StateJournal",
+      "line": 42
+    },
+    {
+      "file": "noryx7_runtime/test_engine.py",
+      "name": "BlockingAdapter",
+      "line": 54
+    },
+    {
+      "file": "noryx7_runtime/test_engine_state_commit.py",
+      "name": "RejectingVerifier",
+      "line": 27
+    },
+    {
+      "file": "noryx7_runtime/test_model_fabric.py",
+      "name": "FakeModel",
+      "line": 11
+    },
+    {
+      "file": "noryx7_runtime/test_model_fabric_execution_binding.py",
+      "name": "FakeModel",
+      "line": 7
+    },
+    {
+      "file": "noryx7_runtime/test_platform_egress.py",
+      "name": "FakePlatform",
+      "line": 11
+    },
+    {
+      "file": "noryx7_runtime/test_runtime_continuity.py",
+      "name": "FakeModel",
+      "line": 12
+    },
+    {
+      "file": "noryx7_runtime/test_state_security.py",
+      "name": "BlockingVerifier",
+      "line": 71
+    },
+    {
+      "file": "ecosystem/boundaries.py",
+      "name": "Front",
+      "line": 10
+    },
+    {
+      "file": "ecosystem/boundaries.py",
+      "name": "IntentEnvelope",
+      "line": 16
+    },
+    {
+      "file": "ecosystem/closure_contract.py",
+      "name": "FrontClosure",
+      "line": 8
+    },
+    {
+      "file": "ecosystem/dispatch_contract.py",
+      "name": "DispatchReceipt",
+      "line": 18
+    },
+    {
+      "file": "ecosystem/global_closure.py",
+      "name": "ClosureReport",
+      "line": 16
+    },
+    {
+      "file": "ecosystem/global_fabric.py",
+      "name": "MemoryLevel",
+      "line": 16
+    },
+    {
+      "file": "ecosystem/global_fabric.py",
+      "name": "MemoryRecord",
+      "line": 26
+    },
+    {
+      "file": "ecosystem/global_fabric.py",
+      "name": "GlobalMemoryFabric",
+      "line": 57
+    },
+    {
+      "file": "ecosystem/global_fabric.py",
+      "name": "IdentityAuthorization",
+      "line": 105
+    },
+    {
+      "file": "ecosystem/global_fabric.py",
+      "name": "GlobalIdentityAuthorizationFabric",
+      "line": 125
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "Health",
+      "line": 25
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "DegradationMode",
+      "line": 32
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "WorkClass",
+      "line": 40
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "Capacity",
+      "line": 46
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "Region",
+      "line": 72
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "Cell",
+      "line": 88
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "GlobalControlPlane",
+      "line": 106
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "CellRegistry",
+      "line": 139
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "WorkRequest",
+      "line": 163
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "Route",
+      "line": 181
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "GlobalTrafficRouter",
+      "line": 188
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "ElasticComputeFabric",
+      "line": 210
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "QueuedWork",
+      "line": 237
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "EventFabric",
+      "line": 243
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "LanguageContext",
+      "line": 269
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "SemanticEnvelope",
+      "line": 286
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "LanguageFabric",
+      "line": 292
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "ResourceBudget",
+      "line": 302
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "ResourceController",
+      "line": 315
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "DegradationController",
+      "line": 323
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "MetricEvent",
+      "line": 345
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "ObservabilityFabric",
+      "line": 353
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "RecoveryTarget",
+      "line": 374
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "DisasterRecoveryPlan",
+      "line": 380
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "SelfHealingController",
+      "line": 388
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "SyntheticScenario",
+      "line": 412
+    },
+    {
+      "file": "ecosystem/global_scale.py",
+      "name": "SyntheticTestingGrid",
+      "line": 424
+    },
+    {
+      "file": "ecosystem/runtime_dispatch.py",
+      "name": "DispatchResult",
+      "line": 16
+    },
+    {
+      "file": "ecosystem/test_global_fabric.py",
+      "name": "GlobalFabricTests",
+      "line": 12
+    },
+    {
+      "file": "jarvis/core/contracts.py",
+      "name": "Request",
+      "line": 13
+    },
+    {
+      "file": "jarvis/core/contracts.py",
+      "name": "PlanStep",
+      "line": 30
+    },
+    {
+      "file": "jarvis/core/contracts.py",
+      "name": "Plan",
+      "line": 53
+    },
+    {
+      "file": "jarvis/core/contracts.py",
+      "name": "ActionResult",
+      "line": 67
+    },
+    {
+      "file": "jarvis/core/decomposition.py",
+      "name": "Decomposer",
+      "line": 7
+    },
+    {
+      "file": "jarvis/core/decomposition.py",
+      "name": "TaskDecomposer",
+      "line": 16
+    },
+    {
+      "file": "jarvis/core/orchestrator.py",
+      "name": "JarvisOrchestrator",
+      "line": 5
+    },
+    {
+      "file": "jarvis/core/policy.py",
+      "name": "Policy",
+      "line": 8
+    },
+    {
+      "file": "jarvis/core/provider.py",
+      "name": "Provider",
+      "line": 14
+    },
+    {
+      "file": "jarvis/core/provider.py",
+      "name": "CallableProvider",
+      "line": 18
+    },
+    {
+      "file": "jarvis/core/runtime.py",
+      "name": "JarvisRuntime",
+      "line": 19
+    },
+    {
+      "file": "jarvis/core/state.py",
+      "name": "JarvisState",
+      "line": 19
+    },
+    {
+      "file": "jarvis/core/state.py",
+      "name": "StateCommit",
+      "line": 29
+    },
+    {
+      "file": "jarvis/core/state.py",
+      "name": "ExecutionReservation",
+      "line": 37
+    },
+    {
+      "file": "jarvis/core/state.py",
+      "name": "JarvisStateStore",
+      "line": 45
+    },
+    {
+      "file": "jarvis/memory/store.py",
+      "name": "MemoryStore",
+      "line": 1
+    },
+    {
+      "file": "jarvis/providers/base.py",
+      "name": "ModelProvider",
+      "line": 3
+    },
+    {
+      "file": "jarvis/security/audit.py",
+      "name": "AuditEvent",
+      "line": 7
+    },
+    {
+      "file": "jarvis/security/audit.py",
+      "name": "AuditLog",
+      "line": 16
+    },
+    {
+      "file": "jarvis/security/authorization.py",
+      "name": "Authorization",
+      "line": 1
+    },
+    {
+      "file": "jarvis/tools/registry.py",
+      "name": "CapabilityRegistry",
+      "line": 7
+    },
+    {
+      "file": "tests/million/test_progressive_difficulty_campaign.py",
+      "name": "CampaignCase",
+      "line": 23
+    },
+    {
+      "file": "tests/million_scale_campaign.py",
+      "name": "Scenario",
+      "line": 33
+    },
+    {
+      "file": "tests/test_attestation.py",
+      "name": "AcceptingVerifier",
+      "line": 7
+    },
+    {
+      "file": "tests/test_attestation.py",
+      "name": "RejectingVerifier",
+      "line": 12
+    },
+    {
+      "file": "tests/test_front_runtime.py",
+      "name": "Runtime",
+      "line": 8
+    },
+    {
+      "file": "tests/test_front_runtime.py",
+      "name": "GuardedRuntime",
+      "line": 66
+    },
+    {
+      "file": "tests/test_offline.py",
+      "name": "Recovery",
+      "line": 15
+    },
+    {
+      "file": "tests/test_offline.py",
+      "name": "Policy",
+      "line": 29
+    },
+    {
+      "file": "tests/test_offline.py",
+      "name": "Verifier",
+      "line": 37
+    },
+    {
+      "file": "tests/test_offline.py",
+      "name": "Cipher",
+      "line": 45
+    },
+    {
+      "file": "tests/test_operational_runtime.py",
+      "name": "FakeOperationalModel",
+      "line": 6
+    }
+  ]
+}
