@@ -52,5 +52,5 @@ def verify_subtasks(route_set: SubtaskRouteSet, results: tuple[AgentResult, ...]
     if tuple(item.subtask_id for item in evidence) != expected:
         return SubtaskVerificationGate(tuple(evidence), VerificationResult(False, "subtask_verification", "subtask_result_order_invalid"), False)
     if any(route.route_authority if hasattr(route, "route_authority") else False for route in route_set.routes):
-        return SubtaskVerificationGate(tuple(evidence), VerificationResult(False, "subtask_verification", "subtask_route_authority_invalid"), False)
+        return SubtaskVerificationGate(tuple(evidence), VerificationResult(False, "subtask_verification", "subtask_routes_invalid"), False)
     return SubtaskVerificationGate(tuple(evidence), VerificationResult(True, "subtask_verification", "subtask_commit_gate_ok"), True)
