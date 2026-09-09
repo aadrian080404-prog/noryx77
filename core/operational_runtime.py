@@ -22,9 +22,16 @@ class OperationalNORYXRuntime(NORYXRuntime):
             raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric)
         self.system_fabric = CanonicalSystemFabric()
-        # The canonical fabric is created after the base runtime, so attach the
-        # same authorization boundary to routing before any operational dispatch.
+        # The canonical fabric is shared by operational routing and the
+        # HYPERSYNTH facade. HYPERSYNTH keeps its local safety components, while
+        # the router enforces the canonical identity/capability boundary.
         self.router.attach_system_fabric(self.system_fabric)
+        self.hypersynth.system_fabric = self.system_fabric
+        self.audit.record(
+            "hypersynth_system_fabric_bound",
+            system_fabric="canonical",
+            router_authorization="canonical",
+        )
         for agent_id in ("deterministic", *sorted(self.REQUIRED_AGENT_IDS)):
             agent = self.router.get(agent_id)
             identity = getattr(agent, "identity", None)
