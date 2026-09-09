@@ -5,6 +5,7 @@ from uuid import uuid4
 from core.contracts import TaskSpec
 from core.memory import MemoryItem
 from core.operational_runtime import OperationalNORYXRuntime
+from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 
 
 class RuntimeAdapter:
@@ -36,6 +37,8 @@ class RuntimeAdapter:
                 "_noryx7_origin": "noryx-browser",
                 "_noryx7_client_id": client_id,
                 "_noryx7_execution_id": execution_id,
+                "_noryx7_system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
+                "_noryx7_creator": CANONICAL_SYSTEM_IDENTITY.creator,
             },
             verification_requirements=("runtime_result",),
             risk_class="normal",
@@ -63,6 +66,8 @@ class RuntimeAdapter:
                 task_id=task.task_id,
                 execution_id=task.execution_id,
                 client_id=client_id,
+                system_id=CANONICAL_SYSTEM_IDENTITY.system_id,
+                creator=CANONICAL_SYSTEM_IDENTITY.creator,
                 memory_id=f"gateway:{task.execution_id}:input",
             )
 
@@ -88,6 +93,8 @@ class RuntimeAdapter:
                     task_id=task.task_id,
                     execution_id=task.execution_id,
                     client_id=client_id,
+                    system_id=CANONICAL_SYSTEM_IDENTITY.system_id,
+                    creator=CANONICAL_SYSTEM_IDENTITY.creator,
                     memory_id=f"gateway:{task.execution_id}:output",
                 )
         except Exception as exc:
@@ -146,6 +153,8 @@ class RuntimeAdapter:
         self._remember_output(task, answer, client_id)
         return {
             "status": "completed",
+            "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
+            "creator": CANONICAL_SYSTEM_IDENTITY.creator,
             "task_id": result.get("task_id"),
             "execution_id": result.get("execution_id"),
             "client_id": client_id,
