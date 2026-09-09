@@ -6,12 +6,12 @@ from core.router import ResourceRouter
 from core.agents import DeterministicAgent
 
 
-def _task(objective="Explain this software architecture", task_id="uif-e2e"):
+def _task(objective="Explain this software architecture", task_id="uif-e2e", task_input="Please analyze the code and architecture."):
     return TaskSpec(
         task_id=task_id,
         task_type="conversation",
         objective=objective,
-        input="Please analyze the code and architecture.",
+        input=task_input,
         constraints={},
         verification_requirements=("agent_result",),
         risk_class="normal",
@@ -43,7 +43,13 @@ def test_hypersynth_executes_uif_route_and_verifies_fabric_result():
 
 
 def test_uif_route_never_grants_authority():
-    route = UniversalIntelligenceFabric().route(_task("Execute a financial transfer and approve the transaction"))
+    route = UniversalIntelligenceFabric().route(
+        _task(
+            "Execute a financial transfer and approve the transaction",
+            task_id="uif-finance-authority",
+            task_input="Review the requested transaction details.",
+        )
+    )
     assert route.domain == "finance_economics"
     assert not hasattr(route, "authorize")
     assert not hasattr(route, "commit")
