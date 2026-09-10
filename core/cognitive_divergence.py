@@ -78,7 +78,10 @@ class BranchingCognitionEngine:
                 source_classes=tuple(source),
                 pattern_tags=tags + neural,
             ))
-        diversity = len({source for branch in branches for source in branch.source_classes})
+        # Fallback source classes describe reasoning lenses only; they are not
+        # external evidence. Count actual authorized/metadata-only source
+        # records so branching cannot manufacture an evidence-diversity signal.
+        diversity = len(sources)
         check = VerificationResult(
             bool(branches) and diversity >= 3,
             "branching_cognition",
