@@ -20,7 +20,7 @@ from noryx7_runtime.engine import RuntimeEngine
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
     def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, system_fabric=None):
-        self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store or JarvisStateStore(); self.recovery = recovery or RecoveryController()
+        self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store if state_store is not None else JarvisStateStore(); self.recovery = recovery or RecoveryController()
         self.core_verifier = VerificationEngine(); self.core_policy = PolicyEngine(); self.core_security = SecurityBoundary(self.core_policy, self.core_verifier)
         self.system_fabric = system_fabric or CanonicalSystemFabric()
         if not isinstance(self.system_fabric, CanonicalSystemFabric): raise TypeError("system_fabric_invalid")
@@ -52,9 +52,6 @@ class JarvisRuntime:
         return actual == expected and all(result.success is True for result in results)
     def _fabric_record(self, *, execution_id: str, request: Request, phase: str, metadata) -> None:
         self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase=phase, metadata=metadata, runtime_id=self.runtime_engine.runtime_id)
-        # Older JARVIS callers historically addressed the fabric record by the
-        # request text. Keep that read-compatible alias without changing the
-        # canonical reservation/execution identity, which remains request_id.
         if request.text != execution_id:
             self.system_fabric.record_execution(execution_id=request.text, client_id=request.principal_id, phase=phase, metadata=metadata, runtime_id=self.runtime_engine.runtime_id)
     def execute(self, request: Request, plan: Plan):
@@ -69,7 +66,7 @@ class JarvisRuntime:
         for step in plan.steps:
             if not self.orchestrator.policy.authorize(request.principal_id, step.capability, step.target):
                 self.audit.record("execution_authorization_rejected", request.principal_id, reason="capability_denied"); raise PermissionError("capability_denied")
-        execution_id = request.request_id; runtime_id = self.runtime_engine.runtime_id
+        execution_id = request.request_id
         try:
             self.state.reserve(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id)
         except (PermissionError, ValueError) as exc:
@@ -79,7 +76,7 @@ class JarvisRuntime:
         try:
             results = self.recovery.run_if_normal(lambda: self.runtime_bridge.execute(request, plan), expected_epoch=recovery_epoch)
         except PermissionError as exc:
-            self.audit.record("execution_authorization_rejected", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": str(exc), "stage": "bridge"},); return ()
+            self.audit.record("execution_authorization_rejected", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": str(exc), "stage": "bridge"}); return ()
         except Exception as exc:
             self.audit.record("execution_failed", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "bridge"}); return ()
         if not isinstance(results, tuple):
