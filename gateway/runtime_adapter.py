@@ -26,6 +26,16 @@ class RuntimeAdapter:
             raise ValueError("client_identity_too_large")
         return client_id.strip()
 
+    @staticmethod
+    def _validate_session_id(session_id: str | None) -> str | None:
+        if session_id is None:
+            return None
+        if not isinstance(session_id, str) or not session_id.strip():
+            raise PermissionError("authenticated_session_required")
+        if len(session_id.encode("utf-8")) > 256:
+            raise ValueError("session_identity_too_large")
+        return session_id.strip()
+
     @classmethod
     def _build_task(cls, *, client_id: str, text: str, execution_id: str) -> TaskSpec:
         return TaskSpec(
@@ -61,15 +71,23 @@ class RuntimeAdapter:
                 metadata=metadata,
             )
 
-    def _remember_input(self, task: TaskSpec, client_id: str) -> None:
+    def _remember_input(self, task: TaskSpec, client_id: str, session_id: str | None = None) -> None:
         memory = getattr(self.runtime, "memory", None)
         if memory is None:
             raise RuntimeError("runtime_memory_unavailable")
+        if session_id is not None:
+            system_fabric = getattr(self.runtime, "system_fabric", None)
+            if system_fabric is None:
+                raise PermissionError("system_fabric_required")
+            authorization = system_fabric.authorize(session_id, "execute")
+            if authorization.identity_id != client_id:
+                raise PermissionError("session_client_identity_mismatch")
+        else:
+            system_fabric = getattr(self.runtime, "system_fabric", None)
+            if system_fabric is not None:
+                system_fabric.bind_session(session_id=f"client:{client_id}", client_id=client_id, device_id="gateway", role="client")
+                system_fabric.authorize(f"client:{client_id}", "execute")
         memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:input", content=task.input, kind="working", source=task.task_id, importance=0.4, execution_id=task.execution_id))
-        system_fabric = getattr(self.runtime, "system_fabric", None)
-        if system_fabric is not None:
-            system_fabric.bind_session(session_id=f"client:{client_id}", client_id=client_id, device_id="gateway", role="client")
-            system_fabric.authorize(f"client:{client_id}", "execute")
         self._record_gateway_phase(
             task,
             client_id,
@@ -117,8 +135,9 @@ class RuntimeAdapter:
                 reason=reason,
             )
 
-    def execute(self, *, client_id: str, text: str, execution_id: str | None = None) -> dict:
+    def execute(self, *, client_id: str, text: str, execution_id: str | None = None, session_id: str | None = None) -> dict:
         client_id = self._validate_client_id(client_id)
+        session_id = self._validate_session_id(session_id)
         if not isinstance(text, str) or not text.strip():
             raise ValueError("browser_input_required")
         if len(text.encode("utf-8")) > self.MAX_INPUT_BYTES:
@@ -129,7 +148,7 @@ class RuntimeAdapter:
         if len(execution_id.encode("utf-8")) > 256:
             raise ValueError("execution_id_too_large")
         task = self._build_task(client_id=client_id, text=text, execution_id=execution_id)
-        self._remember_input(task, client_id)
+        self._remember_input(task, client_id, session_id)
         try:
             self.runtime.heartbeat_agents()
             result = self.runtime.run_hypersynth(task)
@@ -145,6 +164,9 @@ class RuntimeAdapter:
             reason = str(getattr(verification, "reason", None) or result.get("reason") or "runtime_rejected")
             self._reject(task, client_id, reason)
             raise PermissionError(reason)
+        if result.get("task_id") != task.task_id or result.get("execution_id") != task.execution_id:
+            self._reject(task, client_id, "runtime_result_identity_mismatch")
+            raise PermissionError("runtime_result_identity_mismatch")
         answer = result.get("result")
         if not isinstance(answer, str) or not answer.strip():
             self._reject(task, client_id, "runtime_answer_invalid")
