@@ -57,6 +57,9 @@ class _SearchResultParser(HTMLParser):
 
 class WebResearchCapability:
     name = "web_research"
+    _STOPWORDS = frozenset({
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is", "it", "of", "on", "or", "the", "to", "was", "were", "with",
+    })
 
     def __init__(self, *, timeout: float = 10.0, max_bytes: int = 256_000):
         self.timeout = timeout
@@ -113,6 +116,39 @@ class WebResearchCapability:
             results.append({"title": title, "url": url[:1000], "snippet": snippet})
         return results[:10]
 
+    @classmethod
+    def _query_tokens(cls, query: str) -> tuple[str, ...]:
+        tokens = re.findall(r"[\wÀ-ÿ]+", str(query or "").lower())
+        return tuple(token for token in tokens if token not in cls._STOPWORDS and len(token) > 1)
+
+    @classmethod
+    def _relevance_score(cls, query: str, item: dict) -> float:
+        normalized_query = " ".join(cls._query_tokens(query))
+        haystack = " ".join(cls._query_tokens(f"{item.get('title', '')} {item.get('snippet', '')}"))
+        if not normalized_query or not haystack:
+            return 0.0
+        if normalized_query in haystack:
+            return 1.0
+        query_tokens = cls._query_tokens(query)
+        if not query_tokens:
+            return 0.0
+        matched = sum(token in haystack.split() for token in query_tokens)
+        return matched / len(query_tokens)
+
+    @classmethod
+    def _filter_relevant(cls, query: str, links: list[dict]) -> list[dict]:
+        tokens = cls._query_tokens(query)
+        if not tokens:
+            return links[:10]
+        threshold = 1.0 if len(tokens) == 1 else 0.75 if len(tokens) <= 3 else 0.4
+        ranked = []
+        for item in links:
+            score = cls._relevance_score(query, item)
+            if score >= threshold:
+                ranked.append((score, item))
+        ranked.sort(key=lambda pair: (-pair[0], str(pair[1].get("title") or "").lower()))
+        return [item for _, item in ranked[:10]]
+
     def __call__(self, target: str, parameters: dict) -> dict:
         target_value = str(target or "").strip()
         explicit_url = str(parameters.get("url") or "").strip()
@@ -140,17 +176,19 @@ class WebResearchCapability:
             except Exception:
                 continue
             links = self._parse_results(page.get("body", ""))
-            if links:
-                return self._build_result(query, page["url"], links)
+            relevant = self._filter_relevant(query, links)
+            if relevant:
+                return self._build_result(query, page["url"], relevant)
 
         try:
             from core.web_search_fallback import WebSearchFallback
             links = WebSearchFallback(timeout=self.timeout).search(query)
         except Exception:
             links = []
-        if links:
-            return self._build_result(query, "metasearch", links)
-        raise CapabilityUnavailable("web_search_provider_unavailable")
+        relevant = self._filter_relevant(query, links)
+        if relevant:
+            return self._build_result(query, "metasearch", relevant)
+        raise CapabilityUnavailable("web_search_no_relevant_results")
 
     def _build_result(self, query: str, source_url: str, links: list[dict]) -> dict:
         evidence = []
@@ -182,6 +220,8 @@ class WebResearchCapability:
                     "status_code": 200,
                     "content_type": "search-result",
                 })
+        if not evidence:
+            raise CapabilityUnavailable("web_search_no_relevant_evidence")
         return {
             "status": "completed",
             "query": query,
