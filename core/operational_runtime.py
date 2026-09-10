@@ -54,12 +54,12 @@ class OperationalNORYXRuntime(NORYXRuntime):
         statuses = self.agent_runtime.start()
         status_ids = {item.agent_id for item in statuses}
         if not self.REQUIRED_AGENT_IDS.issubset(status_ids):
-            self.agent_runtime.stop(); raise RuntimeError("primary_secondary_agents_missing")
+            self.agent_runtime.stop(); self.shutdown(); raise RuntimeError("primary_secondary_agents_missing")
         if not statuses or not all(item.state == "ONLINE" for item in statuses):
-            self.agent_runtime.stop(); raise RuntimeError("agent_runtime_not_online")
+            self.agent_runtime.stop(); self.shutdown(); raise RuntimeError("agent_runtime_not_online")
         fabric_ids = set(self.agent_fabric.available())
         if not self.REQUIRED_AGENT_IDS.issubset(fabric_ids):
-            self.agent_runtime.stop(); raise RuntimeError("operational_fabric_agents_missing")
+            self.agent_runtime.stop(); self.shutdown(); raise RuntimeError("operational_fabric_agents_missing")
         self.continuity = AgentContinuityScheduler(agent_runtime=self.agent_runtime, cycle_callback=self._continuity_cycle, interval_seconds=300.0, max_cycles_per_start=1000)
         self.continuity.start()
         self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True, scientific_fabric=True)
@@ -186,3 +186,4 @@ class OperationalNORYXRuntime(NORYXRuntime):
         if hasattr(self, "continuity"):
             self.continuity.stop()
         self.agent_runtime.stop()
+        self.shutdown()
