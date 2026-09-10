@@ -6,6 +6,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .auth import SessionAuthority, SessionError
 from .runtime_adapter import RuntimeAdapter
+from core.operational_runtime import OperationalNORYXRuntime
+from core.system_fabric import CanonicalSystemFabric
 
 
 class NoryxGateway:
@@ -32,7 +34,15 @@ class NoryxGateway:
         self.runtime = runtime_adapter
         system_fabric = getattr(self.runtime.runtime, "system_fabric", None)
         if system_fabric is None:
-            raise RuntimeError("runtime_system_fabric_required")
+            # Lightweight test/dry-run runtimes are allowed a local canonical
+            # fabric so the gateway contract can be exercised. A real
+            # OperationalNORYXRuntime is never given an implicit fabric.
+            if isinstance(self.runtime.runtime, OperationalNORYXRuntime):
+                raise RuntimeError("runtime_system_fabric_required")
+            system_fabric = CanonicalSystemFabric()
+            self.runtime.runtime.system_fabric = system_fabric
+        if not isinstance(system_fabric, CanonicalSystemFabric):
+            raise RuntimeError("runtime_system_fabric_invalid")
         self.system_fabric = system_fabric
 
     def health(self) -> dict:
@@ -56,13 +66,7 @@ class NoryxGateway:
     def create_browser_session(self, *, pairing_code: str, client_id: str) -> dict:
         token = self.auth.issue_browser_pairing(pairing_code, client_id)
         session_id = self.system_fabric.session_id_from_token(token)
-        self.system_fabric.bind_session(
-            session_id=session_id,
-            client_id=client_id,
-            device_id="android-browser",
-            role="browser",
-            capabilities=("execute",),
-        )
+        self.system_fabric.bind_session(session_id=session_id, client_id=client_id, device_id="android-browser", role="browser", capabilities=("execute",))
         return {"status": "authenticated", "client_id": client_id, "session_token": token}
 
     def execute(self, *, session_token: str, text: str, execution_id: str | None = None) -> dict:
@@ -71,12 +75,7 @@ class NoryxGateway:
         authorization = self.system_fabric.authorize(session_id, "execute")
         if authorization.identity_id != identity["client_id"]:
             raise PermissionError("session_client_identity_mismatch")
-        return self.runtime.execute(
-            client_id=identity["client_id"],
-            text=text,
-            execution_id=execution_id,
-            session_id=session_id,
-        )
+        return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id, session_id=session_id)
 
     def handler_class(self):
         gateway = self
@@ -120,26 +119,16 @@ class NoryxGateway:
                 try:
                     body = self._body()
                     if self.path == "/v1/session":
-                        self._json(200, gateway.create_session(
-                            bootstrap_token=str(body.get("bootstrap_token", "")),
-                            client_id=str(body.get("client_id", "")),
-                        ))
+                        self._json(200, gateway.create_session(bootstrap_token=str(body.get("bootstrap_token", "")), client_id=str(body.get("client_id", ""))))
                         return
                     if self.path == "/v1/browser/session":
-                        self._json(200, gateway.create_browser_session(
-                            pairing_code=str(body.get("pairing_code", "")),
-                            client_id=str(body.get("client_id", "")),
-                        ))
+                        self._json(200, gateway.create_browser_session(pairing_code=str(body.get("pairing_code", "")), client_id=str(body.get("client_id", ""))))
                         return
                     if self.path == "/v1/execute":
                         authorization = self.headers.get("Authorization", "")
                         if not authorization.startswith("Bearer "):
                             raise SessionError("authorization_required")
-                        self._json(200, gateway.execute(
-                            session_token=authorization[7:],
-                            text=body.get("input", ""),
-                            execution_id=body.get("execution_id"),
-                        ))
+                        self._json(200, gateway.execute(session_token=authorization[7:], text=body.get("input", ""), execution_id=body.get("execution_id")))
                         return
                     self._json(404, {"status": "rejected", "reason": "not_found"})
                 except SessionError as exc:
