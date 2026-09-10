@@ -40,6 +40,11 @@ class SystemBridge:
 
     def execute(self, *, session_token: str, envelope: Mapping[str, Any]) -> dict[str, Any]:
         request = validate_request(envelope)
+        if request.client_id != request.principal_id:
+            raise PermissionError("noryx_protocol_client_principal_mismatch")
+        if request.source != "noryx-browser":
+            raise PermissionError("noryx_protocol_source_not_authorized")
+
         capability = self._capability(request)
         query = self._query(request)
         text = request.input.get("text")
