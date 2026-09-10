@@ -1,7 +1,7 @@
 # NORYX7 — Current Operational State
 
-Date: 2026-09-09
-Branch: `main` (Wave 7 prepared on integration branch)
+Date: 2026-09-10
+Branch baseline: `main`; Wave 10 is prepared on `integration-wave-10-end-to-end-closure-2026-09-10`.
 
 ## Mission
 
@@ -26,7 +26,7 @@ USER / TEXT / VOICE / BROWSER / API
 → MEMORY
 → USER / TEXT / TTS
 
-Not every request must traverse every subsystem; orchestration selects the required path while preserving the security and verification boundaries.
+Not every request must traverse every subsystem; orchestration selects the required path while preserving security and verification boundaries.
 
 ## Integrated boundaries
 
@@ -42,80 +42,52 @@ The active web surface routes execution through the canonical gateway/runtime pa
 
 The Android Browser no longer ships a gateway bootstrap credential. Browser enrollment uses a dedicated server-side pairing secret (`NORYX_BROWSER_PAIRING_CODE`) and receives a normal short-lived gateway session. The resulting browser identity is bound into `CanonicalSystemFabric` with the `execute` capability only.
 
-The pairing code is entered at runtime and is not persisted by the Android client. The server-side pairing secret must be configured in the deployment environment before browser enrollment can succeed.
-
 ### Wave 7 — Agent identity fabric binding
 
-The canonical system fabric now has an explicit agent-identity binding contract. A well-formed `AgentIdentity` is mapped to a key-fingerprint-bound synthetic agent session and must hold an explicit capability before a protected agent execution path may proceed.
+The canonical system fabric has an explicit agent-identity binding contract. A well-formed `AgentIdentity` is mapped to a key-fingerprint-bound synthetic agent session and must hold an explicit capability before a protected agent execution path may proceed.
 
-The JARVIS bridge now binds and authorizes its execution principal through the canonical system fabric before RuntimeEngine dispatch, and re-checks the explicit `execute` capability at the execution boundary. This supplements, rather than replaces, the existing cryptographic `AuthorizationAuthority`, `ActionGate`, policy and security checks.
+### Wave 8 — Model fabric and operational collaboration
 
-The binding is fail-closed and does not implicitly grant authority. Key replacement produces a distinct binding because the public-key fingerprint is part of the agent session identity.
+Primary and Secondary agents are backed by the canonical `ModelFabric`; operational collaboration is verified through Primary → Secondary → Primary and fabric dispatch/admission audit events.
 
-## Verified historically
+### Wave 9 — Runtime/system-fabric boundary
 
-### JARVIS vertical execution
+The canonical system fabric is the intended shared authority boundary for operational runtime, gateway and JARVIS. The remaining question was whether a real HYPERSYNTH lifecycle actually traversed that fabric rather than merely exposing the object.
 
-A complete test using an explicit policy grant succeeded historically:
+### Wave 10 — End-to-end closure audit and lifecycle binding
 
-- JARVIS policy grant: PASS
-- JARVIS execute: PASS
-- recovery guard: PASS
-- JARVIS runtime bridge: PASS
-- RuntimeEngine: PASS
-- shared capability registry: PASS
-- ToolExecutor: PASS
-- authorization: PASS
-- verification: PASS
-- state commit: PASS
-- final state: `committed`
+The audit found two concrete closure gaps:
 
-These results are historical and are not a fresh verification of the current main branch.
+1. The operational runtime exposed `system_fabric`, but direct `run_hypersynth()` execution did not itself record canonical lifecycle provenance.
+2. The hosted web runtime constructed an operational runtime independently of the configurable task-timeout and user-understanding integration used by the operational entrypoint.
 
-### Policy security
+Wave 10 addresses those boundaries together:
 
-Previously verified:
+- operational lifecycle records canonical `runtime_received`, `runtime_committed` or `runtime_rejected` provenance through the same `CanonicalSystemFabric`;
+- gateway execution and direct runtime execution can now be checked as one continuous lifecycle;
+- hosted web runtime uses `NORYX7_MAX_TASK_SECONDS` through `RuntimeLimits`;
+- hosted web runtime configures consent-bound `UserUnderstandingEngine` for first-interaction context derivation;
+- dedicated closure tests verify direct runtime provenance and gateway → runtime → committed → gateway lifecycle records.
 
-- deny-by-default: PASS
-- explicit grant: PASS
-- revoke: PASS
-- revoked execution blocked: PASS
-- revoked handler was not called: PASS
-- principal isolation: PASS
-- capability isolation: PASS
-- target isolation: PASS
+## Audit findings that remain important
+
+- The JARVIS execution plane is intentionally optional and fail-closed until explicitly configured with its runtime engine, authorization authority, principal and policy.
+- Voice has a canonical `VoiceGateway` and verified runtime boundary, but the active hosted web surface does not currently expose microphone/STT/TTS endpoints. This is an interface integration boundary, not a hidden claim of live voice availability.
+- External providers such as payments, flights and insurance remain fail-closed until real provider adapters and credentials are configured.
+- A green unit/integration suite is not equivalent to a live Render deployment verification. Deployment configuration and real provider credentials must be checked separately.
 
 ## Security principle
 
 The security layer is intentionally fail-closed and deny-by-default. Do not weaken policy, bypass authorization, auto-grant capabilities, remove checks, or modify tests merely to make an integration test pass.
 
-If a protected path rejects an operation, first determine whether the rejection is the intended contract or a genuine integration defect.
-
-## Important implementation facts
-
-- `core/tools.py` contains the canonical capability registry and ToolExecutor.
-- JARVIS registry delegates to the canonical core registry.
-- JARVIS native handlers keep the `handler(PlanStep) -> ActionResult` contract.
-- Core ToolExecutor handlers use `handler(target, dict(parameters))`; the JARVIS registry adapter translates between these contracts.
-- `core/actions.py` owns the canonical ActionGate/AuthorizationAuthority path.
-- Do not call `ActionGate.authorize()` separately before an auth-required `authorize_and_execute()` path because that can consume a one-shot grant twice.
-- RuntimeEngine receives the actual action payload from the bridge, not the JARVIS `ActionResult` wrapper.
-- JARVIS StateStore requires `results` as a list at commit time.
-- RecoveryController is implemented in `core/recovery.py`.
-- `core/system_fabric.py` owns the cross-component system-fabric boundary and now exposes explicit agent identity binding/authorization.
-- `ecosystem/global_fabric.py` owns the bounded global memory and identity/authorization indexes.
-- Android Browser v0.1 remains a separate WebView project; it does not embed HYPERSYNTH or the chatbot.
-
-## Known-good integration commits
-
-- `81b68c8` — Wave 4 web/runtime unification
-- `f46904f` — Wave 5 canonical system fabric integration
-- `b6808f4` — Wave 6 secure Android browser enrollment
-
-## Current verification status
-
-Wave 7 implementation is prepared on the integration branch. The new Wave 7 tests have not been executed in this environment, so no fresh PASS claim is made here. Live Render verification is also not available from the current environment.
-
 ## Current rule
 
-Continue integration by identifying the next real disconnected boundary, inspect its existing contract first, make the smallest necessary change, run a focused test when execution is available, then run the relevant regression suite. Never claim repository or deployment verification that has not actually occurred.
+Work in waves of 3–4 real boundaries:
+
+1. inspect for disconnected or false integrations;
+2. integrate the boundaries together;
+3. run focused closure tests;
+4. run the full regression suite;
+5. perform a real end-to-end execution where credentials/environment permit it.
+
+Never claim that every component is live merely because it exists in the repository.
