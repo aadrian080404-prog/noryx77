@@ -83,15 +83,15 @@ class RuntimeAdapter:
         model_execution = {}
         if isinstance(kernel_results, (tuple, list)) and kernel_results:
             agent_id = getattr(kernel_results[-1], "agent_id", "")
-            agent = getattr(self.runtime, "router", None)
-            if agent is not None:
+            router = getattr(self.runtime, "router", None)
+            if router is not None:
                 try:
-                    selected_agent = agent.get(agent_id)
+                    selected_agent = router.get(agent_id)
                     metadata = getattr(selected_agent, "last_model_execution", None)
                     if isinstance(metadata, dict): model_execution = {str(key): str(value) for key, value in metadata.items() if isinstance(key, str) and isinstance(value, str)}
                 except Exception:
                     model_execution = {}
-        if not model_execution:
-            self._reject(task,client_id,"model_execution_metadata_missing"); raise RuntimeError("model_execution_metadata_missing")
         self._remember_output(task,answer,client_id)
-        return {"status":"completed","system_id":CANONICAL_SYSTEM_IDENTITY.system_id,"creator":CANONICAL_SYSTEM_IDENTITY.creator,"task_id":result_task_id,"execution_id":result_execution_id,"client_id":client_id,"result":answer,"model_execution":model_execution,"verification":{"stage":getattr(verification,"stage",""),"valid":bool(getattr(verification,"valid",False)),"reason":getattr(verification,"reason","")}}
+        response={"status":"completed","system_id":CANONICAL_SYSTEM_IDENTITY.system_id,"creator":CANONICAL_SYSTEM_IDENTITY.creator,"task_id":result_task_id,"execution_id":result_execution_id,"client_id":client_id,"result":answer,"verification":{"stage":getattr(verification,"stage",""),"valid":bool(getattr(verification,"valid",False)),"reason":getattr(verification,"reason","")}}
+        if model_execution: response["model_execution"] = model_execution
+        return response
