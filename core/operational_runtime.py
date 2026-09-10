@@ -16,18 +16,26 @@ class OperationalNORYXRuntime(NORYXRuntime):
     """NORYX7 runtime with hosted agents and one canonical operational fabric."""
 
     REQUIRED_AGENT_IDS = frozenset({"noryx7-llm", "noryx7-secondary"})
+    MODEL_EXECUTE_CAPABILITY = "model:execute"
 
     def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None, user_understanding=None):
         if model_fabric is None:
             raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric, user_understanding=user_understanding)
         self.system_fabric = CanonicalSystemFabric()
+        self.router.system_fabric = self.system_fabric
         self.training_governance = TrainingGovernance()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
         self._jarvis_bridge: JarvisRuntimeBridge | None = None
         self.hypersynth.kernel.planner = Planner(max_steps=min(self.limits.max_actions_per_task, 2), collaboration_enabled=True)
         self.hypersynth.kernel.supervisor = self.agent_fabric
+        for agent_id in sorted(self.REQUIRED_AGENT_IDS):
+            agent = self.router.get(agent_id)
+            identity = getattr(agent, "identity", None)
+            if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+                raise RuntimeError("operational_agent_identity_invalid")
+            self.system_fabric.bind_agent_identity(identity, capabilities=("execute", self.MODEL_EXECUTE_CAPABILITY))
         statuses = self.agent_runtime.start()
         status_ids = {item.agent_id for item in statuses}
         if not self.REQUIRED_AGENT_IDS.issubset(status_ids):
@@ -60,18 +68,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         if not isinstance(report, EvaluationReport):
             raise TypeError("evaluation_report_required")
         stage = self.training_governance.admit(report)
-        self.system_fabric.record_execution(
-            execution_id=f"training:{report.candidate_id}",
-            client_id="noryx7-training",
-            phase=stage.value,
-            metadata={
-                "candidate_id": report.candidate_id,
-                "baseline_score": report.baseline_score,
-                "candidate_score": report.candidate_score,
-                "safety_score": report.safety_score,
-                "regression_free": report.regression_free,
-            },
-        )
+        self.system_fabric.record_execution(execution_id=f"training:{report.candidate_id}", client_id="noryx7-training", phase=stage.value, metadata={"candidate_id": report.candidate_id, "baseline_score": report.baseline_score, "candidate_score": report.candidate_score, "safety_score": report.safety_score, "regression_free": report.regression_free})
         self.audit.record("training_candidate_evaluated", candidate_id=report.candidate_id, stage=stage.value)
         return stage
 
