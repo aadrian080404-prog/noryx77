@@ -24,5 +24,6 @@ def test_gemini_tools_are_noryx7_function_only() -> None:
 
 
 def test_gemini_function_result_requires_identity() -> None:
+    adapter = object.__new__(GeminiInteractionsAdapter)
     with pytest.raises(ValueError, match="function_result_identity_required"):
-        GeminiInteractionsAdapter._validate_tools([]) if False else GeminiInteractionsAdapter.continue_interaction
+        adapter.continue_interaction("interaction-1", [{"name": "tool", "result": {}}])
