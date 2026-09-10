@@ -17,11 +17,12 @@ from .security import SecurityBoundary
 from .verification import VerificationEngine
 from .tools import ToolExecutor
 from .frontier_capabilities import install_frontier_capabilities
+from .universal_intelligence import UniversalIntelligenceFabric
 
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, universal_intelligence=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -38,10 +39,13 @@ class HypersynthRuntime:
         self.collaboration = AgentCollaboration(self.verifier)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
+        self.universal_intelligence = universal_intelligence or UniversalIntelligenceFabric()
+        if not isinstance(self.universal_intelligence, UniversalIntelligenceFabric): raise TypeError("invalid_universal_intelligence_fabric")
         self.kernel = Hypersynth(
             self.verifier, self.router, planner=planner, action_gate=self.action_gate,
             memory=self.memory, audit=self.audit, max_steps=self.limits.max_actions_per_task,
             recovery=self.recovery, tool_executor=self.tool_executor,
+            universal_intelligence=self.universal_intelligence,
         )
 
     def _execute_agent_collaboration(self, target, parameters):
@@ -136,10 +140,7 @@ class HypersynthRuntime:
             principal_bindings = self._principal_binding(available) if available else ()
             if available: self.audit.record("hypersynth_identity_bound", task_id=task_id, principals=tuple(x[0] for x in principal_bindings), fingerprints=tuple(x[1] for x in principal_bindings))
             kernel_parameters = inspect.signature(self.kernel.run).parameters
-            kernel_accepts_context = (
-                "interaction_context" in kernel_parameters
-                or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in kernel_parameters.values())
-            )
+            kernel_accepts_context = "interaction_context" in kernel_parameters or any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in kernel_parameters.values())
             if kernel_accepts_context:
                 result = self.kernel.run(task, deadline_check=deadline_exceeded, preferred_agent=preferred_agent, interaction_context=interaction_context) if preferred_agent is not None else self.kernel.run(task, deadline_check=deadline_exceeded, interaction_context=interaction_context)
             else:
