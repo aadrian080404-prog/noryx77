@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Iterable
 
 from .contracts import TaskSpec, VerificationResult
+from .pattern_neural import PatternNeuralNetwork
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,7 @@ class BranchingAssessment:
     branches: tuple[CognitiveBranch, ...]
     source_diversity: int
     pattern_count: int
+    neural_patterns: tuple[str, ...]
     verification: VerificationResult
 
 
@@ -36,13 +37,17 @@ class BranchingCognitionEngine:
     LENSES = ("direct", "analogical", "adversarial", "systems", "cross_domain")
     SOURCE_CLASSES = ("direct_evidence", "historical", "structural", "counterexample", "cross_domain")
 
+    def __init__(self, neural_network: PatternNeuralNetwork | None = None) -> None:
+        self.neural_network = neural_network or PatternNeuralNetwork()
+
     def explore(self, task: TaskSpec, *, max_branches: int = 5) -> BranchingAssessment:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
-            return BranchingAssessment((), 0, 0, VerificationResult(False, "branching_cognition", "invalid_task"))
+            return BranchingAssessment((), 0, 0, (), VerificationResult(False, "branching_cognition", "invalid_task"))
         if isinstance(max_branches, bool) or not isinstance(max_branches, int) or not 1 <= max_branches <= len(self.LENSES):
-            return BranchingAssessment((), 0, 0, VerificationResult(False, "branching_cognition", "invalid_branch_budget"))
+            return BranchingAssessment((), 0, 0, (), VerificationResult(False, "branching_cognition", "invalid_branch_budget"))
         text = f"{task.task_type} {task.objective} {task.input or ''}".lower()
         tags = self._patterns(text)
+        neural = tuple(item.label for item in self.neural_network.recognize_text(text) if item.score >= 0.55)
         branches = []
         for index, lens in enumerate(self.LENSES[:max_branches]):
             source = (self.SOURCE_CLASSES[index], self.SOURCE_CLASSES[(index + 1) % len(self.SOURCE_CLASSES)])
@@ -52,16 +57,16 @@ class BranchingCognitionEngine:
                 lens=lens,
                 hypothesis=f"evaluate:{lens}:{task.objective[:240]}",
                 source_classes=source,
-                pattern_tags=tags,
+                pattern_tags=tags + neural,
             ))
         diversity = len({source for branch in branches for source in branch.source_classes})
         check = VerificationResult(
             bool(branches) and diversity >= 3,
             "branching_cognition",
             "branch_set_ok" if branches and diversity >= 3 else "insufficient_source_diversity",
-            (f"branches={len(branches)}", f"source_diversity={diversity}", f"patterns={len(tags)}"),
+            (f"branches={len(branches)}", f"source_diversity={diversity}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}"),
         )
-        return BranchingAssessment(tuple(branches), diversity, len(tags), check)
+        return BranchingAssessment(tuple(branches), diversity, len(tags), neural, check)
 
     @staticmethod
     def _patterns(text: str) -> tuple[str, ...]:
