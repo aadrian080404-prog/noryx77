@@ -21,6 +21,20 @@ class WebResearchCapability:
         self.timeout = timeout
         self.max_bytes = max_bytes
 
+    @staticmethod
+    def _clean_text(value: str, *, limit: int = 1000) -> str:
+        text = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", value or "")
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = unescape(text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:limit]
+
+    @staticmethod
+    def _source_title(body: str, fallback: str) -> str:
+        match = re.search(r"(?is)<title[^>]*>(.*?)</title>", body or "")
+        title = WebResearchCapability._clean_text(match.group(1), limit=300) if match else ""
+        return title or fallback
+
     def __call__(self, target: str, parameters: dict) -> dict:
         target_value = str(target or "").strip()
         explicit_url = str(parameters.get("url") or "").strip()
@@ -38,27 +52,34 @@ class WebResearchCapability:
         )
         search_url = template.format(query=quote_plus(query))
         page = self._fetch(search_url)
+        body = page.get("body", "")
         links = []
+        seen_urls: set[str] = set()
         for href, title in re.findall(
-            r'href="([^"]+)"[^>]*>(.*?)</a>',
-            page.get("body", ""),
+            r'<a[^>]+class=["\'][^"\']*result__a[^"\']*["\'][^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            body,
             re.I | re.S,
         ):
-            clean_title = re.sub(r"<[^>]+>", " ", unescape(title)).strip()
-            if clean_title and href.startswith("https://"):
-                links.append({"title": clean_title[:300], "url": href[:1000]})
+            clean_title = self._clean_text(title, limit=300)
+            if not clean_title or not href.startswith("https://") or href in seen_urls:
+                continue
+            seen_urls.add(href)
+            links.append({"title": clean_title, "url": href[:1000]})
+
+        # Keep the search page itself out of evidence and only admit actual HTTPS sources.
         evidence = []
         for item in links[:10]:
             try:
                 source = self._fetch(item["url"])
             except Exception:
                 continue
-            body = source.get("body", "")
+            source_body = source.get("body", "")
+            clean_body = self._clean_text(source_body)
             evidence.append({
                 "url": source["url"],
-                "title": item["title"],
-                "snippet": re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", unescape(body)))[:1000],
-                "content_sha256": hashlib.sha256(body.encode("utf-8", "replace")).hexdigest(),
+                "title": self._source_title(source_body, item["title"]),
+                "snippet": clean_body,
+                "content_sha256": hashlib.sha256(source_body.encode("utf-8", "replace")).hexdigest(),
                 "status_code": source["status_code"],
                 "content_type": source["content_type"],
             })
