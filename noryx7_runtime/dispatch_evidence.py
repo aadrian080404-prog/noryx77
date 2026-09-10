@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 class DurableDispatchEvidenceStore:
-    """Durable append-only evidence that an execution dispatch returned."""
+    """Durable evidence that a dispatch started and, when available, returned."""
 
     def __init__(self, path: str) -> None:
         if not isinstance(path, str) or not path:
@@ -15,6 +15,7 @@ class DurableDispatchEvidenceStore:
         self._db = sqlite3.connect(self.path, isolation_level=None, check_same_thread=False)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=FULL")
+        self._db.execute("PRAGMA foreign_keys=ON")
         self._db.execute("""
             CREATE TABLE IF NOT EXISTS dispatch_evidence (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +30,26 @@ class DurableDispatchEvidenceStore:
                 UNIQUE(execution_id, step_id)
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS dispatch_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                execution_id TEXT NOT NULL,
+                principal_id TEXT NOT NULL,
+                step_id TEXT NOT NULL,
+                action_digest TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                runtime_id TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                output_digest TEXT NOT NULL
+            )
+        """)
+
+    def append_started(self, *, execution_id: str, principal_id: str, step_id: str,
+                       action_digest: str, agent_id: str, runtime_id: str) -> None:
+        self._db.execute(
+            "INSERT INTO dispatch_events(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
+            (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "started", ""),
+        )
 
     def append_returned(self, *, execution_id: str, principal_id: str, step_id: str,
                         action_digest: str, agent_id: str, runtime_id: str,
@@ -36,6 +57,10 @@ class DurableDispatchEvidenceStore:
         try:
             self._db.execute(
                 "INSERT INTO dispatch_evidence(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
+                (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "returned", output_digest),
+            )
+            self._db.execute(
+                "INSERT INTO dispatch_events(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
                 (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "returned", output_digest),
             )
         except sqlite3.IntegrityError as exc:
