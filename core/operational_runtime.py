@@ -107,7 +107,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
             risk_class="normal",
             execution_id=execution_id,
         )
-        reconciliation, check = self.collaboration.run(seed, primary, secondary)
+        reconciliation, check = self.hypersynth.collaboration.run(seed, primary, secondary)
         if not check.valid or not reconciliation.accepted:
             raise RuntimeError("continuity_reconciliation_failed")
         digest = sha256(reconciliation.output.encode("utf-8")).hexdigest()
