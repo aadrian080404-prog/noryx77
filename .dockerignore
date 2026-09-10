@@ -1,0 +1,14 @@
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+.env
+.env.*
+NORYX7_STATE_JOURNAL_PATH
+noryx-browser/.gradle
+noryx-browser/build
