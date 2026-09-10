@@ -75,11 +75,23 @@ class RuntimeAdapter:
         result_execution_id=result.get("execution_id") or task.execution_id
         if result_task_id != task.task_id or result_execution_id != task.execution_id: self._reject(task,client_id,"runtime_result_identity_mismatch"); raise PermissionError("runtime_result_identity_mismatch")
         answer=result.get("result")
-        if answer is None:
-            kernel_results=result.get("results")
-            if isinstance(kernel_results,(tuple,list)) and kernel_results: answer=getattr(kernel_results[-1],"output",None)
+        kernel_results=result.get("results")
+        if answer is None and isinstance(kernel_results,(tuple,list)) and kernel_results: answer=getattr(kernel_results[-1],"output",None)
         if not isinstance(answer,str) or not answer.strip(): self._reject(task,client_id,"runtime_answer_invalid"); raise RuntimeError("runtime_answer_invalid")
         verification=result.get("verification")
         if not getattr(verification,"valid",False): self._reject(task,client_id,"runtime_result_unverified"); raise PermissionError("runtime_result_unverified")
+        model_execution = {}
+        if isinstance(kernel_results, (tuple, list)) and kernel_results:
+            agent_id = getattr(kernel_results[-1], "agent_id", "")
+            agent = getattr(self.runtime, "router", None)
+            if agent is not None:
+                try:
+                    selected_agent = agent.get(agent_id)
+                    metadata = getattr(selected_agent, "last_model_execution", None)
+                    if isinstance(metadata, dict): model_execution = {str(key): str(value) for key, value in metadata.items() if isinstance(key, str) and isinstance(value, str)}
+                except Exception:
+                    model_execution = {}
+        if not model_execution:
+            self._reject(task,client_id,"model_execution_metadata_missing"); raise RuntimeError("model_execution_metadata_missing")
         self._remember_output(task,answer,client_id)
-        return {"status":"completed","system_id":CANONICAL_SYSTEM_IDENTITY.system_id,"creator":CANONICAL_SYSTEM_IDENTITY.creator,"task_id":result_task_id,"execution_id":result_execution_id,"client_id":client_id,"result":answer,"verification":{"stage":getattr(verification,"stage",""),"valid":bool(getattr(verification,"valid",False)),"reason":getattr(verification,"reason","")}}
+        return {"status":"completed","system_id":CANONICAL_SYSTEM_IDENTITY.system_id,"creator":CANONICAL_SYSTEM_IDENTITY.creator,"task_id":result_task_id,"execution_id":result_execution_id,"client_id":client_id,"result":answer,"model_execution":model_execution,"verification":{"stage":getattr(verification,"stage",""),"valid":bool(getattr(verification,"valid",False)),"reason":getattr(verification,"reason","")}}
