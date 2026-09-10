@@ -40,6 +40,18 @@ class StepReservation:
     action_digest: str
 
 
+@dataclass(frozen=True)
+class ExternalCommitEvent:
+    """Immutable reconciliation evidence for an already-attested execution."""
+
+    journal_sequence: int
+    execution_id: str
+    step_id: str
+    action_digest: str
+    output_digest: str
+    status: str
+
+
 class StateJournal:
     """Append-only commit boundary with authenticity and pre-dispatch idempotency reservation."""
 
@@ -53,6 +65,7 @@ class StateJournal:
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry): raise TypeError("identity_registry must be an IdentityRegistry")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id): raise ValueError("runtime_id must be a non-empty string")
         self._lock = RLock(); self._entries = []; self._keys = set(); self._principals = {}; self._reservations = {}
+        self._commit_events: list[ExternalCommitEvent] = []
         self._require_signatures = require_signatures; self._verifier = verifier; self._identity_registry = identity_registry; self._runtime_id = runtime_id
 
     @property
@@ -129,32 +142,46 @@ class StateJournal:
             return entry
 
     def record_external_commit(self, attestation: Attestation, status: str) -> JournalEntry:
-        """Bind the external side-effect outcome to an already-attested journal entry."""
+        """Append immutable reconciliation evidence; never mutate an attested journal entry."""
         if not isinstance(attestation, Attestation):
             raise TypeError("attestation_required")
         if status not in self._COMMIT_STATUSES or status == "pending":
             raise ValueError("invalid external commit status")
         key = (attestation.execution_id, attestation.step_id)
         with self._lock:
-            if not self._entries:
-                raise ValueError("journal_empty")
-            for index in range(len(self._entries) - 1, -1, -1):
-                entry = self._entries[index]
+            for entry in reversed(self._entries):
                 if (entry.execution_id, entry.step_id) != key:
                     continue
                 if entry.action_digest != attestation.action_digest or entry.output_digest != attestation.output_digest:
                     raise ValueError("journal_commit_target_mismatch")
-                if entry.external_commit_status != "pending" and entry.external_commit_status != status:
+                current = self._effective_commit_status_locked(entry)
+                if current != "pending" and current != status:
                     raise ValueError("external_commit_status_already_set")
-                updated = JournalEntry(
-                    entry.sequence, entry.execution_id, entry.principal_id, entry.step_id,
-                    entry.agent_id, entry.agent_key_fingerprint, entry.action_digest,
-                    entry.output_digest, entry.signature, entry.previous_attestation_digest,
-                    entry.runtime_id, entry.provenance_digest, entry.provenance_seal, status,
-                )
-                self._entries[index] = updated
-                return updated
+                if current == status:
+                    return self._entry_with_status(entry, status)
+                self._commit_events.append(ExternalCommitEvent(
+                    entry.sequence, entry.execution_id, entry.step_id,
+                    entry.action_digest, entry.output_digest, status,
+                ))
+                return self._entry_with_status(entry, status)
         raise ValueError("journal_commit_target_missing")
+
+    def _effective_commit_status_locked(self, entry: JournalEntry) -> str:
+        status = entry.external_commit_status
+        for event in reversed(self._commit_events):
+            if event.journal_sequence == entry.sequence:
+                status = event.status
+                break
+        return status
+
+    @staticmethod
+    def _entry_with_status(entry: JournalEntry, status: str) -> JournalEntry:
+        return JournalEntry(
+            entry.sequence, entry.execution_id, entry.principal_id, entry.step_id,
+            entry.agent_id, entry.agent_key_fingerprint, entry.action_digest,
+            entry.output_digest, entry.signature, entry.previous_attestation_digest,
+            entry.runtime_id, entry.provenance_digest, entry.provenance_seal, status,
+        )
 
     def _previous_digest_locked(self, execution_id: str) -> str:
         for entry in reversed(self._entries):
@@ -190,7 +217,8 @@ class StateJournal:
         raise PermissionError("attested execution cannot be rolled back")
 
     def snapshot(self) -> tuple[JournalEntry, ...]:
-        with self._lock: return tuple(self._entries)
+        with self._lock:
+            return tuple(self._entry_with_status(entry, self._effective_commit_status_locked(entry)) for entry in self._entries)
 
 
 StateStore = StateJournal
