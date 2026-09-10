@@ -131,7 +131,7 @@ class JarvisRuntimeBridge:
             results = [result for result in results if result.step_id in {step.step_id for step in plan.steps}]
 
         if self.system_fabric is not None:
-            phase = "jarvis_verified" if runtime_result.status.value == "succeeded" else "jarvis_rejected"
+            phase = "jarvis_verified" if runtime_result.status.value == "succeeded" else "jarvis_execution_rejected"
             self.system_fabric.record_execution(
                 execution_id=request.request_id,
                 client_id=request.principal_id,
