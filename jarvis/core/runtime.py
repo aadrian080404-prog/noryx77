@@ -14,11 +14,12 @@ from core.limits import RuntimeLimits
 from core.actions import ActionGate, AuthorizationAuthority
 from core.tools import ToolExecutor
 from core.identity import AgentIdentityAuthority, IdentityRegistry
+from core.system_fabric import CanonicalSystemFabric
 from noryx7_runtime.engine import RuntimeEngine
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
-    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None):
+    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, system_fabric=None):
         self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store or JarvisStateStore(); self.recovery = recovery or RecoveryController()
 
         # Canonical NORYX7 execution infrastructure.
@@ -28,6 +29,9 @@ class JarvisRuntime:
             self.core_policy,
             self.core_verifier,
         )
+        self.system_fabric = system_fabric or CanonicalSystemFabric()
+        if not isinstance(self.system_fabric, CanonicalSystemFabric):
+            raise TypeError("system_fabric_invalid")
 
         # Canonical JARVIS execution identity and authorization authority.
         # JARVIS is an agent identity; request.principal_id remains the
@@ -69,6 +73,7 @@ class JarvisRuntime:
             authorization=self.authorization,
             principal=self.jarvis_identity,
             policy=self.orchestrator.policy,
+            system_fabric=self.system_fabric,
         )
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
     def grant(self, principal_id: str, capability: str, target: str) -> None:
