@@ -29,6 +29,11 @@ class ModelFabricBridge:
             raise TypeError("invalid_system_fabric")
         if system_fabric is not None and (not isinstance(agent_identity, AgentIdentity) or not agent_identity.is_well_formed()):
             raise PermissionError("model_agent_identity_required")
+        if system_fabric is not None and not execution_id.strip():
+            raise PermissionError("model_execution_identity_required")
+        fabric_runtime_id = fabric.runtime_id
+        if fabric_runtime_id is not None and runtime_id != fabric_runtime_id:
+            raise PermissionError("model_runtime_identity_mismatch")
         self._fabric = fabric
         self._runtime_id = runtime_id
         self._execution_id = execution_id
@@ -51,12 +56,18 @@ class ModelFabricBridge:
             execution_id=self._execution_id,
         )
         result = self._fabric.execute(request)
+        if not self._fabric.verify_result(request, result):
+            raise RuntimeError("model_fabric_result_verification_failed")
         output = getattr(result, "output", None)
         if not isinstance(output, str):
             raise RuntimeError("model_fabric_non_text_output")
         output = output.strip()
         if not output:
             raise RuntimeError("model_fabric_empty_output")
+        result_output_digest = sha256(output.encode("utf-8")).hexdigest()
+        envelope_digest = self._fabric.result_digest(request, result)
+        if not isinstance(envelope_digest, str) or len(envelope_digest) != 64:
+            raise RuntimeError("model_fabric_result_digest_invalid")
         if self._system_fabric is not None:
             self._system_fabric.record_execution(
                 execution_id=self._execution_id,
@@ -64,8 +75,9 @@ class ModelFabricBridge:
                 runtime_id=self._runtime_id,
                 phase="model_verified",
                 metadata={
-                    "request_digest": sha256(prompt.encode("utf-8")).hexdigest(),
-                    "result_digest": sha256(output.encode("utf-8")).hexdigest(),
+                    "request_digest": self._fabric.request_digest(request),
+                    "result_digest": result_output_digest,
+                    "result_envelope_digest": envelope_digest,
                     "model_runtime_id": self._runtime_id,
                     "agent_id": self._agent_identity.agent_id,
                 },
