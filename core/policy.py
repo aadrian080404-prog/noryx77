@@ -4,13 +4,10 @@ from .contracts import ActionSpec
 class PolicyEngine:
     """Central authorization boundary; malformed or unknown actions are denied by default."""
 
-    # These are runtime-internal, explicitly registered capability routes. High-risk
-    # external operations remain separately gated by risk/authorization and the
-    # security boundary; merely being listed here never grants external authority.
     ALLOWED_ACTIONS = {
         "observe", "search", "navigate", "compute", "create", "transform", "store",
         "jarvis_capability", "agent_collaboration", "web_research", "chess_analyze",
-        "payments", "flights", "insurance",
+        "payments", "flights", "insurance", "contracts", "bureaucracy",
     }
     HIGH_RISK = {"execute_external", "publish", "financial", "delete_external", "system_change"}
 
