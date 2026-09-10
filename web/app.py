@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from core.limits import RuntimeLimits
@@ -15,13 +15,14 @@ from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 from core.operational_runtime import OperationalNORYXRuntime
 from core.user_understanding import UnderstandingConsent, UserUnderstandingEngine
 from gateway.auth import SessionError
+from gateway.gemini_service import GatewayGeminiService
 from gateway.server import NoryxGateway
 from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.gemini import GeminiAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
 
-app = FastAPI(title="NORYX7 API", version="0.3.0")
+app = FastAPI(title="NORYX7 API", version="0.4.0")
 WEB_DIR = Path(__file__).resolve().parent
 INDEX_FILE = WEB_DIR / "index.html"
 ROBOTS_FILE = WEB_DIR / "robots.txt"
@@ -42,6 +43,19 @@ class GatewayExecuteRequest(BaseModel):
     execution_id: str | None = None
 
 
+class GeminiInteractionRequest(BaseModel):
+    parts: list[dict]
+    tools: list[dict] = []
+    execution_id: str | None = None
+    previous_interaction_id: str | None = None
+
+
+class GeminiFunctionResultRequest(BaseModel):
+    previous_interaction_id: str
+    function_results: list[dict]
+    execution_id: str | None = None
+
+
 def _operational_limits() -> RuntimeLimits:
     raw = os.environ.get("NORYX7_MAX_TASK_SECONDS", "120.0")
     try:
@@ -55,39 +69,15 @@ def _model_adapters() -> list[object]:
     provider = os.environ.get("NORYX7_MODEL_PROVIDER", "auto").strip().lower()
     if provider not in {"auto", "openrouter", "gemini", "both"}:
         raise RuntimeError("NORYX7_MODEL_PROVIDER must be auto, openrouter, gemini or both")
-
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     adapters: list[object] = []
-
     if provider in {"auto", "openrouter", "both"} and openrouter_key:
-        adapters.append(
-            OpenRouterAdapter(
-                model=os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"),
-                api_key=openrouter_key,
-                timeout_seconds=120.0,
-                app_name="NORYX7",
-            )
-        )
-
+        adapters.append(OpenRouterAdapter(model=os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"), api_key=openrouter_key, timeout_seconds=120.0, app_name="NORYX7"))
     if provider in {"auto", "gemini", "both"} and gemini_key:
-        adapters.append(
-            GeminiAdapter(
-                model=os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"),
-                api_key=gemini_key,
-                timeout_seconds=120.0,
-                system_instruction=(
-                    "You are NORYX7, a distributed AI runtime. "
-                    "Do not pretend to have capabilities that were not actually invoked. "
-                    "Respect the system's verification, authorization and provenance boundaries."
-                ),
-            )
-        )
-
+        adapters.append(GeminiAdapter(model=os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"), api_key=gemini_key, timeout_seconds=120.0, system_instruction=("You are NORYX7, a distributed AI runtime. Do not pretend to have capabilities that were not actually invoked. Respect the system's verification, authorization and provenance boundaries.")))
     if not adapters:
-        raise RuntimeError(
-            "no_model_provider_configured: set OPENROUTER_API_KEY and/or GEMINI_API_KEY"
-        )
+        raise RuntimeError("no_model_provider_configured: set OPENROUTER_API_KEY and/or GEMINI_API_KEY")
     if provider == "openrouter" and not openrouter_key:
         raise RuntimeError("OPENROUTER_API_KEY is required for NORYX7_MODEL_PROVIDER=openrouter")
     if provider == "gemini" and not gemini_key:
@@ -99,23 +89,19 @@ def _model_adapters() -> list[object]:
 
 @lru_cache(maxsize=1)
 def get_runtime() -> OperationalNORYXRuntime:
-    adapters = _model_adapters()
-    fabric = ModelFabric(adapters, runtime_id=f"api-{uuid.uuid4().hex}")
-    journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
-    understanding = UserUnderstandingEngine(
-        consent=UnderstandingConsent.PRE_INTERACTION,
-    )
-    return OperationalNORYXRuntime(
-        limits=_operational_limits(),
-        model_fabric=fabric,
-        state_journal_path=journal_path,
-        user_understanding=understanding,
-    )
+    fabric = ModelFabric(_model_adapters(), runtime_id=f"api-{uuid.uuid4().hex}")
+    understanding = UserUnderstandingEngine(consent=UnderstandingConsent.PRE_INTERACTION)
+    return OperationalNORYXRuntime(limits=_operational_limits(), model_fabric=fabric, state_journal_path=os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None, user_understanding=understanding)
 
 
 @lru_cache(maxsize=1)
 def get_gateway() -> NoryxGateway:
     return NoryxGateway(runtime_adapter=RuntimeAdapter(runtime=get_runtime()))
+
+
+@lru_cache(maxsize=1)
+def get_gemini_service() -> GatewayGeminiService:
+    return GatewayGeminiService(get_runtime())
 
 
 @lru_cache(maxsize=1)
@@ -127,14 +113,24 @@ def _web_session_token() -> str:
     bootstrap = os.environ.get("NORYX_GATEWAY_BOOTSTRAP_TOKEN", "")
     if not bootstrap:
         raise RuntimeError("NORYX_GATEWAY_BOOTSTRAP_TOKEN is not configured")
-    result = get_gateway().create_session(
-        bootstrap_token=bootstrap,
-        client_id=WEB_CLIENT_ID,
-    )
+    result = get_gateway().create_session(bootstrap_token=bootstrap, client_id=WEB_CLIENT_ID)
     token = result.get("session_token")
     if not isinstance(token, str) or not token:
         raise RuntimeError("web_gateway_session_invalid")
     return token
+
+
+def _authorize_gateway_session(http_request: Request) -> str:
+    authorization = http_request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        raise SessionError("authorization_required")
+    token = authorization[7:]
+    identity = get_gateway().auth.verify(token)
+    session_id = get_gateway().system_fabric.session_id_from_token(token)
+    capability = get_gateway().system_fabric.authorize(session_id, "execute")
+    if capability.identity_id != identity["client_id"]:
+        raise PermissionError("session_client_identity_mismatch")
+    return identity["client_id"]
 
 
 @app.get("/", include_in_schema=False)
@@ -154,53 +150,22 @@ def robots():
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap(request: Request):
     base = str(request.base_url).rstrip("/")
-    content = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        f"<url><loc>{base}/</loc></url></urlset>"
-    )
-    return Response(content=content, media_type="application/xml")
+    return Response(content='<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + f"<url><loc>{base}/</loc></url></urlset>", media_type="application/xml")
 
 
 @app.get("/api/identity")
 def identity():
-    return {
-        "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
-        "creator": CANONICAL_SYSTEM_IDENTITY.creator,
-        "creator_role": CANONICAL_SYSTEM_IDENTITY.creator_role,
-        "creator_relationship": CANONICAL_SYSTEM_IDENTITY.creator_relationship,
-        "provenance": CANONICAL_SYSTEM_IDENTITY.provenance,
-    }
+    return {"system_id": CANONICAL_SYSTEM_IDENTITY.system_id, "creator": CANONICAL_SYSTEM_IDENTITY.creator, "creator_role": CANONICAL_SYSTEM_IDENTITY.creator_role, "creator_relationship": CANONICAL_SYSTEM_IDENTITY.creator_relationship, "provenance": CANONICAL_SYSTEM_IDENTITY.provenance}
 
 
 @app.get("/api/capabilities")
 def capabilities():
-    """Expose only capabilities that NORYX7 can truthfully advertise at runtime."""
     configured = []
     if os.environ.get("OPENROUTER_API_KEY", "").strip():
         configured.append("openrouter")
     if os.environ.get("GEMINI_API_KEY", "").strip():
         configured.append("gemini")
-    return {
-        "system": "NORYX7",
-        "providers": configured,
-        "features": {
-            "chat": bool(configured),
-            "multi_model_routing": len(configured) > 1,
-            "verified_execution": True,
-            "canonical_gateway": True,
-            "agent_runtime": True,
-            "metacognition": True,
-            "scientific_knowledge": True,
-            "vision": False,
-            "audio": False,
-            "file_analysis": False,
-            "live_voice": False,
-            "web_search": False,
-            "code_execution": False,
-        },
-        "note": "Unsupported modalities are not advertised until their NORYX7 contracts are wired end-to-end.",
-    }
+    return {"system": "NORYX7", "providers": configured, "features": {"chat": bool(configured), "multi_model_routing": len(configured) > 1, "verified_execution": True, "canonical_gateway": True, "agent_runtime": True, "metacognition": True, "scientific_knowledge": True, "vision": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "audio": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "file_analysis": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "live_voice": False, "web_search": False, "code_execution": False, "gemini_interactions": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "function_calling": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "streaming": bool(os.environ.get("GEMINI_API_KEY", "").strip())}, "note": "Gemini multimodal/function/streaming features are exposed only through the authenticated NORYX7 gateway boundary."}
 
 
 @app.get("/api/models")
@@ -208,19 +173,9 @@ def models():
     provider = os.environ.get("NORYX7_MODEL_PROVIDER", "auto").strip().lower()
     rows = []
     if os.environ.get("OPENROUTER_API_KEY", "").strip() and provider in {"auto", "openrouter", "both"}:
-        rows.append({
-            "id": os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"),
-            "provider": "openrouter",
-            "role": "cloud-general",
-            "configured": True,
-        })
+        rows.append({"id": os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"), "provider": "openrouter", "role": "cloud-general", "configured": True})
     if os.environ.get("GEMINI_API_KEY", "").strip() and provider in {"auto", "gemini", "both"}:
-        rows.append({
-            "id": os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"),
-            "provider": "gemini",
-            "role": "cloud-reasoning",
-            "configured": True,
-        })
+        rows.append({"id": os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"), "provider": "gemini", "role": "cloud-reasoning", "configured": True, "interactions": True})
     return {"routing": provider, "models": rows}
 
 
@@ -230,31 +185,14 @@ def loading_offer():
     if not destination:
         return {"enabled": False}
     offer = get_monetization().create_offer(placement="response_loading", destination=destination)
-    return {
-        "enabled": get_monetization().loading_placement_enabled(offer),
-        "offer_id": offer.offer_id,
-        "placement": offer.placement,
-        "destination": offer.destination,
-        "label": offer.label,
-        "skippable": offer.skippable,
-    }
+    return {"enabled": get_monetization().loading_placement_enabled(offer), "offer_id": offer.offer_id, "placement": offer.placement, "destination": offer.destination, "label": offer.label, "skippable": offer.skippable}
 
 
 @app.get("/health")
 def health():
     runtime = get_runtime()
     statuses = runtime.heartbeat_agents()
-    return {
-        "status": "healthy" if runtime.agent_runtime.online else "degraded",
-        "service": "noryx7",
-        "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
-        "creator": CANONICAL_SYSTEM_IDENTITY.creator,
-        "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
-        "continuous_cognitive_loop": runtime.continuity.status().running,
-        "scientific_knowledge": len(runtime.scientific_knowledge.sources()),
-        "monetization_loading_placement": bool(os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()),
-        "providers": [item["provider"] for item in models()["models"]],
-    }
+    return {"status": "healthy" if runtime.agent_runtime.online else "degraded", "service": "noryx7", "system_id": CANONICAL_SYSTEM_IDENTITY.system_id, "creator": CANONICAL_SYSTEM_IDENTITY.creator, "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses], "continuous_cognitive_loop": runtime.continuity.status().running, "scientific_knowledge": len(runtime.scientific_knowledge.sources()), "monetization_loading_placement": bool(os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()), "providers": [item["provider"] for item in models()["models"]]}
 
 
 @app.get("/v1/health")
@@ -264,19 +202,13 @@ def gateway_health():
     except Exception as exc:
         import logging
         logging.getLogger("noryx7.gateway").exception("Gateway health initialization failed")
-        raise HTTPException(
-            status_code=503,
-            detail=f"gateway_runtime_unhealthy:{type(exc).__name__}",
-        ) from exc
+        raise HTTPException(status_code=503, detail=f"gateway_runtime_unhealthy:{type(exc).__name__}") from exc
 
 
 @app.post("/v1/session")
 def gateway_session(request: GatewaySessionRequest):
     try:
-        return get_gateway().create_session(
-            bootstrap_token=request.bootstrap_token,
-            client_id=request.client_id,
-        )
+        return get_gateway().create_session(bootstrap_token=request.bootstrap_token, client_id=request.client_id)
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
@@ -285,15 +217,8 @@ def gateway_session(request: GatewaySessionRequest):
 
 @app.post("/v1/execute")
 def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
-    authorization = http_request.headers.get("Authorization", "")
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="authorization_required")
     try:
-        return get_gateway().execute(
-            session_token=authorization[7:],
-            text=request.input,
-            execution_id=request.execution_id,
-        )
+        return get_gateway().execute(session_token=http_request.headers.get("Authorization", "")[7:] if http_request.headers.get("Authorization", "").startswith("Bearer ") else (_ for _ in ()).throw(SessionError("authorization_required")), text=request.input, execution_id=request.execution_id)
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -304,30 +229,72 @@ def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
         raise HTTPException(status_code=500, detail="gateway_runtime_failure") from exc
 
 
+@app.post("/v1/gemini/interaction")
+def gemini_interaction(request: GeminiInteractionRequest, http_request: Request):
+    try:
+        _authorize_gateway_session(http_request)
+        execution_id = request.execution_id or f"gemini-{uuid.uuid4().hex}"
+        return get_gemini_service().interact(execution_id=execution_id, parts=request.parts, tools=request.tools, previous_interaction_id=request.previous_interaction_id)
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="gemini_gateway_failure") from exc
+
+
+@app.post("/v1/gemini/stream")
+def gemini_stream(request: GeminiInteractionRequest, http_request: Request):
+    try:
+        _authorize_gateway_session(http_request)
+        execution_id = request.execution_id or f"gemini-stream-{uuid.uuid4().hex}"
+        events = get_gemini_service().stream(execution_id=execution_id, parts=request.parts, tools=request.tools, previous_interaction_id=request.previous_interaction_id)
+        def body():
+            import json
+            for event in events:
+                yield f"data: {json.dumps(event, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        return StreamingResponse(body(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="gemini_stream_gateway_failure") from exc
+
+
+@app.post("/v1/gemini/stream/function-results")
+def gemini_stream_function_results(request: GeminiFunctionResultRequest, http_request: Request):
+    try:
+        _authorize_gateway_session(http_request)
+        execution_id = request.execution_id or f"gemini-cont-{uuid.uuid4().hex}"
+        events = get_gemini_service().stream_after_verified_results(execution_id=execution_id, previous_interaction_id=request.previous_interaction_id, function_results=request.function_results)
+        def body():
+            import json
+            for event in events:
+                yield f"data: {json.dumps(event, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        return StreamingResponse(body(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+    except SessionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="gemini_continuation_gateway_failure") from exc
+
+
 @app.post("/api/chat")
 def chat(request: ChatRequest):
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
     try:
-        result = get_gateway().execute(
-            session_token=_web_session_token(),
-            text=message,
-            execution_id=f"web-exec-{uuid.uuid4().hex}",
-        )
-        return {
-            "response": result["result"],
-            "system_id": result["system_id"],
-            "creator": result["creator"],
-            "task_id": result["task_id"],
-            "execution_id": result["execution_id"],
-            "client_id": result["client_id"],
-            "verification": result["verification"],
-            "agent_runtime": [
-                {"agent_id": item.agent_id, "role": item.role, "state": item.state}
-                for item in get_runtime().agent_runtime.status()
-            ],
-        }
+        result = get_gateway().execute(session_token=_web_session_token(), text=message, execution_id=f"web-exec-{uuid.uuid4().hex}")
+        return {"response": result["result"], "system_id": result["system_id"], "creator": result["creator"], "task_id": result["task_id"], "execution_id": result["execution_id"], "client_id": result["client_id"], "verification": result["verification"], "agent_runtime": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in get_runtime().agent_runtime.status()]}
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except PermissionError as exc:
