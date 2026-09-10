@@ -14,6 +14,7 @@ from .planning import Planner
 from .runtime import NORYXRuntime
 from .scientific_fabric import ScientificFabric
 from .scientific_knowledge import ScientificKnowledgeFabric
+from .scientific_sources import ArxivSourceProvider, CrossrefSourceProvider, PubMedSourceProvider
 from .system_fabric import CanonicalSystemFabric
 from .training_governance import EvaluationReport, TrainingGovernance, TrainingStage
 from noryx7_runtime.engine import RuntimeEngine
@@ -66,6 +67,27 @@ class OperationalNORYXRuntime(NORYXRuntime):
         )
         self.continuity.start()
         self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True, scientific_fabric=True)
+
+    def discover_scientific_sources(self, query: str, *, providers=("pubmed", "arxiv", "crossref"), max_results: int = 8, email: str | None = None) -> tuple[str, ...]:
+        """Discover only public/authorized metadata and add it to the research fabric."""
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("research_query_required")
+        if isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= 50:
+            raise ValueError("invalid_research_result_limit")
+        names = tuple(dict.fromkeys(providers))
+        found = []
+        if "pubmed" in names:
+            if not isinstance(email, str) or "@" not in email:
+                raise ValueError("pubmed_email_required")
+            found.extend(PubMedSourceProvider(email=email).search(query, retmax=max_results))
+        if "arxiv" in names:
+            found.extend(ArxivSourceProvider().search(query, max_results=max_results))
+        if "crossref" in names:
+            found.extend(CrossrefSourceProvider().search(query, rows=max_results))
+        unique = tuple({source.source_id: source for source in found}.values())
+        ids = self.scientific_knowledge.add_sources(unique)
+        self.audit.record("scientific_sources_discovered", query_digest=sha256(query.strip().encode("utf-8")).hexdigest(), providers=names, source_ids=ids, count=len(ids))
+        return ids
 
     def _continuity_cycle(self, exercise) -> None:
         """Run one bounded internal Primary -> Secondary -> Primary research exercise."""
