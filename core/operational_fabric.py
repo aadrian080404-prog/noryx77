@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
+from .identity import AgentIdentity
 from .supervisor import AgentDecision, AgentSupervisor
 
 
@@ -55,13 +56,26 @@ class OperationalAgentFabric:
             )
         return check
 
+    def _authorize_execution_agent(self, agent) -> None:
+        """Require canonical execution authority when the operational router is protected."""
+        fabric = getattr(self.router, "system_fabric", None)
+        if fabric is None:
+            return
+        identity = getattr(agent, "identity", None)
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise PermissionError("agent_identity_required")
+        fabric.authorize_agent(identity, "execute")
+
     def dispatch(self, task: TaskSpec, preferred=None):
         """Dispatch one bounded task through the canonical fabric and admit its result."""
         selected, decision = self.select(task, preferred=preferred)
         if not decision.accepted or selected is None:
             return None, VerificationResult(False, "allocation", decision.reason)
         try:
+            self._authorize_execution_agent(selected)
             result = selected.run(task)
+        except PermissionError as exc:
+            return None, VerificationResult(False, "identity", str(exc) or "agent_execution_unauthorized")
         except Exception:
             return None, VerificationResult(False, "execution", "agent_execution_failure")
         admission = self.admit(task, result, selected_agent_id=selected.agent_id)
