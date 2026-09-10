@@ -36,6 +36,7 @@ class LLMBackedAgent(Agent):
         if not resolved_capabilities or any(not isinstance(item, str) or not item.strip() for item in resolved_capabilities): raise ValueError("invalid_agent_capabilities")
         self.agent_id = resolved_id; self.role = resolved_role; self.creator = resolved_creator; self.purpose = resolved_purpose; self.capabilities = resolved_capabilities
         self.model_fabric = model_fabric; self.verifier = verifier or VerificationEngine(); self.self_knowledge = self_knowledge or SelfKnowledgeProvider(); self.identity = identity
+        self.last_model_execution: dict[str, str] = {}
         if self.agent_id == "noryx7-llm": self._bootstrap_secondary()
 
     def _identity_fingerprint(self) -> str:
@@ -86,9 +87,13 @@ class LLMBackedAgent(Agent):
             system_fabric = getattr(runtime, "system_fabric", None)
             if system_fabric is not None and not isinstance(system_fabric, CanonicalSystemFabric): raise TypeError("invalid_system_fabric")
             bridge = ModelFabricBridge(self.model_fabric, runtime_id=runtime_id, execution_id=task.execution_id, system_fabric=system_fabric, agent_identity=self.identity)
-            return bridge.generate(prompt)
+            output = bridge.generate(prompt)
+            self.last_model_execution = dict(bridge.last_execution_metadata)
+            return output
         generate = getattr(self.model_fabric, "generate", None)
-        if callable(generate): return generate(prompt)
+        if callable(generate):
+            self.last_model_execution = {}
+            return generate(prompt)
         raise TypeError("model_fabric_generate_unavailable")
 
     def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
