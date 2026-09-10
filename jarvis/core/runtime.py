@@ -33,6 +33,17 @@ class JarvisRuntime:
         self.runtime_engine = RuntimeEngine()
         self.runtime_bridge = JarvisRuntimeBridge(runtime_engine=self.runtime_engine, tool_executor=self.tool_executor, verifier=self.core_verifier, authorization=self.authorization, principal=self.jarvis_identity, policy=self.orchestrator.policy, system_fabric=self.system_fabric)
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
+        self._closed = False
+    def close(self) -> None:
+        """Close resources owned by JARVIS without closing shared canonical services."""
+        if self._closed:
+            return
+        self.runtime_engine.close()
+        self._closed = True
+    def __enter__(self) -> "JarvisRuntime":
+        return self
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
     def grant(self, principal_id: str, capability: str, target: str) -> None:
         if not isinstance(self.orchestrator.policy, Policy): raise TypeError("runtime policy does not support grants")
         self.orchestrator.policy.grant(principal_id, capability, target)
@@ -45,6 +56,7 @@ class JarvisRuntime:
         expected = tuple(step.step_id for step in plan.steps); actual = tuple(result.step_id for result in results)
         return actual == expected and all(result.success is True for result in results)
     def execute(self, request: Request, plan: Plan):
+        if self._closed: raise RuntimeError("jarvis_runtime_closed")
         if not isinstance(request, Request) or not isinstance(plan, Plan): raise TypeError("request and plan types are required")
         if plan.request_id != request.request_id: raise PermissionError("request_identity_mismatch")
         recovery_state, recovery_epoch = self.recovery.snapshot()
