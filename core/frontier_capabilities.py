@@ -5,13 +5,55 @@ import json
 import os
 import re
 import ssl
-from html import unescape
+from html import HTMLParser, unescape
 from urllib.parse import parse_qs, quote_plus, unquote, urlsplit
 from urllib.request import Request, urlopen
 
 
 class CapabilityUnavailable(RuntimeError):
     pass
+
+
+class _SearchResultParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.results = []
+        self._anchor = False
+        self._classes = set()
+        self._href = ""
+        self._text = []
+        self._snippet = False
+        self._snippet_text = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = set(str(attrs.get("class") or "").split())
+        if tag.lower() == "a" and "result__a" in classes:
+            self._anchor = True
+            self._href = str(attrs.get("href") or "")
+            self._text = []
+            return
+        if tag.lower() == "a" and "result__snippet" in classes:
+            self._snippet = True
+            self._snippet_text = []
+
+    def handle_data(self, data):
+        if self._anchor:
+            self._text.append(data)
+        if self._snippet:
+            self._snippet_text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._anchor:
+            self.results.append({"title": "".join(self._text), "url": self._href, "snippet": ""})
+            self._anchor = False
+        elif tag.lower() == "a" and self._snippet:
+            snippet = " ".join(self._snippet_text).strip()
+            for item in reversed(self.results):
+                if not item.get("snippet"):
+                    item["snippet"] = snippet
+                    break
+            self._snippet = False
 
 
 class WebResearchCapability:
@@ -38,10 +80,10 @@ class WebResearchCapability:
     @staticmethod
     def _resolve_search_url(href: str) -> str:
         value = unescape(str(href or "").strip())
-        if value.startswith("https://"):
-            return value
+        if value.startswith("//"):
+            value = "https:" + value
         if value.startswith("/"):
-            parsed = urlsplit("https://html.duckduckgo.com" + value)
+            parsed = urlsplit("https://duckduckgo.com" + value)
         else:
             parsed = urlsplit(value)
         redirected = parse_qs(parsed.query).get("uddg")
@@ -51,6 +93,26 @@ class WebResearchCapability:
             except Exception:
                 return ""
         return value if value.startswith("https://") else ""
+
+    @staticmethod
+    def _parse_results(body: str) -> list[dict]:
+        parser = _SearchResultParser()
+        try:
+            parser.feed(body or "")
+            parser.close()
+        except Exception:
+            return []
+        results = []
+        seen = set()
+        for item in parser.results:
+            title = WebResearchCapability._clean_text(item.get("title", ""), limit=300)
+            url = WebResearchCapability._resolve_search_url(item.get("url", ""))
+            snippet = WebResearchCapability._clean_text(item.get("snippet", ""), limit=600)
+            if not title or not url or url in seen:
+                continue
+            seen.add(url)
+            results.append({"title": title, "url": url[:1000], "snippet": snippet})
+        return results[:10]
 
     def __call__(self, target: str, parameters: dict) -> dict:
         target_value = str(target or "").strip()
@@ -63,61 +125,77 @@ class WebResearchCapability:
         query = str(parameters.get("query") or target_value).strip()
         if not query:
             raise ValueError("web_research_requires_query_or_url")
-        template = os.environ.get(
-            "NORYX7_SEARCH_URL_TEMPLATE",
+        templates = []
+        configured = os.environ.get("NORYX7_SEARCH_URL_TEMPLATE", "").strip()
+        if configured:
+            templates.append(configured)
+        templates.extend([
             "https://html.duckduckgo.com/html/?q={query}",
-        )
-        search_url = template.format(query=quote_plus(query))
-        page = self._fetch(search_url)
-        body = page.get("body", "")
-        links = []
-        seen_urls: set[str] = set()
-        for tag in re.findall(r"(?is)<a\b[^>]*>.*?</a>", body):
-            if not re.search(r"(?i)\bresult__a\b", tag):
-                continue
-            href_match = re.search(r"(?is)\bhref\s*=\s*([\"'])(.*?)\1", tag)
-            if not href_match:
-                continue
-            href = self._resolve_search_url(href_match.group(2))
-            title_html = re.sub(r"(?is)^.*?>", "", tag, count=1)
-            title_html = re.sub(r"(?is)</a>\s*$", "", title_html)
-            clean_title = self._clean_text(title_html, limit=300)
-            if not clean_title or not href or href in seen_urls:
-                continue
-            seen_urls.add(href)
-            links.append({"title": clean_title, "url": href[:1000]})
+            "https://html.duckduckgo.com/lite/?q={query}",
+        ])
 
-        evidence = []
-        for item in links[:10]:
+        last_error = None
+        for template in dict.fromkeys(templates):
+            search_url = template.format(query=quote_plus(query))
             try:
-                source = self._fetch(item["url"])
-            except Exception:
+                page = self._fetch(search_url)
+            except Exception as exc:
+                last_error = exc
                 continue
-            source_body = source.get("body", "")
-            clean_body = self._clean_text(source_body)
-            if not clean_body:
+            links = self._parse_results(page.get("body", ""))
+            if not links:
                 continue
-            evidence.append({
-                "url": source["url"],
-                "title": self._source_title(source_body, item["title"]),
-                "snippet": clean_body,
-                "content_sha256": hashlib.sha256(source_body.encode("utf-8", "replace")).hexdigest(),
-                "status_code": source["status_code"],
-                "content_type": source["content_type"],
-            })
-        return {
-            "status": "completed",
-            "query": query,
-            "source": search_url,
-            "results": links[:10],
-            "evidence": evidence,
-        }
+            evidence = []
+            for item in links:
+                snippet = item.get("snippet", "")
+                if not snippet:
+                    try:
+                        source = self._fetch(item["url"])
+                    except Exception:
+                        continue
+                    source_body = source.get("body", "")
+                    snippet = self._clean_text(source_body)
+                    if not snippet:
+                        continue
+                    evidence.append({
+                        "url": source["url"],
+                        "title": self._source_title(source_body, item["title"]),
+                        "snippet": snippet,
+                        "content_sha256": hashlib.sha256(source_body.encode("utf-8", "replace")).hexdigest(),
+                        "status_code": source["status_code"],
+                        "content_type": source["content_type"],
+                    })
+                else:
+                    evidence.append({
+                        "url": item["url"],
+                        "title": item["title"],
+                        "snippet": snippet,
+                        "content_sha256": "",
+                        "status_code": 200,
+                        "content_type": "search-result",
+                    })
+            return {
+                "status": "completed",
+                "query": query,
+                "source": page["url"],
+                "results": links,
+                "evidence": evidence[:10],
+            }
+
+        if last_error is not None:
+            raise CapabilityUnavailable("web_search_provider_unavailable") from last_error
+        raise CapabilityUnavailable("web_search_no_results")
 
     def _fetch(self, url: str) -> dict:
         parts = urlsplit(url)
         if parts.scheme != "https" or not parts.netloc:
             raise ValueError("web_research_https_url_required")
-        req = Request(url, headers={"User-Agent": "NORYX7/1.0 frontier-research"})
+        req = Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; NORYX7/1.0; +https://noryx7.onrender.com)",
+            "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.8",
+            "Referer": "https://html.duckduckgo.com/",
+        })
         context = ssl.create_default_context()
         with urlopen(req, timeout=self.timeout, context=context) as response:
             data = response.read(self.max_bytes + 1)
@@ -192,14 +270,9 @@ class ChessCapability:
             board.push(parsed)
             after = self._material(board)
             return {
-                "status": "completed",
-                "fen": board.fen(),
-                "move": parsed.uci(),
-                "legal": True,
-                "check": board.is_check(),
-                "checkmate": board.is_checkmate(),
-                "stalemate": board.is_stalemate(),
-                "material_delta": after - before,
+                "status": "completed", "fen": board.fen(), "move": parsed.uci(), "legal": True,
+                "check": board.is_check(), "checkmate": board.is_checkmate(),
+                "stalemate": board.is_stalemate(), "material_delta": after - before,
             }
         requested_depth = parameters.get("depth", 2)
         try:
@@ -209,16 +282,9 @@ class ChessCapability:
         score, best_move = self._search(board, depth)
         legal = [m.uci() for m in board.legal_moves]
         return {
-            "status": "completed",
-            "fen": board.fen(),
-            "legal_move_count": len(legal),
-            "legal_moves": legal[:100],
-            "best_move": best_move,
-            "evaluation": score,
-            "depth": depth,
-            "check": board.is_check(),
-            "checkmate": board.is_checkmate(),
-            "stalemate": board.is_stalemate(),
+            "status": "completed", "fen": board.fen(), "legal_move_count": len(legal),
+            "legal_moves": legal[:100], "best_move": best_move, "evaluation": score, "depth": depth,
+            "check": board.is_check(), "checkmate": board.is_checkmate(), "stalemate": board.is_stalemate(),
             "engine_note": "bounded deterministic material/minimax analysis; not a strong chess engine",
         }
 
@@ -245,24 +311,15 @@ class ExternalProviderCapability:
             raise CapabilityUnavailable(f"{self.name}_execution_id_required")
         operation = str(parameters.get("operation") or target or self.name).strip()
         payload = {
-            "operation": operation,
-            "target": str(target or ""),
+            "operation": operation, "target": str(target or ""),
             "parameters": {k: v for k, v in dict(parameters).items() if k != "token"},
-            "execution_id": execution_id,
-            "idempotency_key": execution_id,
+            "execution_id": execution_id, "idempotency_key": execution_id,
         }
-        req = Request(
-            endpoint,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-                "User-Agent": "NORYX7/1.0 frontier-provider",
-                "X-NORYX7-Execution-ID": execution_id,
-                "Idempotency-Key": execution_id,
-            },
-            method="POST",
-        )
+        req = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={
+            "Content-Type": "application/json", "Authorization": f"Bearer {token}",
+            "User-Agent": "NORYX7/1.0 frontier-provider", "X-NORYX7-Execution-ID": execution_id,
+            "Idempotency-Key": execution_id,
+        }, method="POST")
         try:
             with urlopen(req, timeout=self.timeout, context=ssl.create_default_context()) as response:
                 body = response.read(self.max_bytes + 1)
