@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from .capability_fabric import CapabilityFabric
 from .contracts import TaskSpec, VerificationResult
 
 
@@ -20,17 +21,34 @@ class Plan:
 
 
 class Planner:
-    """Deterministic bounded planner; model planners plug in behind this contract."""
-    VALID_ACTION_TYPES = {"compute", "agent_collaboration", "web_research", "chess_analyze", "payments", "flights", "insurance"}
+    """Deterministic bounded planner with one canonical capability-selection boundary."""
+    VALID_ACTION_TYPES = {"compute", "agent_collaboration", "web_research", "chess_analyze", "payments", "flights", "insurance", "contracts", "bureaucracy"}
     VALID_RISKS = {"normal", "sensitive", "high"}
 
-    def __init__(self, max_steps: int = 8, *, collaboration_enabled: bool = False):
+    def __init__(self, max_steps: int = 8, *, collaboration_enabled: bool = False, capability_fabric: CapabilityFabric | None = None):
         if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
         if not isinstance(collaboration_enabled, bool):
             raise ValueError("collaboration_enabled must be bool")
         self.max_steps = max_steps
         self.collaboration_enabled = collaboration_enabled
+        self.capability_fabric = capability_fabric or CapabilityFabric()
+
+    @staticmethod
+    def _risk_for_capability(intent, task_risk: str) -> str:
+        if intent.risk_class == "high":
+            return "high"
+        if intent.risk_class == "sensitive" and task_risk == "normal":
+            return "sensitive"
+        return task_risk
+
+    def _action_for(self, task: TaskSpec, objective: str) -> tuple[str, str]:
+        intent = self.capability_fabric.classify(f"{task.objective}\n{task.input}\n{objective}", explicit_capability=task.task_type if task.task_type in self.VALID_ACTION_TYPES and task.task_type != "compute" else None)
+        if intent.capability != "compute":
+            return intent.capability, self._risk_for_capability(intent, task.risk_class)
+        if self.collaboration_enabled:
+            return "agent_collaboration", task.risk_class
+        return "compute", task.risk_class
 
     def build(self, task: TaskSpec) -> Plan:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -48,33 +66,17 @@ class Planner:
                     raw_dependencies = item.get("dependencies", ())
                     if not isinstance(raw_dependencies, (tuple, list)):
                         raise ValueError("subtask dependencies invalid")
-                    dependencies = tuple(
-                        dep if str(dep).startswith(task.task_id + ":") else task.task_id + ":" + str(dep)
-                        for dep in raw_dependencies
-                    )
+                    dependencies = tuple(dep if str(dep).startswith(task.task_id + ":") else task.task_id + ":" + str(dep) for dep in raw_dependencies)
                 else:
                     raise ValueError("subtask definition invalid")
                 if not isinstance(objective, str) or not objective.strip():
                     raise ValueError("subtask objective required")
-                frontier = {"web_research", "chess_analyze", "payments", "flights", "insurance"}
-                if task.task_type in frontier:
-                    action_type = task.task_type
-                elif self.collaboration_enabled:
-                    action_type = "agent_collaboration"
-                else:
-                    action_type = "compute"
-                steps.append(PlanStep(f"{task.task_id}:{index}", objective.strip(), action_type, task.risk_class, dependencies))
+                action_type, risk_class = self._action_for(task, objective.strip())
+                steps.append(PlanStep(f"{task.task_id}:{index}", objective.strip(), action_type, risk_class, dependencies))
             return Plan(task.task_id, tuple(steps))
 
-        frontier = {"web_research", "chess_analyze", "payments", "flights", "insurance"}
-        if task.task_type in frontier:
-            action_type = task.task_type
-        elif self.collaboration_enabled:
-            action_type = "agent_collaboration"
-        else:
-            action_type = "compute"
-        step = PlanStep(f"{task.task_id}:0", task.objective, action_type, task.risk_class)
-        return Plan(task.task_id, (step,))
+        action_type, risk_class = self._action_for(task, task.objective)
+        return Plan(task.task_id, (PlanStep(f"{task.task_id}:0", task.objective, action_type, risk_class),))
 
     def verify(self, plan: Plan, task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -94,7 +96,7 @@ class Planner:
                 return VerificationResult(False, "plan", "plan_step_objective_invalid")
             if step.action_type not in self.VALID_ACTION_TYPES or step.risk_class not in self.VALID_RISKS:
                 return VerificationResult(False, "plan", "plan_step_policy_invalid")
-            if step.risk_class != task.risk_class:
+            if step.risk_class != task.risk_class and step.risk_class != "high":
                 return VerificationResult(False, "plan", "plan_step_risk_mismatch")
             if not isinstance(step.dependencies, tuple) or any(not isinstance(dep, str) or not dep for dep in step.dependencies):
                 return VerificationResult(False, "plan", "plan_step_dependencies_invalid")
