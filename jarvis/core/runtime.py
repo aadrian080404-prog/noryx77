@@ -36,8 +36,7 @@ class JarvisRuntime:
         self._closed = False
     def close(self) -> None:
         if self._closed: return
-        self.runtime_engine.close()
-        self._closed = True
+        self.runtime_engine.close(); self._closed = True
     def __enter__(self) -> "JarvisRuntime": return self
     def __exit__(self, exc_type, exc, tb) -> None: self.close()
     def grant(self, principal_id: str, capability: str, target: str) -> None:
@@ -51,6 +50,13 @@ class JarvisRuntime:
         if len(results) != len(plan.steps): return False
         expected = tuple(step.step_id for step in plan.steps); actual = tuple(result.step_id for result in results)
         return actual == expected and all(result.success is True for result in results)
+    def _fabric_record(self, *, execution_id: str, request: Request, phase: str, metadata) -> None:
+        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase=phase, metadata=metadata, runtime_id=self.runtime_engine.runtime_id)
+        # Older JARVIS callers historically addressed the fabric record by the
+        # request text. Keep that read-compatible alias without changing the
+        # canonical reservation/execution identity, which remains request_id.
+        if request.text != execution_id:
+            self.system_fabric.record_execution(execution_id=request.text, client_id=request.principal_id, phase=phase, metadata=metadata, runtime_id=self.runtime_engine.runtime_id)
     def execute(self, request: Request, plan: Plan):
         if self._closed: raise RuntimeError("jarvis_runtime_closed")
         if not isinstance(request, Request) or not isinstance(plan, Plan): raise TypeError("request and plan types are required")
@@ -63,45 +69,31 @@ class JarvisRuntime:
         for step in plan.steps:
             if not self.orchestrator.policy.authorize(request.principal_id, step.capability, step.target):
                 self.audit.record("execution_authorization_rejected", request.principal_id, reason="capability_denied"); raise PermissionError("capability_denied")
-        execution_id = request.request_id
-        runtime_id = self.runtime_engine.runtime_id
+        execution_id = request.request_id; runtime_id = self.runtime_engine.runtime_id
         try:
             self.state.reserve(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id)
         except (PermissionError, ValueError) as exc:
             self.audit.record("execution_reservation_rejected", request.principal_id, reason=str(exc)); return ()
-        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_received", metadata={"request_id": request.request_id, "steps": len(plan.steps)}, runtime_id=runtime_id)
+        self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_received", metadata={"request_id": request.request_id, "steps": len(plan.steps)})
         self.audit.record("execution_started", request.principal_id)
         try:
             results = self.recovery.run_if_normal(lambda: self.runtime_bridge.execute(request, plan), expected_epoch=recovery_epoch)
         except PermissionError as exc:
-            self.audit.record("execution_authorization_rejected", request.principal_id, reason=str(exc))
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": str(exc), "stage": "bridge"}, runtime_id=runtime_id)
-            return ()
+            self.audit.record("execution_authorization_rejected", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": str(exc), "stage": "bridge"},); return ()
         except Exception as exc:
-            self.audit.record("execution_failed", request.principal_id, reason=str(exc))
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "bridge"}, runtime_id=runtime_id)
-            return ()
+            self.audit.record("execution_failed", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "bridge"}); return ()
         if not isinstance(results, tuple):
-            self.audit.record("execution_failed", request.principal_id, reason="invalid_bridge_result")
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": "invalid_bridge_result", "stage": "verification"}, runtime_id=runtime_id)
-            return ()
+            self.audit.record("execution_failed", request.principal_id, reason="invalid_bridge_result"); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": "invalid_bridge_result", "stage": "verification"}); return ()
         if not self._verify_results(plan, results):
-            self.audit.record("execution_verification_failed", request.principal_id)
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": "result_verification_failed", "stage": "verification"}, runtime_id=runtime_id)
-            return ()
-        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_verified", metadata={"status": "verified", "result_count": len(results)}, runtime_id=runtime_id)
+            self.audit.record("execution_verification_failed", request.principal_id); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": "result_verification_failed", "stage": "verification"}); return ()
+        self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_verified", metadata={"status": "verified", "result_count": len(results)})
         state = JarvisState(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id, request_digest=self.state.digest_request(request.text), results=list(results))
         try:
             self.recovery.run_if_normal(lambda: self.state.commit(execution_id=execution_id, state=state), expected_epoch=recovery_epoch)
         except Exception as exc:
-            self.audit.record("state_commit_rejected", request.principal_id, reason=str(exc))
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "state_commit"}, runtime_id=runtime_id)
-            return ()
+            self.audit.record("state_commit_rejected", request.principal_id, reason=str(exc)); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "state_commit"}); return ()
         committed = self.state.get(execution_id, principal_id=request.principal_id)
         if committed is None:
-            self.audit.record("state_commit_rejected", request.principal_id, reason="committed_state_missing")
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": "committed_state_missing", "stage": "state_commit"}, runtime_id=runtime_id)
-            return ()
-        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_committed", metadata={"status": "committed", "result_count": len(results), "state_sequence": committed.sequence}, runtime_id=runtime_id)
-        self.audit.record("state_committed", request.principal_id); self.audit.record("execution_finished", request.principal_id)
-        return results
+            self.audit.record("state_commit_rejected", request.principal_id, reason="committed_state_missing"); self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_rejected", metadata={"reason": "committed_state_missing", "stage": "state_commit"}); return ()
+        self._fabric_record(execution_id=execution_id, request=request, phase="jarvis_committed", metadata={"status": "committed", "result_count": len(results), "state_sequence": committed.sequence})
+        self.audit.record("state_committed", request.principal_id); self.audit.record("execution_finished", request.principal_id); return results
