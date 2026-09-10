@@ -74,12 +74,28 @@ class CanonicalSystemFabric:
             raise ValueError("invalid_provenance_metadata") from exc
         return sha256(canonical.encode("utf-8")).hexdigest()
 
-    def record_execution(self, *, execution_id: str, client_id: str, phase: str, metadata: Any, level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED):
+    def record_execution(
+        self,
+        *,
+        execution_id: str,
+        client_id: str,
+        phase: str,
+        metadata: Any,
+        level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED,
+        runtime_id: str | None = None,
+    ):
         if not all(isinstance(value, str) and value.strip() for value in (execution_id, client_id, phase)):
             raise ValueError("invalid_execution_binding")
+        if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id.strip()):
+            raise ValueError("invalid_runtime_binding")
         metadata_digest = self._metadata_digest(metadata)
         payload = f"metadata_digest={metadata_digest}".encode("ascii")
-        provenance = (f"{CANONICAL_SYSTEM_IDENTITY.system_id}|{CANONICAL_SYSTEM_IDENTITY.creator}|{client_id}|{execution_id}|{phase}").encode("utf-8")
+        runtime_binding = runtime_id or "unbound-runtime"
+        provenance = (
+            f"{CANONICAL_SYSTEM_IDENTITY.system_id}|"
+            f"{CANONICAL_SYSTEM_IDENTITY.creator}|"
+            f"{client_id}|{execution_id}|{phase}|{runtime_binding}"
+        ).encode("utf-8")
         return self.memory.put(record_id=f"execution:{execution_id}:{phase}", level=level, payload=payload, provenance=provenance, replicas=("runtime", "gateway"))
 
     def health(self) -> dict[str, Any]:
