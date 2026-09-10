@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -8,6 +9,8 @@ from .auth import SessionAuthority, SessionError
 from .runtime_adapter import RuntimeAdapter
 from core.operational_runtime import OperationalNORYXRuntime
 from core.system_fabric import CanonicalSystemFabric
+
+logger = logging.getLogger(__name__)
 
 
 class NoryxGateway:
@@ -142,7 +145,8 @@ class NoryxGateway:
                     self._json(400, {"status": "rejected", "reason": str(exc)})
                 except PermissionError as exc:
                     self._json(403, {"status": "rejected", "reason": str(exc)})
-                except Exception:
+                except Exception as exc:
+                    logger.exception("gateway_runtime_failure type=%s", type(exc).__name__)
                     self._json(500, {"status": "rejected", "reason": "gateway_runtime_failure"})
 
             def log_message(self, *_args):
