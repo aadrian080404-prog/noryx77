@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from .agent_core import AgentInput, AgentResponse, InteractionMode
+from .system_fabric import CanonicalSystemFabric
 from .voice import (
     CommandSpeechRecognizer,
     CommandSpeechSynthesizer,
@@ -95,8 +96,36 @@ def test_voice_gateway_full_path_reaches_runtime_then_tts():
     synthesizer.speak.assert_called_once_with("Quattro.")
 
 
-def test_rejected_runtime_never_reaches_tts():
+def test_voice_gateway_records_canonical_lifecycle():
     runtime = Mock()
+    runtime.system_fabric = CanonicalSystemFabric()
+    runtime.audit = Mock()
+    recognizer = Mock()
+    synthesizer = Mock()
+    recognizer.transcribe.return_value = "verifica il lifecycle"
+    runtime.run_hypersynth.return_value = {
+        "status": "completed",
+        "execution_id": "voice-fabric-001",
+        "result": "Lifecycle verified.",
+    }
+
+    result = VoiceGateway(runtime, recognizer, synthesizer).run(
+        execution_id="voice-fabric-001"
+    )
+
+    assert result.execution_id == "voice-fabric-001"
+    records = {
+        record.record_id: record
+        for record in runtime.system_fabric.memory.snapshot()
+    }
+    assert "execution:voice-fabric-001:received" in records
+    assert "execution:voice-fabric-001:completed" in records
+
+
+def test_rejected_runtime_never_reaches_tts_and_records_rejection():
+    runtime = Mock()
+    runtime.system_fabric = CanonicalSystemFabric()
+    runtime.audit = Mock()
     recognizer = Mock()
     synthesizer = Mock()
     recognizer.transcribe.return_value = "esegui qualcosa"
@@ -110,4 +139,10 @@ def test_rejected_runtime_never_reaches_tts():
     with pytest.raises(PermissionError):
         gateway.run(execution_id="voice-test-denied")
 
+    records = {
+        record.record_id: record
+        for record in runtime.system_fabric.memory.snapshot()
+    }
+    assert "execution:voice-test-denied:received" in records
+    assert "execution:voice-test-denied:rejected" in records
     synthesizer.speak.assert_not_called()
