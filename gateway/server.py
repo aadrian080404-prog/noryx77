@@ -27,7 +27,9 @@ class NoryxGateway:
             signing_secret=signing_secret,
             browser_pairing_code=browser_pairing_code,
         )
-        self.runtime = runtime_adapter or RuntimeAdapter()
+        if not isinstance(runtime_adapter, RuntimeAdapter):
+            raise TypeError("runtime_adapter_required")
+        self.runtime = runtime_adapter
         system_fabric = getattr(self.runtime.runtime, "system_fabric", None)
         if system_fabric is None:
             raise RuntimeError("runtime_system_fabric_required")
