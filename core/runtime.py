@@ -57,7 +57,7 @@ class NORYXRuntime:
         self._offline.install_snapshot(snapshot); self.audit.record("offline_snapshot_installed", snapshot_id=snapshot.snapshot_id, principal_id=snapshot.principal_id)
 
     def run_offline(self, task: TaskSpec, *, capability: str, local_executor) -> dict:
-        task_id = getattr(task, "task_id", None); execution_id = getattr(task, "execution_id", None) or str(uuid4()); principal_id = execution_id
+        task_id = getattr(task,"task_id",None); execution_id = getattr(task,"execution_id",None) or str(uuid4()); principal_id = execution_id
         if self._offline is None: return {"status":"rejected","reason":"offline_not_configured","task_id":task_id,"execution_id":execution_id}
         try:
             payload = json.dumps({"task_id":task_id,"task_type":getattr(task,"task_type",""),"objective":getattr(task,"objective",""),"input":getattr(task,"input",None),"constraints":getattr(task,"constraints",{})}, sort_keys=True, separators=(",",":"), ensure_ascii=False, default=str).encode("utf-8"); payload_digest = hashlib.sha256(payload).hexdigest(); snapshot = self._offline._snapshot
@@ -75,6 +75,12 @@ class NORYXRuntime:
         """Legacy direct runtime entrypoint routed through the bounded HYPERSYNTH facade."""
         if not isinstance(task, TaskSpec): return {"status":"rejected","reason":"invalid_task_spec","task_id":getattr(task,"task_id",None),"execution_id":getattr(task,"execution_id",None),"verification":VerificationResult(False,"contract","invalid_task_spec"),"orchestration_stage":OrchestrationStage.REJECTED.value}
         if agent_id is not None and (not isinstance(agent_id,str) or not agent_id.strip()): return {"status":"rejected","reason":"invalid_agent_id","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"identity","invalid_agent_id"),"orchestration_stage":OrchestrationStage.REJECTED.value}
+        # Keep the public router and all downstream admission/dispatch owners aligned.
+        if self.hypersynth.router is not self.router:
+            self.hypersynth.router = self.router
+            self.hypersynth.kernel.router = self.router
+            from .supervisor import AgentSupervisor
+            self.hypersynth.kernel.supervisor = AgentSupervisor(self.router, self.verifier, audit=self.audit)
         result = self.hypersynth.run(task, interaction_context=interaction_context, preferred_agent=agent_id) if agent_id is not None else self.hypersynth.run(task, interaction_context=interaction_context)
         if not isinstance(result,dict): return {"status":"rejected","reason":"malformed_hypersynth_result","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"runtime","malformed_hypersynth_result"),"orchestration_stage":OrchestrationStage.REJECTED.value}
         result = dict(result)
@@ -97,12 +103,9 @@ class NORYXRuntime:
             if interaction_context is None and self.user_understanding is not None:
                 content = UserContent(content_id=task_id or execution_id, text=str(getattr(task,"input","")), source="runtime_task_input"); profile = self.user_understanding.build_profile((content,)); interaction_context = build_interaction_context(profile); self.audit.record("user_understanding_derived", task_id=task_id, execution_id=execution_id, profile_id=profile.profile_id, context_id=interaction_context.context_id, consent=self.user_understanding.consent.value)
             envelope = self._context_envelope(task, interaction_context, execution_id); envelope = OrchestrationCoordinator.with_intent_digest(envelope, f"{task.task_type}|{task.objective}")
-            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD)
-            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
-            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
-            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
-            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED)
-            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD); self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED); self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED); self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
             result = self.hypersynth.run(task, interaction_context=interaction_context, preferred_agent=("noryx7-llm" if self._model_fabric is not None else None))
             if not isinstance(result,dict): return self._rejection(envelope,task_id,"malformed_hypersynth_result",self.audit,execution_id=execution_id)
             if result.get("execution_id") != execution_id: return self._rejection(envelope,task_id,"task_identity_mismatch",self.audit,execution_id=execution_id)
@@ -118,5 +121,4 @@ class NORYXRuntime:
 
     @staticmethod
     def _rejection(envelope, task_id, reason, audit, *, verification=None, execution_id=None):
-        audit.record("runtime_rejected", task_id=task_id, execution_id=execution_id, reason=reason, verification_stage=getattr(verification,"stage",None))
-        return {"status":"rejected","task_id":task_id,"execution_id":execution_id,"reason":reason,"verification":verification,"orchestration_stage":OrchestrationStage.REJECTED.value}
+        audit.record("runtime_rejected", task_id=task_id, execution_id=execution_id, reason=reason, verification_stage=getattr(verification,"stage",None)); return {"status":"rejected","task_id":task_id,"execution_id":execution_id,"reason":reason,"verification":verification,"orchestration_stage":OrchestrationStage.REJECTED.value}
