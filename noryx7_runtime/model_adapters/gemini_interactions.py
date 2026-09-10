@@ -43,6 +43,8 @@ class GeminiInteractionsAdapter:
     Google-hosted tools are intentionally not enabled through this adapter.
     """
 
+    ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions"
+
     def __init__(self, *, model: str = "gemini-3.8-flash", api_key: str | None = None, timeout_seconds: float = 120.0) -> None:
         if not isinstance(model, str) or not model.strip():
             raise ValueError("model is required")
@@ -75,7 +77,7 @@ class GeminiInteractionsAdapter:
 
     def _request(self, payload: dict[str, Any], *, stream: bool) -> urllib.request.Request:
         return urllib.request.Request(
-            "https://generativelanguage.googleapis.com/v1beta/interactions",
+            self.ENDPOINT,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             headers={
                 "x-goog-api-key": self._api_key,
@@ -96,7 +98,6 @@ class GeminiInteractionsAdapter:
 
     @staticmethod
     def extract_function_calls(result: dict[str, Any]) -> tuple[dict[str, Any], ...]:
-        """Extract model-requested functions without executing anything."""
         if not isinstance(result, dict):
             raise ValueError("invalid_gemini_interaction")
         calls: list[dict[str, Any]] = []
@@ -152,15 +153,18 @@ class GeminiInteractionsAdapter:
             raise RuntimeError(f"gemini_interactions_model_error:{error.get('code', 'unknown')}:{error.get('message', 'unknown_error')}")
         return result
 
-    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
+    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = (), previous_interaction_id: str | None = None) -> dict[str, Any]:
         validated_parts = self._validate_parts(parts)
         payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in validated_parts]}
+        if previous_interaction_id is not None:
+            if not isinstance(previous_interaction_id, str) or not previous_interaction_id.strip():
+                raise ValueError("previous_interaction_id_required")
+            payload["previous_interaction_id"] = previous_interaction_id.strip()
         if tools:
             payload["tools"] = self._validate_tools(tools)
         return self._post_json(payload)
 
     def continue_interaction(self, previous_interaction_id: str, function_results: Sequence[dict[str, Any]]) -> dict[str, Any]:
-        """Resume a tool-call turn after NORYX7 has independently executed and verified functions."""
         if not isinstance(previous_interaction_id, str) or not previous_interaction_id.strip():
             raise ValueError("previous_interaction_id_required")
         if not isinstance(function_results, Sequence) or isinstance(function_results, (str, bytes)) or not function_results:
@@ -177,11 +181,7 @@ class GeminiInteractionsAdapter:
             input_items.append({"type": "function_result", "name": name, "call_id": call_id, "result": result})
         return self._post_json({"model": self._model, "previous_interaction_id": previous_interaction_id.strip(), "input": input_items})
 
-    def stream(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> Iterator[dict[str, Any]]:
-        validated_parts = self._validate_parts(parts)
-        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in validated_parts], "stream": True}
-        if tools:
-            payload["tools"] = self._validate_tools(tools)
+    def _stream(self, payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
         request = self._request(payload, stream=True)
         try:
             response = urllib.request.urlopen(request, timeout=self._timeout_seconds)
@@ -211,3 +211,31 @@ class GeminiInteractionsAdapter:
                     yield event
         finally:
             response.close()
+
+    def stream(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = (), previous_interaction_id: str | None = None) -> Iterator[dict[str, Any]]:
+        validated_parts = self._validate_parts(parts)
+        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in validated_parts], "stream": True}
+        if previous_interaction_id is not None:
+            if not isinstance(previous_interaction_id, str) or not previous_interaction_id.strip():
+                raise ValueError("previous_interaction_id_required")
+            payload["previous_interaction_id"] = previous_interaction_id.strip()
+        if tools:
+            payload["tools"] = self._validate_tools(tools)
+        yield from self._stream(payload)
+
+    def stream_function_results(self, previous_interaction_id: str, function_results: Sequence[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+        if not isinstance(previous_interaction_id, str) or not previous_interaction_id.strip():
+            raise ValueError("previous_interaction_id_required")
+        if not isinstance(function_results, Sequence) or isinstance(function_results, (str, bytes)) or not function_results:
+            raise ValueError("function_results_required")
+        input_items: list[dict[str, Any]] = []
+        for item in function_results:
+            if not isinstance(item, dict):
+                raise ValueError("invalid_function_result")
+            call_id = item.get("call_id")
+            name = item.get("name")
+            result = item.get("result")
+            if not isinstance(call_id, str) or not call_id.strip() or not isinstance(name, str) or not name.strip():
+                raise ValueError("function_result_identity_required")
+            input_items.append({"type": "function_result", "name": name, "call_id": call_id, "result": result})
+        yield from self._stream({"model": self._model, "previous_interaction_id": previous_interaction_id.strip(), "input": input_items, "stream": True})
