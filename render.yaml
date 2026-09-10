@@ -17,3 +17,5 @@ services:
         sync: false
       - key: NORYX7_WEB_RESEARCH_ENABLED
         sync: false
+      - key: NORYX_SPONSORED_LOADING_URL
+        sync: false
