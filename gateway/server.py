@@ -17,14 +17,7 @@ logger = logging.getLogger(__name__)
 class NoryxGateway:
     """HTTP API boundary. Production deployment must terminate TLS."""
 
-    def __init__(
-        self,
-        *,
-        runtime_adapter: RuntimeAdapter | None = None,
-        bootstrap_token: str | None = None,
-        signing_secret: str | None = None,
-        browser_pairing_code: str | None = None,
-    ):
+    def __init__(self, *, runtime_adapter: RuntimeAdapter | None = None, bootstrap_token: str | None = None, signing_secret: str | None = None, browser_pairing_code: str | None = None):
         bootstrap_token = bootstrap_token if bootstrap_token is not None else os.environ.get("NORYX_GATEWAY_BOOTSTRAP_TOKEN", "")
         signing_secret = signing_secret if signing_secret is not None else os.environ.get("NORYX_GATEWAY_SIGNING_SECRET", "")
         browser_pairing_code = browser_pairing_code if browser_pairing_code is not None else os.environ.get("NORYX_BROWSER_PAIRING_CODE", "")
@@ -53,28 +46,19 @@ class NoryxGateway:
 
     def health(self) -> dict:
         statuses = self.runtime.runtime.heartbeat_agents()
-        return {
-            "status": "ok",
-            "service": "noryx7-gateway",
-            "runtime": "connected",
-            "auth": "enabled",
-            "browser_pairing": "enabled" if self.auth._browser_pairing_code else "disabled",
-            "system_protocol": {"name": "NORYX_SYSTEM_PROTOCOL", "version": "1", "transport": "http"},
-            "system_fabric": self.system_fabric.health(),
-            "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
-        }
+        return {"status": "ok", "service": "noryx7-gateway", "runtime": "connected", "auth": "enabled", "browser_pairing": "enabled" if self.auth._browser_pairing_code else "disabled", "system_protocol": {"name": "NORYX_SYSTEM_PROTOCOL", "version": "1", "transport": "http"}, "system_fabric": self.system_fabric.health(), "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses]}
 
     def create_session(self, *, bootstrap_token: str, client_id: str) -> dict:
         token = self.auth.issue(bootstrap_token, client_id)
         session_id = self.system_fabric.session_id_from_token(token)
         self.system_fabric.bind_session(session_id=session_id, client_id=client_id, device_id="gateway", role="client", capabilities=self._session_capabilities())
-        return {"status": "authenticated", "client_id": client_id, "session_token": token}
+        return {"status": "authenticated", "client_id": client_id, "session_id": session_id, "session_token": token}
 
     def create_browser_session(self, *, pairing_code: str, client_id: str) -> dict:
         token = self.auth.issue_browser_pairing(pairing_code, client_id)
         session_id = self.system_fabric.session_id_from_token(token)
         self.system_fabric.bind_session(session_id=session_id, client_id=client_id, device_id="android-browser", role="browser", capabilities=self._session_capabilities())
-        return {"status": "authenticated", "client_id": client_id, "session_token": token}
+        return {"status": "authenticated", "client_id": client_id, "session_id": session_id, "session_token": token}
 
     def execute(self, *, session_token: str, text: str, execution_id: str | None = None, capability: str | None = None, query: str | None = None) -> dict:
         identity = self.auth.verify(session_token)
@@ -89,7 +73,6 @@ class NoryxGateway:
         return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id, session_id=session_id, capability=capability, query=query)
 
     def execute_system(self, *, session_token: str, envelope: dict) -> dict:
-        """Execute the canonical NORYX System Protocol envelope."""
         identity = self.auth.verify(session_token)
         if envelope.get("principal_id") != identity["client_id"]:
             raise PermissionError("noryx_protocol_principal_mismatch")
