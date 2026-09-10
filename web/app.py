@@ -117,6 +117,21 @@ def get_monetization() -> MonetizationEngine:
     return MonetizationEngine()
 
 
+def _configured_provider_rows() -> list[dict[str, object]]:
+    provider = os.environ.get("NORYX7_MODEL_PROVIDER", "auto").strip().lower()
+    rows: list[dict[str, object]] = []
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if groq_key and provider in {"auto", "groq"}:
+        rows.append({"id": os.environ.get("NORYX7_GROQ_MODEL", "openai/gpt-oss-120b"), "provider": "groq", "role": "cloud-general-reasoning", "configured": True})
+    if openrouter_key and provider in {"auto", "openrouter", "both"}:
+        rows.append({"id": os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"), "provider": "openrouter", "role": "cloud-general", "configured": True})
+    if gemini_key and provider in {"auto", "gemini", "both"}:
+        rows.append({"id": os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"), "provider": "gemini", "role": "cloud-reasoning", "configured": True, "interactions": True})
+    return rows
+
+
 def _web_session_token() -> str:
     bootstrap = os.environ.get("NORYX_GATEWAY_BOOTSTRAP_TOKEN", "")
     if not bootstrap:
@@ -168,24 +183,17 @@ def identity():
 
 @app.get("/api/capabilities")
 def capabilities():
-    configured = []
-    if os.environ.get("OPENROUTER_API_KEY", "").strip():
-        configured.append("openrouter")
-    if os.environ.get("GEMINI_API_KEY", "").strip():
-        configured.append("gemini")
+    providers = _configured_provider_rows()
+    configured = [str(item["provider"]) for item in providers]
     web_research_enabled = os.environ.get("NORYX7_WEB_RESEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
-    return {"system": "NORYX7", "providers": configured, "features": {"chat": bool(configured), "multi_model_routing": len(configured) > 1, "verified_execution": True, "canonical_gateway": True, "agent_runtime": True, "metacognition": True, "scientific_knowledge": True, "vision": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "audio": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "file_analysis": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "live_voice": False, "web_search": web_research_enabled, "code_execution": False, "gemini_interactions": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "function_calling": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "streaming": bool(os.environ.get("GEMINI_API_KEY", "").strip())}, "note": "Web research is exposed only through the authenticated gateway when NORYX7_WEB_RESEARCH_ENABLED is enabled; Gemini multimodal/function/streaming features are exposed only through the authenticated NORYX7 gateway boundary."}
+    has_gemini = "gemini" in configured
+    return {"system": "NORYX7", "providers": configured, "features": {"chat": bool(configured), "multi_model_routing": len(configured) > 1, "verified_execution": True, "canonical_gateway": True, "agent_runtime": True, "metacognition": True, "scientific_knowledge": True, "vision": has_gemini, "audio": has_gemini, "file_analysis": has_gemini, "live_voice": False, "web_search": web_research_enabled, "code_execution": False, "gemini_interactions": has_gemini, "function_calling": has_gemini, "streaming": has_gemini}, "note": "Capabilities reflect providers actually configured in the runtime; web research remains behind the authenticated gateway."}
 
 
 @app.get("/api/models")
 def models():
     provider = os.environ.get("NORYX7_MODEL_PROVIDER", "auto").strip().lower()
-    rows = []
-    if os.environ.get("OPENROUTER_API_KEY", "").strip() and provider in {"auto", "openrouter", "both"}:
-        rows.append({"id": os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"), "provider": "openrouter", "role": "cloud-general", "configured": True})
-    if os.environ.get("GEMINI_API_KEY", "").strip() and provider in {"auto", "gemini", "both"}:
-        rows.append({"id": os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"), "provider": "gemini", "role": "cloud-reasoning", "configured": True, "interactions": True})
-    return {"routing": provider, "models": rows}
+    return {"routing": provider, "models": _configured_provider_rows()}
 
 
 @app.get("/api/monetization/loading-offer")
@@ -201,7 +209,7 @@ def loading_offer():
 def health():
     runtime = get_runtime()
     statuses = runtime.heartbeat_agents()
-    return {"status": "healthy" if runtime.agent_runtime.online else "degraded", "service": "noryx7", "system_id": CANONICAL_SYSTEM_IDENTITY.system_id, "creator": CANONICAL_SYSTEM_IDENTITY.creator, "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses], "continuous_cognitive_loop": runtime.continuity.status().running, "scientific_knowledge": len(runtime.scientific_knowledge.sources()), "monetization_loading_placement": bool(os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()), "providers": [item["provider"] for item in models()["models"]]}
+    return {"status": "healthy" if runtime.agent_runtime.online else "degraded", "service": "noryx7", "system_id": CANONICAL_SYSTEM_IDENTITY.system_id, "creator": CANONICAL_SYSTEM_IDENTITY.creator, "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses], "continuous_cognitive_loop": runtime.continuity.status().running, "scientific_knowledge": len(runtime.scientific_knowledge.sources()), "monetization_loading_placement": bool(os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()), "providers": [item["provider"] for item in _configured_provider_rows()]}
 
 
 @app.get("/v1/health")
