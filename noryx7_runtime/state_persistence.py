@@ -58,21 +58,6 @@ class DurableAttestationStore:
         sequence = int(payload["sequence"])
         self._db.execute("INSERT INTO journal_entries(sequence,payload) VALUES(?,?)", (sequence, self._encode(payload)))
 
-    def append_entry_and_delete_reservation(self, payload: dict[str, Any], execution_id: str, step_id: str) -> None:
-        """Atomically admit an attestation and consume its durable reservation."""
-        sequence = int(payload["sequence"])
-        try:
-            self._db.execute("BEGIN IMMEDIATE")
-            self._db.execute("INSERT INTO journal_entries(sequence,payload) VALUES(?,?)", (sequence, self._encode(payload)))
-            self._db.execute("DELETE FROM reservations WHERE execution_id=? AND step_id=?", (execution_id, step_id))
-            self._db.execute("COMMIT")
-        except Exception:
-            try:
-                self._db.execute("ROLLBACK")
-            except Exception:
-                pass
-            raise
-
     def append_event(self, payload: dict[str, Any]) -> None:
         sequence = int(payload["journal_sequence"])
         self._db.execute("INSERT INTO commit_events(journal_sequence,payload) VALUES(?,?)", (sequence, self._encode(payload)))
