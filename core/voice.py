@@ -152,6 +152,8 @@ class VoiceInteractionResult:
 class VoiceGateway:
     """Canonical voice ingress/egress boundary around NORYXRuntime."""
 
+    SYSTEM_CLIENT_ID = "noryx7-voice"
+
     def __init__(
         self,
         runtime,
@@ -169,6 +171,23 @@ class VoiceGateway:
         self.recognizer = recognizer
         self.synthesizer = synthesizer
         self.transport = SpeechVoiceTransport(synthesizer)
+
+    def _record_lifecycle(self, *, execution_id: str, phase: str, metadata: Mapping[str, object]) -> None:
+        system_fabric = getattr(self.runtime, "system_fabric", None)
+        if system_fabric is not None:
+            system_fabric.record_execution(
+                execution_id=execution_id,
+                client_id=self.SYSTEM_CLIENT_ID,
+                phase=phase,
+                metadata=dict(metadata),
+            )
+        audit = getattr(self.runtime, "audit", None)
+        if audit is not None and callable(getattr(audit, "record", None)):
+            audit.record(
+                f"voice_{phase}",
+                execution_id=execution_id,
+                phase=phase,
+            )
 
     def listen(self) -> AgentInput:
         transcript = self.recognizer.transcribe()
@@ -201,17 +220,36 @@ class VoiceGateway:
             execution_id=execution_id,
         )
 
+        self._record_lifecycle(
+            execution_id=execution_id,
+            phase="received",
+            metadata={"task_id": task.task_id, "task_type": task.task_type},
+        )
         runtime_result = self.runtime.run_hypersynth(task)
         if not isinstance(runtime_result, dict):
+            self._record_lifecycle(
+                execution_id=execution_id,
+                phase="rejected",
+                metadata={"task_id": task.task_id, "reason": "voice_runtime_result_invalid"},
+            )
             raise RuntimeError("voice_runtime_result_invalid")
 
         if runtime_result.get("status") != "completed":
-            raise PermissionError(
-                str(runtime_result.get("reason", "voice_runtime_rejected"))
+            reason = str(runtime_result.get("reason", "voice_runtime_rejected"))
+            self._record_lifecycle(
+                execution_id=execution_id,
+                phase="rejected",
+                metadata={"task_id": task.task_id, "reason": reason},
             )
+            raise PermissionError(reason)
 
         final_answer = runtime_result.get("result")
         if not isinstance(final_answer, str) or not final_answer.strip():
+            self._record_lifecycle(
+                execution_id=execution_id,
+                phase="rejected",
+                metadata={"task_id": task.task_id, "reason": "voice_runtime_output_invalid"},
+            )
             raise RuntimeError("voice_runtime_output_invalid")
 
         response = AgentResponse(
@@ -220,6 +258,11 @@ class VoiceGateway:
             verified=True,
         )
         response = self.transport.deliver(response)
+        self._record_lifecycle(
+            execution_id=execution_id,
+            phase="completed",
+            metadata={"task_id": task.task_id, "verified": True},
+        )
 
         return VoiceInteractionResult(
             execution_id=execution_id,
