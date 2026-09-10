@@ -75,7 +75,6 @@ class NORYXRuntime:
         """Legacy direct runtime entrypoint routed through the bounded HYPERSYNTH facade."""
         if not isinstance(task, TaskSpec): return {"status":"rejected","reason":"invalid_task_spec","task_id":getattr(task,"task_id",None),"execution_id":getattr(task,"execution_id",None),"verification":VerificationResult(False,"contract","invalid_task_spec"),"orchestration_stage":OrchestrationStage.REJECTED.value}
         if agent_id is not None and (not isinstance(agent_id,str) or not agent_id.strip()): return {"status":"rejected","reason":"invalid_agent_id","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"identity","invalid_agent_id"),"orchestration_stage":OrchestrationStage.REJECTED.value}
-        # Keep the public router and all downstream admission/dispatch owners aligned.
         if self.hypersynth.router is not self.router:
             self.hypersynth.router = self.router
             self.hypersynth.kernel.router = self.router
@@ -86,7 +85,20 @@ class NORYXRuntime:
         result = dict(result)
         if result.get("status") == "rejected":
             verification = result.get("verification")
-            result.setdefault("reason", getattr(verification, "reason", None) or "hypersynth_execution_rejected")
+            reason = getattr(verification, "reason", None) or result.get("reason") or "hypersynth_execution_rejected"
+            # Preserve the historical public reason strings of NORYXRuntime.run
+            # without weakening the canonical HYPERSYNTH verification vocabulary.
+            legacy_reasons = {
+                "execution_failure": "execution failure",
+                "task_id_mismatch": "task_identity_mismatch",
+                "agent_not_completed": "invalid_result_status",
+                "invalid_agent_result": "malformed_agent_result",
+                "preferred_agent_unavailable": "agent_unavailable",
+            }
+            reason = legacy_reasons.get(reason, reason)
+            result["reason"] = reason
+            if isinstance(verification, VerificationResult) and verification.reason != reason:
+                result["verification"] = VerificationResult(verification.valid, verification.stage, reason, verification.details)
             result.setdefault("orchestration_stage", OrchestrationStage.REJECTED.value)
         else:
             result.setdefault("orchestration_stage", OrchestrationStage.COMMITTED.value)
