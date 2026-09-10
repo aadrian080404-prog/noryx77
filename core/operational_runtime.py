@@ -89,6 +89,18 @@ class OperationalNORYXRuntime(NORYXRuntime):
         if not check.valid or not reconciliation.accepted:
             raise RuntimeError("continuity_reconciliation_failed")
         digest = sha256(reconciliation.output.encode("utf-8")).hexdigest()
+        research_sources = self.scientific_knowledge.research_context(limit=8)
+        hypothesis_id = None
+        if research_sources:
+            hypothesis = self.scientific_knowledge.formulate_hypothesis(
+                hypothesis_id=f"{exercise.exercise_id}:hypothesis",
+                statement=reconciliation.output[:2000],
+                source_ids=(source.source_id for source in research_sources),
+                confidence=0.5,
+                falsifiers=("new authorized evidence contradicts the statement", "controlled experiment fails the predicted relationship"),
+                experiment_plan=("define measurable prediction", "run a bounded reproducible experiment", "independently verify the result"),
+            )
+            hypothesis_id = hypothesis.hypothesis_id
         self.audit.record(
             "agent_continuity_exercise",
             exercise_id=exercise.exercise_id,
@@ -99,6 +111,8 @@ class OperationalNORYXRuntime(NORYXRuntime):
             final_output_digest=digest,
             proposal_digest=reconciliation.proposal_digest,
             critique_digest=reconciliation.critique_digest,
+            authorized_source_ids=tuple(source.source_id for source in research_sources),
+            hypothesis_id=hypothesis_id,
             execution_authority="none",
             external_side_effects=False,
         )
