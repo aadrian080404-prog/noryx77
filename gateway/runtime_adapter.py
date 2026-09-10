@@ -14,14 +14,9 @@ class RuntimeAdapter:
     MAX_INPUT_BYTES = 8192
 
     def __init__(self, runtime: OperationalNORYXRuntime):
-        # Production receives OperationalNORYXRuntime, while boundary tests and
-        # controlled embedders may provide an equivalent runtime implementation.
-        # Enforce the actual execution contract instead of Python nominal typing.
         required = ("heartbeat_agents", "run_hypersynth")
         if runtime is None or any(not callable(getattr(runtime, name, None)) for name in required):
             raise TypeError("operational_runtime_required")
-        if getattr(runtime, "memory", None) is None:
-            raise TypeError("operational_runtime_memory_required")
         self.runtime = runtime
 
     @staticmethod
@@ -68,8 +63,6 @@ class RuntimeAdapter:
 
     def _remember_input(self, task: TaskSpec, client_id: str, session_id: str | None = None) -> None:
         memory = getattr(self.runtime, "memory", None)
-        if memory is None:
-            raise RuntimeError("runtime_memory_unavailable")
         if session_id is not None:
             system_fabric = getattr(self.runtime, "system_fabric", None)
             if system_fabric is None:
@@ -82,11 +75,12 @@ class RuntimeAdapter:
             if system_fabric is not None:
                 system_fabric.bind_session(session_id=f"client:{client_id}", client_id=client_id, device_id="gateway", role="client")
                 system_fabric.authorize(f"client:{client_id}", "execute")
-        memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:input", content=task.input, kind="working", source=task.task_id, importance=0.4, execution_id=task.execution_id))
+        if memory is not None:
+            memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:input", content=task.input, kind="working", source=task.task_id, importance=0.4, execution_id=task.execution_id))
         self._record_gateway_phase(task, client_id, "gateway_received", {"task_id": task.task_id})
         audit = getattr(self.runtime, "audit", None)
         if audit is not None:
-            audit.record("gateway_input_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:input")
+            audit.record("gateway_input_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:input" if memory is not None else None)
 
     def _remember_output(self, task: TaskSpec, output: str, client_id: str) -> None:
         memory = getattr(self.runtime, "memory", None)
