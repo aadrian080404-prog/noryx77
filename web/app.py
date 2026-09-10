@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 from core.limits import RuntimeLimits
+from core.monetization import MonetizationEngine
 from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 from core.operational_runtime import OperationalNORYXRuntime
 from core.user_understanding import UnderstandingConsent, UserUnderstandingEngine
@@ -73,6 +74,11 @@ def get_gateway() -> NoryxGateway:
     return NoryxGateway(runtime_adapter=RuntimeAdapter(runtime=get_runtime()))
 
 
+@lru_cache(maxsize=1)
+def get_monetization() -> MonetizationEngine:
+    return MonetizationEngine()
+
+
 def _web_session_token() -> str:
     bootstrap = os.environ.get("NORYX_GATEWAY_BOOTSTRAP_TOKEN", "")
     if not bootstrap:
@@ -119,6 +125,22 @@ def identity():
     }
 
 
+@app.get("/api/monetization/loading-offer")
+def loading_offer():
+    destination = os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()
+    if not destination:
+        return {"enabled": False}
+    offer = get_monetization().create_offer(placement="response_loading", destination=destination)
+    return {
+        "enabled": get_monetization().loading_placement_enabled(offer),
+        "offer_id": offer.offer_id,
+        "placement": offer.placement,
+        "destination": offer.destination,
+        "label": offer.label,
+        "skippable": offer.skippable,
+    }
+
+
 @app.get("/health")
 def health():
     runtime = get_runtime()
@@ -129,6 +151,9 @@ def health():
         "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
         "creator": CANONICAL_SYSTEM_IDENTITY.creator,
         "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
+        "continuous_cognitive_loop": runtime.continuity.status().running,
+        "scientific_knowledge": len(runtime.scientific_knowledge.sources()),
+        "monetization_loading_placement": bool(os.environ.get("NORYX_SPONSORED_LOADING_URL", "").strip()),
     }
 
 
