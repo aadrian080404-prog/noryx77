@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .contracts import TaskSpec, VerificationResult
+from .cognitive_divergence import BranchingCognitionEngine
 
 
 @dataclass(frozen=True)
@@ -84,8 +85,8 @@ class FabricResult:
 class UniversalIntelligenceFabric:
     """Coordinate bounded domain assessment and deterministic specialist routing."""
 
-    STRATEGIES = ("pythagorean", "apollonian", "eurelian")
-    BUDGETS = ("reflex", "standard", "deep", "specialist", "multi_agent", "simulation", "independent_verification")
+    STRATEGIES = ("pythagorean", "apollonian", "eurelian", "branching_lateral")
+    BUDGETS = ("reflex", "standard", "deep", "specialist", "multi_agent", "simulation", "independent_verification", "branching")
     DOMAINS = (
         "software_engineering",
         "architecture_engineering",
@@ -104,6 +105,11 @@ class UniversalIntelligenceFabric:
         "finance_economics": ("finance", "financial", "investment", "economy", "economics", "market", "stock", "budget", "revenue"),
     }
 
+    def __init__(self, *, branching_engine: BranchingCognitionEngine | None = None):
+        self.branching_engine = branching_engine or BranchingCognitionEngine()
+        if not isinstance(self.branching_engine, BranchingCognitionEngine):
+            raise TypeError("invalid_branching_cognition_engine")
+
     def route(self, task: TaskSpec) -> SpecialistRoute:
         """Select a bounded cognitive route; this changes cognition, never authority."""
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -114,9 +120,6 @@ class UniversalIntelligenceFabric:
         domain = "general_reasoning"
         best_score = 0
         for candidate, keywords in self._DOMAIN_KEYWORDS.items():
-            # The objective is the primary semantic signal; input is supporting
-            # context. This prevents generic context such as "analyze the code"
-            # from overriding an explicit domain named in the user's objective.
             objective_score = sum(1 for keyword in keywords if keyword in objective)
             input_score = sum(1 for keyword in keywords if keyword in task_input)
             score = objective_score * 3 + input_score
@@ -134,6 +137,15 @@ class UniversalIntelligenceFabric:
         else:
             budget = "standard"
             strategy = "standard"
+        # Complex, ambiguous or explicitly comparative tasks receive bounded
+        # lateral exploration before downstream decomposition. This is a route,
+        # not an authorization grant, and remains capped by the divergence engine.
+        branching_markers = ("compare", "alternative", "hypothesis", "experiment", "why", "unknown", "multiple", "different")
+        if domain in {"scientific_research", "architecture_engineering"} or any(marker in text for marker in branching_markers):
+            assessment = self.branching_engine.explore(task, max_branches=5)
+            if assessment.verification.valid and assessment.source_diversity >= 2:
+                strategy = "branching_lateral"
+                budget = "branching"
         return SpecialistRoute(domain, strategy, budget, f"deterministic objective/context/risk routing; domain_score={best_score}")
 
     def assess(self, task: TaskSpec, assessments: tuple[DomainAssessment, ...], *, budget: str = "standard") -> FabricResult:
