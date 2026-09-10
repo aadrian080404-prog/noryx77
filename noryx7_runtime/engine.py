@@ -145,18 +145,20 @@ class RuntimeEngine:
                 if self._state_journal is not None:
                     self._state_journal.append(attestation)
                     journal_appended = True
-                if committer is not None: committer(envelope, attestation, output)
+                if committer is not None:
+                    committer(envelope, attestation, output)
+                    if self._state_journal is not None:
+                        self._state_journal.record_external_commit(attestation, "committed")
+                elif self._state_journal is not None:
+                    self._state_journal.record_external_commit(attestation, "not_required")
             except Exception as exc:
-                # Once the attestation has been appended, the journal is the
-                # durable evidence that dispatch+verification occurred.  Do
-                # not recreate a reservation for that same key: it would
-                # conflict with the committed journal entry and make recovery
-                # state internally inconsistent.  A reservation is restored
-                # only when failure happened before the journal append.
-                if self._state_journal is not None and reservation is not None and not journal_appended:
+                if self._state_journal is not None and journal_appended:
+                    try: self._state_journal.record_external_commit(attestation, "failed")
+                    except Exception as reconcile_exc: return self._result(lifecycle, ExecutionStatus.FAILED, (*attestations, attestation), outputs, "external_commit_reconciliation_failed")
+                elif self._state_journal is not None and reservation is not None:
                     try: self._state_journal.restore_reservation(reservation)
                     except Exception as restore_exc: raise RuntimeError("reservation_restore_failed") from restore_exc
-                return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
+                return self._result(lifecycle, ExecutionStatus.FAILED, (*attestations, attestation) if journal_appended else attestations, outputs, type(exc).__name__)
             attestations.append(attestation); outputs.append(output)
             if attestation.signature: previous_attestation_digest = attestation_digest(attestation)
         return self._result(lifecycle, ExecutionStatus.SUCCEEDED, attestations, outputs)
