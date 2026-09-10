@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from .cognitive_divergence import BranchingCognitionEngine
 from .contracts import AgentResult, TaskSpec, VerificationResult
 from .planning import Plan
 
@@ -10,6 +11,8 @@ class Hypothesis:
     task_id: str
     statement: str
     basis: tuple[str, ...] = ()
+    branch_lenses: tuple[str, ...] = ()
+    pattern_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -20,10 +23,18 @@ class SimulationResult:
 
 
 class HypothesisEngine:
-    """Bounded, inspectable hypothesis generation; never exposes hidden reasoning traces."""
+    """Bounded hypothesis generation with divergent, multi-source pattern analysis."""
+    def __init__(self, branching_engine: BranchingCognitionEngine | None = None):
+        self.branching_engine = branching_engine or BranchingCognitionEngine()
+
     def generate(self, task: TaskSpec, plan: Plan) -> tuple[Hypothesis, ...]:
         if not isinstance(task, TaskSpec) or not isinstance(plan, Plan) or not plan.steps: return ()
-        return tuple(Hypothesis(f"{task.task_id}:h{index}", task.task_id, step.objective, (step.step_id,)) for index, step in enumerate(plan.steps))
+        assessment = self.branching_engine.explore(task, max_branches=5)
+        if not assessment.verification.valid: return ()
+        lenses = tuple(branch.lens for branch in assessment.branches)
+        tags = tuple(dict.fromkeys(branch.pattern_tags for branch in assessment.branches for _ in (0,)))
+        flat_tags = tuple(dict.fromkeys(tag for branch in assessment.branches for tag in branch.pattern_tags))
+        return tuple(Hypothesis(f"{task.task_id}:h{index}", task.task_id, step.objective, (step.step_id,), lenses, flat_tags) for index, step in enumerate(plan.steps))
 
     def verify(self, hypotheses: tuple[Hypothesis, ...], task: TaskSpec) -> VerificationResult:
         if not isinstance(task, TaskSpec) or not isinstance(hypotheses, tuple) or not hypotheses: return VerificationResult(False, "hypothesis", "invalid_hypothesis_collection")
@@ -35,6 +46,8 @@ class HypothesisEngine:
             ids.add(hypothesis.hypothesis_id)
             if hypothesis.task_id != task.task_id or not isinstance(hypothesis.statement, str) or not hypothesis.statement.strip() or not hypothesis.basis: return VerificationResult(False, "hypothesis", "invalid_hypothesis")
             if any(not isinstance(item, str) or not item.strip() for item in hypothesis.basis): return VerificationResult(False, "hypothesis", "invalid_hypothesis_basis")
+            if any(not isinstance(item, str) or not item.strip() for item in hypothesis.branch_lenses): return VerificationResult(False, "hypothesis", "invalid_branch_lenses")
+            if any(not isinstance(item, str) or not item.strip() for item in hypothesis.pattern_tags): return VerificationResult(False, "hypothesis", "invalid_pattern_tags")
         return VerificationResult(True, "hypothesis", "hypotheses_ok")
 
 
