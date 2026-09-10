@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn web.app:app --host 0.0.0.0 --port $PORT
+    startCommand: python web/serve.py
     healthCheckPath: /health
     envVars:
       - key: OPENROUTER_API_KEY
