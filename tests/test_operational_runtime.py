@@ -30,6 +30,18 @@ def test_operational_runtime_starts_primary_and_secondary_online():
     assert runtime.agent_runtime.online is True
 
 
+def test_operational_runtime_binds_canonical_fabric_to_hypersynth_router():
+    runtime = _runtime("operational-fabric-wiring")
+    assert runtime.router.system_fabric is runtime.system_fabric
+    assert runtime.hypersynth.router is runtime.router
+    assert runtime.hypersynth.kernel.router is runtime.router
+    assert runtime.system_fabric.health()["global_identity_bindings"] >= 2
+    for agent_id in ("noryx7-llm", "noryx7-secondary"):
+        agent = runtime.router.get(agent_id)
+        runtime.system_fabric.authorize_agent(agent.identity, "execute")
+        runtime.system_fabric.authorize_agent(agent.identity, "model:execute")
+
+
 def test_operational_runtime_executes_primary_secondary_primary_through_tool_mesh():
     runtime = _runtime("operational-e2e")
     task = TaskSpec(
