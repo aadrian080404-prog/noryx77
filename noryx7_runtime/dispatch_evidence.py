@@ -55,6 +55,7 @@ class DurableDispatchEvidenceStore:
                         action_digest: str, agent_id: str, runtime_id: str,
                         output_digest: str) -> None:
         try:
+            self._db.execute("BEGIN IMMEDIATE")
             self._db.execute(
                 "INSERT INTO dispatch_evidence(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
                 (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "returned", output_digest),
@@ -63,8 +64,13 @@ class DurableDispatchEvidenceStore:
                 "INSERT INTO dispatch_events(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
                 (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "returned", output_digest),
             )
+            self._db.execute("COMMIT")
         except sqlite3.IntegrityError as exc:
+            self._db.execute("ROLLBACK")
             raise ValueError("duplicate dispatch evidence") from exc
+        except Exception:
+            self._db.execute("ROLLBACK")
+            raise
 
     def close(self) -> None:
         self._db.close()
