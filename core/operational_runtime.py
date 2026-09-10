@@ -5,11 +5,13 @@ from uuid import uuid4
 
 from .actions import AuthorizationAuthority
 from .agent_runtime import AgentRuntime
+from .agent_continuity import AgentContinuityScheduler
 from .identity import AgentIdentity
 from .jarvis_runtime_bridge import JarvisRuntimeBridge
 from .operational_fabric import OperationalAgentFabric
 from .planning import Planner
 from .runtime import NORYXRuntime
+from .scientific_knowledge import ScientificKnowledgeFabric
 from .system_fabric import CanonicalSystemFabric
 from .training_governance import EvaluationReport, TrainingGovernance, TrainingStage
 from noryx7_runtime.engine import RuntimeEngine
@@ -27,6 +29,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric, user_understanding=user_understanding)
         self.system_fabric = CanonicalSystemFabric()
         self.router.system_fabric = self.system_fabric
+        self.scientific_knowledge = ScientificKnowledgeFabric()
         self.training_governance = TrainingGovernance()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
@@ -48,7 +51,25 @@ class OperationalNORYXRuntime(NORYXRuntime):
         fabric_ids = set(self.agent_fabric.available())
         if not self.REQUIRED_AGENT_IDS.issubset(fabric_ids):
             self.agent_runtime.stop(); raise RuntimeError("operational_fabric_agents_missing")
-        self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)))
+        self.continuity = AgentContinuityScheduler(
+            agent_runtime=self.agent_runtime,
+            cycle_callback=self._continuity_cycle,
+            interval_seconds=300.0,
+            max_cycles_per_start=1000,
+        )
+        self.continuity.start()
+        self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True)
+
+    def _continuity_cycle(self, exercise) -> None:
+        """Record a bounded autonomous exercise opportunity without granting authority."""
+        self.audit.record(
+            "agent_continuity_exercise",
+            exercise_id=exercise.exercise_id,
+            agent_id=exercise.agent_id,
+            objective=exercise.objective,
+            execution_authority="none",
+            external_side_effects=False,
+        )
 
     def _record_canonical_execution(self, *, execution_id: str, phase: str, metadata) -> None:
         self.system_fabric.record_execution(execution_id=execution_id, client_id="noryx7-runtime", phase=phase, metadata=metadata)
@@ -102,4 +123,6 @@ class OperationalNORYXRuntime(NORYXRuntime):
         return statuses
 
     def shutdown_agents(self):
+        if hasattr(self, "continuity"):
+            self.continuity.stop()
         self.agent_runtime.stop()
