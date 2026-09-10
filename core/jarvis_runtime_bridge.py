@@ -69,8 +69,6 @@ class JarvisRuntimeBridge:
         intent = Intent(text=request.text, principal_id=request.principal_id, intent_id=request.request_id)
 
         if self.system_fabric is not None:
-            # Bind the execution agent itself once, then authorize its explicit
-            # capability. User/session identity remains separately bound below.
             self.system_fabric.bind_agent_identity(self.principal, capabilities=("execute",))
             self.system_fabric.authorize_agent(self.principal, "execute")
             self.system_fabric.bind_session(
@@ -133,7 +131,7 @@ class JarvisRuntimeBridge:
             results = [result for result in results if result.step_id in {step.step_id for step in plan.steps}]
 
         if self.system_fabric is not None:
-            phase = "jarvis_completed" if runtime_result.status.value == "succeeded" else "jarvis_rejected"
+            phase = "jarvis_verified" if runtime_result.status.value == "succeeded" else "jarvis_rejected"
             self.system_fabric.record_execution(
                 execution_id=request.request_id,
                 client_id=request.principal_id,
