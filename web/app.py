@@ -41,6 +41,8 @@ class GatewaySessionRequest(BaseModel):
 class GatewayExecuteRequest(BaseModel):
     input: str
     execution_id: str | None = None
+    capability: str | None = None
+    query: str | None = None
 
 
 class GeminiInteractionRequest(BaseModel):
@@ -165,7 +167,8 @@ def capabilities():
         configured.append("openrouter")
     if os.environ.get("GEMINI_API_KEY", "").strip():
         configured.append("gemini")
-    return {"system": "NORYX7", "providers": configured, "features": {"chat": bool(configured), "multi_model_routing": len(configured) > 1, "verified_execution": True, "canonical_gateway": True, "agent_runtime": True, "metacognition": True, "scientific_knowledge": True, "vision": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "audio": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "file_analysis": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "live_voice": False, "web_search": False, "code_execution": False, "gemini_interactions": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "function_calling": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "streaming": bool(os.environ.get("GEMINI_API_KEY", "").strip())}, "note": "Gemini multimodal/function/streaming features are exposed only through the authenticated NORYX7 gateway boundary."}
+    web_research_enabled = os.environ.get("NORYX7_WEB_RESEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    return {"system": "NORYX7", "providers": configured, "features": {"chat": bool(configured), "multi_model_routing": len(configured) > 1, "verified_execution": True, "canonical_gateway": True, "agent_runtime": True, "metacognition": True, "scientific_knowledge": True, "vision": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "audio": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "file_analysis": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "live_voice": False, "web_search": web_research_enabled, "code_execution": False, "gemini_interactions": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "function_calling": bool(os.environ.get("GEMINI_API_KEY", "").strip()), "streaming": bool(os.environ.get("GEMINI_API_KEY", "").strip())}, "note": "Web research is exposed only through the authenticated gateway when NORYX7_WEB_RESEARCH_ENABLED is enabled; Gemini multimodal/function/streaming features are exposed only through the authenticated NORYX7 gateway boundary."}
 
 
 @app.get("/api/models")
@@ -218,7 +221,10 @@ def gateway_session(request: GatewaySessionRequest):
 @app.post("/v1/execute")
 def gateway_execute(request: GatewayExecuteRequest, http_request: Request):
     try:
-        return get_gateway().execute(session_token=http_request.headers.get("Authorization", "")[7:] if http_request.headers.get("Authorization", "").startswith("Bearer ") else (_ for _ in ()).throw(SessionError("authorization_required")), text=request.input, execution_id=request.execution_id)
+        authorization = http_request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            raise SessionError("authorization_required")
+        return get_gateway().execute(session_token=authorization[7:], text=request.input, execution_id=request.execution_id, capability=request.capability, query=request.query)
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except PermissionError as exc:
