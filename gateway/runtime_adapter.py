@@ -45,6 +45,22 @@ class RuntimeAdapter:
             execution_id=execution_id,
         )
 
+    def _record_gateway_phase(
+        self,
+        task: TaskSpec,
+        client_id: str,
+        phase: str,
+        metadata: dict[str, object],
+    ) -> None:
+        system_fabric = getattr(self.runtime, "system_fabric", None)
+        if system_fabric is not None:
+            system_fabric.record_execution(
+                execution_id=task.execution_id,
+                client_id=client_id,
+                phase=phase,
+                metadata=metadata,
+            )
+
     def _remember_input(self, task: TaskSpec, client_id: str) -> None:
         memory = getattr(self.runtime, "memory", None)
         if memory is None:
@@ -54,7 +70,12 @@ class RuntimeAdapter:
         if system_fabric is not None:
             system_fabric.bind_session(session_id=f"client:{client_id}", client_id=client_id, device_id="gateway", role="client")
             system_fabric.authorize(f"client:{client_id}", "execute")
-            system_fabric.record_execution(execution_id=task.execution_id, client_id=client_id, phase="gateway_received", metadata={"task_id": task.task_id})
+        self._record_gateway_phase(
+            task,
+            client_id,
+            "gateway_received",
+            {"task_id": task.task_id},
+        )
         audit = getattr(self.runtime, "audit", None)
         if audit is not None:
             audit.record("gateway_input_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:input")
@@ -65,9 +86,12 @@ class RuntimeAdapter:
             return
         try:
             memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:output", content=output, kind="working", source=task.task_id, importance=0.7, execution_id=task.execution_id))
-            system_fabric = getattr(self.runtime, "system_fabric", None)
-            if system_fabric is not None:
-                system_fabric.record_execution(execution_id=task.execution_id, client_id=client_id, phase="gateway_completed", metadata={"task_id": task.task_id, "verified": True})
+            self._record_gateway_phase(
+                task,
+                client_id,
+                "gateway_completed",
+                {"task_id": task.task_id, "verified": True},
+            )
             audit = getattr(self.runtime, "audit", None)
             if audit is not None:
                 audit.record("gateway_output_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:output")
@@ -75,6 +99,23 @@ class RuntimeAdapter:
             audit = getattr(self.runtime, "audit", None)
             if audit is not None:
                 audit.record("gateway_output_memory_degraded", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=type(exc).__name__)
+
+    def _reject(self, task: TaskSpec, client_id: str, reason: str) -> None:
+        self._record_gateway_phase(
+            task,
+            client_id,
+            "gateway_rejected",
+            {"task_id": task.task_id, "reason": reason},
+        )
+        audit = getattr(self.runtime, "audit", None)
+        if audit is not None:
+            audit.record(
+                "gateway_execution_rejected",
+                task_id=task.task_id,
+                execution_id=task.execution_id,
+                client_id=client_id,
+                reason=reason,
+            )
 
     def execute(self, *, client_id: str, text: str, execution_id: str | None = None) -> dict:
         client_id = self._validate_client_id(client_id)
@@ -89,19 +130,28 @@ class RuntimeAdapter:
             raise ValueError("execution_id_too_large")
         task = self._build_task(client_id=client_id, text=text, execution_id=execution_id)
         self._remember_input(task, client_id)
-        self.runtime.heartbeat_agents()
-        result = self.runtime.run_hypersynth(task)
+        try:
+            self.runtime.heartbeat_agents()
+            result = self.runtime.run_hypersynth(task)
+        except Exception as exc:
+            reason = f"runtime_exception:{type(exc).__name__}"
+            self._reject(task, client_id, reason)
+            raise
         if not isinstance(result, dict):
+            self._reject(task, client_id, "runtime_result_malformed")
             raise RuntimeError("runtime_result_malformed")
         if result.get("status") != "completed":
             verification = result.get("verification")
-            reason = getattr(verification, "reason", None) or result.get("reason") or "runtime_rejected"
-            raise PermissionError(str(reason))
+            reason = str(getattr(verification, "reason", None) or result.get("reason") or "runtime_rejected")
+            self._reject(task, client_id, reason)
+            raise PermissionError(reason)
         answer = result.get("result")
         if not isinstance(answer, str) or not answer.strip():
+            self._reject(task, client_id, "runtime_answer_invalid")
             raise RuntimeError("runtime_answer_invalid")
         verification = result.get("verification")
         if not getattr(verification, "valid", False):
+            self._reject(task, client_id, "runtime_result_unverified")
             raise PermissionError("runtime_result_unverified")
         self._remember_output(task, answer, client_id)
         return {"status":"completed", "system_id":CANONICAL_SYSTEM_IDENTITY.system_id, "creator":CANONICAL_SYSTEM_IDENTITY.creator, "task_id":result.get("task_id"), "execution_id":result.get("execution_id"), "client_id":client_id, "result":answer, "verification":{"stage":getattr(verification,"stage",""),"valid":bool(getattr(verification,"valid",False)),"reason":getattr(verification,"reason","")}}
