@@ -29,6 +29,7 @@ class JournalEntry:
     runtime_id: str = ""
     provenance_digest: str = ""
     provenance_seal: bytes = b""
+    external_commit_status: str = "pending"
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,8 @@ class StepReservation:
 
 class StateJournal:
     """Append-only commit boundary with authenticity and pre-dispatch idempotency reservation."""
+
+    _COMMIT_STATUSES = frozenset(("pending", "committed", "failed", "not_required"))
 
     def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None,
                  identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None) -> None:
@@ -119,9 +122,37 @@ class StateJournal:
                 raise PermissionError("step reservation mismatch")
             previous = self._previous_digest_locked(attestation.execution_id)
             if attestation.previous_attestation_digest != previous: raise ValueError("attestation chain link mismatch")
-            entry = JournalEntry(len(self._entries), attestation.execution_id, attestation.principal_id, attestation.step_id, attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.signature, attestation.previous_attestation_digest, attestation.runtime_id, attestation.provenance_digest, attestation.provenance_seal)
+            entry = JournalEntry(len(self._entries), attestation.execution_id, attestation.principal_id, attestation.step_id, attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.signature, attestation.previous_attestation_digest, attestation.runtime_id, attestation.provenance_digest, attestation.provenance_seal, "pending")
             self._entries.append(entry); self._keys.add(key); self._principals.setdefault(attestation.execution_id, attestation.principal_id); self._reservations.pop(key, None)
             return entry
+
+    def record_external_commit(self, attestation: Attestation, status: str) -> JournalEntry:
+        """Bind the external side-effect outcome to an already-attested journal entry."""
+        if not isinstance(attestation, Attestation):
+            raise TypeError("attestation_required")
+        if status not in self._COMMIT_STATUSES or status == "pending":
+            raise ValueError("invalid external commit status")
+        key = (attestation.execution_id, attestation.step_id)
+        with self._lock:
+            if not self._entries:
+                raise ValueError("journal_empty")
+            for index in range(len(self._entries) - 1, -1, -1):
+                entry = self._entries[index]
+                if (entry.execution_id, entry.step_id) != key:
+                    continue
+                if entry.action_digest != attestation.action_digest or entry.output_digest != attestation.output_digest:
+                    raise ValueError("journal_commit_target_mismatch")
+                if entry.external_commit_status != "pending" and entry.external_commit_status != status:
+                    raise ValueError("external_commit_status_already_set")
+                updated = JournalEntry(
+                    entry.sequence, entry.execution_id, entry.principal_id, entry.step_id,
+                    entry.agent_id, entry.agent_key_fingerprint, entry.action_digest,
+                    entry.output_digest, entry.signature, entry.previous_attestation_digest,
+                    entry.runtime_id, entry.provenance_digest, entry.provenance_seal, status,
+                )
+                self._entries[index] = updated
+                return updated
+        raise ValueError("journal_commit_target_missing")
 
     def _previous_digest_locked(self, execution_id: str) -> str:
         for entry in reversed(self._entries):
@@ -181,7 +212,4 @@ class StateJournal:
         with self._lock: return tuple(self._entries)
 
 
-# Canonical runtime state boundary.  The journal implementation is the state
-# authority; this name is intentionally an explicit compatibility surface for
-# callers that depend on the runtime-level StateStore contract.
 StateStore = StateJournal
