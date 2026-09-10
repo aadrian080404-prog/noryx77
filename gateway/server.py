@@ -9,6 +9,7 @@ from .auth import SessionAuthority, SessionError
 from .runtime_adapter import RuntimeAdapter
 from core.operational_runtime import OperationalNORYXRuntime
 from core.system_fabric import CanonicalSystemFabric
+from protocol.system_bridge import SystemBridge
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class NoryxGateway:
         if not isinstance(system_fabric, CanonicalSystemFabric):
             raise RuntimeError("runtime_system_fabric_invalid")
         self.system_fabric = system_fabric
+        self.system_bridge = SystemBridge(self)
 
     @staticmethod
     def _web_research_enabled() -> bool:
@@ -57,6 +59,7 @@ class NoryxGateway:
             "runtime": "connected",
             "auth": "enabled",
             "browser_pairing": "enabled" if self.auth._browser_pairing_code else "disabled",
+            "system_protocol": {"name": "NORYX_SYSTEM_PROTOCOL", "version": "1", "transport": "http"},
             "system_fabric": self.system_fabric.health(),
             "agents": [{"agent_id": item.agent_id, "role": item.role, "state": item.state} for item in statuses],
         }
@@ -84,6 +87,16 @@ class NoryxGateway:
                 raise PermissionError("capability_disabled")
             self.system_fabric.authorize(session_id, capability)
         return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id, session_id=session_id, capability=capability, query=query)
+
+    def execute_system(self, *, session_token: str, envelope: dict) -> dict:
+        """Execute the canonical NORYX System Protocol envelope."""
+        identity = self.auth.verify(session_token)
+        if envelope.get("principal_id") != identity["client_id"]:
+            raise PermissionError("noryx_protocol_principal_mismatch")
+        session_id = self.system_fabric.session_id_from_token(session_token)
+        if envelope.get("session_id") != session_id:
+            raise PermissionError("noryx_protocol_session_mismatch")
+        return self.system_bridge.execute(session_token=session_token, envelope=envelope)
 
     def handler_class(self):
         gateway = self
@@ -114,6 +127,12 @@ class NoryxGateway:
                         raise
                     raise ValueError("invalid_json_body") from exc
 
+            def _bearer(self) -> str:
+                authorization = self.headers.get("Authorization", "")
+                if not authorization.startswith("Bearer "):
+                    raise SessionError("authorization_required")
+                return authorization[7:]
+
             def do_GET(self):
                 if self.path == "/v1/health":
                     try:
@@ -132,11 +151,11 @@ class NoryxGateway:
                     if self.path == "/v1/browser/session":
                         self._json(200, gateway.create_browser_session(pairing_code=str(body.get("pairing_code", "")), client_id=str(body.get("client_id", ""))))
                         return
+                    if self.path == "/v1/system/execute":
+                        self._json(200, gateway.execute_system(session_token=self._bearer(), envelope=body))
+                        return
                     if self.path == "/v1/execute":
-                        authorization = self.headers.get("Authorization", "")
-                        if not authorization.startswith("Bearer "):
-                            raise SessionError("authorization_required")
-                        self._json(200, gateway.execute(session_token=authorization[7:], text=body.get("input", ""), execution_id=body.get("execution_id"), capability=body.get("capability"), query=body.get("query")))
+                        self._json(200, gateway.execute(session_token=self._bearer(), text=body.get("input", ""), execution_id=body.get("execution_id"), capability=body.get("capability"), query=body.get("query")))
                         return
                     self._json(404, {"status": "rejected", "reason": "not_found"})
                 except SessionError as exc:
