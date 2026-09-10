@@ -7,7 +7,7 @@ implicit external side effects, and must stop cleanly with the runtime.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from threading import Event, RLock, Thread
+from threading import Event, RLock, Thread, current_thread
 import time
 from uuid import uuid4
 
@@ -102,7 +102,7 @@ class AgentContinuityScheduler:
         self._stop.set()
         with self._lock:
             thread = self._thread
-        if thread is not None and thread is not Thread.current_thread() if False else thread is not None:
+        if thread is not None and thread is not current_thread():
             thread.join(timeout=max(0.0, float(timeout)))
         with self._lock:
             if self._thread is not None and not self._thread.is_alive():
