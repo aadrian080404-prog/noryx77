@@ -137,13 +137,10 @@ class UniversalIntelligenceFabric:
         else:
             budget = "standard"
             strategy = "standard"
-        # Complex, ambiguous or explicitly comparative tasks receive bounded
-        # lateral exploration before downstream decomposition. This is a route,
-        # not an authorization grant, and remains capped by the divergence engine.
         branching_markers = ("compare", "alternative", "hypothesis", "experiment", "why", "unknown", "multiple", "different")
         if domain in {"scientific_research", "architecture_engineering"} or any(marker in text for marker in branching_markers):
             assessment = self.branching_engine.explore(task, max_branches=5)
-            if assessment.verification.valid and assessment.source_diversity >= 2:
+            if assessment.verification.valid:
                 strategy = "branching_lateral"
                 budget = "branching"
         return SpecialistRoute(domain, strategy, budget, f"deterministic objective/context/risk routing; domain_score={best_score}")
