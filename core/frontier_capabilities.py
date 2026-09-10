@@ -19,7 +19,6 @@ class _SearchResultParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.results = []
         self._anchor = False
-        self._classes = set()
         self._href = ""
         self._text = []
         self._snippet = False
@@ -28,12 +27,11 @@ class _SearchResultParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         classes = set(str(attrs.get("class") or "").split())
-        if tag.lower() == "a" and "result__a" in classes:
+        if "result__a" in classes and tag.lower() == "a":
             self._anchor = True
             self._href = str(attrs.get("href") or "")
             self._text = []
-            return
-        if tag.lower() == "a" and "result__snippet" in classes:
+        if "result__snippet" in classes:
             self._snippet = True
             self._snippet_text = []
 
@@ -47,7 +45,7 @@ class _SearchResultParser(HTMLParser):
         if tag.lower() == "a" and self._anchor:
             self.results.append({"title": "".join(self._text), "url": self._href, "snippet": ""})
             self._anchor = False
-        elif tag.lower() == "a" and self._snippet:
+        if self._snippet and tag.lower() in {"a", "div", "span"}:
             snippet = " ".join(self._snippet_text).strip()
             for item in reversed(self.results):
                 if not item.get("snippet"):
@@ -121,10 +119,10 @@ class WebResearchCapability:
             return self._fetch(explicit_url)
         if target_value.startswith(("http://", "https://")):
             return self._fetch(target_value)
-
         query = str(parameters.get("query") or target_value).strip()
         if not query:
             raise ValueError("web_research_requires_query_or_url")
+
         templates = []
         configured = os.environ.get("NORYX7_SEARCH_URL_TEMPLATE", "").strip()
         if configured:
@@ -134,57 +132,62 @@ class WebResearchCapability:
             "https://html.duckduckgo.com/lite/?q={query}",
         ])
 
-        last_error = None
         for template in dict.fromkeys(templates):
             search_url = template.format(query=quote_plus(query))
             try:
                 page = self._fetch(search_url)
-            except Exception as exc:
-                last_error = exc
+            except Exception:
                 continue
             links = self._parse_results(page.get("body", ""))
-            if not links:
-                continue
-            evidence = []
-            for item in links:
-                snippet = item.get("snippet", "")
-                if not snippet:
-                    try:
-                        source = self._fetch(item["url"])
-                    except Exception:
-                        continue
-                    source_body = source.get("body", "")
-                    snippet = self._clean_text(source_body)
-                    if not snippet:
-                        continue
-                    evidence.append({
-                        "url": source["url"],
-                        "title": self._source_title(source_body, item["title"]),
-                        "snippet": snippet,
-                        "content_sha256": hashlib.sha256(source_body.encode("utf-8", "replace")).hexdigest(),
-                        "status_code": source["status_code"],
-                        "content_type": source["content_type"],
-                    })
-                else:
-                    evidence.append({
-                        "url": item["url"],
-                        "title": item["title"],
-                        "snippet": snippet,
-                        "content_sha256": "",
-                        "status_code": 200,
-                        "content_type": "search-result",
-                    })
-            return {
-                "status": "completed",
-                "query": query,
-                "source": page["url"],
-                "results": links,
-                "evidence": evidence[:10],
-            }
+            if links:
+                return self._build_result(query, page["url"], links)
 
-        if last_error is not None:
-            raise CapabilityUnavailable("web_search_provider_unavailable") from last_error
-        raise CapabilityUnavailable("web_search_no_results")
+        try:
+            from core.web_search_fallback import WebSearchFallback
+            links = WebSearchFallback(timeout=self.timeout).search(query)
+        except Exception:
+            links = []
+        if links:
+            return self._build_result(query, "metasearch", links)
+        raise CapabilityUnavailable("web_search_provider_unavailable")
+
+    def _build_result(self, query: str, source_url: str, links: list[dict]) -> dict:
+        evidence = []
+        for item in links[:10]:
+            snippet = str(item.get("snippet") or "").strip()
+            if not snippet:
+                try:
+                    source = self._fetch(item["url"])
+                except Exception:
+                    continue
+                source_body = source.get("body", "")
+                snippet = self._clean_text(source_body)
+                if not snippet:
+                    continue
+                evidence.append({
+                    "url": source["url"],
+                    "title": self._source_title(source_body, item["title"]),
+                    "snippet": snippet,
+                    "content_sha256": hashlib.sha256(source_body.encode("utf-8", "replace")).hexdigest(),
+                    "status_code": source["status_code"],
+                    "content_type": source["content_type"],
+                })
+            else:
+                evidence.append({
+                    "url": item["url"],
+                    "title": item["title"],
+                    "snippet": snippet,
+                    "content_sha256": "",
+                    "status_code": 200,
+                    "content_type": "search-result",
+                })
+        return {
+            "status": "completed",
+            "query": query,
+            "source": source_url,
+            "results": links[:10],
+            "evidence": evidence[:10],
+        }
 
     def _fetch(self, url: str) -> dict:
         parts = urlsplit(url)
