@@ -77,8 +77,20 @@ class RuntimeEngine:
         self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard
         self._dispatch_evidence = DurableDispatchEvidenceStore(state_journal.persistence_path) if state_journal is not None and state_journal.persistence_path is not None else None
         if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
+        self._closed = False
     @property
     def runtime_id(self) -> str: return self._runtime_id
+    def close(self) -> None:
+        """Release engine-owned durable resources without closing the parent StateJournal."""
+        if self._closed:
+            return
+        if self._dispatch_evidence is not None:
+            self._dispatch_evidence.close()
+        self._closed = True
+    def __enter__(self) -> "RuntimeEngine":
+        return self
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self.close()
     @staticmethod
     def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult:
         final = lifecycle.transition(status)
@@ -103,6 +115,7 @@ class RuntimeEngine:
         if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=action_statement): raise PermissionError("authorization_proof_invalid")
         if not self._replay_guard.consume(replay_token): raise PermissionError("authorization_replay_detected")
     def execute(self, intent: Intent, steps: Sequence[PlanStep], *, executor: Executor | None = None, verifier: Verifier, committer: Committer | None = None, timeout_seconds: float = 30.0, execution_id: str | None = None) -> RuntimeResult:
+        if self._closed: raise RuntimeError("runtime_engine_closed")
         if not isinstance(intent, Intent): raise TypeError("intent must be an Intent")
         if not isinstance(steps, Sequence): raise TypeError("steps must be a sequence")
         if not callable(verifier): raise TypeError("verifier must be callable")
