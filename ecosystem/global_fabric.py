@@ -31,6 +31,11 @@ class MemoryRecord:
     replicas: tuple[str, ...]
     provenance_digest: str
 
+    @property
+    def payload(self) -> bytes:
+        """Compatibility view containing only the payload digest, never raw data."""
+        return bytes.fromhex(self.payload_digest)
+
     def __post_init__(self) -> None:
         _id(self.record_id)
         if not isinstance(self.level, MemoryLevel) or not isinstance(self.version, int) or self.version < 1:
