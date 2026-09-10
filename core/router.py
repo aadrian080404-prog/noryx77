@@ -20,6 +20,11 @@ class ResourceRouter:
     def system_fabric(self, value) -> None:
         self._system_fabric = value
 
+    @property
+    def identity_registry(self):
+        """Expose the canonical trust registry to downstream admission boundaries."""
+        return self._identity_registry
+
     def register(self, agent: Agent) -> None:
         agent_id = getattr(agent, "agent_id", None)
         if not isinstance(agent_id, str) or not agent_id:
