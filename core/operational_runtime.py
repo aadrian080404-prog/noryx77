@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from hashlib import sha256
 from uuid import uuid4
 
 from .actions import AuthorizationAuthority
 from .agent_runtime import AgentRuntime
 from .agent_continuity import AgentContinuityScheduler
+from .contracts import TaskSpec
 from .identity import AgentIdentity
 from .jarvis_runtime_bridge import JarvisRuntimeBridge
 from .operational_fabric import OperationalAgentFabric
 from .planning import Planner
 from .runtime import NORYXRuntime
+from .scientific_fabric import ScientificFabric
 from .scientific_knowledge import ScientificKnowledgeFabric
 from .system_fabric import CanonicalSystemFabric
 from .training_governance import EvaluationReport, TrainingGovernance, TrainingStage
@@ -30,6 +33,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         self.system_fabric = CanonicalSystemFabric()
         self.router.system_fabric = self.system_fabric
         self.scientific_knowledge = ScientificKnowledgeFabric()
+        self.scientific_fabric = ScientificFabric()
         self.training_governance = TrainingGovernance()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
@@ -58,15 +62,47 @@ class OperationalNORYXRuntime(NORYXRuntime):
             max_cycles_per_start=1000,
         )
         self.continuity.start()
-        self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True)
+        self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True, scientific_fabric=True)
 
     def _continuity_cycle(self, exercise) -> None:
-        """Record a bounded autonomous exercise opportunity without granting authority."""
+        """Run one bounded internal Primary-Secondary-Primary research exercise."""
+        primary = self.router.get("noryx7-llm")
+        secondary = self.router.get("noryx7-secondary")
+        if primary is None or secondary is None:
+            raise RuntimeError("continuity_agents_missing")
+        self.agent_runtime.require_online(exercise.agent_id)
+        execution_id = "continuity:" + exercise.exercise_id
+        objective = "Perform a bounded cross-agent research exercise using multiple evidence patterns; identify uncertainty and a falsifiable next step."
+        seed = TaskSpec(
+            task_id=exercise.exercise_id + ":primary",
+            task_type="continuous_research",
+            objective=objective,
+            input="Review the currently available NORYX7 scientific knowledge context and produce one concise hypothesis with explicit uncertainty.",
+            constraints={"continuity": True, "external_side_effects": False, "source_policy": "authorized_only"},
+            verification_requirements=("agent_result", "cross_agent_review"),
+            risk_class="normal",
+            execution_id=execution_id,
+        )
+        first = primary.run(seed)
+        if first.status != "completed" or first.verification is None or not first.verification.valid or not isinstance(first.output, str):
+            raise RuntimeError("continuity_primary_failed")
+        secondary_task = replace(seed, task_id=exercise.exercise_id + ":secondary", input=first.output)
+        second = secondary.run(secondary_task)
+        if second.status != "completed" or second.verification is None or not second.verification.valid or not isinstance(second.output, str):
+            raise RuntimeError("continuity_secondary_failed")
+        final_task = replace(seed, task_id=exercise.exercise_id + ":reconciliation", input=second.output)
+        final = primary.run(final_task)
+        if final.status != "completed" or final.verification is None or not final.verification.valid or not isinstance(final.output, str):
+            raise RuntimeError("continuity_reconciliation_failed")
+        digest = sha256(final.output.encode("utf-8")).hexdigest()
         self.audit.record(
             "agent_continuity_exercise",
             exercise_id=exercise.exercise_id,
+            execution_id=execution_id,
             agent_id=exercise.agent_id,
-            objective=exercise.objective,
+            interaction=("noryx7-llm", "noryx7-secondary", "noryx7-llm"),
+            completed=True,
+            final_output_digest=digest,
             execution_authority="none",
             external_side_effects=False,
         )
