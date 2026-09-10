@@ -22,7 +22,10 @@ from web.ui_transform import build_ui_index
 
 
 SOURCE = Path(web_app.INDEX_FILE)
-TARGET = Path('/tmp/noryx7-index.html')
+# Android/Termux may expose /tmp as non-writable. Keep the generated UI copy
+# inside the writable repository/runtime directory; Render and containers can
+# also write here during startup.
+TARGET = ROOT / '.noryx7-index.html'
 web_app.INDEX_FILE = build_ui_index(SOURCE, TARGET)
 
 # The package bootstrap wraps FileResponse for the canonical index path. The
