@@ -15,21 +15,17 @@ _ORIGINAL_FILE_RESPONSE = fastapi.responses.FileResponse
 _WEB_DIR = Path(__file__).resolve().parent
 _INDEX = _WEB_DIR / "index.html"
 _UI = _WEB_DIR / "ui_enhancements.js"
-_TAG = '<script src="/ui_enhancements.js"></script>'
 
 
 def _serve_file(path, *args, **kwargs):
     if Path(path).resolve() == _INDEX.resolve():
         html = _INDEX.read_text(encoding="utf-8")
-        if _UI.is_file() and _TAG not in html:
-            html = html.replace("</body>", f"{_TAG}\n</body>", 1)
+        if _UI.is_file():
+            script = _UI.read_text(encoding="utf-8")
+            marker = '<script src="/ui_enhancements.js"></script>'
+            if marker not in html:
+                html = html.replace("</body>", f"<script>{script}</script>\n</body>", 1)
         return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
-    if Path(path).resolve() == _UI.resolve():
-        return fastapi.responses.Response(
-            content=_UI.read_text(encoding="utf-8"),
-            media_type="application/javascript; charset=utf-8",
-            headers={"Cache-Control": "no-cache"},
-        )
     return _ORIGINAL_FILE_RESPONSE(path, *args, **kwargs)
 
 
