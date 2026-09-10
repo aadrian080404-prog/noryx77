@@ -32,9 +32,7 @@ _RUNTIME_STATUS_PATCH = """
       if (health.status !== 'ok' || health.runtime !== 'connected') throw new Error('gateway_not_connected');
       dot.className = 'dot';
       status.textContent = 'NORYX7 online';
-      if (model && model.textContent.includes('Configurazione richiesta')) {
-        model.innerHTML = '<span class="dot"></span> HYPERSYNTH CORE';
-      }
+      if (model) model.innerHTML = '<span class="dot"></span> HYPERSYNTH CORE';
     } catch (_) {
       try {
         const response = await fetch('/health', { cache: 'no-store' });
@@ -43,12 +41,11 @@ _RUNTIME_STATUS_PATCH = """
         if (health.status !== 'healthy') throw new Error('runtime_degraded');
         dot.className = 'dot';
         status.textContent = 'NORYX7 online';
-        if (model && model.textContent.includes('Configurazione richiesta')) {
-          model.innerHTML = '<span class="dot"></span> HYPERSYNTH CORE';
-        }
+        if (model) model.innerHTML = '<span class="dot"></span> HYPERSYNTH CORE';
       } catch (_) {
         dot.className = 'dot bad';
         status.textContent = 'Runtime non raggiungibile';
+        if (model) model.innerHTML = '<span class="dot bad"></span> Gateway non raggiungibile';
       }
     }
   }
