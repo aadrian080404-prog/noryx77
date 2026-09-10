@@ -73,10 +73,17 @@ class NORYXRuntime:
 
     def run(self, task: TaskSpec, *, agent_id: str | None = None, interaction_context: InteractionContext | None = None) -> dict:
         """Legacy direct runtime entrypoint routed through the bounded HYPERSYNTH facade."""
-        if not isinstance(task, TaskSpec): return {"status":"rejected","reason":"invalid_task","task_id":getattr(task,"task_id",None),"execution_id":getattr(task,"execution_id",None),"verification":VerificationResult(False,"contract","invalid_task")}
-        if agent_id is not None and (not isinstance(agent_id,str) or not agent_id.strip()): return {"status":"rejected","reason":"invalid_agent_id","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"identity","invalid_agent_id")}
+        if not isinstance(task, TaskSpec): return {"status":"rejected","reason":"invalid_task_spec","task_id":getattr(task,"task_id",None),"execution_id":getattr(task,"execution_id",None),"verification":VerificationResult(False,"contract","invalid_task_spec"),"orchestration_stage":OrchestrationStage.REJECTED.value}
+        if agent_id is not None and (not isinstance(agent_id,str) or not agent_id.strip()): return {"status":"rejected","reason":"invalid_agent_id","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"identity","invalid_agent_id"),"orchestration_stage":OrchestrationStage.REJECTED.value}
         result = self.hypersynth.run(task, interaction_context=interaction_context, preferred_agent=agent_id) if agent_id is not None else self.hypersynth.run(task, interaction_context=interaction_context)
-        if not isinstance(result,dict): return {"status":"rejected","reason":"malformed_hypersynth_result","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"runtime","malformed_hypersynth_result")}
+        if not isinstance(result,dict): return {"status":"rejected","reason":"malformed_hypersynth_result","task_id":task.task_id,"execution_id":task.execution_id,"verification":VerificationResult(False,"runtime","malformed_hypersynth_result"),"orchestration_stage":OrchestrationStage.REJECTED.value}
+        result = dict(result)
+        if result.get("status") == "rejected":
+            verification = result.get("verification")
+            result.setdefault("reason", getattr(verification, "reason", None) or "hypersynth_execution_rejected")
+            result.setdefault("orchestration_stage", OrchestrationStage.REJECTED.value)
+        else:
+            result.setdefault("orchestration_stage", OrchestrationStage.COMMITTED.value)
         return result
 
     def run_hypersynth(self, task: TaskSpec, interaction_context: InteractionContext | None = None):
