@@ -36,6 +36,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         branching_engine = getattr(self.hypersynth.universal_intelligence, "branching_engine", None)
         if branching_engine is not None:
             branching_engine.source_provider = lambda task: self.scientific_knowledge.research_context(limit=8)
+            self.hypersynth.kernel.hypothesis_engine.branching_engine = branching_engine
         self.training_governance = TrainingGovernance()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
