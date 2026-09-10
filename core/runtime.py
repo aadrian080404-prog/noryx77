@@ -32,7 +32,6 @@ from .verification import VerificationEngine
 
 class NORYXRuntime:
     """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
-
     def __init__(self, limits: RuntimeLimits | None = None, *, state_journal_path: str | None = None, model_fabric=None, user_understanding: UserUnderstandingEngine | None = None):
         self.limits = limits or RuntimeLimits(); self._model_fabric = model_fabric
         if user_understanding is not None and not isinstance(user_understanding, UserUnderstandingEngine): raise TypeError("invalid_user_understanding_engine")
@@ -90,7 +89,13 @@ class NORYXRuntime:
         try:
             if interaction_context is None and self.user_understanding is not None:
                 content = UserContent(content_id=task_id or execution_id, text=str(getattr(task,"input","")), source="runtime_task_input"); profile = self.user_understanding.build_profile((content,)); interaction_context = build_interaction_context(profile); self.audit.record("user_understanding_derived", task_id=task_id, execution_id=execution_id, profile_id=profile.profile_id, context_id=interaction_context.context_id, consent=self.user_understanding.consent.value)
-            envelope = self._context_envelope(task, interaction_context, execution_id); envelope = OrchestrationCoordinator.with_intent_digest(envelope, f"{task.task_type}|{task.objective}"); envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED); self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope = self._context_envelope(task, interaction_context, execution_id); envelope = OrchestrationCoordinator.with_intent_digest(envelope, f"{task.task_type}|{task.objective}")
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.UNDERSTOOD)
+            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.REPRESENTED)
+            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
+            envelope, transition = OrchestrationCoordinator.transition(envelope, OrchestrationStage.ROUTED)
+            self.audit.record("orchestration_transition", task_id=task_id, execution_id=execution_id, stage=envelope.stage.value, envelope_digest=transition.envelope_digest)
             result = self.hypersynth.run(task, interaction_context=interaction_context, preferred_agent=("noryx7-llm" if self._model_fabric is not None else None))
             if not isinstance(result,dict): return self._rejection(envelope,task_id,"malformed_hypersynth_result",self.audit,execution_id=execution_id)
             if result.get("execution_id") != execution_id: return self._rejection(envelope,task_id,"task_identity_mismatch",self.audit,execution_id=execution_id)
