@@ -148,10 +148,12 @@ class RuntimeEngine:
                 else: replay_token = authorization_statement
                 self._authorize_high_risk(envelope, authorization_statement, replay_token)
                 if self._state_journal is not None: reservation = self._state_journal.reserve_step(envelope.execution_id, envelope.principal_id, envelope.step_id, action_digest)
+                agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
+                if self._dispatch_evidence is not None:
+                    self._dispatch_evidence.append_started(execution_id=envelope.execution_id, principal_id=envelope.principal_id, step_id=envelope.step_id, action_digest=action_digest, agent_id=agent_id, runtime_id=self._runtime_id)
                 dispatched = True
                 output = self._dispatch(envelope, executor)
                 output_digest = _digest(output)
-                agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
                 if self._dispatch_evidence is not None:
                     self._dispatch_evidence.append_returned(execution_id=envelope.execution_id, principal_id=envelope.principal_id, step_id=envelope.step_id, action_digest=action_digest, agent_id=agent_id, runtime_id=self._runtime_id, output_digest=output_digest)
                 verified = bool(verifier(envelope, output))
