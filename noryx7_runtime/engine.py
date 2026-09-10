@@ -61,10 +61,12 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
+        owns_replay_guard = False
         if high_risk_action_types and replay_guard is None:
             if multi_auth_authority is not None and multi_auth_authority.required_threshold == 1:
                 persistence_path = state_journal.persistence_path if state_journal is not None else None
                 replay_guard = AuthorizationReplayGuard(persistence_path=persistence_path)
+                owns_replay_guard = True
             else:
                 raise ValueError("high_risk_actions_require_replay_guard")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
@@ -74,18 +76,20 @@ class RuntimeEngine:
             if not identity_registry.is_trusted(AgentIdentity(str(adapter.agent_id), public_key)): raise PermissionError("adapter identity is not trusted")
         self._max_actions, self._clock = max_actions, clock; self._scheduler, self._adapter = scheduler or Scheduler(), adapter
         self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = runtime_id or uuid4().hex
-        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard
+        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard; self._owns_replay_guard = owns_replay_guard
         self._dispatch_evidence = DurableDispatchEvidenceStore(state_journal.persistence_path) if state_journal is not None and state_journal.persistence_path is not None else None
         if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
         self._closed = False
     @property
     def runtime_id(self) -> str: return self._runtime_id
     def close(self) -> None:
-        """Release engine-owned durable resources without closing the parent StateJournal."""
+        """Release engine-owned durable resources without closing caller-owned resources."""
         if self._closed:
             return
         if self._dispatch_evidence is not None:
             self._dispatch_evidence.close()
+        if self._owns_replay_guard and self._replay_guard is not None:
+            self._replay_guard.close()
         self._closed = True
     def __enter__(self) -> "RuntimeEngine":
         return self
