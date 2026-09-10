@@ -153,6 +153,13 @@ class JarvisRuntime:
                 request.principal_id,
                 reason=str(exc),
             )
+            if self.system_fabric is not None:
+                self.system_fabric.record_execution(
+                    execution_id=execution_id,
+                    client_id=request.principal_id,
+                    phase="jarvis_rejected",
+                    metadata={"reason": str(exc), "stage": "bridge"},
+                )
             return ()
         except Exception as exc:
             self.audit.record(
@@ -160,6 +167,13 @@ class JarvisRuntime:
                 request.principal_id,
                 reason=str(exc),
             )
+            if self.system_fabric is not None:
+                self.system_fabric.record_execution(
+                    execution_id=execution_id,
+                    client_id=request.principal_id,
+                    phase="jarvis_rejected",
+                    metadata={"reason": type(exc).__name__, "stage": "bridge"},
+                )
             return ()
 
         if not isinstance(results, tuple):
@@ -168,6 +182,13 @@ class JarvisRuntime:
                 request.principal_id,
                 reason="invalid_bridge_result",
             )
+            if self.system_fabric is not None:
+                self.system_fabric.record_execution(
+                    execution_id=execution_id,
+                    client_id=request.principal_id,
+                    phase="jarvis_rejected",
+                    metadata={"reason": "invalid_bridge_result", "stage": "verification"},
+                )
             return ()
 
         if not self._verify_results(plan, results):
@@ -175,6 +196,13 @@ class JarvisRuntime:
                 "execution_verification_failed",
                 request.principal_id,
             )
+            if self.system_fabric is not None:
+                self.system_fabric.record_execution(
+                    execution_id=execution_id,
+                    client_id=request.principal_id,
+                    phase="jarvis_rejected",
+                    metadata={"reason": "result_verification_failed", "stage": "verification"},
+                )
             return ()
 
         state = JarvisState(
@@ -193,13 +221,28 @@ class JarvisRuntime:
                 ),
                 expected_epoch=recovery_epoch,
             )
-        except (PermissionError, ValueError):
+        except (PermissionError, ValueError) as exc:
             self.audit.record(
                 "state_commit_rejected",
                 request.principal_id,
+                reason=str(exc),
             )
+            if self.system_fabric is not None:
+                self.system_fabric.record_execution(
+                    execution_id=execution_id,
+                    client_id=request.principal_id,
+                    phase="jarvis_rejected",
+                    metadata={"reason": str(exc), "stage": "state_commit"},
+                )
             return ()
 
+        if self.system_fabric is not None:
+            self.system_fabric.record_execution(
+                execution_id=execution_id,
+                client_id=request.principal_id,
+                phase="jarvis_committed",
+                metadata={"status": "committed", "result_count": len(results), "state_sequence": self.state.get(execution_id, principal_id=request.principal_id).sequence},
+            )
         self.audit.record("state_committed", request.principal_id)
         self.audit.record("execution_finished", request.principal_id)
         return results
