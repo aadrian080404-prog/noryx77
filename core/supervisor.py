@@ -28,10 +28,16 @@ class AgentSupervisor:
         agent_id = ""
         try:
             agent_id = preferred or self.router.default_id()
-            agent = self.router.route(agent_id)
+            required_capability = "execute" if getattr(self.router, "system_fabric", None) is not None else None
+            agent = self.router.route(agent_id, required_capability=required_capability)
         except LookupError as exc:
             if "agent_identity_untrusted" in str(exc):
                 return None, AgentDecision(agent_id, False, "agent_identity_untrusted")
+            return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
+        except PermissionError as exc:
+            reason = str(exc) or "agent_execution_not_authorized"
+            if reason in {"authorization_not_valid", "capability_not_granted", "agent_identity_not_trusted", "canonical_system_fabric_required"}:
+                return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_execution_not_authorized")
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
         except Exception:
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
