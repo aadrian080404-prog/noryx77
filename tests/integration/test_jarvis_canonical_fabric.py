@@ -17,3 +17,25 @@ def test_jarvis_runtime_bridge_uses_same_execution_identity_for_fabric_recording
 
     assert bridge.system_fabric is runtime.system_fabric
     assert runtime.runtime_engine.runtime_id
+
+    request_id = "jarvis-fabric-test"
+    bridge.system_fabric.bind_session(
+        session_id="jarvis:" + request_id,
+        client_id="test-principal",
+        device_id="jarvis-runtime",
+        role="agent",
+        capabilities=("execute",),
+    )
+
+    bridge.system_fabric.record_execution(
+        execution_id=request_id,
+        client_id="test-principal",
+        phase="test",
+        metadata={"request_id": request_id},
+    )
+
+    record_ids = {
+        record.record_id
+        for record in runtime.system_fabric.memory.snapshot()
+    }
+    assert "execution:jarvis-fabric-test:test" in record_ids
