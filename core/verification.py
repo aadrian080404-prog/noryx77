@@ -15,6 +15,19 @@ class VerificationEngine:
             return VerificationResult(False, "contract", "malformed_task_spec")
         if task.risk_class not in self.VALID_RISKS:
             return VerificationResult(False, "policy", "unsupported_risk_class")
+        constraints = task.constraints
+        if not isinstance(constraints, dict):
+            constraints = dict(constraints)
+        bound_execution_id = constraints.get("_noryx7_execution_id")
+        if bound_execution_id is not None:
+            if not isinstance(bound_execution_id, str) or not bound_execution_id.strip():
+                return VerificationResult(False, "identity", "invalid_bound_execution_identity")
+            if bound_execution_id != task.execution_id:
+                return VerificationResult(False, "identity", "task_execution_binding_mismatch")
+        bound_client_id = constraints.get("_noryx7_client_id")
+        if bound_client_id is not None:
+            if not isinstance(bound_client_id, str) or not bound_client_id.strip():
+                return VerificationResult(False, "identity", "invalid_bound_client_identity")
         return VerificationResult(True, "contract", "task_ok")
 
     def verify_output(self, output, *, stage: str = "result") -> VerificationResult:
