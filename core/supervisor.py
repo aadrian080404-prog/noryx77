@@ -28,7 +28,22 @@ class AgentSupervisor:
             return None, AgentDecision("", False, reason)
         agent_id = ""
         try:
-            agent_id = preferred or self.router.default_id()
+            if preferred:
+                agent_id = preferred
+            elif getattr(self.router, "system_fabric", None) is not None:
+                # Operational routing has multiple agents; the fabric's canonical
+                # primary is the deterministic default for ordinary execution.
+                candidates = tuple(self.router.available())
+                if "noryx7-llm" in candidates:
+                    agent_id = "noryx7-llm"
+                else:
+                    primary = next((item for item in candidates if getattr(self.router.get(item), "role", None) == "primary"), None)
+                    if primary:
+                        agent_id = primary
+                    else:
+                        raise LookupError("no canonical primary agent")
+            else:
+                agent_id = self.router.default_id()
             required_capability = "execute" if getattr(self.router, "system_fabric", None) is not None else None
             agent = self.router.route(agent_id, required_capability=required_capability) if required_capability is not None else self.router.route(agent_id)
         except LookupError as exc:
