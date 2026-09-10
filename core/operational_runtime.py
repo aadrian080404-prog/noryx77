@@ -12,8 +12,8 @@ from .jarvis_runtime_bridge import JarvisRuntimeBridge
 from .operational_fabric import OperationalAgentFabric
 from .planning import Planner
 from .runtime import NORYXRuntime
-from .scientific_fabric import ScientificFabric
-from .scientific_knowledge import ScientificKnowledgeFabric
+from .scientific_fabric import ScientificFabric, PDEProblem
+from .scientific_knowledge import ResearchExperiment, ScientificKnowledgeFabric
 from .scientific_sources import ArxivSourceProvider, CrossrefSourceProvider, PubMedSourceProvider
 from .system_fabric import CanonicalSystemFabric
 from .training_governance import EvaluationReport, TrainingGovernance, TrainingStage
@@ -25,6 +25,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
 
     REQUIRED_AGENT_IDS = frozenset({"noryx7-llm", "noryx7-secondary"})
     MODEL_EXECUTE_CAPABILITY = "model:execute"
+    SCIENTIFIC_EXECUTE_CAPABILITY = "scientific:execute"
 
     def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None, user_understanding=None):
         if model_fabric is None:
@@ -49,7 +50,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
             identity = getattr(agent, "identity", None)
             if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
                 raise RuntimeError("operational_agent_identity_invalid")
-            self.system_fabric.bind_agent_identity(identity, capabilities=("execute", self.MODEL_EXECUTE_CAPABILITY))
+            self.system_fabric.bind_agent_identity(identity, capabilities=("execute", self.MODEL_EXECUTE_CAPABILITY, self.SCIENTIFIC_EXECUTE_CAPABILITY))
         statuses = self.agent_runtime.start()
         status_ids = {item.agent_id for item in statuses}
         if not self.REQUIRED_AGENT_IDS.issubset(status_ids):
@@ -59,12 +60,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         fabric_ids = set(self.agent_fabric.available())
         if not self.REQUIRED_AGENT_IDS.issubset(fabric_ids):
             self.agent_runtime.stop(); raise RuntimeError("operational_fabric_agents_missing")
-        self.continuity = AgentContinuityScheduler(
-            agent_runtime=self.agent_runtime,
-            cycle_callback=self._continuity_cycle,
-            interval_seconds=300.0,
-            max_cycles_per_start=1000,
-        )
+        self.continuity = AgentContinuityScheduler(agent_runtime=self.agent_runtime, cycle_callback=self._continuity_cycle, interval_seconds=300.0, max_cycles_per_start=1000)
         self.continuity.start()
         self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True, scientific_fabric=True)
 
@@ -97,16 +93,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
             raise RuntimeError("continuity_agents_missing")
         self.agent_runtime.require_online(exercise.agent_id)
         execution_id = "continuity:" + exercise.exercise_id
-        seed = TaskSpec(
-            task_id=exercise.exercise_id,
-            task_type="continuous_research",
-            objective="Perform a bounded cross-agent research exercise using multiple evidence patterns; identify uncertainty and a falsifiable next step.",
-            input="Review the currently authorized scientific knowledge context and produce one concise hypothesis with explicit uncertainty.",
-            constraints={"continuity": True, "external_side_effects": False, "source_policy": "authorized_only"},
-            verification_requirements=("agent_result", "cross_agent_review"),
-            risk_class="normal",
-            execution_id=execution_id,
-        )
+        seed = TaskSpec(task_id=exercise.exercise_id, task_type="continuous_research", objective="Perform a bounded cross-agent research exercise using multiple evidence patterns; identify uncertainty and a falsifiable next step.", input="Review the currently authorized scientific knowledge context and produce one concise hypothesis with explicit uncertainty.", constraints={"continuity": True, "external_side_effects": False, "source_policy": "authorized_only"}, verification_requirements=("agent_result", "cross_agent_review"), risk_class="normal", execution_id=execution_id)
         reconciliation, check = self.hypersynth.collaboration.run(seed, primary, secondary)
         if not check.valid or not reconciliation.accepted:
             raise RuntimeError("continuity_reconciliation_failed")
@@ -114,30 +101,36 @@ class OperationalNORYXRuntime(NORYXRuntime):
         research_sources = self.scientific_knowledge.research_context(limit=8)
         hypothesis_id = None
         if research_sources:
-            hypothesis = self.scientific_knowledge.formulate_hypothesis(
-                hypothesis_id=f"{exercise.exercise_id}:hypothesis",
-                statement=reconciliation.output[:2000],
-                source_ids=(source.source_id for source in research_sources),
-                confidence=0.5,
-                falsifiers=("new authorized evidence contradicts the statement", "controlled experiment fails the predicted relationship"),
-                experiment_plan=("define measurable prediction", "run a bounded reproducible experiment", "independently verify the result"),
-            )
+            hypothesis = self.scientific_knowledge.formulate_hypothesis(hypothesis_id=f"{exercise.exercise_id}:hypothesis", statement=reconciliation.output[:2000], source_ids=(source.source_id for source in research_sources), confidence=0.5, falsifiers=("new authorized evidence contradicts the statement", "controlled experiment fails the predicted relationship"), experiment_plan=("define measurable prediction", "run a bounded reproducible experiment", "independently verify the result"))
             hypothesis_id = hypothesis.hypothesis_id
-        self.audit.record(
-            "agent_continuity_exercise",
-            exercise_id=exercise.exercise_id,
-            execution_id=execution_id,
-            agent_id=exercise.agent_id,
-            interaction=(primary.agent_id, secondary.agent_id, primary.agent_id),
-            completed=True,
-            final_output_digest=digest,
-            proposal_digest=reconciliation.proposal_digest,
-            critique_digest=reconciliation.critique_digest,
-            authorized_source_ids=tuple(source.source_id for source in research_sources),
-            hypothesis_id=hypothesis_id,
-            execution_authority="none",
-            external_side_effects=False,
-        )
+        self.audit.record("agent_continuity_exercise", exercise_id=exercise.exercise_id, execution_id=execution_id, agent_id=exercise.agent_id, interaction=(primary.agent_id, secondary.agent_id, primary.agent_id), completed=True, final_output_digest=digest, proposal_digest=reconciliation.proposal_digest, critique_digest=reconciliation.critique_digest, authorized_source_ids=tuple(source.source_id for source in research_sources), hypothesis_id=hypothesis_id, execution_authority="none", external_side_effects=False)
+
+    def execute_scientific_experiment(self, task: TaskSpec, problem: PDEProblem, solver, *, agent_id: str = "noryx7-llm", hypothesis_id: str | None = None, experiment_id: str | None = None):
+        """Execute a bounded scientific solver only after canonical identity/capability authorization."""
+        if not isinstance(task, TaskSpec) or not task.is_well_formed():
+            raise ValueError("invalid_task")
+        if not isinstance(problem, PDEProblem) or not callable(solver):
+            raise ValueError("invalid_scientific_execution_request")
+        agent = self.router.get(agent_id) if isinstance(agent_id, str) else None
+        identity = getattr(agent, "identity", None) if agent is not None else None
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise PermissionError("scientific_agent_identity_invalid")
+        self.system_fabric.authorize_agent(identity, self.SCIENTIFIC_EXECUTE_CAPABILITY)
+        execution_id = task.execution_id or uuid4().hex
+        result, verification = self.scientific_fabric.execute(task, problem, solver)
+        result_digest = sha256(repr(result).encode("utf-8")).hexdigest()
+        self.audit.record("scientific_execution", execution_id=execution_id, agent_id=agent_id, capability=self.SCIENTIFIC_EXECUTE_CAPABILITY, result_digest=result_digest, verified=verification.valid)
+        if not verification.valid:
+            self.system_fabric.record_execution(execution_id=execution_id, client_id=agent_id, phase="scientific_rejected", metadata={"task_id": task.task_id, "reason": verification.reason, "result_digest": result_digest})
+            return result, verification, None
+        self.system_fabric.record_execution(execution_id=execution_id, client_id=agent_id, phase="scientific_verified", metadata={"task_id": task.task_id, "result_digest": result_digest})
+        admitted_experiment = None
+        if hypothesis_id is not None:
+            if not isinstance(hypothesis_id, str) or not hypothesis_id.strip():
+                raise ValueError("invalid_hypothesis_id")
+            admitted_experiment = self.scientific_knowledge.admit_experiment(ResearchExperiment(experiment_id=experiment_id or f"{execution_id}:experiment", hypothesis_id=hypothesis_id, method=result.method, inputs_digest=sha256(repr(problem).encode("utf-8")).hexdigest(), result_summary=f"residual={result.residual:.3e}; divergence={result.divergence_error:.3e}; conservation={result.conservation_error:.3e}", verified=True))
+            self.audit.record("scientific_experiment_admitted", execution_id=execution_id, hypothesis_id=hypothesis_id, experiment_id=admitted_experiment.experiment_id)
+        return result, verification, admitted_experiment
 
     def _record_canonical_execution(self, *, execution_id: str, phase: str, metadata) -> None:
         self.system_fabric.record_execution(execution_id=execution_id, client_id="noryx7-runtime", phase=phase, metadata=metadata)
@@ -157,7 +150,6 @@ class OperationalNORYXRuntime(NORYXRuntime):
         return result
 
     def admit_training_candidate(self, report: EvaluationReport) -> TrainingStage:
-        """Evaluate a model candidate without changing the active model implicitly."""
         if not isinstance(report, EvaluationReport):
             raise TypeError("evaluation_report_required")
         stage = self.training_governance.admit(report)
