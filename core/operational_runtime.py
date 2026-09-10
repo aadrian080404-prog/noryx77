@@ -73,7 +73,10 @@ class OperationalNORYXRuntime(NORYXRuntime):
             if not isinstance(hypothesis_id,str) or not hypothesis_id.strip(): raise ValueError("invalid_hypothesis_id")
             admitted_experiment=self.scientific_knowledge.admit_experiment(ResearchExperiment(experiment_id=experiment_id or f"{execution_id}:experiment",hypothesis_id=hypothesis_id,method=result.method,inputs_digest=sha256(repr(problem).encode()).hexdigest(),result_summary=f"residual={result.residual:.3e}; divergence={result.divergence_error:.3e}; conservation={result.conservation_error:.3e}",verified=True)); self.audit.record("scientific_experiment_admitted",execution_id=execution_id,hypothesis_id=hypothesis_id,experiment_id=admitted_experiment.experiment_id)
         return result,verification,admitted_experiment
-    def _record_canonical_execution(self,*,execution_id,phase,metadata): self.system_fabric.record_execution(execution_id=execution_id,client_id="noryx-runtime",phase=phase,metadata=metadata); self.audit.record(f"canonical_system_execution_{phase}",execution_id=execution_id,phase=phase)
+    def _record_canonical_execution(self,*,execution_id,phase,metadata):
+        self.system_fabric.record_execution(execution_id=execution_id,client_id="noryx-runtime",phase=phase,metadata=metadata)
+        canonical_phase=phase.removeprefix("runtime_")
+        self.audit.record(f"canonical_system_execution_{canonical_phase}",execution_id=execution_id,phase=phase)
     def run_hypersynth(self,task,interaction_context=None):
         execution_id=getattr(task,"execution_id",None)
         if not isinstance(execution_id,str) or not execution_id:
