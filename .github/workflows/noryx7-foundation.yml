@@ -2,7 +2,7 @@ name: NORYX7 Foundation Verification
 
 on:
   push:
-    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "architecture-freeze-2026-09-06"]
+    branches: ["main", "Noryx7", "noryx7-foundation", "hypersynth-verification-hardening", "architecture-freeze-2026-09-06", "integration-wave-10-end-to-end-closure-2026-09-10"]
   pull_request:
   workflow_dispatch:
 
