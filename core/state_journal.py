@@ -108,12 +108,16 @@ class StateJournal:
                 "SELECT execution_id,task_id,state_json,verification_stage,sequence,principal_id,principal_key_fingerprint,record_digest,schema_version "
                 "FROM state_commits ORDER BY sequence"
             ).fetchall()
-            commits = [self._from_row(row) for row in rows]
             expected = 1
-            for commit in commits:
-                if commit.sequence != expected:
+            # Sequence continuity is a structural property of the journal and
+            # must be classified before per-record digest validation. Otherwise
+            # a missing/rewritten sequence is incorrectly reported as generic
+            # integrity failure instead of a recoverability gap.
+            for row in rows:
+                if row[4] != expected:
                     raise RuntimeError("state_journal_sequence_gap")
                 expected += 1
+            commits = [self._from_row(row) for row in rows]
             return {commit.execution_id: commit for commit in commits}
 
     def close(self) -> None:
