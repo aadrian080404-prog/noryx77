@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+# When executed as ``python web/serve.py``, Python places ``web/`` on
+# sys.path rather than the repository root. The canonical entrypoint imports
+# the ``web`` package and therefore needs the project root explicitly. This
+# also keeps the Docker/Render command (which executes this file directly)
+# equivalent to running the server from the repository root.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import uvicorn
 
