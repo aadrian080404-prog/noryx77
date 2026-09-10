@@ -64,6 +64,16 @@ class DurableDispatchEvidenceStore:
                         output_digest: str) -> None:
         try:
             self._db.execute("BEGIN IMMEDIATE")
+            started = self._db.execute(
+                "SELECT principal_id,action_digest,agent_id,runtime_id FROM dispatch_events WHERE execution_id=? AND step_id=? AND outcome='started'",
+                (execution_id, step_id),
+            ).fetchone()
+            if started is None:
+                self._db.execute("ROLLBACK")
+                raise ValueError("dispatch start evidence missing")
+            if started != (principal_id, action_digest, agent_id, runtime_id):
+                self._db.execute("ROLLBACK")
+                raise ValueError("dispatch start evidence mismatch")
             self._db.execute(
                 "INSERT INTO dispatch_evidence(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
                 (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "returned", output_digest),
@@ -77,7 +87,10 @@ class DurableDispatchEvidenceStore:
             self._db.execute("ROLLBACK")
             raise ValueError("duplicate dispatch evidence") from exc
         except Exception:
-            self._db.execute("ROLLBACK")
+            try:
+                self._db.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
             raise
 
     def close(self) -> None:
