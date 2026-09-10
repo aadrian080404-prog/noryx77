@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Iterable
 
 from core.agents import Agent
@@ -14,11 +15,7 @@ from noryx7_runtime.model_fabric import ModelFabric
 
 
 class LLMBackedAgent(Agent):
-    """Generative NORYX7 agent with explicit role, mission and capability metadata.
-
-    The model reasons; NORYX7 owns authorization, tool dispatch, verification and
-    state. Real actions must arrive through capabilities exposed by the runtime.
-    """
+    """Generative NORYX7 agent with explicit role, mission and capability metadata."""
     agent_id = "noryx7-llm"
     role = "primary"
     creator = "Adrian Aristodemo"
@@ -40,6 +37,11 @@ class LLMBackedAgent(Agent):
         self.agent_id = resolved_id; self.role = resolved_role; self.creator = resolved_creator; self.purpose = resolved_purpose; self.capabilities = resolved_capabilities
         self.model_fabric = model_fabric; self.verifier = verifier or VerificationEngine(); self.self_knowledge = self_knowledge or SelfKnowledgeProvider(); self.identity = identity
         if self.agent_id == "noryx7-llm": self._bootstrap_secondary()
+
+    def _identity_fingerprint(self) -> str:
+        identity = self.identity
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed(): return ""
+        return hashlib.sha256(identity.public_key).hexdigest()
 
     def _bootstrap_secondary(self) -> None:
         runtime = getattr(self.self_knowledge, "runtime", None); router = getattr(runtime, "router", None); registry = getattr(runtime, "identity_registry", None)
@@ -82,15 +84,8 @@ class LLMBackedAgent(Agent):
             if not isinstance(runtime_id, str) or not runtime_id: raise RuntimeError("model_fabric_runtime_id_required")
             runtime = getattr(self.self_knowledge, "runtime", None)
             system_fabric = getattr(runtime, "system_fabric", None)
-            if system_fabric is not None and not isinstance(system_fabric, CanonicalSystemFabric):
-                raise TypeError("invalid_system_fabric")
-            bridge = ModelFabricBridge(
-                self.model_fabric,
-                runtime_id=runtime_id,
-                execution_id=task.execution_id,
-                system_fabric=system_fabric,
-                agent_identity=self.identity,
-            )
+            if system_fabric is not None and not isinstance(system_fabric, CanonicalSystemFabric): raise TypeError("invalid_system_fabric")
+            bridge = ModelFabricBridge(self.model_fabric, runtime_id=runtime_id, execution_id=task.execution_id, system_fabric=system_fabric, agent_identity=self.identity)
             return bridge.generate(prompt)
         generate = getattr(self.model_fabric, "generate", None)
         if callable(generate): return generate(prompt)
@@ -98,13 +93,14 @@ class LLMBackedAgent(Agent):
 
     def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
         check = self.verifier.verify_task(task)
-        if not check.valid: return AgentResult(self.agent_id, task.task_id, "rejected", verification=check, execution_id=task.execution_id)
+        fingerprint = self._identity_fingerprint()
+        if not check.valid: return AgentResult(self.agent_id, task.task_id, "rejected", verification=check, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
         prompt = self._build_prompt(task, interaction_context=interaction_context)
         try: output = self._generate(prompt, task)
-        except Exception: return AgentResult(self.agent_id, task.task_id, "failed", output=None, verification=None, execution_id=task.execution_id)
-        if not isinstance(output, str) or not output.strip(): return AgentResult(self.agent_id, task.task_id, "failed", output=output, verification=None, execution_id=task.execution_id)
+        except Exception: return AgentResult(self.agent_id, task.task_id, "failed", output=None, verification=None, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
+        if not isinstance(output, str) or not output.strip(): return AgentResult(self.agent_id, task.task_id, "failed", output=output, verification=None, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
         output = output.strip(); output_check = self.verifier.verify_output(output, stage="agent_result")
-        return AgentResult(self.agent_id, task.task_id, "completed" if output_check.valid else "rejected", output=output, verification=output_check, execution_id=task.execution_id)
+        return AgentResult(self.agent_id, task.task_id, "completed" if output_check.valid else "rejected", output=output, verification=output_check, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
 
 
 class SecondaryLLMBackedAgent(LLMBackedAgent):
