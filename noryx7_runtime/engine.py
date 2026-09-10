@@ -92,10 +92,8 @@ class RuntimeEngine:
         if self._owns_replay_guard and self._replay_guard is not None:
             self._replay_guard.close()
         self._closed = True
-    def __enter__(self) -> "RuntimeEngine":
-        return self
-    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
-        self.close()
+    def __enter__(self) -> "RuntimeEngine": return self
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None: self.close()
     @staticmethod
     def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult:
         final = lifecycle.transition(status)
@@ -182,6 +180,16 @@ class RuntimeEngine:
                 if self._state_journal is not None and journal_appended:
                     try: self._state_journal.record_external_commit(attestation, "failed")
                     except Exception as reconcile_exc: return self._result(lifecycle, ExecutionStatus.FAILED, (*attestations, attestation), outputs, "external_commit_reconciliation_failed")
+                    if reservation is not None:
+                        try:
+                            with self._state_journal._lock:
+                                key = (reservation.execution_id, reservation.step_id)
+                                if key not in self._state_journal._reservations:
+                                    if self._state_journal._persistence is not None:
+                                        self._state_journal._persistence.put_reservation(self._state_journal._reservation_payload(reservation))
+                                    self._state_journal._reservations[key] = reservation
+                        except Exception:
+                            return self._result(lifecycle, ExecutionStatus.FAILED, (*attestations, attestation), outputs, "reservation_restore_failed")
                 elif self._state_journal is not None and reservation is not None:
                     try: self._state_journal.restore_reservation(reservation)
                     except Exception as restore_exc: raise RuntimeError("reservation_restore_failed") from restore_exc
