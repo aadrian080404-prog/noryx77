@@ -4,7 +4,7 @@ import hashlib
 from typing import Any, Iterable
 
 from core.agents import Agent
-from core.contracts import AgentResult, TaskSpec
+from core.contracts import AgentResult, TaskSpec, VerificationResult
 from core.identity import AgentIdentity, AgentIdentityAuthority
 from core.verification import VerificationEngine
 from core.llm.model_fabric_bridge import ModelFabricBridge
@@ -97,13 +97,21 @@ class LLMBackedAgent(Agent):
         raise TypeError("model_fabric_generate_unavailable")
 
     def run(self, task: TaskSpec, *, interaction_context=None) -> AgentResult:
-        check = self.verifier.verify_task(task)
         fingerprint = self._identity_fingerprint()
-        if not check.valid: return AgentResult(self.agent_id, task.task_id, "rejected", verification=check, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
-        prompt = self._build_prompt(task, interaction_context=interaction_context)
-        try: output = self._generate(prompt, task)
-        except Exception: return AgentResult(self.agent_id, task.task_id, "failed", output=None, verification=None, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
-        if not isinstance(output, str) or not output.strip(): return AgentResult(self.agent_id, task.task_id, "failed", output=output, verification=None, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
+        try:
+            check = self.verifier.verify_task(task)
+            if not isinstance(check, VerificationResult) or not check.is_well_formed():
+                return AgentResult(self.agent_id, getattr(task, "task_id", ""), "rejected", verification=VerificationResult(False, "contract", "invalid_task_verification"), execution_id=getattr(task, "execution_id", ""), agent_key_fingerprint=fingerprint)
+            if not check.valid:
+                return AgentResult(self.agent_id, task.task_id, "rejected", verification=check, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
+            prompt = self._build_prompt(task, interaction_context=interaction_context)
+            output = self._generate(prompt, task)
+        except Exception as exc:
+            task_id = getattr(task, "task_id", "")
+            execution_id = getattr(task, "execution_id", "")
+            return AgentResult(self.agent_id, task_id, "failed", output=None, verification=VerificationResult(False, "agent_execution", f"agent_execution_exception:{type(exc).__name__}"), execution_id=execution_id, agent_key_fingerprint=fingerprint)
+        if not isinstance(output, str) or not output.strip():
+            return AgentResult(self.agent_id, task.task_id, "failed", output=output, verification=VerificationResult(False, "agent_execution", "agent_empty_output"), execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
         output = output.strip(); output_check = self.verifier.verify_output(output, stage="agent_result")
         return AgentResult(self.agent_id, task.task_id, "completed" if output_check.valid else "rejected", output=output, verification=output_check, execution_id=task.execution_id, agent_key_fingerprint=fingerprint)
 
