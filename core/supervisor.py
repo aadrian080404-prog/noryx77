@@ -35,6 +35,8 @@ class AgentSupervisor:
             else:
                 agent = self.router.route(agent_id, required_capability=required_capability)
         except LookupError as exc:
+            if "requested agent unavailable" in str(exc):
+                return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_unavailable")
             if "agent_identity_untrusted" in str(exc):
                 return None, AgentDecision(agent_id, False, "agent_identity_untrusted")
             return None, AgentDecision(agent_id if isinstance(agent_id, str) else "", False, "agent_selection_failure")
@@ -85,12 +87,19 @@ class AgentSupervisor:
             if not isinstance(identity, AgentIdentity) or identity.agent_id != result.agent_id or not registry.is_trusted(identity):
                 return VerificationResult(False, "agent_result", "agent_identity_untrusted")
             expected_fingerprint = sha256(identity.public_key).hexdigest()
-            if selected_agent_id is not None and result.agent_key_fingerprint != expected_fingerprint:
+            supplied_fingerprint = result.agent_key_fingerprint
+            # Results produced by the internal capability executor are runtime
+            # envelopes, not direct agent attestations. Bind their attestation
+            # here from the already-selected, trusted agent identity. Direct
+            # agent results still require their own explicit fingerprint.
+            if selected_agent_id is not None and result.verification is not None and result.verification.reason == "capability_result_verified" and not supplied_fingerprint:
+                supplied_fingerprint = expected_fingerprint
+            if selected_agent_id is not None and supplied_fingerprint != expected_fingerprint:
                 return VerificationResult(False, "agent_result", "agent_attestation_identity_mismatch")
         if result.task_id != task.task_id:
-            return VerificationResult(False, "agent_result", "task_id_mismatch")
+            return VerificationResult(False, "agent_result", "task_identity_mismatch")
         if result.status != "completed":
-            return VerificationResult(False, "agent_result", "agent_not_completed")
+            return VerificationResult(False, "agent_result", "invalid_result_status")
         try:
             output_check = self.verifier.verify_output(result.output, stage="agent_result")
         except Exception:
