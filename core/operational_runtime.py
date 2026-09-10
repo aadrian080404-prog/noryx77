@@ -24,7 +24,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
     def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None, user_understanding=None):
         if model_fabric is None: raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits,state_journal_path=state_journal_path,model_fabric=model_fabric,user_understanding=user_understanding)
-        self.verifier=VerificationEngine(); self.system_fabric=CanonicalSystemFabric(identity_registry=self.identity_registry); self.router.system_fabric=self.system_fabric
+        self.system_fabric=CanonicalSystemFabric(identity_registry=self.identity_registry); self.router.system_fabric=self.system_fabric
         self.scientific_knowledge=ScientificKnowledgeFabric(); self.scientific_fabric=ScientificFabric(); branching_engine=getattr(self.hypersynth.universal_intelligence,"branching_engine",None)
         if branching_engine is not None: branching_engine.source_provider=lambda task:self.scientific_knowledge.research_context(limit=8); self.hypersynth.kernel.hypothesis_engine.branching_engine=branching_engine
         self.training_governance=TrainingGovernance(); self.agent_runtime=AgentRuntime(self.router,self.identity_registry); self.agent_fabric=OperationalAgentFabric(self.router,self.verifier,audit=self.audit); self._jarvis_bridge=None
