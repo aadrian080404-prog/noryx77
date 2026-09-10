@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from hashlib import sha256
 from uuid import uuid4
 
@@ -34,6 +33,9 @@ class OperationalNORYXRuntime(NORYXRuntime):
         self.router.system_fabric = self.system_fabric
         self.scientific_knowledge = ScientificKnowledgeFabric()
         self.scientific_fabric = ScientificFabric()
+        branching_engine = getattr(self.hypersynth.universal_intelligence, "branching_engine", None)
+        if branching_engine is not None:
+            branching_engine.source_provider = lambda task: self.scientific_knowledge.research_context(limit=8)
         self.training_governance = TrainingGovernance()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
@@ -65,44 +67,37 @@ class OperationalNORYXRuntime(NORYXRuntime):
         self.audit.record("agent_runtime_online", agents=tuple(item.agent_id for item in statuses), states=tuple(item.state for item in statuses), required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)), operational_fabric=tuple(sorted(fabric_ids)), continuity=True, scientific_fabric=True)
 
     def _continuity_cycle(self, exercise) -> None:
-        """Run one bounded internal Primary-Secondary-Primary research exercise."""
+        """Run one bounded internal Primary -> Secondary -> Primary research exercise."""
         primary = self.router.get("noryx7-llm")
         secondary = self.router.get("noryx7-secondary")
         if primary is None or secondary is None:
             raise RuntimeError("continuity_agents_missing")
         self.agent_runtime.require_online(exercise.agent_id)
         execution_id = "continuity:" + exercise.exercise_id
-        objective = "Perform a bounded cross-agent research exercise using multiple evidence patterns; identify uncertainty and a falsifiable next step."
         seed = TaskSpec(
-            task_id=exercise.exercise_id + ":primary",
+            task_id=exercise.exercise_id,
             task_type="continuous_research",
-            objective=objective,
-            input="Review the currently available NORYX7 scientific knowledge context and produce one concise hypothesis with explicit uncertainty.",
+            objective="Perform a bounded cross-agent research exercise using multiple evidence patterns; identify uncertainty and a falsifiable next step.",
+            input="Review the currently authorized scientific knowledge context and produce one concise hypothesis with explicit uncertainty.",
             constraints={"continuity": True, "external_side_effects": False, "source_policy": "authorized_only"},
             verification_requirements=("agent_result", "cross_agent_review"),
             risk_class="normal",
             execution_id=execution_id,
         )
-        first = primary.run(seed)
-        if first.status != "completed" or first.verification is None or not first.verification.valid or not isinstance(first.output, str):
-            raise RuntimeError("continuity_primary_failed")
-        secondary_task = replace(seed, task_id=exercise.exercise_id + ":secondary", input=first.output)
-        second = secondary.run(secondary_task)
-        if second.status != "completed" or second.verification is None or not second.verification.valid or not isinstance(second.output, str):
-            raise RuntimeError("continuity_secondary_failed")
-        final_task = replace(seed, task_id=exercise.exercise_id + ":reconciliation", input=second.output)
-        final = primary.run(final_task)
-        if final.status != "completed" or final.verification is None or not final.verification.valid or not isinstance(final.output, str):
+        reconciliation, check = self.collaboration.run(seed, primary, secondary)
+        if not check.valid or not reconciliation.accepted:
             raise RuntimeError("continuity_reconciliation_failed")
-        digest = sha256(final.output.encode("utf-8")).hexdigest()
+        digest = sha256(reconciliation.output.encode("utf-8")).hexdigest()
         self.audit.record(
             "agent_continuity_exercise",
             exercise_id=exercise.exercise_id,
             execution_id=execution_id,
             agent_id=exercise.agent_id,
-            interaction=("noryx7-llm", "noryx7-secondary", "noryx7-llm"),
+            interaction=(primary.agent_id, secondary.agent_id, primary.agent_id),
             completed=True,
             final_output_digest=digest,
+            proposal_digest=reconciliation.proposal_digest,
+            critique_digest=reconciliation.critique_digest,
             execution_authority="none",
             external_side_effects=False,
         )
@@ -115,7 +110,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         execution_id = getattr(task, "execution_id", None)
         if not isinstance(execution_id, str) or not execution_id:
             execution_id = uuid4().hex
-            task = replace(task, execution_id=execution_id)
+            task = type(task)(task.task_id, task.task_type, task.objective, task.input, task.constraints, task.verification_requirements, task.risk_class, execution_id)
         self._record_canonical_execution(execution_id=execution_id, phase="runtime_received", metadata={"task_id": getattr(task, "task_id", ""), "task_type": getattr(task, "task_type", "")})
         result = super().run_hypersynth(task, interaction_context=interaction_context)
         if isinstance(result, dict) and result.get("status") == "completed":
