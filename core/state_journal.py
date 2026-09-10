@@ -71,6 +71,8 @@ class StateJournal:
         return commit
 
     def append(self, commit: StateCommit) -> None:
+        if not isinstance(commit, StateCommit):
+            raise TypeError("state_commit_required")
         with self._lock:
             if self._db.execute("SELECT 1 FROM state_commits WHERE execution_id=?", (commit.execution_id,)).fetchone():
                 raise PermissionError("execution_already_journaled")
