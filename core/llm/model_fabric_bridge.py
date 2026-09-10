@@ -39,6 +39,7 @@ class ModelFabricBridge:
         self._execution_id = execution_id
         self._system_fabric = system_fabric
         self._agent_identity = agent_identity
+        self.last_execution_metadata: dict[str, str] = {}
 
     def generate(self, prompt: str) -> str:
         if not isinstance(prompt, str) or not prompt.strip():
@@ -68,6 +69,20 @@ class ModelFabricBridge:
         envelope_digest = self._fabric.result_digest(request, result)
         if not isinstance(envelope_digest, str) or len(envelope_digest) != 64:
             raise RuntimeError("model_fabric_result_digest_invalid")
+        selected_model = result.selected_model
+        model = next((item for item in self._fabric._models if item.name == selected_model), None)
+        if model is None:
+            raise RuntimeError("model_fabric_selected_model_missing")
+        provider = "openrouter" if "openrouter" in model.capabilities else ("gemini" if "gemini" in model.capabilities else "unknown")
+        self.last_execution_metadata = {
+            "provider": provider,
+            "model": selected_model,
+            "runtime_id": self._runtime_id,
+            "execution_id": self._execution_id,
+            "request_digest": self._fabric.request_digest(request),
+            "result_digest": result_output_digest,
+            "result_envelope_digest": envelope_digest,
+        }
         if self._system_fabric is not None:
             self._system_fabric.record_execution(
                 execution_id=self._execution_id,
@@ -75,10 +90,7 @@ class ModelFabricBridge:
                 runtime_id=self._runtime_id,
                 phase="model_verified",
                 metadata={
-                    "request_digest": self._fabric.request_digest(request),
-                    "result_digest": result_output_digest,
-                    "result_envelope_digest": envelope_digest,
-                    "model_runtime_id": self._runtime_id,
+                    **self.last_execution_metadata,
                     "agent_id": self._agent_identity.agent_id,
                 },
             )
