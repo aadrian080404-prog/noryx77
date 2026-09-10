@@ -43,13 +43,21 @@ class DurableDispatchEvidenceStore:
                 output_digest TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS dispatch_events_started_once
+            ON dispatch_events(execution_id, step_id)
+            WHERE outcome = 'started'
+        """)
 
     def append_started(self, *, execution_id: str, principal_id: str, step_id: str,
                        action_digest: str, agent_id: str, runtime_id: str) -> None:
-        self._db.execute(
-            "INSERT INTO dispatch_events(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
-            (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "started", ""),
-        )
+        try:
+            self._db.execute(
+                "INSERT INTO dispatch_events(execution_id,principal_id,step_id,action_digest,agent_id,runtime_id,outcome,output_digest) VALUES(?,?,?,?,?,?,?,?)",
+                (execution_id, principal_id, step_id, action_digest, agent_id, runtime_id, "started", ""),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("duplicate dispatch start evidence") from exc
 
     def append_returned(self, *, execution_id: str, principal_id: str, step_id: str,
                         action_digest: str, agent_id: str, runtime_id: str,
