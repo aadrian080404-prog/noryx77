@@ -64,8 +64,15 @@ class NoryxGateway:
     def execute(self, *, session_token: str, text: str, execution_id: str | None = None) -> dict:
         identity = self.auth.verify(session_token)
         session_id = self.system_fabric.session_id_from_token(session_token)
-        self.system_fabric.authorize(session_id, "execute")
-        return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id)
+        authorization = self.system_fabric.authorize(session_id, "execute")
+        if authorization.identity_id != identity["client_id"]:
+            raise PermissionError("session_client_identity_mismatch")
+        return self.runtime.execute(
+            client_id=identity["client_id"],
+            text=text,
+            execution_id=execution_id,
+            session_id=session_id,
+        )
 
     def handler_class(self):
         gateway = self
