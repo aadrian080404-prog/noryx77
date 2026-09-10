@@ -23,8 +23,14 @@ Committer = Callable[[ActionEnvelope, Attestation, Any], None]
 AuthorizationProvider = Callable[[ActionEnvelope, bytes], SignedAuthorizationProof | None]
 _ZERO_DIGEST = "0" * 64
 
-def _canonical(value: Any) -> str: return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-def _digest(value: Any) -> str: return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
 
 @dataclass(frozen=True)
 class RuntimeResult:
@@ -33,6 +39,7 @@ class RuntimeResult:
     attestations: tuple[Attestation, ...]
     outputs: tuple[Any, ...]
     error: str | None = None
+
 
 class RuntimeEngine:
     """Operational kernel for the NORYX7 data plane."""
@@ -54,13 +61,8 @@ class RuntimeEngine:
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
         if high_risk_action_types and replay_guard is None:
-            if (
-                multi_auth_authority is not None
-                and multi_auth_authority.required_threshold == 1
-            ):
-                replay_guard = AuthorizationReplayGuard()
-            else:
-                raise ValueError("high_risk_actions_require_replay_guard")
+            if multi_auth_authority is not None and multi_auth_authority.required_threshold == 1: replay_guard = AuthorizationReplayGuard()
+            else: raise ValueError("high_risk_actions_require_replay_guard")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
@@ -86,341 +88,68 @@ class RuntimeEngine:
             if identity.public_key != public_key: raise PermissionError("adapter identity key mismatch")
             return dispatch(envelope)
         return self._identity_registry.with_trusted_identity(str(self._adapter.agent_id), run_if_trusted)
-    def _authorize_high_risk(
-        self,
-        envelope: ActionEnvelope,
-        action_statement: bytes,
-        replay_token: bytes,
-    ) -> None:
-        if envelope.action_type not in self._high_risk_action_types:
-            return
-
-        if (
-            self._multi_auth_authority is None
-            or self._authorization_provider is None
-        ):
-            raise PermissionError("multi_auth_required")
-
-        if self._replay_guard is None:
-            raise PermissionError("replay_guard_required")
-
-        try:
-            proof = self._authorization_provider(
-                envelope,
-                action_statement,
-            )
-        except Exception as exc:
-            raise PermissionError(
-                "authorization_provider_failed"
-            ) from exc
-
-        if not isinstance(proof, SignedAuthorizationProof):
-            raise PermissionError("authorization_proof_required")
-
-        if not self._multi_auth_authority.verify(
-            proof,
-            action_id=envelope.execution_id,
-            epoch=self._authorization_epoch,
-            action_statement=action_statement,
-        ):
-            raise PermissionError("authorization_proof_invalid")
-
-        if not self._replay_guard.consume(replay_token):
-            raise PermissionError("authorization_replay_detected")
-
-    def execute(
-        self,
-        intent: Intent,
-        steps: Sequence[PlanStep],
-        *,
-        executor: Executor | None = None,
-        verifier: Verifier,
-        committer: Committer | None = None,
-        timeout_seconds: float = 30.0,
-        execution_id: str | None = None,
-    ) -> RuntimeResult:
-
-        # ----------------------------
-        # Input boundary
-        # ----------------------------
-        if not isinstance(intent, Intent):
-            raise TypeError("intent must be an Intent")
-
-        if not isinstance(steps, Sequence):
-            raise TypeError("steps must be a sequence")
-
-        if not callable(verifier):
-            raise TypeError("verifier must be callable")
-
-        if executor is not None and not callable(executor):
-            raise TypeError("executor must be callable")
-
-        if self._adapter is None and executor is None:
-            raise ValueError(
-                "an execution adapter or executor is required"
-            )
-
-        if (
-            isinstance(timeout_seconds, bool)
-            or not isinstance(timeout_seconds, (int, float))
-            or timeout_seconds <= 0
-        ):
-            raise ValueError("timeout_seconds must be positive")
-
-        # ----------------------------
-        # Lifecycle
-        # ----------------------------
-        lifecycle = ExecutionLifecycle(
-            execution_id or uuid4().hex,
-            intent.principal_id,
-        )
-
-        if len(steps) > self._max_actions:
-            return self._result(
-                lifecycle,
-                ExecutionStatus.REJECTED,
-                (),
-                (),
-                "action_budget_exceeded",
-            )
-
+    def _authorize_high_risk(self, envelope: ActionEnvelope, action_statement: bytes, replay_token: bytes) -> None:
+        if envelope.action_type not in self._high_risk_action_types: return
+        if self._multi_auth_authority is None or self._authorization_provider is None: raise PermissionError("multi_auth_required")
+        if self._replay_guard is None: raise PermissionError("replay_guard_required")
+        try: proof = self._authorization_provider(envelope, action_statement)
+        except Exception as exc: raise PermissionError("authorization_provider_failed") from exc
+        if not isinstance(proof, SignedAuthorizationProof): raise PermissionError("authorization_proof_required")
+        if not self._multi_auth_authority.verify(proof, action_id=envelope.execution_id, epoch=self._authorization_epoch, action_statement=action_statement): raise PermissionError("authorization_proof_invalid")
+        if not self._replay_guard.consume(replay_token): raise PermissionError("authorization_replay_detected")
+    def execute(self, intent: Intent, steps: Sequence[PlanStep], *, executor: Executor | None = None, verifier: Verifier, committer: Committer | None = None, timeout_seconds: float = 30.0, execution_id: str | None = None) -> RuntimeResult:
+        if not isinstance(intent, Intent): raise TypeError("intent must be an Intent")
+        if not isinstance(steps, Sequence): raise TypeError("steps must be a sequence")
+        if not callable(verifier): raise TypeError("verifier must be callable")
+        if executor is not None and not callable(executor): raise TypeError("executor must be callable")
+        if self._adapter is None and executor is None: raise ValueError("an execution adapter or executor is required")
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0: raise ValueError("timeout_seconds must be positive")
+        lifecycle = ExecutionLifecycle(execution_id or uuid4().hex, intent.principal_id)
+        if len(steps) > self._max_actions: return self._result(lifecycle, ExecutionStatus.REJECTED, (), (), "action_budget_exceeded")
         lifecycle = lifecycle.transition(ExecutionStatus.RUNNING)
-
-        context = ExecutionContext(
-            lifecycle.execution_id,
-            intent.principal_id,
-            self._clock() + timeout_seconds,
-            self._max_actions,
-            ExecutionStatus.RUNNING,
-        )
-
-        # Scheduler exceptions must escape as contract errors.
-        ordered = tuple(
-            item.step
-            for item in self._scheduler.schedule(tuple(steps))
-        )
-
+        context = ExecutionContext(lifecycle.execution_id, intent.principal_id, self._clock() + timeout_seconds, self._max_actions, ExecutionStatus.RUNNING)
+        ordered = tuple(item.step for item in self._scheduler.schedule(tuple(steps)))
         attestations: list[Attestation] = []
         outputs: list[Any] = []
         previous_attestation_digest = _ZERO_DIGEST
-
-        # ----------------------------
-        # Deterministic execution
-        # ----------------------------
         for plan_step in ordered:
-
-            if self._clock() > context.deadline_monotonic:
-                return self._result(
-                    lifecycle,
-                    ExecutionStatus.CANCELLED,
-                    attestations,
-                    outputs,
-                    "deadline_exceeded",
-                )
-
-            envelope = ActionEnvelope(
-                context.execution_id,
-                context.principal_id,
-                plan_step.step_id,
-                plan_step.action_type,
-                plan_step.target,
-                dict(plan_step.parameters),
-                uuid4().hex,
-            )
-
+            if self._clock() > context.deadline_monotonic: return self._result(lifecycle, ExecutionStatus.CANCELLED, attestations, outputs, "deadline_exceeded")
+            envelope = ActionEnvelope(context.execution_id, context.principal_id, plan_step.step_id, plan_step.action_type, plan_step.target, dict(plan_step.parameters), uuid4().hex)
             reservation = None
-
+            dispatched = False
             try:
-                # Concrete action digest includes nonce.
-                action_digest = _digest(
-                    {
-                        "execution_id": envelope.execution_id,
-                        "principal_id": envelope.principal_id,
-                        "step_id": envelope.step_id,
-                        "action_type": envelope.action_type,
-                        "target": envelope.target,
-                        "parameters": envelope.parameters,
-                        "nonce": envelope.nonce,
-                    }
-                )
-
-                # Authorization statement is stable and excludes nonce.
-                authorization_statement = bytes.fromhex(
-                    _digest(
-                        {
-                            "execution_id": envelope.execution_id,
-                            "principal_id": envelope.principal_id,
-                            "step_id": envelope.step_id,
-                            "action_type": envelope.action_type,
-                            "target": envelope.target,
-                            "parameters": envelope.parameters,
-                        }
-                    )
-                )
-
-                # threshold=1 -> concrete action replay identity
-                # threshold>1 -> stable authorization statement replay identity
-                if (
-                    self._multi_auth_authority is None
-                    or self._multi_auth_authority.required_threshold == 1
-                ):
-                    replay_token = bytes.fromhex(action_digest)
-                else:
-                    replay_token = authorization_statement
-
-                self._authorize_high_risk(
-                    envelope,
-                    authorization_statement,
-                    replay_token,
-                )
-
-                # Reserve BEFORE dispatch. This prevents duplicate side effects.
-                if self._state_journal is not None:
-                    reservation = self._state_journal.reserve_step(
-                        envelope.execution_id,
-                        envelope.principal_id,
-                        envelope.step_id,
-                        action_digest,
-                    )
-
+                action_digest = _digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters, "nonce": envelope.nonce})
+                authorization_statement = bytes.fromhex(_digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters}))
+                if self._multi_auth_authority is None or self._multi_auth_authority.required_threshold == 1: replay_token = bytes.fromhex(action_digest)
+                else: replay_token = authorization_statement
+                self._authorize_high_risk(envelope, authorization_statement, replay_token)
+                if self._state_journal is not None: reservation = self._state_journal.reserve_step(envelope.execution_id, envelope.principal_id, envelope.step_id, action_digest)
+                dispatched = True
                 output = self._dispatch(envelope, executor)
-
-                # Verification is performed before any commit.
                 verified = bool(verifier(envelope, output))
-
-                # Force JSON-compatible output at the attestation boundary.
                 output_digest = _digest(output)
-
-                if self._adapter is not None:
-                    agent_id = str(
-                        getattr(self._adapter, "agent_id", "executor")
-                    )
-                else:
-                    agent_id = "executor"
-
-                if self._attestation_signer is not None:
-                    public_key = getattr(
-                        self._attestation_signer,
-                        "public_key_bytes",
-                        None,
-                    )
-                else:
-                    public_key = None
-
-                if isinstance(public_key, bytes):
-                    fingerprint = hashlib.sha256(
-                        public_key
-                    ).hexdigest()
-                else:
-                    fingerprint = hashlib.sha256(
-                        b"legacy-executor"
-                    ).hexdigest()
-
-                attestation = Attestation(
-                    context.execution_id,
-                    context.principal_id,
-                    plan_step.step_id,
-                    agent_id,
-                    fingerprint,
-                    action_digest,
-                    output_digest,
-                    verified,
-                    "verified" if verified else "verification_failed",
-                    previous_attestation_digest=previous_attestation_digest,
-                    runtime_id=self._runtime_id,
-                )
-
-                if self._attestation_signer is not None:
-                    attestation = signed_attestation(
-                        attestation,
-                        self._attestation_signer,
-                    )
-
+                agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
+                public_key = getattr(self._attestation_signer, "public_key_bytes", None) if self._attestation_signer is not None else None
+                fingerprint = hashlib.sha256(public_key).hexdigest() if isinstance(public_key, bytes) else hashlib.sha256(b"legacy-executor").hexdigest()
+                attestation = Attestation(context.execution_id, context.principal_id, plan_step.step_id, agent_id, fingerprint, action_digest, output_digest, verified, "verified" if verified else "verification_failed", previous_attestation_digest=previous_attestation_digest, runtime_id=self._runtime_id)
+                if self._attestation_signer is not None: attestation = signed_attestation(attestation, self._attestation_signer)
             except Exception as exc:
-                # Reservation intentionally remains if dispatch/commit has
-                # crossed the side-effect boundary. This is required for
-                # re-execution protection.
-                return self._result(
-                    lifecycle,
-                    ExecutionStatus.FAILED,
-                    attestations,
-                    outputs,
-                    type(exc).__name__,
-                )
-
-            # ----------------------------
-            # Verification rejection
-            # ----------------------------
-            if not verified:
-                return self._result(
-                    lifecycle,
-                    ExecutionStatus.REJECTED,
-                    (*attestations, attestation),
-                    outputs,
-                    "result_verification_failed",
-                )
-
-            # Adapter-backed execution requires cryptographic attestation.
-            if (
-                self._adapter is not None
-                and not attestation.signature
-            ):
-                return self._result(
-                    lifecycle,
-                    ExecutionStatus.FAILED,
-                    attestations,
-                    outputs,
-                    "unsigned_attestation",
-                )
-
-            # ----------------------------
-            # Commit boundary
-            # ----------------------------
+                if self._state_journal is not None and reservation is not None and not dispatched:
+                    try: self._state_journal.restore_reservation(reservation)
+                    except Exception as restore_exc: raise RuntimeError("reservation_restore_failed") from restore_exc
+                return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
+            if not verified: return self._result(lifecycle, ExecutionStatus.REJECTED, (*attestations, attestation), outputs, "result_verification_failed")
+            if self._adapter is not None and not attestation.signature: return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, "unsigned_attestation")
             try:
-                if self._state_journal is not None:
-                    self._state_journal.append(attestation)
-
-                if committer is not None:
-                    committer(
-                        envelope,
-                        attestation,
-                        output,
-                    )
-
+                if self._state_journal is not None: self._state_journal.append(attestation)
+                if committer is not None: committer(envelope, attestation, output)
             except Exception as exc:
-                # The journal append consumes the reservation. If the
-                # external commit boundary fails afterwards, restore the
-                # exact pre-dispatch reservation so the execution step
-                # remains permanently blocked from re-dispatch.
                 if self._state_journal is not None and reservation is not None:
-                    try:
-                        self._state_journal.restore_reservation(reservation)
-                    except Exception as restore_exc:
-                        # Losing the reservation after journal consumption would
-                        # reopen the execution step for duplicate dispatch. Fail closed.
-                        raise RuntimeError("reservation_restore_failed") from restore_exc
-                return self._result(
-                    lifecycle,
-                    ExecutionStatus.FAILED,
-                    attestations,
-                    outputs,
-                    type(exc).__name__,
-                )
-
-            attestations.append(attestation)
-            outputs.append(output)
-
-            if attestation.signature:
-                previous_attestation_digest = attestation_digest(
-                    attestation
-                )
-
-        return self._result(
-            lifecycle,
-            ExecutionStatus.SUCCEEDED,
-            attestations,
-            outputs,
-        )
-
+                    try: self._state_journal.restore_reservation(reservation)
+                    except Exception as restore_exc: raise RuntimeError("reservation_restore_failed") from restore_exc
+                return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
+            attestations.append(attestation); outputs.append(output)
+            if attestation.signature: previous_attestation_digest = attestation_digest(attestation)
+        return self._result(lifecycle, ExecutionStatus.SUCCEEDED, attestations, outputs)
     @staticmethod
     def _topological_order(steps: Iterable[PlanStep]) -> tuple[PlanStep, ...]: return tuple(item.step for item in Scheduler().schedule(tuple(steps)))
