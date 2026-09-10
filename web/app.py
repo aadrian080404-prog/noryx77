@@ -9,8 +9,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
+from core.limits import RuntimeLimits
 from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 from core.operational_runtime import OperationalNORYXRuntime
+from core.user_understanding import UnderstandingConsent, UserUnderstandingEngine
 from gateway.auth import SessionError
 from gateway.server import NoryxGateway
 from gateway.runtime_adapter import RuntimeAdapter
@@ -38,15 +40,32 @@ class GatewayExecuteRequest(BaseModel):
     execution_id: str | None = None
 
 
+def _operational_limits() -> RuntimeLimits:
+    raw = os.environ.get("NORYX7_MAX_TASK_SECONDS", "120.0")
+    try:
+        seconds = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("NORYX7_MAX_TASK_SECONDS is invalid") from exc
+    return RuntimeLimits(max_task_seconds=seconds)
+
+
 @lru_cache(maxsize=1)
 def get_runtime() -> OperationalNORYXRuntime:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY is not configured")
-    adapter = OpenRouterAdapter(api_key=api_key)
+    adapter = OpenRouterAdapter(api_key=api_key, timeout_seconds=120.0)
     fabric = ModelFabric([adapter], runtime_id=f"api-{uuid.uuid4().hex}")
     journal_path = os.environ.get("NORYX7_STATE_JOURNAL_PATH") or None
-    return OperationalNORYXRuntime(model_fabric=fabric, state_journal_path=journal_path)
+    understanding = UserUnderstandingEngine(
+        consent=UnderstandingConsent.PRE_INTERACTION,
+    )
+    return OperationalNORYXRuntime(
+        limits=_operational_limits(),
+        model_fabric=fabric,
+        state_journal_path=journal_path,
+        user_understanding=understanding,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -85,7 +104,7 @@ def robots():
 @app.get("/sitemap.xml", include_in_schema=False)
 def sitemap(request: Request):
     base = str(request.base_url).rstrip("/")
-    content = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + f'<url><loc>{base}/</loc></url></urlset>'
+    content = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + f"<url><loc>{base}/</loc></url></urlset>"
     return Response(content=content, media_type="application/xml")
 
 
