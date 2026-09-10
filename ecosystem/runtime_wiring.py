@@ -67,12 +67,20 @@ class RuntimeWiring:
             handler=lambda: self._adapters[target].invoke(operation, payload, execution_id),
         )
 
-    def invoke(self, intent: IntentEnvelope, *, execution_id: str) -> DispatchResult:
+    def invoke(self, intent: IntentEnvelope, *, execution_id: str, payload: bytes | None = None) -> DispatchResult:
+        """Invoke an intent while preserving the original payload digest.
+
+        A digest-only envelope cannot be reversed into the original payload; for
+        non-orchestration targets the caller must provide the original bytes and
+        they must match the envelope digest exactly.
+        """
         if not isinstance(intent, IntentEnvelope):
             raise TypeError("intent_required")
         if not isinstance(execution_id, str) or not execution_id.strip():
             raise ValueError("invalid_execution_id")
         if intent.front is Front.ORCHESTRATION:
+            if payload not in (None, b""):
+                raise ValueError("orchestration_payload_must_be_empty")
             return dispatch(
                 intent,
                 source=Front.ORCHESTRATION,
@@ -80,4 +88,14 @@ class RuntimeWiring:
                 execution_id=execution_id,
                 handler=lambda: self._adapters[Front.ORCHESTRATION].invoke(intent.operation, b"", execution_id),
             )
-        return self.invoke_target(intent.front, intent.operation, intent.payload_digest.encode("ascii"), execution_id=execution_id)
+        if not isinstance(payload, bytes):
+            raise ValueError("original_payload_required")
+        if sha256(payload).hexdigest() != intent.payload_digest:
+            raise PermissionError("intent_payload_digest_mismatch")
+        return dispatch(
+            intent,
+            source=Front.ORCHESTRATION,
+            target=intent.front,
+            execution_id=execution_id,
+            handler=lambda: self._adapters[intent.front].invoke(intent.operation, payload, execution_id),
+        )
