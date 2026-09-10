@@ -16,7 +16,7 @@ from ecosystem.global_fabric import (
     IdentityAuthorization,
     MemoryLevel,
 )
-from .identity import AgentIdentity
+from .identity import AgentIdentity, IdentityRegistry
 from .system_identity import CANONICAL_SYSTEM_IDENTITY
 
 
@@ -25,9 +25,12 @@ class CanonicalSystemFabric:
 
     POLICY_NAMESPACE = "NORYX7:canonical-system-fabric:v1"
 
-    def __init__(self) -> None:
+    def __init__(self, *, identity_registry: IdentityRegistry | None = None) -> None:
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise TypeError("invalid_identity_registry")
         self.memory = GlobalMemoryFabric()
         self.identity = GlobalIdentityAuthorizationFabric()
+        self.identity_registry = identity_registry
         self.policy_digest = sha256(self.POLICY_NAMESPACE.encode("utf-8")).hexdigest()
 
     @staticmethod
@@ -56,11 +59,15 @@ class CanonicalSystemFabric:
     def bind_agent_identity(self, identity: AgentIdentity, *, capabilities: tuple[str, ...] = ("execute",)) -> IdentityAuthorization:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
+        if self.identity_registry is not None and not self.identity_registry.is_trusted(identity):
+            raise PermissionError("agent_identity_not_trusted")
         if not isinstance(capabilities, tuple) or not capabilities:
             raise ValueError("invalid_agent_capabilities")
         return self.bind_session(session_id=self.agent_session_id(identity), client_id=identity.agent_id, device_id="agent-runtime", role="agent", capabilities=capabilities)
 
     def authorize_agent(self, identity: AgentIdentity, capability: str) -> IdentityAuthorization:
+        if self.identity_registry is not None and not self.identity_registry.is_trusted(identity):
+            raise PermissionError("agent_identity_not_trusted")
         return self.authorize(self.agent_session_id(identity), capability)
 
     def authorize(self, session_id: str, capability: str) -> IdentityAuthorization:
@@ -74,16 +81,7 @@ class CanonicalSystemFabric:
             raise ValueError("invalid_provenance_metadata") from exc
         return sha256(canonical.encode("utf-8")).hexdigest()
 
-    def record_execution(
-        self,
-        *,
-        execution_id: str,
-        client_id: str,
-        phase: str,
-        metadata: Any,
-        level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED,
-        runtime_id: str | None = None,
-    ):
+    def record_execution(self, *, execution_id: str, client_id: str, phase: str, metadata: Any, level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED, runtime_id: str | None = None):
         if not all(isinstance(value, str) and value.strip() for value in (execution_id, client_id, phase)):
             raise ValueError("invalid_execution_binding")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id.strip()):
