@@ -73,7 +73,12 @@ class ModelFabricBridge:
         model = next((item for item in self._fabric._models if item.name == selected_model), None)
         if model is None:
             raise RuntimeError("model_fabric_selected_model_missing")
-        provider = "openrouter" if "openrouter" in model.capabilities else ("gemini" if "gemini" in model.capabilities else "unknown")
+        provider = (
+            "groq" if "groq" in model.capabilities
+            else "openrouter" if "openrouter" in model.capabilities
+            else "gemini" if "gemini" in model.capabilities
+            else "unknown"
+        )
         self.last_execution_metadata = {
             "provider": provider,
             "model": selected_model,
