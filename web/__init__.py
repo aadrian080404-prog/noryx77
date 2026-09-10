@@ -61,6 +61,70 @@ _RUNTIME_STATUS_PATCH = """
 """
 
 
+_BROWSER_BEHAVIOR_PATCH = """
+<script>
+(() => {
+  const style = document.createElement('style');
+  style.textContent = `
+    html, body { height: 100%; }
+    body { overflow: hidden; }
+    .app { height: 100dvh; min-height: 0; }
+    .main { min-height: 0; }
+    .workspace {
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior-y: contain;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chat { min-height: 0; }
+  `;
+  document.head.appendChild(style);
+
+  // The original chat renderer always jumps to the bottom after every message.
+  // Preserve the reader's position unless they were already near the bottom.
+  const originalAdd = window.add;
+  if (typeof originalAdd === 'function') {
+    window.add = function(text, kind, meta) {
+      const workspace = document.getElementById('workspace');
+      const before = workspace ? workspace.scrollTop : 0;
+      const nearBottom = workspace
+        ? workspace.scrollHeight - workspace.scrollTop - workspace.clientHeight < 96
+        : true;
+      const result = originalAdd.apply(this, arguments);
+      if (workspace && !nearBottom) {
+        requestAnimationFrame(() => { workspace.scrollTop = before; });
+      }
+      return result;
+    };
+  }
+
+  // Replace the browser's generic execution failure with a stable, user-facing
+  // explanation when an existing high-risk capability is not configured.
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init) {
+    const response = await originalFetch(input, init);
+    try {
+      const url = typeof input === 'string' ? input : input?.url || '';
+      if (url.endsWith('/api/chat') && !response.ok) {
+        const clone = response.clone();
+        const payload = await clone.json().catch(() => ({}));
+        const detail = String(payload.detail || '');
+        if (detail.includes('execution_failure') || detail.includes('web_gateway_runtime_failure')) {
+          return new Response(JSON.stringify({
+            detail: 'runtime_execution_failed: verifica provider, autorizzazione o capability configurata'
+          }), { status: response.status, headers: {'Content-Type':'application/json'} });
+        }
+      }
+    } catch (_) {}
+    return response;
+  };
+})();
+</script>
+"""
+
+
 def _serve_file(path, *args, **kwargs):
     if Path(path).resolve() == _INDEX.resolve():
         html = _INDEX.read_text(encoding="utf-8")
@@ -68,7 +132,7 @@ def _serve_file(path, *args, **kwargs):
             script = _UI.read_text(encoding="utf-8")
             marker = '<script src="/ui_enhancements.js"></script>'
             if marker not in html:
-                html = html.replace("</body>", f"<script>{script}</script>\n<style>.top #clear:before{{content:'+' !important;border:0 !important;width:auto !important;height:auto !important;box-shadow:none !important;font-size:22px !important;line-height:1 !important;color:#cfe0ff !important}}.top #clear:after{{display:none !important}}</style>\n{_RUNTIME_STATUS_PATCH}\n</body>", 1)
+                html = html.replace("</body>", f"<script>{script}</script>\n<style>.top #clear:before{{content:'+' !important;border:0 !important;width:auto !important;height:auto !important;box-shadow:none !important;font-size:22px !important;line-height:1 !important;color:#cfe0ff !important}}.top #clear:after{{display:none !important}}</style>\n{_RUNTIME_STATUS_PATCH}\n{_BROWSER_BEHAVIOR_PATCH}\n</body>", 1)
         return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
     return _ORIGINAL_FILE_RESPONSE(path, *args, **kwargs)
 
