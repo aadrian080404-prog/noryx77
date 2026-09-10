@@ -7,6 +7,7 @@ global fabric digest-only: raw user/task payloads are never persisted here.
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 from typing import Any
 
 from ecosystem.global_fabric import (
@@ -42,96 +43,44 @@ class CanonicalSystemFabric:
         fingerprint = sha256(identity.public_key).hexdigest()
         return "agent:" + identity.agent_id + ":" + fingerprint
 
-    def bind_session(
-        self,
-        *,
-        session_id: str,
-        client_id: str,
-        device_id: str = "gateway",
-        role: str = "client",
-        capabilities: tuple[str, ...] = ("execute", "memory:write"),
-    ) -> IdentityAuthorization:
+    def bind_session(self, *, session_id: str, client_id: str, device_id: str = "gateway", role: str = "client", capabilities: tuple[str, ...] = ("execute", "memory:write")) -> IdentityAuthorization:
         if not all(isinstance(value, str) and value.strip() for value in (session_id, client_id, device_id, role)):
             raise ValueError("invalid_session_binding")
         if not isinstance(capabilities, tuple) or not capabilities:
             raise ValueError("invalid_session_capabilities")
-        authorization_digest = sha256(
-            (f"{session_id}|{client_id}|{device_id}|{role}|{','.join(capabilities)}|{self.policy_digest}").encode("utf-8")
-        ).hexdigest()
-        authorization = IdentityAuthorization(
-            identity_id=client_id,
-            session_id=session_id,
-            device_id=device_id,
-            role=role,
-            capabilities=capabilities,
-            policy_digest=self.policy_digest,
-            authorization_digest=authorization_digest,
-        )
+        authorization_digest = sha256((f"{session_id}|{client_id}|{device_id}|{role}|{','.join(capabilities)}|{self.policy_digest}").encode("utf-8")).hexdigest()
+        authorization = IdentityAuthorization(identity_id=client_id, session_id=session_id, device_id=device_id, role=role, capabilities=capabilities, policy_digest=self.policy_digest, authorization_digest=authorization_digest)
         self.identity.bind(authorization)
         return authorization
 
-    def bind_agent_identity(
-        self,
-        identity: AgentIdentity,
-        *,
-        capabilities: tuple[str, ...] = ("execute",),
-    ) -> IdentityAuthorization:
-        """Bind a cryptographically well-formed agent to the global identity fabric.
-
-        This records identity/capability membership without granting authority to
-        the agent implicitly: callers still need an explicit capability check.
-        The public-key fingerprint makes key replacement produce a distinct binding.
-        """
+    def bind_agent_identity(self, identity: AgentIdentity, *, capabilities: tuple[str, ...] = ("execute",)) -> IdentityAuthorization:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
         if not isinstance(capabilities, tuple) or not capabilities:
             raise ValueError("invalid_agent_capabilities")
-        session_id = self.agent_session_id(identity)
-        return self.bind_session(
-            session_id=session_id,
-            client_id=identity.agent_id,
-            device_id="agent-runtime",
-            role="agent",
-            capabilities=capabilities,
-        )
+        return self.bind_session(session_id=self.agent_session_id(identity), client_id=identity.agent_id, device_id="agent-runtime", role="agent", capabilities=capabilities)
 
     def authorize_agent(self, identity: AgentIdentity, capability: str) -> IdentityAuthorization:
-        """Require a previously bound agent identity and explicit capability."""
         return self.authorize(self.agent_session_id(identity), capability)
 
     def authorize(self, session_id: str, capability: str) -> IdentityAuthorization:
         return self.identity.authorize(session_id, capability, self.policy_digest)
 
-    def record_execution(
-        self,
-        *,
-        execution_id: str,
-        client_id: str,
-        phase: str,
-        metadata: Any,
-        level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED,
-    ):
+    @staticmethod
+    def _metadata_digest(metadata: Any) -> str:
+        try:
+            canonical = json.dumps(metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        except Exception as exc:
+            raise ValueError("invalid_provenance_metadata") from exc
+        return sha256(canonical.encode("utf-8")).hexdigest()
+
+    def record_execution(self, *, execution_id: str, client_id: str, phase: str, metadata: Any, level: MemoryLevel = MemoryLevel.L3_DISTRIBUTED):
         if not all(isinstance(value, str) and value.strip() for value in (execution_id, client_id, phase)):
             raise ValueError("invalid_execution_binding")
-        payload = repr(metadata).encode("utf-8")
-        provenance = (
-            f"{CANONICAL_SYSTEM_IDENTITY.system_id}|"
-            f"{CANONICAL_SYSTEM_IDENTITY.creator}|{client_id}|{execution_id}|{phase}"
-        ).encode("utf-8")
-        return self.memory.put(
-            record_id=f"execution:{execution_id}:{phase}",
-            level=level,
-            payload=payload,
-            provenance=provenance,
-            replicas=("runtime", "gateway"),
-        )
+        metadata_digest = self._metadata_digest(metadata)
+        payload = f"metadata_digest={metadata_digest}".encode("ascii")
+        provenance = (f"{CANONICAL_SYSTEM_IDENTITY.system_id}|{CANONICAL_SYSTEM_IDENTITY.creator}|{client_id}|{execution_id}|{phase}").encode("utf-8")
+        return self.memory.put(record_id=f"execution:{execution_id}:{phase}", level=level, payload=payload, provenance=provenance, replicas=("runtime", "gateway"))
 
     def health(self) -> dict[str, Any]:
-        return {
-            "system_id": CANONICAL_SYSTEM_IDENTITY.system_id,
-            "creator": CANONICAL_SYSTEM_IDENTITY.creator,
-            "provenance": CANONICAL_SYSTEM_IDENTITY.provenance,
-            "policy_digest": self.policy_digest,
-            "global_memory_records": len(self.memory.snapshot()),
-            "global_identity_bindings": len(self.identity.snapshot()),
-        }
+        return {"system_id": CANONICAL_SYSTEM_IDENTITY.system_id, "creator": CANONICAL_SYSTEM_IDENTITY.creator, "provenance": CANONICAL_SYSTEM_IDENTITY.provenance, "policy_digest": self.policy_digest, "global_memory_records": len(self.memory.snapshot()), "global_identity_bindings": len(self.identity.snapshot())}
