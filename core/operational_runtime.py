@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from uuid import uuid4
+
 from .actions import AuthorizationAuthority
 from .agent_runtime import AgentRuntime
 from .identity import AgentIdentity
@@ -54,7 +57,8 @@ class OperationalNORYXRuntime(NORYXRuntime):
     def run_hypersynth(self, task, interaction_context=None):
         execution_id = getattr(task, "execution_id", None)
         if not isinstance(execution_id, str) or not execution_id:
-            return super().run_hypersynth(task, interaction_context=interaction_context)
+            execution_id = uuid4().hex
+            task = replace(task, execution_id=execution_id)
         self._record_canonical_execution(execution_id=execution_id, phase="runtime_received", metadata={"task_id": getattr(task, "task_id", ""), "task_type": getattr(task, "task_type", "")})
         result = super().run_hypersynth(task, interaction_context=interaction_context)
         if isinstance(result, dict) and result.get("status") == "completed":
