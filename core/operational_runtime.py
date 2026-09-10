@@ -16,10 +16,22 @@ class OperationalNORYXRuntime(NORYXRuntime):
 
     REQUIRED_AGENT_IDS = frozenset({"noryx7-llm", "noryx7-secondary"})
 
-    def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None):
+    def __init__(
+        self,
+        limits=None,
+        *,
+        state_journal_path=None,
+        model_fabric=None,
+        user_understanding=None,
+    ):
         if model_fabric is None:
             raise ValueError("model_fabric_required_for_operational_agents")
-        super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric)
+        super().__init__(
+            limits,
+            state_journal_path=state_journal_path,
+            model_fabric=model_fabric,
+            user_understanding=user_understanding,
+        )
         self.system_fabric = CanonicalSystemFabric()
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
@@ -48,6 +60,57 @@ class OperationalNORYXRuntime(NORYXRuntime):
             required_agents=tuple(sorted(self.REQUIRED_AGENT_IDS)),
             operational_fabric=tuple(sorted(fabric_ids)),
         )
+
+    def _record_canonical_execution(self, *, execution_id: str, phase: str, metadata) -> None:
+        self.system_fabric.record_execution(
+            execution_id=execution_id,
+            client_id="noryx7-runtime",
+            phase=phase,
+            metadata=metadata,
+        )
+        self.audit.record(
+            f"canonical_system_execution_{phase}",
+            execution_id=execution_id,
+            phase=phase,
+        )
+
+    def run_hypersynth(self, task, interaction_context=None):
+        execution_id = getattr(task, "execution_id", None)
+        if not isinstance(execution_id, str) or not execution_id:
+            return super().run_hypersynth(task, interaction_context=interaction_context)
+
+        self._record_canonical_execution(
+            execution_id=execution_id,
+            phase="runtime_received",
+            metadata={
+                "task_id": getattr(task, "task_id", ""),
+                "task_type": getattr(task, "task_type", ""),
+            },
+        )
+        result = super().run_hypersynth(
+            task,
+            interaction_context=interaction_context,
+        )
+        if isinstance(result, dict) and result.get("status") == "completed":
+            self._record_canonical_execution(
+                execution_id=execution_id,
+                phase="runtime_committed",
+                metadata={
+                    "task_id": getattr(task, "task_id", ""),
+                    "verified": True,
+                    "orchestration_stage": result.get("orchestration_stage", ""),
+                },
+            )
+        elif isinstance(result, dict):
+            self._record_canonical_execution(
+                execution_id=execution_id,
+                phase="runtime_rejected",
+                metadata={
+                    "task_id": getattr(task, "task_id", ""),
+                    "reason": result.get("reason", "runtime_rejected"),
+                },
+            )
+        return result
 
     def configure_jarvis_bridge(
         self,
