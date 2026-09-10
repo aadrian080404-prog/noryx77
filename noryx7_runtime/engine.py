@@ -117,6 +117,7 @@ class RuntimeEngine:
             envelope = ActionEnvelope(context.execution_id, context.principal_id, plan_step.step_id, plan_step.action_type, plan_step.target, dict(plan_step.parameters), uuid4().hex)
             reservation = None
             dispatched = False
+            journal_appended = False
             try:
                 action_digest = _digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters, "nonce": envelope.nonce})
                 authorization_statement = bytes.fromhex(_digest({"execution_id": envelope.execution_id, "principal_id": envelope.principal_id, "step_id": envelope.step_id, "action_type": envelope.action_type, "target": envelope.target, "parameters": envelope.parameters}))
@@ -141,10 +142,18 @@ class RuntimeEngine:
             if not verified: return self._result(lifecycle, ExecutionStatus.REJECTED, (*attestations, attestation), outputs, "result_verification_failed")
             if self._adapter is not None and not attestation.signature: return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, "unsigned_attestation")
             try:
-                if self._state_journal is not None: self._state_journal.append(attestation)
+                if self._state_journal is not None:
+                    self._state_journal.append(attestation)
+                    journal_appended = True
                 if committer is not None: committer(envelope, attestation, output)
             except Exception as exc:
-                if self._state_journal is not None and reservation is not None:
+                # Once the attestation has been appended, the journal is the
+                # durable evidence that dispatch+verification occurred.  Do
+                # not recreate a reservation for that same key: it would
+                # conflict with the committed journal entry and make recovery
+                # state internally inconsistent.  A reservation is restored
+                # only when failure happened before the journal append.
+                if self._state_journal is not None and reservation is not None and not journal_appended:
                     try: self._state_journal.restore_reservation(reservation)
                     except Exception as restore_exc: raise RuntimeError("reservation_restore_failed") from restore_exc
                 return self._result(lifecycle, ExecutionStatus.FAILED, attestations, outputs, type(exc).__name__)
