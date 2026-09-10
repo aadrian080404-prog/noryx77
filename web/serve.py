@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__
 
 import os
 import sys
@@ -28,7 +28,7 @@ web_app.INDEX_FILE = build_ui_index(SOURCE, TARGET)
 # The package bootstrap wraps FileResponse for the canonical index path. The
 # production server intentionally serves a transformed copy, so point the
 # bootstrap at that same copy; otherwise runtime status, scrolling and UI
-enhancements are silently bypassed in production.
+# enhancements are silently bypassed in production.
 web_package._INDEX = Path(web_app.INDEX_FILE)
 
 # Browser/System Protocol and the existing web API use the same cached gateway
