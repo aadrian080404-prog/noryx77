@@ -1,13 +1,14 @@
 """Bounded divergent cognition primitives for NORYX7.
 
 This is an architectural reasoning mode, not a claim to reproduce a clinical
-neurotype. It deliberately explores multiple independent paths, source types,
-and cross-domain patterns before selecting a bounded execution plan.
+neurotype. It explores multiple independent paths, source types, and patterns
+while remaining bounded and non-authoritative.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+from typing import Any, Callable
 
 from .contracts import TaskSpec, VerificationResult
 from .pattern_neural import PatternNeuralNetwork
@@ -32,13 +33,23 @@ class BranchingAssessment:
 
 
 class BranchingCognitionEngine:
-    """Create bounded alternative lenses without exposing private reasoning traces."""
+    """Create bounded alternative lenses using optional authorized evidence."""
 
     LENSES = ("direct", "analogical", "adversarial", "systems", "cross_domain")
     SOURCE_CLASSES = ("direct_evidence", "historical", "structural", "counterexample", "cross_domain")
 
-    def __init__(self, neural_network: PatternNeuralNetwork | None = None) -> None:
+    def __init__(self, neural_network: PatternNeuralNetwork | None = None, source_provider: Callable[[TaskSpec], Any] | None = None) -> None:
         self.neural_network = neural_network or PatternNeuralNetwork()
+        self.source_provider = source_provider
+
+    def _authorized_sources(self, task: TaskSpec) -> tuple[Any, ...]:
+        if self.source_provider is None:
+            return ()
+        try:
+            sources = tuple(self.source_provider(task))
+        except Exception:
+            return ()
+        return tuple(item for item in sources if getattr(item, "access_status", "") in {"authorized", "metadata_only"})
 
     def explore(self, task: TaskSpec, *, max_branches: int = 5) -> BranchingAssessment:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
@@ -48,15 +59,23 @@ class BranchingCognitionEngine:
         text = f"{task.task_type} {task.objective} {task.input or ''}".lower()
         tags = self._patterns(text)
         neural = tuple(item.label for item in self.neural_network.recognize_text(text) if item.score >= 0.55)
+        sources = self._authorized_sources(task)
+        source_types = tuple(dict.fromkeys(str(getattr(source, "source_type", "direct_evidence")) for source in sources))
+        source_disciplines = tuple(dict.fromkeys(str(getattr(source, "discipline", "")) for source in sources if getattr(source, "discipline", "")))
+        evidence_context = tuple(source_types[:4])
         branches = []
         for index, lens in enumerate(self.LENSES[:max_branches]):
-            source = (self.SOURCE_CLASSES[index], self.SOURCE_CLASSES[(index + 1) % len(self.SOURCE_CLASSES)])
+            fallback = (self.SOURCE_CLASSES[index], self.SOURCE_CLASSES[(index + 1) % len(self.SOURCE_CLASSES)])
+            source = evidence_context[:2] if len(evidence_context) >= 2 else fallback
+            if len(source) == 1:
+                source = (source[0], self.SOURCE_CLASSES[(index + 1) % len(self.SOURCE_CLASSES)])
             digest = sha256(f"{task.task_id}|{lens}|{task.objective}".encode()).hexdigest()[:16]
+            evidence_label = ",".join(source_disciplines[:3]) or "no_authorized_source"
             branches.append(CognitiveBranch(
                 branch_id=f"{task.task_id}:branch:{digest}",
                 lens=lens,
-                hypothesis=f"evaluate:{lens}:{task.objective[:240]}",
-                source_classes=source,
+                hypothesis=f"evaluate:{lens}:{task.objective[:240]}|evidence={evidence_label}",
+                source_classes=tuple(source),
                 pattern_tags=tags + neural,
             ))
         diversity = len({source for branch in branches for source in branch.source_classes})
@@ -64,7 +83,7 @@ class BranchingCognitionEngine:
             bool(branches) and diversity >= 3,
             "branching_cognition",
             "branch_set_ok" if branches and diversity >= 3 else "insufficient_source_diversity",
-            (f"branches={len(branches)}", f"source_diversity={diversity}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}"),
+            (f"branches={len(branches)}", f"source_diversity={diversity}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}", f"authorized_sources={len(sources)}"),
         )
         return BranchingAssessment(tuple(branches), diversity, len(tags), neural, check)
 
