@@ -73,6 +73,7 @@ class AgentResult:
     output: Any = None
     verification: VerificationResult | None = None
     execution_id: str = ""
+    agent_key_fingerprint: str = ""
 
     def is_well_formed(self) -> bool:
         return (
@@ -81,4 +82,5 @@ class AgentResult:
             and isinstance(self.status, str) and bool(self.status.strip())
             and (self.verification is None or isinstance(self.verification, VerificationResult))
             and isinstance(self.execution_id, str) and len(self.execution_id.encode("utf-8")) <= 256
+            and isinstance(self.agent_key_fingerprint, str) and len(self.agent_key_fingerprint) <= 128
         )
