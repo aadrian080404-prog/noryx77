@@ -61,6 +61,8 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
+        effective_runtime_id = runtime_id or uuid4().hex
+        if state_journal is not None and state_journal.runtime_id not in (None, effective_runtime_id): raise ValueError("state journal runtime identity mismatch")
         owns_replay_guard = False
         if high_risk_action_types and replay_guard is None:
             if multi_auth_authority is not None and multi_auth_authority.required_threshold == 1:
@@ -75,10 +77,9 @@ class RuntimeEngine:
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
             if not identity_registry.is_trusted(AgentIdentity(str(adapter.agent_id), public_key)): raise PermissionError("adapter identity is not trusted")
         self._max_actions, self._clock = max_actions, clock; self._scheduler, self._adapter = scheduler or Scheduler(), adapter
-        self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = runtime_id or uuid4().hex
+        self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = effective_runtime_id
         self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard; self._owns_replay_guard = owns_replay_guard
         self._dispatch_evidence = DurableDispatchEvidenceStore(state_journal.persistence_path) if state_journal is not None and state_journal.persistence_path is not None else None
-        if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
         self._closed = False
     @property
     def runtime_id(self) -> str: return self._runtime_id
