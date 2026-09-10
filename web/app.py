@@ -19,6 +19,7 @@ from gateway.gemini_service import GatewayGeminiService
 from gateway.server import NoryxGateway
 from gateway.runtime_adapter import RuntimeAdapter
 from noryx7_runtime.model_adapters.gemini import GeminiAdapter
+from noryx7_runtime.model_adapters.groq import GroqAdapter
 from noryx7_runtime.model_adapters.openrouter import OpenRouterAdapter
 from noryx7_runtime.model_fabric import ModelFabric
 
@@ -69,19 +70,24 @@ def _operational_limits() -> RuntimeLimits:
 
 def _model_adapters() -> list[object]:
     provider = os.environ.get("NORYX7_MODEL_PROVIDER", "auto").strip().lower()
-    if provider not in {"auto", "openrouter", "gemini", "both"}:
-        raise RuntimeError("NORYX7_MODEL_PROVIDER must be auto, openrouter, gemini or both")
+    if provider not in {"auto", "openrouter", "gemini", "both", "groq"}:
+        raise RuntimeError("NORYX7_MODEL_PROVIDER must be auto, openrouter, gemini, both or groq")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
     adapters: list[object] = []
+    if provider in {"auto", "groq"} and groq_key:
+        adapters.append(GroqAdapter(model=os.environ.get("NORYX7_GROQ_MODEL", "openai/gpt-oss-120b"), api_key=groq_key, timeout_seconds=120.0, app_name="NORYX7"))
     if provider in {"auto", "openrouter", "both"} and openrouter_key:
         adapters.append(OpenRouterAdapter(model=os.environ.get("NORYX7_OPENROUTER_MODEL", "openrouter/free"), api_key=openrouter_key, timeout_seconds=120.0, app_name="NORYX7"))
     if provider in {"auto", "gemini", "both"} and gemini_key:
         adapters.append(GeminiAdapter(model=os.environ.get("NORYX7_GEMINI_MODEL", "gemini-3.8-flash"), api_key=gemini_key, timeout_seconds=120.0, system_instruction=("You are NORYX7, a distributed AI runtime. Do not pretend to have capabilities that were not actually invoked. Respect the system's verification, authorization and provenance boundaries.")))
     if not adapters:
-        raise RuntimeError("no_model_provider_configured: set OPENROUTER_API_KEY and/or GEMINI_API_KEY")
+        raise RuntimeError("no_model_provider_configured: set GROQ_API_KEY, OPENROUTER_API_KEY and/or GEMINI_API_KEY")
     if provider == "openrouter" and not openrouter_key:
         raise RuntimeError("OPENROUTER_API_KEY is required for NORYX7_MODEL_PROVIDER=openrouter")
+    if provider == "groq" and not groq_key:
+        raise RuntimeError("GROQ_API_KEY is required for NORYX7_MODEL_PROVIDER=groq")
     if provider == "gemini" and not gemini_key:
         raise RuntimeError("GEMINI_API_KEY is required for NORYX7_MODEL_PROVIDER=gemini")
     if provider == "both" and (not openrouter_key or not gemini_key):

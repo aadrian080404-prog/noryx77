@@ -5,8 +5,8 @@ import json
 import os
 import re
 import ssl
-from html.parser import HTMLParser
 from html import unescape
+from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote_plus, unquote, urlsplit
 from urllib.request import Request, urlopen
 
