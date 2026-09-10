@@ -12,6 +12,9 @@ class RecoveryError(ValueError):
 
 
 class RuntimeRecovery:
+    _COMMIT_STATUSES = frozenset(("pending", "committed", "failed", "not_required"))
+    _TERMINAL_COMMIT_STATUSES = frozenset(("committed", "failed", "not_required"))
+
     def __init__(self, journal: StateJournal, verifier: AttestationVerifier | None = None, identity_registry: IdentityRegistry | None = None):
         if not isinstance(journal, StateJournal): raise TypeError("journal must be a StateJournal")
         effective_verifier = verifier if verifier is not None else journal.verifier
@@ -27,12 +30,13 @@ class RuntimeRecovery:
         self._validate(entries, self._verifier, self._identity_registry, self._journal.runtime_id)
         return entries
 
-    @staticmethod
-    def _validate(entries, verifier=None, identity_registry=None, runtime_id=None):
+    @classmethod
+    def _validate(cls, entries, verifier=None, identity_registry=None, runtime_id=None):
         previous_sequence, previous_digest = -1, "0" * 64
         seen_steps = set()
         for entry in entries:
             if not isinstance(entry, JournalEntry): raise RecoveryError("invalid journal entry")
+            if entry.external_commit_status not in cls._COMMIT_STATUSES: raise RecoveryError("invalid external commit status")
             if entry.step_id in seen_steps: raise RecoveryError("duplicate committed step")
             seen_steps.add(entry.step_id)
         for left, right in zip(entries, entries[1:]):
@@ -73,3 +77,10 @@ class RuntimeRecovery:
     def _verify_with_identity(identity, attestation, signature, verifier):
         if hashlib.sha256(identity.public_key).hexdigest() != attestation.agent_key_fingerprint: return False
         return bool(verifier.verify(attestation, signature))
+
+    @classmethod
+    def is_recoverable_for_commit(cls, entry: JournalEntry) -> bool:
+        """Only terminal successful/non-required entries may be treated as committed state."""
+        if not isinstance(entry, JournalEntry): raise TypeError("journal_entry_required")
+        if entry.external_commit_status not in cls._COMMIT_STATUSES: raise RecoveryError("invalid external commit status")
+        return entry.external_commit_status in cls._TERMINAL_COMMIT_STATUSES and entry.external_commit_status != "failed"
