@@ -6,7 +6,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .auth import SessionAuthority, SessionError
 from .runtime_adapter import RuntimeAdapter
-from core.system_fabric import CanonicalSystemFabric
 
 
 class NoryxGateway:
@@ -29,7 +28,10 @@ class NoryxGateway:
             browser_pairing_code=browser_pairing_code,
         )
         self.runtime = runtime_adapter or RuntimeAdapter()
-        self.system_fabric = getattr(self.runtime.runtime, "system_fabric", None) or CanonicalSystemFabric()
+        system_fabric = getattr(self.runtime.runtime, "system_fabric", None)
+        if system_fabric is None:
+            raise RuntimeError("runtime_system_fabric_required")
+        self.system_fabric = system_fabric
 
     def health(self) -> dict:
         statuses = self.runtime.runtime.heartbeat_agents()
