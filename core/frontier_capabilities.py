@@ -6,7 +6,7 @@ import os
 import re
 import ssl
 from html import unescape
-from urllib.parse import quote_plus, urlsplit
+from urllib.parse import parse_qs, quote_plus, unquote, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -35,6 +35,23 @@ class WebResearchCapability:
         title = WebResearchCapability._clean_text(match.group(1), limit=300) if match else ""
         return title or fallback
 
+    @staticmethod
+    def _resolve_search_url(href: str) -> str:
+        value = unescape(str(href or "").strip())
+        if value.startswith("https://"):
+            return value
+        if value.startswith("/"):
+            parsed = urlsplit("https://html.duckduckgo.com" + value)
+        else:
+            parsed = urlsplit(value)
+        redirected = parse_qs(parsed.query).get("uddg")
+        if redirected:
+            try:
+                value = unquote(redirected[0])
+            except Exception:
+                return ""
+        return value if value.startswith("https://") else ""
+
     def __call__(self, target: str, parameters: dict) -> dict:
         target_value = str(target or "").strip()
         explicit_url = str(parameters.get("url") or "").strip()
@@ -55,18 +72,21 @@ class WebResearchCapability:
         body = page.get("body", "")
         links = []
         seen_urls: set[str] = set()
-        for href, title in re.findall(
-            r'<a[^>]+class=["\'][^"\']*result__a[^"\']*["\'][^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
-            body,
-            re.I | re.S,
-        ):
-            clean_title = self._clean_text(title, limit=300)
-            if not clean_title or not href.startswith("https://") or href in seen_urls:
+        for tag in re.findall(r"(?is)<a\b[^>]*>.*?</a>", body):
+            if not re.search(r"(?i)\bresult__a\b", tag):
+                continue
+            href_match = re.search(r"(?is)\bhref\s*=\s*([\"'])(.*?)\1", tag)
+            if not href_match:
+                continue
+            href = self._resolve_search_url(href_match.group(2))
+            title_html = re.sub(r"(?is)^.*?>", "", tag, count=1)
+            title_html = re.sub(r"(?is)</a>\s*$", "", title_html)
+            clean_title = self._clean_text(title_html, limit=300)
+            if not clean_title or not href or href in seen_urls:
                 continue
             seen_urls.add(href)
             links.append({"title": clean_title, "url": href[:1000]})
 
-        # Keep the search page itself out of evidence and only admit actual HTTPS sources.
         evidence = []
         for item in links[:10]:
             try:
@@ -75,6 +95,8 @@ class WebResearchCapability:
                 continue
             source_body = source.get("body", "")
             clean_body = self._clean_text(source_body)
+            if not clean_body:
+                continue
             evidence.append({
                 "url": source["url"],
                 "title": self._source_title(source_body, item["title"]),
