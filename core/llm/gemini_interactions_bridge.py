@@ -10,11 +10,7 @@ from noryx7_runtime.model_adapters.gemini_interactions import GeminiInteractions
 
 
 class GeminiInteractionsBridge:
-    """Authorize and audit Gemini Interactions without bypassing NORYX7 policy.
-
-    Gemini remains a non-authoritative model provider. Function calls returned by
-    the provider are proposals only; this bridge never executes them directly.
-    """
+    """Authorize and audit Gemini Interactions without bypassing NORYX7 policy."""
 
     MODEL_EXECUTE_CAPABILITY = "model:execute"
 
@@ -51,21 +47,21 @@ class GeminiInteractionsBridge:
             metadata={"agent_id": self._agent_identity.agent_id, "provider": self._adapter.name, **metadata},
         )
 
-    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
+    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = (), previous_interaction_id: str | None = None) -> dict[str, Any]:
         self._authorize()
-        result = self._adapter.interact(parts, tools=tools)
+        result = self._adapter.interact(parts, tools=tools, previous_interaction_id=previous_interaction_id)
         if not isinstance(result, dict):
             raise RuntimeError("gemini_interactions_result_invalid")
         self._record("gemini_interaction_verified", {
             "request_digest": self._digest([part.as_payload() for part in parts]),
             "result_digest": self._digest(result),
+            "previous_interaction_id": previous_interaction_id,
             "interaction_id": result.get("id") or result.get("interaction", {}).get("id"),
             "function_calls_present": bool(self._adapter.extract_function_calls(result)),
         })
         return result
 
     def continue_after_verified_results(self, previous_interaction_id: str, function_results: Sequence[dict[str, Any]]) -> dict[str, Any]:
-        """Resume Gemini only with function results already executed by NORYX7."""
         self._authorize()
         result = self._adapter.continue_interaction(previous_interaction_id, function_results)
         if not isinstance(result, dict):
@@ -78,11 +74,20 @@ class GeminiInteractionsBridge:
         })
         return result
 
-    def stream(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> Iterable[dict[str, Any]]:
+    def stream(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = (), previous_interaction_id: str | None = None) -> Iterable[dict[str, Any]]:
         self._authorize()
         request_digest = self._digest([part.as_payload() for part in parts])
-        for event in self._adapter.stream(parts, tools=tools):
+        for event in self._adapter.stream(parts, tools=tools, previous_interaction_id=previous_interaction_id):
             if not isinstance(event, dict):
                 raise RuntimeError("gemini_interactions_stream_event_invalid")
-            self._record("gemini_stream_event", {"request_digest": request_digest, "event_digest": self._digest(event), "event_type": event.get("event_type", event.get("type", "unknown"))})
+            self._record("gemini_stream_event", {"request_digest": request_digest, "previous_interaction_id": previous_interaction_id, "event_digest": self._digest(event), "event_type": event.get("event_type", event.get("type", "unknown"))})
+            yield event
+
+    def stream_after_verified_results(self, previous_interaction_id: str, function_results: Sequence[dict[str, Any]]) -> Iterable[dict[str, Any]]:
+        self._authorize()
+        results_digest = self._digest(function_results)
+        for event in self._adapter.stream_function_results(previous_interaction_id, function_results):
+            if not isinstance(event, dict):
+                raise RuntimeError("gemini_interactions_continuation_event_invalid")
+            self._record("gemini_continuation_stream_event", {"previous_interaction_id": previous_interaction_id, "function_results_digest": results_digest, "event_digest": self._digest(event), "event_type": event.get("event_type", event.get("type", "unknown"))})
             yield event
