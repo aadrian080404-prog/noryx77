@@ -33,8 +33,8 @@ class MemoryRecord:
 
     @property
     def payload(self) -> bytes:
-        """Compatibility view containing only the payload digest, never raw data."""
-        return bytes.fromhex(self.payload_digest)
+        """Compatibility view exposing only the metadata digest, never raw payload."""
+        return b"metadata_digest=" + self.payload_digest.encode("ascii")
 
     def __post_init__(self) -> None:
         _id(self.record_id)
@@ -138,17 +138,12 @@ class GlobalIdentityAuthorizationFabric:
             raise TypeError("authorization_required")
         with self._lock:
             previous = self._entries.get(authorization.session_id)
-            if previous is not None and (
-                previous.identity_id != authorization.identity_id
-                or previous.device_id != authorization.device_id
-            ):
+            if previous is not None and (previous.identity_id != authorization.identity_id or previous.device_id != authorization.device_id):
                 raise PermissionError("session_identity_binding_mismatch")
             self._entries[authorization.session_id] = authorization
 
     def authorize(self, session_id: str, capability: str, policy_digest: str) -> IdentityAuthorization:
-        _id(session_id)
-        _id(capability)
-        _digest(policy_digest, "policy_digest")
+        _id(session_id); _id(capability); _digest(policy_digest, "policy_digest")
         with self._lock:
             authorization = self._entries.get(session_id)
             if authorization is None or authorization.policy_digest != policy_digest:
