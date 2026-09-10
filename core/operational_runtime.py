@@ -31,7 +31,7 @@ class OperationalNORYXRuntime(NORYXRuntime):
         if model_fabric is None:
             raise ValueError("model_fabric_required_for_operational_agents")
         super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric, user_understanding=user_understanding)
-        self.system_fabric = CanonicalSystemFabric()
+        self.system_fabric = CanonicalSystemFabric(identity_registry=self.identity_registry)
         self.router.system_fabric = self.system_fabric
         self.scientific_knowledge = ScientificKnowledgeFabric()
         self.scientific_fabric = ScientificFabric()
