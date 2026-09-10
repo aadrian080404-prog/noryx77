@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from core.contracts import TaskSpec
@@ -124,6 +125,28 @@ class RuntimeAdapter:
         if audit is not None:
             audit.record("gateway_execution_rejected", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=reason)
 
+    @staticmethod
+    def _answer_from_output(output, capability: str | None) -> str | None:
+        """Convert structured capability output to the gateway's string result contract."""
+        if isinstance(output, str):
+            return output.strip() or None
+        if capability != "web_research" or not isinstance(output, dict):
+            return None
+        evidence = output.get("evidence")
+        results = output.get("results")
+        item = evidence[0] if isinstance(evidence, list) and evidence else None
+        if not isinstance(item, dict):
+            item = results[0] if isinstance(results, list) and results and isinstance(results[0], dict) else None
+        if not isinstance(item, dict):
+            return None
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        domain = urlsplit(url).netloc
+        snippet = str(item.get("snippet") or "").strip()
+        if not title or not domain or not snippet:
+            return None
+        return f"Titolo: {title}\nDominio: {domain}\nSintesi: {snippet}"
+
     def execute(self, *, client_id, text, execution_id=None, session_id=None, capability=None, query=None):
         client_id = self._validate_client_id(client_id)
         session_id = self._validate_session_id(session_id)
@@ -163,11 +186,12 @@ class RuntimeAdapter:
         if result_task_id != task.task_id or result_execution_id != task.execution_id:
             self._reject(task, client_id, "runtime_result_identity_mismatch")
             raise PermissionError("runtime_result_identity_mismatch")
-        answer = result.get("result")
         kernel_results = result.get("results")
-        if answer is None and isinstance(kernel_results, (tuple, list)) and kernel_results:
-            answer = getattr(kernel_results[-1], "output", None)
-        if not isinstance(answer, str) or not answer.strip():
+        raw_answer = result.get("result")
+        if raw_answer is None and isinstance(kernel_results, (tuple, list)) and kernel_results:
+            raw_answer = getattr(kernel_results[-1], "output", None)
+        answer = self._answer_from_output(raw_answer, capability)
+        if answer is None:
             self._reject(task, client_id, "runtime_answer_invalid")
             raise RuntimeError("runtime_answer_invalid")
         verification = result.get("verification")
