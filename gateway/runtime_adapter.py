@@ -244,7 +244,13 @@ class RuntimeAdapter:
                     selected_agent = router.get(agent_id)
                     metadata = getattr(selected_agent, "last_model_execution", None)
                     if isinstance(metadata, dict):
-                        model_execution = {str(key): str(value) for key, value in metadata.items() if isinstance(key, str) and isinstance(value, str)}
+                        metadata_execution_id = str(metadata.get("execution_id") or "").strip()
+                        if metadata_execution_id == task.execution_id:
+                            model_execution = {str(key): str(value) for key, value in metadata.items() if isinstance(key, str) and isinstance(value, str)}
+                        elif metadata_execution_id:
+                            audit = getattr(self.runtime, "audit", None)
+                            if audit is not None:
+                                audit.record("gateway_stale_model_execution_metadata", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, agent_id=agent_id, stale_execution_id=metadata_execution_id)
                 except Exception:
                     model_execution = {}
         self._remember_output(task, answer, client_id)
