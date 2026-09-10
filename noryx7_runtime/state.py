@@ -8,6 +8,7 @@ from typing import Protocol
 from core.identity import IdentityRegistry
 from .attestation import attestation_digest
 from .contracts import Attestation
+from .state_persistence import DurableAttestationStore
 
 
 class AttestationVerifier(Protocol):
@@ -43,7 +44,6 @@ class StepReservation:
 @dataclass(frozen=True)
 class ExternalCommitEvent:
     """Immutable reconciliation evidence for an already-attested execution."""
-
     journal_sequence: int
     execution_id: str
     step_id: str
@@ -53,20 +53,24 @@ class ExternalCommitEvent:
 
 
 class StateJournal:
-    """Append-only commit boundary with authenticity and pre-dispatch idempotency reservation."""
+    """Append-only attestation boundary with optional durable crash recovery."""
 
     _COMMIT_STATUSES = frozenset(("pending", "committed", "failed", "not_required"))
 
     def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None,
-                 identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None) -> None:
+                 identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None,
+                 persistence_path: str | None = None) -> None:
         if not isinstance(require_signatures, bool): raise TypeError("require_signatures must be bool")
         if require_signatures and verifier is None: raise ValueError("signed journal requires an attestation verifier")
         if verifier is not None and not callable(getattr(verifier, "verify", None)): raise TypeError("verifier must expose verify")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry): raise TypeError("identity_registry must be an IdentityRegistry")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id): raise ValueError("runtime_id must be a non-empty string")
-        self._lock = RLock(); self._entries = []; self._keys = set(); self._principals = {}; self._reservations = {}
+        if persistence_path is not None and (not isinstance(persistence_path, str) or not persistence_path): raise ValueError("persistence_path must be a non-empty string")
+        self._lock = RLock(); self._entries: list[JournalEntry] = []; self._keys = set(); self._principals = {}; self._reservations = {}
         self._commit_events: list[ExternalCommitEvent] = []
         self._require_signatures = require_signatures; self._verifier = verifier; self._identity_registry = identity_registry; self._runtime_id = runtime_id
+        self._persistence = DurableAttestationStore(persistence_path) if persistence_path is not None else None
+        self._load_persistent_state()
 
     @property
     def verifier(self): return self._verifier
@@ -76,6 +80,70 @@ class StateJournal:
     def identity_registry(self): return self._identity_registry
     @property
     def runtime_id(self): return self._runtime_id
+    @property
+    def persistence_path(self) -> str | None: return self._persistence.path if self._persistence is not None else None
+
+    @staticmethod
+    def _entry_payload(entry: JournalEntry) -> dict:
+        return {"sequence": entry.sequence, "execution_id": entry.execution_id, "principal_id": entry.principal_id, "step_id": entry.step_id, "agent_id": entry.agent_id, "agent_key_fingerprint": entry.agent_key_fingerprint, "action_digest": entry.action_digest, "output_digest": entry.output_digest, "signature": entry.signature.hex(), "previous_attestation_digest": entry.previous_attestation_digest, "runtime_id": entry.runtime_id, "provenance_digest": entry.provenance_digest, "provenance_seal": entry.provenance_seal.hex(), "external_commit_status": entry.external_commit_status}
+
+    @staticmethod
+    def _event_payload(event: ExternalCommitEvent) -> dict:
+        return {"journal_sequence": event.journal_sequence, "execution_id": event.execution_id, "step_id": event.step_id, "action_digest": event.action_digest, "output_digest": event.output_digest, "status": event.status}
+
+    @staticmethod
+    def _reservation_payload(reservation: StepReservation) -> dict:
+        return {"execution_id": reservation.execution_id, "principal_id": reservation.principal_id, "step_id": reservation.step_id, "action_digest": reservation.action_digest}
+
+    @staticmethod
+    def _entry_from_payload(payload: dict) -> JournalEntry:
+        return JournalEntry(int(payload["sequence"]), str(payload["execution_id"]), str(payload["principal_id"]), str(payload["step_id"]), str(payload["agent_id"]), str(payload["agent_key_fingerprint"]), str(payload["action_digest"]), str(payload["output_digest"]), bytes.fromhex(payload["signature"]), str(payload["previous_attestation_digest"]), str(payload["runtime_id"]), str(payload["provenance_digest"]), bytes.fromhex(payload["provenance_seal"]), str(payload.get("external_commit_status", "pending")))
+
+    @staticmethod
+    def _event_from_payload(payload: dict) -> ExternalCommitEvent:
+        return ExternalCommitEvent(int(payload["journal_sequence"]), str(payload["execution_id"]), str(payload["step_id"]), str(payload["action_digest"]), str(payload["output_digest"]), str(payload["status"]))
+
+    @staticmethod
+    def _reservation_from_payload(payload: dict) -> StepReservation:
+        return StepReservation(str(payload["execution_id"]), str(payload["principal_id"]), str(payload["step_id"]), str(payload["action_digest"]))
+
+    def _load_persistent_state(self) -> None:
+        if self._persistence is None: return
+        entries, events, reservations = self._persistence.load()
+        with self._lock:
+            for payload in entries:
+                entry = self._entry_from_payload(payload)
+                self._validate_entry_shape(entry)
+                if entry.sequence != len(self._entries): raise ValueError("persisted journal sequence gap")
+                self._entries.append(entry); self._keys.add((entry.execution_id, entry.step_id))
+                existing = self._principals.get(entry.execution_id)
+                if existing is not None and existing != entry.principal_id: raise PermissionError("persisted execution principal mismatch")
+                self._principals.setdefault(entry.execution_id, entry.principal_id)
+            for payload in reservations:
+                reservation = self._reservation_from_payload(payload)
+                key = (reservation.execution_id, reservation.step_id)
+                if key in self._keys: continue
+                self._reservations[key] = reservation; self._principals.setdefault(reservation.execution_id, reservation.principal_id)
+            for payload in events:
+                event = self._event_from_payload(payload)
+                if event.status not in self._COMMIT_STATUSES or event.status == "pending": raise ValueError("invalid persisted external commit status")
+                if event.journal_sequence < 0 or event.journal_sequence >= len(self._entries): raise ValueError("persisted external commit target missing")
+                entry = self._entries[event.journal_sequence]
+                if (entry.execution_id, entry.step_id, entry.action_digest, entry.output_digest) != (event.execution_id, event.step_id, event.action_digest, event.output_digest): raise ValueError("persisted external commit target mismatch")
+                current = self._effective_commit_status_locked(entry)
+                if current != "pending" and current != event.status: raise ValueError("conflicting persisted external commit status")
+                self._commit_events.append(event)
+
+    @staticmethod
+    def _validate_entry_shape(entry: JournalEntry) -> None:
+        if entry.external_commit_status not in StateJournal._COMMIT_STATUSES: raise ValueError("invalid persisted commit status")
+        for digest in (entry.agent_key_fingerprint, entry.previous_attestation_digest, entry.action_digest, entry.output_digest):
+            if not isinstance(digest, str) or len(digest) != 64:
+                raise ValueError("invalid persisted attestation digest")
+            try: int(digest, 16)
+            except ValueError as exc: raise ValueError("invalid persisted attestation digest") from exc
+        if entry.provenance_digest and len(entry.provenance_digest) != 64: raise ValueError("invalid persisted provenance digest")
+        if entry.provenance_digest and len(entry.provenance_seal) != 32: raise ValueError("invalid persisted provenance seal")
 
     def reserve_step(self, execution_id: str, principal_id: str, step_id: str, action_digest: str) -> StepReservation:
         fields = (execution_id, principal_id, step_id, action_digest)
@@ -91,6 +159,7 @@ class StateJournal:
             existing = self._principals.get(execution_id)
             if existing is not None and existing != principal_id: raise PermissionError("execution principal mismatch")
             reservation = StepReservation(execution_id, principal_id, step_id, action_digest)
+            if self._persistence is not None: self._persistence.put_reservation(self._reservation_payload(reservation))
             self._reservations[key] = reservation
             self._principals.setdefault(execution_id, principal_id)
             return reservation
@@ -99,20 +168,14 @@ class StateJournal:
         with self._lock: return self._reservations.get((execution_id, step_id))
 
     def restore_reservation(self, reservation: StepReservation) -> None:
-        if not isinstance(reservation, StepReservation):
-            raise TypeError("step_reservation_required")
+        if not isinstance(reservation, StepReservation): raise TypeError("step_reservation_required")
         key = (reservation.execution_id, reservation.step_id)
         with self._lock:
-            if key in self._keys:
-                raise ValueError("cannot restore reservation for attested execution")
+            if key in self._keys: raise ValueError("cannot restore reservation for attested execution")
             existing = self._reservations.get(key)
-            if existing is not None and existing != reservation:
-                raise ValueError("execution step reservation conflict")
-            self._reservations[key] = reservation
-            self._principals.setdefault(
-                reservation.execution_id,
-                reservation.principal_id,
-            )
+            if existing is not None and existing != reservation: raise ValueError("execution step reservation conflict")
+            if self._persistence is not None: self._persistence.put_reservation(self._reservation_payload(reservation))
+            self._reservations[key] = reservation; self._principals.setdefault(reservation.execution_id, reservation.principal_id)
 
     def append(self, attestation: Attestation) -> JournalEntry:
         self._validate_attestation(attestation)
@@ -133,55 +196,41 @@ class StateJournal:
             if existing is not None and existing != attestation.principal_id: raise PermissionError("execution principal mismatch")
             if key in self._keys: raise ValueError("duplicate execution step")
             reservation = self._reservations.get(key)
-            if reservation is not None and (reservation.principal_id != attestation.principal_id or reservation.action_digest != attestation.action_digest):
-                raise PermissionError("step reservation mismatch")
+            if reservation is not None and (reservation.principal_id != attestation.principal_id or reservation.action_digest != attestation.action_digest): raise PermissionError("step reservation mismatch")
             previous = self._previous_digest_locked(attestation.execution_id)
             if attestation.previous_attestation_digest != previous: raise ValueError("attestation chain link mismatch")
             entry = JournalEntry(len(self._entries), attestation.execution_id, attestation.principal_id, attestation.step_id, attestation.agent_id, attestation.agent_key_fingerprint, attestation.action_digest, attestation.output_digest, attestation.signature, attestation.previous_attestation_digest, attestation.runtime_id, attestation.provenance_digest, attestation.provenance_seal, "pending")
+            if self._persistence is not None: self._persistence.append_entry(self._entry_payload(entry)); self._persistence.delete_reservation(*key)
             self._entries.append(entry); self._keys.add(key); self._principals.setdefault(attestation.execution_id, attestation.principal_id); self._reservations.pop(key, None)
             return entry
 
     def record_external_commit(self, attestation: Attestation, status: str) -> JournalEntry:
         """Append immutable reconciliation evidence; never mutate an attested journal entry."""
-        if not isinstance(attestation, Attestation):
-            raise TypeError("attestation_required")
-        if status not in self._COMMIT_STATUSES or status == "pending":
-            raise ValueError("invalid external commit status")
+        if not isinstance(attestation, Attestation): raise TypeError("attestation_required")
+        if status not in self._COMMIT_STATUSES or status == "pending": raise ValueError("invalid external commit status")
         key = (attestation.execution_id, attestation.step_id)
         with self._lock:
             for entry in reversed(self._entries):
-                if (entry.execution_id, entry.step_id) != key:
-                    continue
-                if entry.action_digest != attestation.action_digest or entry.output_digest != attestation.output_digest:
-                    raise ValueError("journal_commit_target_mismatch")
+                if (entry.execution_id, entry.step_id) != key: continue
+                if entry.action_digest != attestation.action_digest or entry.output_digest != attestation.output_digest: raise ValueError("journal_commit_target_mismatch")
                 current = self._effective_commit_status_locked(entry)
-                if current != "pending" and current != status:
-                    raise ValueError("external_commit_status_already_set")
-                if current == status:
-                    return self._entry_with_status(entry, status)
-                self._commit_events.append(ExternalCommitEvent(
-                    entry.sequence, entry.execution_id, entry.step_id,
-                    entry.action_digest, entry.output_digest, status,
-                ))
+                if current != "pending" and current != status: raise ValueError("external_commit_status_already_set")
+                if current == status: return self._entry_with_status(entry, status)
+                event = ExternalCommitEvent(entry.sequence, entry.execution_id, entry.step_id, entry.action_digest, entry.output_digest, status)
+                if self._persistence is not None: self._persistence.append_event(self._event_payload(event))
+                self._commit_events.append(event)
                 return self._entry_with_status(entry, status)
         raise ValueError("journal_commit_target_missing")
 
     def _effective_commit_status_locked(self, entry: JournalEntry) -> str:
         status = entry.external_commit_status
         for event in reversed(self._commit_events):
-            if event.journal_sequence == entry.sequence:
-                status = event.status
-                break
+            if event.journal_sequence == entry.sequence: status = event.status; break
         return status
 
     @staticmethod
     def _entry_with_status(entry: JournalEntry, status: str) -> JournalEntry:
-        return JournalEntry(
-            entry.sequence, entry.execution_id, entry.principal_id, entry.step_id,
-            entry.agent_id, entry.agent_key_fingerprint, entry.action_digest,
-            entry.output_digest, entry.signature, entry.previous_attestation_digest,
-            entry.runtime_id, entry.provenance_digest, entry.provenance_seal, status,
-        )
+        return JournalEntry(entry.sequence, entry.execution_id, entry.principal_id, entry.step_id, entry.agent_id, entry.agent_key_fingerprint, entry.action_digest, entry.output_digest, entry.signature, entry.previous_attestation_digest, entry.runtime_id, entry.provenance_digest, entry.provenance_seal, status)
 
     def _previous_digest_locked(self, execution_id: str) -> str:
         for entry in reversed(self._entries):
@@ -201,8 +250,7 @@ class StateJournal:
         if not isinstance(attestation.provenance_digest, str) or not isinstance(attestation.provenance_seal, bytes): raise ValueError("invalid provenance binding")
         if bool(attestation.provenance_digest) != bool(attestation.provenance_seal): raise ValueError("provenance digest and seal must be supplied together")
         for digest in (attestation.agent_key_fingerprint, attestation.previous_attestation_digest, attestation.action_digest, attestation.output_digest):
-            if len(digest) != 64:
-                raise ValueError("attestation digest must be SHA-256 hex")
+            if len(digest) != 64: raise ValueError("attestation digest must be SHA-256 hex")
             try: int(digest, 16)
             except ValueError as exc: raise ValueError("attestation digest is not hexadecimal") from exc
         if attestation.provenance_digest:
@@ -213,12 +261,13 @@ class StateJournal:
         if self._require_signatures and (not isinstance(attestation.signature, bytes) or len(attestation.signature) != 64): raise PermissionError("cannot commit unsigned attestation")
 
     def rollback_last(self, attestation: Attestation) -> None:
-        """Attested executions are immutable and must never be rolled back into a reservation."""
         raise PermissionError("attested execution cannot be rolled back")
 
     def snapshot(self) -> tuple[JournalEntry, ...]:
-        with self._lock:
-            return tuple(self._entry_with_status(entry, self._effective_commit_status_locked(entry)) for entry in self._entries)
+        with self._lock: return tuple(self._entry_with_status(entry, self._effective_commit_status_locked(entry)) for entry in self._entries)
+
+    def close(self) -> None:
+        if self._persistence is not None: self._persistence.close()
 
 
 StateStore = StateJournal
