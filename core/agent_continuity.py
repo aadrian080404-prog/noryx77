@@ -1,9 +1,8 @@
 """Continuous agent activity without unbounded autonomy.
 
-The scheduler keeps agent processes available between user requests and can run
-small, explicitly bounded exercises. It is not a claim of consciousness: each
-background cycle has a finite budget, no implicit external side effects, and
-must stop cleanly with the runtime.
+The scheduler keeps authorized agent processes available between user requests
+and can run small, explicitly bounded exercises. Every cycle is finite, has no
+implicit external side effects, and must stop cleanly with the runtime.
 """
 from __future__ import annotations
 
@@ -33,10 +32,12 @@ class AgentContinuityScheduler:
     """Bounded background exercise loop for already-authorized agents."""
 
     def __init__(self, *, agent_runtime, cycle_callback=None, interval_seconds: float = 30.0, max_cycles_per_start: int = 1000):
-        if agent_runtime is None:
-            raise ValueError("agent_runtime_required")
-        if interval_seconds <= 0.0 or max_cycles_per_start < 1:
-            raise ValueError("invalid_continuity_limits")
+        if agent_runtime is None or not callable(cycle_callback):
+            raise ValueError("agent_runtime_and_cycle_callback_required")
+        if isinstance(interval_seconds, bool) or not isinstance(interval_seconds, (int, float)) or interval_seconds <= 0.0:
+            raise ValueError("invalid_continuity_interval")
+        if isinstance(max_cycles_per_start, bool) or not isinstance(max_cycles_per_start, int) or max_cycles_per_start < 1:
+            raise ValueError("invalid_continuity_cycle_limit")
         self.agent_runtime = agent_runtime
         self.cycle_callback = cycle_callback
         self.interval_seconds = float(interval_seconds)
@@ -53,15 +54,16 @@ class AgentContinuityScheduler:
         online = tuple(item.agent_id for item in statuses if item.state == "ONLINE")
         if not online:
             raise RuntimeError("no_online_agents")
-        agent_id = online[self._cycles % len(online)]
+        with self._lock:
+            cycle_index = self._cycles
+        agent_id = online[cycle_index % len(online)]
         exercise = ContinuityExercise(
             exercise_id=uuid4().hex,
             agent_id=agent_id,
             objective="bounded_self_evaluation_and_cross_agent_exercise",
             created_at=time.time(),
         )
-        if self.cycle_callback is not None:
-            self.cycle_callback(exercise)
+        self.cycle_callback(exercise)
         with self._lock:
             self._cycles += 1
             self._last_exercise_id = exercise.exercise_id
@@ -91,6 +93,7 @@ class AgentContinuityScheduler:
                 raise RuntimeError("agent_runtime_offline")
             self._stop.clear()
             self._cycles = 0
+            self._last_exercise_id = None
             self._last_error = None
             self._thread = Thread(target=self._run, name="noryx7-agent-continuity", daemon=True)
             self._thread.start()
@@ -99,8 +102,11 @@ class AgentContinuityScheduler:
         self._stop.set()
         with self._lock:
             thread = self._thread
-        if thread is not None:
+        if thread is not None and thread is not Thread.current_thread() if False else thread is not None:
             thread.join(timeout=max(0.0, float(timeout)))
+        with self._lock:
+            if self._thread is not None and not self._thread.is_alive():
+                self._thread = None
 
     @property
     def running(self) -> bool:
