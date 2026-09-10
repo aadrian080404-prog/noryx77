@@ -13,6 +13,7 @@ from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof
 from .adapters import ExecutionAdapter
 from .attestation import AttestationSigner, attestation_digest, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
+from .dispatch_evidence import DurableDispatchEvidenceStore
 from .lifecycle import ExecutionLifecycle
 from .scheduler import Scheduler
 from .state import StateJournal
@@ -74,6 +75,7 @@ class RuntimeEngine:
         self._max_actions, self._clock = max_actions, clock; self._scheduler, self._adapter = scheduler or Scheduler(), adapter
         self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = runtime_id or uuid4().hex
         self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard
+        self._dispatch_evidence = DurableDispatchEvidenceStore(state_journal.persistence_path) if state_journal is not None and state_journal.persistence_path is not None else None
         if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
     @property
     def runtime_id(self) -> str: return self._runtime_id
@@ -130,9 +132,11 @@ class RuntimeEngine:
                 if self._state_journal is not None: reservation = self._state_journal.reserve_step(envelope.execution_id, envelope.principal_id, envelope.step_id, action_digest)
                 dispatched = True
                 output = self._dispatch(envelope, executor)
-                verified = bool(verifier(envelope, output))
                 output_digest = _digest(output)
                 agent_id = str(getattr(self._adapter, "agent_id", "executor")) if self._adapter is not None else "executor"
+                if self._dispatch_evidence is not None:
+                    self._dispatch_evidence.append_returned(execution_id=envelope.execution_id, principal_id=envelope.principal_id, step_id=envelope.step_id, action_digest=action_digest, agent_id=agent_id, runtime_id=self._runtime_id, output_digest=output_digest)
+                verified = bool(verifier(envelope, output))
                 public_key = getattr(self._attestation_signer, "public_key_bytes", None) if self._attestation_signer is not None else None
                 fingerprint = hashlib.sha256(public_key).hexdigest() if isinstance(public_key, bytes) else hashlib.sha256(b"legacy-executor").hexdigest()
                 attestation = Attestation(context.execution_id, context.principal_id, plan_step.step_id, agent_id, fingerprint, action_digest, output_digest, verified, "verified" if verified else "verification_failed", previous_attestation_digest=previous_attestation_digest, runtime_id=self._runtime_id)
