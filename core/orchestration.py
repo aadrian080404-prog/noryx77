@@ -33,21 +33,38 @@ class OrchestrationStage(str, Enum):
 
 @dataclass(frozen=True)
 class OrchestrationEnvelope:
-    request_id: str
-    principal_id: str
-    operation: str
-    interaction_context: InteractionContext
+    request_id: str = ""
+    principal_id: str = ""
+    operation: str = "runtime"
+    interaction_context: InteractionContext | None = None
     stage: OrchestrationStage = OrchestrationStage.RECEIVED
     intent_digest: str = ""
     plan_digest: str = ""
     metadata: tuple[tuple[str, str], ...] = ()
+    # Compatibility aliases used by the top-level runtime boundary. They are
+    # normalized into the canonical request/principal/context fields below.
+    envelope_id: str | None = None
+    task_id: str | None = None
+    execution_id: str | None = None
+    interaction_context_id: str | None = None
 
     def __post_init__(self) -> None:
-        for value, name in (
-            (self.request_id, "request_id"),
-            (self.principal_id, "principal_id"),
-            (self.operation, "operation"),
-        ):
+        request_id = self.request_id or self.execution_id or self.envelope_id
+        principal_id = self.principal_id or self.task_id or request_id
+        operation = self.operation or "runtime"
+        context = self.interaction_context
+        if context is None:
+            context_id = self.interaction_context_id or sha256(f"orchestration:{request_id}".encode()).hexdigest()
+            context = InteractionContext(profile_id="runtime", signals=(), context_id=context_id)
+        object.__setattr__(self, "request_id", request_id)
+        object.__setattr__(self, "principal_id", principal_id)
+        object.__setattr__(self, "operation", operation)
+        object.__setattr__(self, "interaction_context", context)
+        object.__setattr__(self, "envelope_id", self.envelope_id or request_id)
+        object.__setattr__(self, "task_id", self.task_id or principal_id)
+        object.__setattr__(self, "execution_id", self.execution_id or request_id)
+        object.__setattr__(self, "interaction_context_id", context.context_id)
+        for value, name in ((self.request_id, "request_id"), (self.principal_id, "principal_id"), (self.operation, "operation")):
             if not isinstance(value, str) or not value.strip() or len(value.encode()) > MAX_REFERENCE:
                 raise ValueError(f"invalid_{name}")
         if not isinstance(self.interaction_context, InteractionContext):
@@ -106,12 +123,15 @@ class OrchestrationCoordinator:
             intent_digest=envelope.intent_digest,
             plan_digest=envelope.plan_digest,
             metadata=envelope.metadata,
+            envelope_id=envelope.envelope_id,
+            task_id=envelope.task_id,
+            execution_id=envelope.execution_id,
+            interaction_context_id=envelope.interaction_context_id,
         )
         return updated, OrchestrationTransition(envelope.stage, target, OrchestrationCoordinator.digest(updated))
 
     @staticmethod
     def reject(envelope: OrchestrationEnvelope) -> tuple[OrchestrationEnvelope, OrchestrationTransition]:
-        """Fail closed from any non-terminal stage without permitting recovery by transition."""
         if not isinstance(envelope, OrchestrationEnvelope):
             raise TypeError("orchestration_envelope_required")
         if envelope.stage in (OrchestrationStage.COMMITTED, OrchestrationStage.REJECTED):
@@ -133,6 +153,10 @@ class OrchestrationCoordinator:
             intent_digest=sha256(intent_material.encode()).hexdigest(),
             plan_digest=envelope.plan_digest,
             metadata=envelope.metadata,
+            envelope_id=envelope.envelope_id,
+            task_id=envelope.task_id,
+            execution_id=envelope.execution_id,
+            interaction_context_id=envelope.interaction_context_id,
         )
 
     @staticmethod
@@ -150,6 +174,10 @@ class OrchestrationCoordinator:
             intent_digest=envelope.intent_digest,
             plan_digest=sha256(plan_material.encode()).hexdigest(),
             metadata=envelope.metadata,
+            envelope_id=envelope.envelope_id,
+            task_id=envelope.task_id,
+            execution_id=envelope.execution_id,
+            interaction_context_id=envelope.interaction_context_id,
         )
 
     @staticmethod
