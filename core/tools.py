@@ -37,6 +37,10 @@ class ToolExecutor:
     """Tool boundary: capability lookup -> canonical ActionGate -> execution -> verification."""
 
     _RISK_ORDER = {"normal": 0, "sensitive": 1, "high": 2}
+    _LAZY_EXTERNAL = {
+        "contracts": "NORYX7_CONTRACTS",
+        "bureaucracy": "NORYX7_BUREAUCRACY",
+    }
 
     def __init__(self, policy_or_gate, verifier):
         if type(policy_or_gate) is object:
@@ -59,6 +63,12 @@ class ToolExecutor:
             return replace(action, risk_class=action_risk, requires_authorization=requires_authorization)
         return action
 
+    def _resolve_lazy_external(self, capability_name):
+        if capability_name not in self._LAZY_EXTERNAL or self.capabilities.resolve(capability_name) is not None:
+            return
+        from .frontier_capabilities import ExternalProviderCapability
+        self.capabilities.register(capability_name, ExternalProviderCapability(capability_name, self._LAZY_EXTERNAL[capability_name]), risk_class="high")
+
     def execute(self, action: ActionSpec, calls_used: int = 0, *, execution_id=None, grant=None, principal=None):
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return None, VerificationResult(False, "tool_contract", "invalid_action")
@@ -68,6 +78,10 @@ class ToolExecutor:
         if action.action_type == "jarvis_capability":
             capability_name = parameters.pop("__jarvis_capability", None)
 
+        try:
+            self._resolve_lazy_external(capability_name)
+        except Exception:
+            return None, VerificationResult(False, "tool_policy", "capability_initialization_failure")
         handler = self.capabilities.resolve(capability_name)
         if handler is None:
             return None, VerificationResult(False, "tool_policy", "unknown_capability")
