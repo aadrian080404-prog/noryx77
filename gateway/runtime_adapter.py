@@ -125,6 +125,39 @@ class RuntimeAdapter:
         if audit is not None:
             audit.record("gateway_execution_rejected", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=reason)
 
+    def _fallback_deterministic(self, task, client_id, original_reason):
+        """Retry ordinary requests through the verified local deterministic agent.
+
+        This is deliberately unavailable to explicit capabilities such as web_research.
+        It never bypasses the runtime pipeline, identity, authorization or verification.
+        """
+        if original_reason != "execution_failure":
+            return None
+        audit = getattr(self.runtime, "audit", None)
+        try:
+            fallback = self.runtime.run(task, agent_id="deterministic")
+        except Exception as exc:
+            if audit is not None:
+                audit.record("gateway_deterministic_fallback_failed", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=type(exc).__name__)
+            return None
+        if not isinstance(fallback, dict) or fallback.get("status") != "completed":
+            if audit is not None:
+                audit.record("gateway_deterministic_fallback_rejected", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=str(fallback.get("reason", "fallback_rejected")) if isinstance(fallback, dict) else "malformed_fallback")
+            return None
+        verification = fallback.get("verification")
+        if not getattr(verification, "valid", False):
+            if audit is not None:
+                audit.record("gateway_deterministic_fallback_unverified", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=str(getattr(verification, "reason", "invalid_verification")))
+            return None
+        if fallback.get("task_id") != task.task_id or fallback.get("execution_id") != task.execution_id:
+            if audit is not None:
+                audit.record("gateway_deterministic_fallback_identity_mismatch", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id)
+            return None
+        if audit is not None:
+            audit.record("gateway_deterministic_fallback_admitted", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, original_reason=original_reason, agent_id="deterministic", verification_stage=getattr(verification, "stage", ""))
+        self._record_gateway_phase(task, client_id, "gateway_fallback_committed", {"task_id": task.task_id, "agent_id": "deterministic", "verified": True})
+        return fallback
+
     @staticmethod
     def _answer_from_output(output, capability: str | None) -> str | None:
         """Convert structured capability output to the gateway's string result contract."""
@@ -179,8 +212,12 @@ class RuntimeAdapter:
         if result.get("status") != "completed":
             verification = result.get("verification")
             reason = str(getattr(verification, "reason", None) or result.get("reason") or "runtime_rejected")
-            self._reject(task, client_id, reason)
-            raise PermissionError(reason)
+            fallback = None if capability is not None else self._fallback_deterministic(task, client_id, reason)
+            if fallback is not None:
+                result = fallback
+            else:
+                self._reject(task, client_id, reason)
+                raise PermissionError(reason)
         result_task_id = result.get("task_id") or task.task_id
         result_execution_id = result.get("execution_id") or task.execution_id
         if result_task_id != task.task_id or result_execution_id != task.execution_id:
