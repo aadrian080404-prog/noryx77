@@ -79,14 +79,14 @@ class BranchingCognitionEngine:
                 pattern_tags=tags + neural,
             ))
         # Fallback source classes describe reasoning lenses only; they are not
-        # external evidence. Count actual authorized/metadata-only source
-        # records so branching cannot manufacture an evidence-diversity signal.
-        diversity = len(sources)
+        # external evidence. Diversity therefore means distinct authorized
+        # evidence classes, not merely the number of source records.
+        diversity = len(set(source_types))
         check = VerificationResult(
             bool(branches) and diversity >= 3,
             "branching_cognition",
             "branch_set_ok" if branches and diversity >= 3 else "insufficient_source_diversity",
-            (f"branches={len(branches)}", f"source_diversity={diversity}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}", f"authorized_sources={len(sources)}"),
+            (f"branches={len(branches)}", f"source_diversity={diversity}", f"source_records={len(sources)}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}", f"authorized_sources={len(sources)}"),
         )
         return BranchingAssessment(tuple(branches), diversity, len(tags), neural, check)
 
