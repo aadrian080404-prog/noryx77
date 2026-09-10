@@ -4,6 +4,7 @@ import pytest
 
 from core.memory import MemoryStore
 from core.operational_runtime import OperationalNORYXRuntime
+from core.system_fabric import CanonicalSystemFabric
 from gateway.runtime_adapter import RuntimeAdapter
 
 
@@ -15,15 +16,23 @@ class _Audit:
         self.events.append((event, payload))
 
 
-def _runtime():
+def _runtime(status="completed"):
     runtime = object.__new__(OperationalNORYXRuntime)
     runtime.memory = MemoryStore()
     runtime.audit = _Audit()
+    runtime.system_fabric = CanonicalSystemFabric()
 
     def heartbeat(self):
         return ()
 
     def run(self, task):
+        if status != "completed":
+            return {
+                "status": status,
+                "task_id": task.task_id,
+                "execution_id": task.execution_id,
+                "reason": "integration_rejected",
+            }
         return {
             "status": "completed",
             "task_id": task.task_id,
@@ -58,9 +67,38 @@ def test_gateway_runtime_memory_identity_flow():
     assert output_item is not None
     assert output_item.content == "INTEGRATION PASS"
 
+    records = {
+        record.record_id
+        for record in runtime.system_fabric.memory.snapshot()
+    }
+    assert "execution:exec-01:gateway_received" in records
+    assert "execution:exec-01:gateway_completed" in records
+
     events = [event for event, _ in runtime.audit.events]
     assert "gateway_input_bound" in events
     assert "gateway_output_bound" in events
+
+
+def test_gateway_runtime_rejection_records_canonical_lifecycle():
+    runtime = _runtime(status="rejected")
+    adapter = RuntimeAdapter(runtime)
+
+    with pytest.raises(PermissionError, match="integration_rejected"):
+        adapter.execute(
+            client_id="browser-client-02",
+            text="test rejection",
+            execution_id="exec-rejected",
+        )
+
+    records = {
+        record.record_id
+        for record in runtime.system_fabric.memory.snapshot()
+    }
+    assert "execution:exec-rejected:gateway_received" in records
+    assert "execution:exec-rejected:gateway_rejected" in records
+
+    events = [event for event, _ in runtime.audit.events]
+    assert "gateway_execution_rejected" in events
 
 
 def test_gateway_runtime_rejects_invalid_client():
