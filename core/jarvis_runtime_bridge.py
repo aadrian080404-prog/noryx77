@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.contracts import ActionSpec, VerificationResult
-from core.actions import AuthorizationAuthority, AuthorizationGrant
+from core.actions import AuthorizationAuthority
 from core.identity import AgentIdentity
 from core.tools import ToolExecutor
 from core.verification import VerificationEngine
@@ -67,6 +67,7 @@ class JarvisRuntimeBridge:
 
         runtime_steps = tuple(self._runtime_step(step) for step in plan.steps)
         intent = Intent(text=request.text, principal_id=request.principal_id, intent_id=request.request_id)
+        runtime_id = self.runtime_engine.runtime_id
 
         if self.system_fabric is not None:
             self.system_fabric.bind_agent_identity(self.principal, capabilities=("execute",))
@@ -84,6 +85,7 @@ class JarvisRuntimeBridge:
                 client_id=request.principal_id,
                 phase="jarvis_received",
                 metadata={"steps": len(plan.steps), "agent_id": self.principal.agent_id},
+                runtime_id=runtime_id,
             )
 
         def executor(envelope: Any) -> Any:
@@ -137,5 +139,6 @@ class JarvisRuntimeBridge:
                 client_id=request.principal_id,
                 phase=phase,
                 metadata={"status": runtime_result.status.value, "result_count": len(results), "agent_id": self.principal.agent_id},
+                runtime_id=runtime_id,
             )
         return tuple(results)
