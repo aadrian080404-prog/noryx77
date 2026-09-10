@@ -9,6 +9,7 @@ from core.verification import VerificationEngine
 from core.llm.model_fabric_bridge import ModelFabricBridge
 from core.llm.self_knowledge import SelfKnowledgeProvider
 from core.scientific_knowledge import ScientificKnowledgeFabric
+from core.system_fabric import CanonicalSystemFabric
 from noryx7_runtime.model_fabric import ModelFabric
 
 
@@ -79,7 +80,17 @@ class LLMBackedAgent(Agent):
         if isinstance(self.model_fabric, ModelFabric):
             runtime_id = self.model_fabric.runtime_id
             if not isinstance(runtime_id, str) or not runtime_id: raise RuntimeError("model_fabric_runtime_id_required")
-            bridge = ModelFabricBridge(self.model_fabric, runtime_id=runtime_id, execution_id=task.execution_id)
+            runtime = getattr(self.self_knowledge, "runtime", None)
+            system_fabric = getattr(runtime, "system_fabric", None)
+            if system_fabric is not None and not isinstance(system_fabric, CanonicalSystemFabric):
+                raise TypeError("invalid_system_fabric")
+            bridge = ModelFabricBridge(
+                self.model_fabric,
+                runtime_id=runtime_id,
+                execution_id=task.execution_id,
+                system_fabric=system_fabric,
+                agent_identity=self.identity,
+            )
             return bridge.generate(prompt)
         generate = getattr(self.model_fabric, "generate", None)
         if callable(generate): return generate(prompt)
