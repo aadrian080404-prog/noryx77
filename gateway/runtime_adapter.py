@@ -14,8 +14,14 @@ class RuntimeAdapter:
     MAX_INPUT_BYTES = 8192
 
     def __init__(self, runtime: OperationalNORYXRuntime):
-        if not isinstance(runtime, OperationalNORYXRuntime):
+        # Production receives OperationalNORYXRuntime, while boundary tests and
+        # controlled embedders may provide an equivalent runtime implementation.
+        # Enforce the actual execution contract instead of Python nominal typing.
+        required = ("heartbeat_agents", "run_hypersynth")
+        if runtime is None or any(not callable(getattr(runtime, name, None)) for name in required):
             raise TypeError("operational_runtime_required")
+        if getattr(runtime, "memory", None) is None:
+            raise TypeError("operational_runtime_memory_required")
         self.runtime = runtime
 
     @staticmethod
@@ -55,21 +61,10 @@ class RuntimeAdapter:
             execution_id=execution_id,
         )
 
-    def _record_gateway_phase(
-        self,
-        task: TaskSpec,
-        client_id: str,
-        phase: str,
-        metadata: dict[str, object],
-    ) -> None:
+    def _record_gateway_phase(self, task: TaskSpec, client_id: str, phase: str, metadata: dict[str, object]) -> None:
         system_fabric = getattr(self.runtime, "system_fabric", None)
         if system_fabric is not None:
-            system_fabric.record_execution(
-                execution_id=task.execution_id,
-                client_id=client_id,
-                phase=phase,
-                metadata=metadata,
-            )
+            system_fabric.record_execution(execution_id=task.execution_id, client_id=client_id, phase=phase, metadata=metadata)
 
     def _remember_input(self, task: TaskSpec, client_id: str, session_id: str | None = None) -> None:
         memory = getattr(self.runtime, "memory", None)
@@ -88,12 +83,7 @@ class RuntimeAdapter:
                 system_fabric.bind_session(session_id=f"client:{client_id}", client_id=client_id, device_id="gateway", role="client")
                 system_fabric.authorize(f"client:{client_id}", "execute")
         memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:input", content=task.input, kind="working", source=task.task_id, importance=0.4, execution_id=task.execution_id))
-        self._record_gateway_phase(
-            task,
-            client_id,
-            "gateway_received",
-            {"task_id": task.task_id},
-        )
+        self._record_gateway_phase(task, client_id, "gateway_received", {"task_id": task.task_id})
         audit = getattr(self.runtime, "audit", None)
         if audit is not None:
             audit.record("gateway_input_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:input")
@@ -104,12 +94,7 @@ class RuntimeAdapter:
             return
         try:
             memory.put(MemoryItem(memory_id=f"gateway:{task.execution_id}:output", content=output, kind="working", source=task.task_id, importance=0.7, execution_id=task.execution_id))
-            self._record_gateway_phase(
-                task,
-                client_id,
-                "gateway_completed",
-                {"task_id": task.task_id, "verified": True},
-            )
+            self._record_gateway_phase(task, client_id, "gateway_completed", {"task_id": task.task_id, "verified": True})
             audit = getattr(self.runtime, "audit", None)
             if audit is not None:
                 audit.record("gateway_output_bound", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, system_id=CANONICAL_SYSTEM_IDENTITY.system_id, creator=CANONICAL_SYSTEM_IDENTITY.creator, memory_id=f"gateway:{task.execution_id}:output")
@@ -119,21 +104,10 @@ class RuntimeAdapter:
                 audit.record("gateway_output_memory_degraded", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=type(exc).__name__)
 
     def _reject(self, task: TaskSpec, client_id: str, reason: str) -> None:
-        self._record_gateway_phase(
-            task,
-            client_id,
-            "gateway_rejected",
-            {"task_id": task.task_id, "reason": reason},
-        )
+        self._record_gateway_phase(task, client_id, "gateway_rejected", {"task_id": task.task_id, "reason": reason})
         audit = getattr(self.runtime, "audit", None)
         if audit is not None:
-            audit.record(
-                "gateway_execution_rejected",
-                task_id=task.task_id,
-                execution_id=task.execution_id,
-                client_id=client_id,
-                reason=reason,
-            )
+            audit.record("gateway_execution_rejected", task_id=task.task_id, execution_id=task.execution_id, client_id=client_id, reason=reason)
 
     def execute(self, *, client_id: str, text: str, execution_id: str | None = None, session_id: str | None = None) -> dict:
         client_id = self._validate_client_id(client_id)
