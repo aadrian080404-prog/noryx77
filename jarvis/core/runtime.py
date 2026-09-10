@@ -35,15 +35,11 @@ class JarvisRuntime:
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
         self._closed = False
     def close(self) -> None:
-        """Close resources owned by JARVIS without closing shared canonical services."""
-        if self._closed:
-            return
+        if self._closed: return
         self.runtime_engine.close()
         self._closed = True
-    def __enter__(self) -> "JarvisRuntime":
-        return self
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.close()
+    def __enter__(self) -> "JarvisRuntime": return self
+    def __exit__(self, exc_type, exc, tb) -> None: self.close()
     def grant(self, principal_id: str, capability: str, target: str) -> None:
         if not isinstance(self.orchestrator.policy, Policy): raise TypeError("runtime policy does not support grants")
         self.orchestrator.policy.grant(principal_id, capability, target)
@@ -73,6 +69,7 @@ class JarvisRuntime:
             self.state.reserve(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id)
         except (PermissionError, ValueError) as exc:
             self.audit.record("execution_reservation_rejected", request.principal_id, reason=str(exc)); return ()
+        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_received", metadata={"request_id": request.request_id, "steps": len(plan.steps)}, runtime_id=runtime_id)
         self.audit.record("execution_started", request.principal_id)
         try:
             results = self.recovery.run_if_normal(lambda: self.runtime_bridge.execute(request, plan), expected_epoch=recovery_epoch)
@@ -92,12 +89,13 @@ class JarvisRuntime:
             self.audit.record("execution_verification_failed", request.principal_id)
             self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": "result_verification_failed", "stage": "verification"}, runtime_id=runtime_id)
             return ()
+        self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_verified", metadata={"status": "verified", "result_count": len(results)}, runtime_id=runtime_id)
         state = JarvisState(execution_id=execution_id, request_id=request.request_id, principal_id=request.principal_id, request_digest=self.state.digest_request(request.text), results=list(results))
         try:
             self.recovery.run_if_normal(lambda: self.state.commit(execution_id=execution_id, state=state), expected_epoch=recovery_epoch)
-        except (PermissionError, ValueError) as exc:
+        except Exception as exc:
             self.audit.record("state_commit_rejected", request.principal_id, reason=str(exc))
-            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": str(exc), "stage": "state_commit"}, runtime_id=runtime_id)
+            self.system_fabric.record_execution(execution_id=execution_id, client_id=request.principal_id, phase="jarvis_rejected", metadata={"reason": type(exc).__name__, "stage": "state_commit"}, runtime_id=runtime_id)
             return ()
         committed = self.state.get(execution_id, principal_id=request.principal_id)
         if committed is None:
