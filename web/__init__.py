@@ -24,7 +24,7 @@ def _serve_file(path, *args, **kwargs):
             script = _UI.read_text(encoding="utf-8")
             marker = '<script src="/ui_enhancements.js"></script>'
             if marker not in html:
-                html = html.replace("</body>", f"<script>{script}</script>\n</body>", 1)
+                html = html.replace("</body>", f"<script>{script}</script>\n<style>.top #clear:before{{content:'+' !important;border:0 !important;width:auto !important;height:auto !important;box-shadow:none !important;font-size:22px !important;line-height:1 !important;color:#cfe0ff !important}}.top #clear:after{{display:none !important}}</style>\n</body>", 1)
         return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
     return _ORIGINAL_FILE_RESPONSE(path, *args, **kwargs)
 
