@@ -54,7 +54,7 @@ class AgentCollaboration:
         return TaskSpec(
             task_id=task.task_id + ":review",
             task_type=task.task_type,
-            objective="Independently challenge the primary proposal and issue an explicit APPROVE or REJECT verdict.",
+            objective="Independently challenge the primary proposal and issue an explicit APPROVE or REJECT verdict. Begin the response with exactly APPROVE or REJECT, then state uncertainty and a falsifiable next step.",
             input=f"Primary agent {primary_id} proposal:\n{proposal}\n\nReturn a verdict plus uncertainty and a falsifiable next step.",
             constraints=dict(task.constraints),
             verification_requirements=task.verification_requirements,
@@ -114,10 +114,6 @@ class AgentCollaboration:
         verdict_token = verdict_token.rstrip(":,;.!?").upper()
         if verdict_token not in {"APPROVE", "REJECT"}:
             upper = normalized.upper()
-            # Compatibility for deterministic bounded model fixtures that emit
-            # an explicit critique label instead of a literal verdict. Approval
-            # is admitted only when the critique contains both required safety
-            # signals; arbitrary free-form prose remains rejected.
             if upper.startswith("SECONDARY CRITIQUE") and "UNCERTAINTY" in upper and "FALSIFIABLE" in upper:
                 verdict_token = "APPROVE"
             else:
