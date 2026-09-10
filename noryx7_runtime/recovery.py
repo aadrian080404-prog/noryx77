@@ -27,11 +27,11 @@ class RuntimeRecovery:
     def recover(self, execution_id: str):
         if not isinstance(execution_id, str) or not execution_id.strip(): raise ValueError("invalid execution identity")
         entries = tuple(e for e in self._journal.snapshot() if e.execution_id == execution_id)
-        self._validate(entries, self._verifier, self._identity_registry, self._journal.runtime_id)
+        self._validate(entries, self._verifier, self._identity_registry, self._journal.runtime_id, self._journal.require_signatures)
         return entries
 
     @classmethod
-    def _validate(cls, entries, verifier=None, identity_registry=None, runtime_id=None):
+    def _validate(cls, entries, verifier=None, identity_registry=None, runtime_id=None, require_signatures=True):
         previous_sequence, previous_digest = -1, "0" * 64
         seen_steps = set()
         for entry in entries:
@@ -53,8 +53,8 @@ class RuntimeRecovery:
                     raise RecoveryError("invalid journal digest")
                 try: int(digest, 16)
                 except ValueError as exc: raise RecoveryError("invalid journal digest") from exc
-            if not isinstance(entry.signature, bytes) or len(entry.signature) != 64: raise RecoveryError("invalid attestation signature")
-            if verifier is None: raise RecoveryError("attestation verifier required")
+            if not isinstance(entry.signature, bytes): raise RecoveryError("invalid attestation signature")
+            if require_signatures and len(entry.signature) != 64: raise RecoveryError("invalid attestation signature")
             attestation = Attestation(
                 execution_id=entry.execution_id, principal_id=entry.principal_id, step_id=entry.step_id,
                 agent_id=entry.agent_id, agent_key_fingerprint=entry.agent_key_fingerprint,
@@ -62,12 +62,14 @@ class RuntimeRecovery:
                 detail="verified", signature=entry.signature, previous_attestation_digest=entry.previous_attestation_digest,
                 runtime_id=entry.runtime_id, provenance_digest=entry.provenance_digest, provenance_seal=entry.provenance_seal,
             )
-            try:
-                if identity_registry is not None:
-                    valid = bool(identity_registry.with_trusted_identity(entry.agent_id, lambda identity: RuntimeRecovery._verify_with_identity(identity, attestation, entry.signature, verifier)))
-                else: valid = bool(verifier.verify(attestation, entry.signature))
-            except Exception as exc: raise RecoveryError("attestation verification failed") from exc
-            if not valid: raise RecoveryError("attestation verification failed")
+            if require_signatures:
+                if verifier is None: raise RecoveryError("attestation verifier required")
+                try:
+                    if identity_registry is not None:
+                        valid = bool(identity_registry.with_trusted_identity(entry.agent_id, lambda identity: RuntimeRecovery._verify_with_identity(identity, attestation, entry.signature, verifier)))
+                    else: valid = bool(verifier.verify(attestation, entry.signature))
+                except Exception as exc: raise RecoveryError("attestation verification failed") from exc
+                if not valid: raise RecoveryError("attestation verification failed")
             if runtime_id is not None or entry.previous_attestation_digest != "0" * 64:
                 if entry.previous_attestation_digest != previous_digest: raise RecoveryError("attestation verification failed: attestation chain is broken")
             previous_digest, previous_sequence = attestation_digest(attestation), entry.sequence
