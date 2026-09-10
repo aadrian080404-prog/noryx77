@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from hashlib import sha256
 from .contracts import TaskSpec, AgentResult, VerificationResult
 from .identity import AgentIdentity
 
@@ -78,6 +79,9 @@ class AgentSupervisor:
             identity = getattr(agent, "identity", None)
             if not isinstance(identity, AgentIdentity) or identity.agent_id != result.agent_id or not registry.is_trusted(identity):
                 return VerificationResult(False, "agent_result", "agent_identity_untrusted")
+            expected_fingerprint = sha256(identity.public_key).hexdigest()
+            if selected_agent_id is not None and result.agent_key_fingerprint != expected_fingerprint:
+                return VerificationResult(False, "agent_result", "agent_attestation_identity_mismatch")
         if result.task_id != task.task_id:
             return VerificationResult(False, "agent_result", "task_id_mismatch")
         if result.status != "completed":
