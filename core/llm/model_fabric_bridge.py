@@ -61,6 +61,7 @@ class ModelFabricBridge:
             self._system_fabric.record_execution(
                 execution_id=self._execution_id,
                 client_id=self._agent_identity.agent_id,
+                runtime_id=self._runtime_id,
                 phase="model_verified",
                 metadata={
                     "request_digest": sha256(prompt.encode("utf-8")).hexdigest(),
