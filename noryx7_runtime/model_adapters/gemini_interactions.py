@@ -19,11 +19,13 @@ class GeminiPart:
 
     def as_payload(self) -> dict[str, Any]:
         if self.type == "text":
-            if not self.data.strip():
+            if not isinstance(self.data, str) or not self.data.strip():
                 raise ValueError("empty_text_part")
             return {"type": "text", "text": self.data}
         if self.type in {"image", "audio", "video", "document"}:
-            if not self.mime_type.strip():
+            if not isinstance(self.data, str) or not self.data:
+                raise ValueError("media_data_required")
+            if not isinstance(self.mime_type, str) or not self.mime_type.strip():
                 raise ValueError("mime_type_required")
             try:
                 base64.b64decode(self.data, validate=True)
@@ -34,12 +36,11 @@ class GeminiPart:
 
 
 class GeminiInteractionsAdapter:
-    """Explicit NORYX7 boundary for Gemini multimodal Interactions.
+    """NORYX7 boundary for Gemini multimodal and agentic Interactions.
 
-    Function declarations are data only: NORYX7 must execute the selected
-    function through its own authorization/action-gate boundary. Google-hosted
-    tools are intentionally not enabled here yet, so they cannot bypass that
-    policy boundary.
+    Model tool declarations are data only. NORYX7 remains responsible for
+    authorization, ActionGate execution, verification, provenance and audit.
+    Google-hosted tools are intentionally not enabled through this adapter.
     """
 
     def __init__(self, *, model: str = "gemini-3.8-flash", api_key: str | None = None, timeout_seconds: float = 120.0) -> None:
@@ -64,8 +65,11 @@ class GeminiInteractionsAdapter:
     def _validate_tools(tools: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         validated: list[dict[str, Any]] = []
         for tool in tools:
-            if not isinstance(tool, dict) or tool.get("type", "function") != "function" or not isinstance(tool.get("name"), str) or not tool["name"].strip():
-                raise ValueError("only_authorized_function_declarations_are_supported")
+            if not isinstance(tool, dict) or tool.get("type", "function") != "function":
+                raise ValueError("only_noryx7_function_declarations_are_supported")
+            name = tool.get("name")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("function_name_required")
             validated.append(dict(tool))
         return validated
 
@@ -73,16 +77,59 @@ class GeminiInteractionsAdapter:
         return urllib.request.Request(
             "https://generativelanguage.googleapis.com/v1beta/interactions",
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"x-goog-api-key": self._api_key, "Content-Type": "application/json", "Accept": "text/event-stream" if stream else "application/json"},
+            headers={
+                "x-goog-api-key": self._api_key,
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream" if stream else "application/json",
+            },
             method="POST",
         )
 
-    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
+    @staticmethod
+    def _validate_parts(parts: Sequence[GeminiPart]) -> tuple[GeminiPart, ...]:
         if not isinstance(parts, Sequence) or isinstance(parts, (str, bytes)) or not parts:
             raise ValueError("at_least_one_gemini_part_required")
-        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in parts]}
-        if tools:
-            payload["tools"] = self._validate_tools(tools)
+        validated = tuple(parts)
+        if any(not isinstance(part, GeminiPart) for part in validated):
+            raise ValueError("invalid_gemini_part")
+        return validated
+
+    @staticmethod
+    def extract_function_calls(result: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+        """Extract model-requested functions without executing anything."""
+        if not isinstance(result, dict):
+            raise ValueError("invalid_gemini_interaction")
+        calls: list[dict[str, Any]] = []
+        for step in result.get("steps", ()):
+            if not isinstance(step, dict) or step.get("type") != "function_call":
+                continue
+            name = step.get("name")
+            call_id = step.get("id") or step.get("call_id")
+            arguments = step.get("arguments", {})
+            if not isinstance(name, str) or not name.strip() or not isinstance(call_id, str) or not call_id.strip() or not isinstance(arguments, dict):
+                raise ValueError("invalid_gemini_function_call")
+            calls.append({"name": name, "call_id": call_id, "arguments": dict(arguments)})
+        return tuple(calls)
+
+    @staticmethod
+    def extract_text(result: dict[str, Any]) -> str:
+        if not isinstance(result, dict):
+            raise ValueError("invalid_gemini_interaction")
+        chunks: list[str] = []
+        for step in result.get("steps", ()):
+            if not isinstance(step, dict) or step.get("type") != "model_output":
+                continue
+            content = step.get("content", ())
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        chunks.append(part["text"])
+        text = "".join(chunks).strip()
+        if not text:
+            raise ValueError("gemini_interaction_empty_text")
+        return text
+
+    def _post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
         request = self._request(payload, stream=False)
         try:
             with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
@@ -105,10 +152,34 @@ class GeminiInteractionsAdapter:
             raise RuntimeError(f"gemini_interactions_model_error:{error.get('code', 'unknown')}:{error.get('message', 'unknown_error')}")
         return result
 
+    def interact(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
+        validated_parts = self._validate_parts(parts)
+        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in validated_parts]}
+        if tools:
+            payload["tools"] = self._validate_tools(tools)
+        return self._post_json(payload)
+
+    def continue_interaction(self, previous_interaction_id: str, function_results: Sequence[dict[str, Any]]) -> dict[str, Any]:
+        """Resume a tool-call turn after NORYX7 has independently executed and verified functions."""
+        if not isinstance(previous_interaction_id, str) or not previous_interaction_id.strip():
+            raise ValueError("previous_interaction_id_required")
+        if not isinstance(function_results, Sequence) or isinstance(function_results, (str, bytes)) or not function_results:
+            raise ValueError("function_results_required")
+        input_items: list[dict[str, Any]] = []
+        for item in function_results:
+            if not isinstance(item, dict):
+                raise ValueError("invalid_function_result")
+            call_id = item.get("call_id")
+            name = item.get("name")
+            result = item.get("result")
+            if not isinstance(call_id, str) or not call_id.strip() or not isinstance(name, str) or not name.strip():
+                raise ValueError("function_result_identity_required")
+            input_items.append({"type": "function_result", "name": name, "call_id": call_id, "result": result})
+        return self._post_json({"model": self._model, "previous_interaction_id": previous_interaction_id.strip(), "input": input_items})
+
     def stream(self, parts: Sequence[GeminiPart], *, tools: Sequence[dict[str, Any]] = ()) -> Iterator[dict[str, Any]]:
-        if not isinstance(parts, Sequence) or isinstance(parts, (str, bytes)) or not parts:
-            raise ValueError("at_least_one_gemini_part_required")
-        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in parts], "stream": True}
+        validated_parts = self._validate_parts(parts)
+        payload: dict[str, Any] = {"model": self._model, "input": [part.as_payload() for part in validated_parts], "stream": True}
         if tools:
             payload["tools"] = self._validate_tools(tools)
         request = self._request(payload, stream=True)
