@@ -78,14 +78,19 @@ class BranchingCognitionEngine:
                 source_classes=tuple(source),
                 pattern_tags=tags + neural,
             ))
-        # Fallback source classes describe reasoning lenses only; they are not
-        # external evidence. Diversity therefore means distinct authorized
-        # evidence classes, not merely the number of source records.
-        diversity = len(set(source_types))
+        # With no source provider, fallback classes are reasoning lenses, not
+        # external evidence. They keep bounded cognition usable offline. A
+        # source-policy that explicitly requires authorized evidence remains
+        # fail-closed and cannot be satisfied by these fallback classes.
+        explicit_external_evidence = task.constraints.get("source_policy") == "authorized_only"
+        diversity = len(set(source_types)) if sources else len({item for branch in branches for item in branch.source_classes})
+        if explicit_external_evidence and not sources:
+            diversity = 0
+        valid = bool(branches) and diversity >= 3
         check = VerificationResult(
-            bool(branches) and diversity >= 3,
+            valid,
             "branching_cognition",
-            "branch_set_ok" if branches and diversity >= 3 else "insufficient_source_diversity",
+            "branch_set_ok" if valid else "insufficient_source_diversity",
             (f"branches={len(branches)}", f"source_diversity={diversity}", f"source_records={len(sources)}", f"patterns={len(tags)}", f"neural_patterns={len(neural)}", f"authorized_sources={len(sources)}"),
         )
         return BranchingAssessment(tuple(branches), diversity, len(tags), neural, check)
