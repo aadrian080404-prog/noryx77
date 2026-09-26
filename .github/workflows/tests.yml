@@ -49,6 +49,10 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest core noryx7_runtime ecosystem jarvis tests -q
+      - name: Real RuntimeEngine execution smoke
+        run: |
+          set -euo pipefail
+          python tests/real_runtime_scale_smoke.py
       - name: Security and runtime binding audit
         run: |
           set -euo pipefail
