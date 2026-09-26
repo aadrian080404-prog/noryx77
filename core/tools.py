@@ -5,7 +5,6 @@ from .contracts import ActionSpec, VerificationResult
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
 from .security import SecurityBoundary
-from noryx7_runtime.engine import Intent, PlanStep, RuntimeEngine
 
 
 class CapabilityRegistry:
@@ -55,8 +54,10 @@ class ToolExecutor:
             security = SecurityBoundary(policy_or_gate, verifier)
             self.action_gate = ActionGate(policy_or_gate, security, RuntimeLimits())
         self.verifier = verifier
-        if runtime_engine is not None and not isinstance(runtime_engine, RuntimeEngine):
-            raise TypeError("invalid_runtime_engine")
+        if runtime_engine is not None:
+            from noryx7_runtime.engine import RuntimeEngine
+            if not isinstance(runtime_engine, RuntimeEngine):
+                raise TypeError("invalid_runtime_engine")
         self.runtime_engine = runtime_engine
         self.capabilities = CapabilityRegistry()
 
@@ -74,6 +75,8 @@ class ToolExecutor:
             principal_id = getattr(principal, "principal_id", None)
         if principal_id is None:
             principal_id = str(principal or "noryx7")
+
+        from noryx7_runtime.contracts import Intent, PlanStep
 
         step = PlanStep(
             step_id=action.action_id,
