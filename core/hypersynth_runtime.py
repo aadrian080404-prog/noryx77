@@ -18,14 +18,15 @@ from .verification import VerificationEngine
 from .tools import ToolExecutor
 from .frontier_capabilities import install_frontier_capabilities
 from .universal_intelligence import UniversalIntelligenceFabric
-from noryx7_runtime.engine import RuntimeEngine
 
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
     def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, universal_intelligence=None, runtime_engine=None):
         self.audit = audit or AuditLog()
-        if runtime_engine is not None and not isinstance(runtime_engine, RuntimeEngine): raise TypeError("invalid_runtime_engine")
+        if runtime_engine is not None:
+            from noryx7_runtime.engine import RuntimeEngine
+            if not isinstance(runtime_engine, RuntimeEngine): raise TypeError("invalid_runtime_engine")
         self.runtime_engine = runtime_engine
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
