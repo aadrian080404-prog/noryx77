@@ -41,6 +41,9 @@ class ToolExecutor:
     _LAZY_EXTERNAL = {
         "contracts": "NORYX7_CONTRACTS",
         "bureaucracy": "NORYX7_BUREAUCRACY",
+        "flights": "NORYX7_FLIGHTS",
+        "payments": "NORYX7_PAYMENTS",
+        "insurance": "NORYX7_INSURANCE",
     }
 
     def __init__(self, policy_or_gate, verifier, *, runtime_engine=None):
