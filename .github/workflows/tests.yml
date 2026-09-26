@@ -44,11 +44,11 @@ jobs:
       - name: Compile entire runtime
         run: |
           set -euo pipefail
-          python -m compileall -q core noryx7_runtime ecosystem jarvis web tests
+          python -m compileall -q core noryx7_runtime ecosystem jarvis web provider_e2e tests
       - name: Runtime integration and full suite
         run: |
           set -euo pipefail
-          python -m pytest core noryx7_runtime ecosystem jarvis tests -q
+          python -m pytest core noryx7_runtime ecosystem jarvis provider_e2e tests -q
       - name: Real RuntimeEngine execution smoke
         run: |
           set -euo pipefail
@@ -56,7 +56,7 @@ jobs:
       - name: Security and runtime binding audit
         run: |
           set -euo pipefail
-          test "$(grep -RInE '(^|[^[:alnum:]_])(eval|exec)[[:space:]]*\(' core noryx7_runtime ecosystem jarvis web || true | wc -l)" -eq 0
+          test "$(grep -RInE '(^|[^[:alnum:]_])(eval|exec)[[:space:]]*\(' core noryx7_runtime ecosystem jarvis web provider_e2e || true | wc -l)" -eq 0
           test "$(grep -RInE 'shell[[:space:]]*=[[:space:]]*True|os\.system[[:space:]]*\(|subprocess\.system[[:space:]]*\(' core noryx7_runtime ecosystem jarvis web || true | wc -l)" -eq 0
           test "$(grep -RInE '^[[:space:]]*except[[:space:]]*:[[:space:]]*$' core noryx7_runtime ecosystem jarvis web || true | wc -l)" -eq 0
           python -c 'from pathlib import Path; required=["core/tools.py","core/hypersynth_runtime.py","core/runtime.py","noryx7_runtime/engine.py","core/hypersynth.py","core/jarvis_runtime_bridge.py"]; [Path(x).is_file() or (_ for _ in ()).throw(SystemExit("missing_required_runtime_file:"+x)) for x in required]; ["RuntimeEngine" in Path(x).read_text() or (_ for _ in ()).throw(SystemExit("runtime_engine_binding_missing:"+x)) for x in ("core/tools.py","core/runtime.py","core/hypersynth_runtime.py")]'
