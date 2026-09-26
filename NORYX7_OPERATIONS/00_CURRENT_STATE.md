@@ -1,6 +1,6 @@
 # NORYX7 — Current Operational State
 
-Date: 2026-09-10
+Date: 2026-09-27
 Branch baseline: `main`; Wave 10 is prepared on `integration-wave-10-end-to-end-closure-2026-09-10`.
 
 ## Mission
@@ -62,6 +62,9 @@ The audit found two concrete closure gaps:
 2. The hosted web runtime constructed an operational runtime independently of the configurable task-timeout and user-understanding integration used by the operational entrypoint.
 
 Wave 10 addresses those boundaries together:
+- external-provider execution is bound to the canonical `RuntimeEngine` with `execution_id == idempotency_key` and signed/verified runtime evidence;
+- the repository contains a dedicated HTTPS Render E2E provider sandbox (`NORYX7_PROVIDER_V1`) for real Gateway → RuntimeEngine → provider contract verification;
+- OpenRouter remains an environment-configured model provider; credentials are never stored in repository payloads.
 
 - operational lifecycle records canonical `runtime_received`, `runtime_committed` or `runtime_rejected` provenance through the same `CanonicalSystemFabric`;
 - gateway execution and direct runtime execution can now be checked as one continuous lifecycle;
@@ -73,7 +76,7 @@ Wave 10 addresses those boundaries together:
 
 - The JARVIS execution plane is intentionally optional and fail-closed until explicitly configured with its runtime engine, authorization authority, principal and policy.
 - Voice has a canonical `VoiceGateway` and verified runtime boundary, but the active hosted web surface does not currently expose microphone/STT/TTS endpoints. This is an interface integration boundary, not a hidden claim of live voice availability.
-- External providers such as payments, flights and insurance remain fail-closed until real provider adapters and credentials are configured.
+- External providers such as payments, flights and insurance remain fail-closed until real provider adapters and credentials are configured. The dedicated Render E2E flights sandbox is now the concrete verification provider for the external-provider path; it does not perform real booking or payment effects.
 - A green unit/integration suite is not equivalent to a live Render deployment verification. Deployment configuration and real provider credentials must be checked separately.
 
 ## Security principle
