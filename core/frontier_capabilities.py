@@ -334,13 +334,89 @@ class ChessCapability:
 
 
 class ExternalProviderCapability:
-    """Canonical HTTPS JSON provider adapter; provider-specific contracts stay explicit."""
+    """Canonical HTTPS JSON provider adapter with a strict NORYX7 provider contract."""
+
+    PROTOCOL = "NORYX7_PROVIDER_V1"
+    _EFFECT_STATES = frozenset({"applied", "accepted", "noop"})
+    _FORBIDDEN_PARAMETER_KEYS = frozenset({"authorization", "bearer", "access_token", "client_secret"})
 
     def __init__(self, name: str, env_prefix: str, *, timeout: float = 15.0, max_bytes: int = 256_000):
         self.name = name
         self.env_prefix = env_prefix
         self.timeout = timeout
         self.max_bytes = max_bytes
+
+    @classmethod
+    def _validate_json_value(cls, value, *, path="parameters"):
+        if value is None or isinstance(value, (str, bool, int)):
+            return
+        if isinstance(value, float):
+            if not __import__("math").isfinite(value):
+                raise CapabilityUnavailable(f"provider_invalid_parameter:{path}")
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if not isinstance(key, str) or not key.strip():
+                    raise CapabilityUnavailable(f"provider_invalid_parameter:{path}")
+                if key.strip().lower() in cls._FORBIDDEN_PARAMETER_KEYS:
+                    raise CapabilityUnavailable(f"provider_sensitive_parameter:{path}.{key}")
+                cls._validate_json_value(item, path=f"{path}.{key}")
+            return
+        if isinstance(value, (list, tuple)):
+            for index, item in enumerate(value):
+                cls._validate_json_value(item, path=f"{path}[{index}]")
+            return
+        raise CapabilityUnavailable(f"provider_invalid_parameter:{path}")
+
+    def _build_payload(self, *, target: str, parameters: dict, execution_id: str, operation: str) -> dict:
+        if len(execution_id.encode("utf-8")) > 256:
+            raise CapabilityUnavailable(f"{self.name}_execution_id_too_large")
+        if not operation or len(operation.encode("utf-8")) > 256:
+            raise CapabilityUnavailable(f"{self.name}_operation_invalid")
+        if not isinstance(target, str) or len(target.encode("utf-8")) > 2048:
+            raise CapabilityUnavailable(f"{self.name}_target_invalid")
+        if not isinstance(parameters, dict):
+            raise CapabilityUnavailable(f"{self.name}_parameters_invalid")
+        provider_parameters = {key: value for key, value in parameters.items() if key not in {"execution_id", "operation"}}
+        self._validate_json_value(provider_parameters)
+        return {
+            "protocol": self.PROTOCOL,
+            "provider": self.name,
+            "operation": operation,
+            "target": target,
+            "parameters": provider_parameters,
+            "execution_id": execution_id,
+            "idempotency_key": execution_id,
+        }
+
+    def _validate_response(self, data: object, execution_id: str) -> dict:
+        if not isinstance(data, dict):
+            raise CapabilityUnavailable(f"{self.name}_provider_contract_rejected")
+        if data.get("protocol") != self.PROTOCOL or data.get("provider") != self.name:
+            raise CapabilityUnavailable(f"{self.name}_provider_contract_rejected")
+        status = data.get("status")
+        if status not in {"completed", "accepted"}:
+            raise CapabilityUnavailable(f"{self.name}_provider_contract_rejected")
+        provider_execution_id = str(data.get("execution_id") or "").strip()
+        if provider_execution_id != execution_id or str(data.get("idempotency_key") or "").strip() != execution_id:
+            raise CapabilityUnavailable(f"{self.name}_execution_identity_mismatch")
+        if data.get("verified") is not True:
+            raise CapabilityUnavailable(f"{self.name}_provider_result_unverified")
+        receipt = data.get("receipt")
+        effect = data.get("effect")
+        if not isinstance(receipt, dict) or not str(receipt.get("receipt_id") or "").strip():
+            raise CapabilityUnavailable(f"{self.name}_provider_receipt_required")
+        if not isinstance(effect, dict) or effect.get("status") not in self._EFFECT_STATES:
+            raise CapabilityUnavailable(f"{self.name}_provider_effect_contract_rejected")
+        if status == "accepted" and effect.get("status") != "accepted":
+            raise CapabilityUnavailable(f"{self.name}_provider_effect_status_mismatch")
+        if status == "completed" and effect.get("status") not in {"applied", "noop"}:
+            raise CapabilityUnavailable(f"{self.name}_provider_effect_status_mismatch")
+        result = data.get("result", {})
+        if not isinstance(result, dict):
+            raise CapabilityUnavailable(f"{self.name}_provider_result_contract_rejected")
+        self._validate_json_value(result, path="result")
+        return data
 
     def __call__(self, target: str, parameters: dict) -> dict:
         endpoint = os.environ.get(self.env_prefix + "_ENDPOINT", "").strip()
@@ -354,13 +430,9 @@ class ExternalProviderCapability:
         if not execution_id:
             raise CapabilityUnavailable(f"{self.name}_execution_id_required")
         operation = str(parameters.get("operation") or target or self.name).strip()
-        payload = {
-            "operation": operation, "target": str(target or ""),
-            "parameters": {k: v for k, v in dict(parameters).items() if k != "token"},
-            "execution_id": execution_id, "idempotency_key": execution_id,
-        }
-        req = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={
-            "Content-Type": "application/json", "Authorization": f"Bearer {token}",
+        payload = self._build_payload(target=str(target or ""), parameters=dict(parameters), execution_id=execution_id, operation=operation)
+        req = Request(endpoint, data=json.dumps(payload, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8"), headers={
+            "Content-Type": "application/json", "Accept": "application/json", "Authorization": f"Bearer {token}",
             "User-Agent": "NORYX7/1.0 frontier-provider", "X-NORYX7-Execution-ID": execution_id,
             "Idempotency-Key": execution_id,
         }, method="POST")
@@ -374,15 +446,7 @@ class ExternalProviderCapability:
             raise
         except Exception as exc:
             raise CapabilityUnavailable(f"{self.name}_provider_request_failed") from exc
-        if not isinstance(data, dict) or data.get("status") not in {"completed", "accepted"}:
-            raise CapabilityUnavailable(f"{self.name}_provider_contract_rejected")
-        provider_execution_id = str(data.get("execution_id") or data.get("correlation_id") or "").strip()
-        if provider_execution_id != execution_id:
-            raise CapabilityUnavailable(f"{self.name}_execution_identity_mismatch")
-        if not data.get("verified", False):
-            raise CapabilityUnavailable(f"{self.name}_provider_result_unverified")
-        return data
-
+        return self._validate_response(data, execution_id)
 
 def install_frontier_capabilities(tool_executor) -> tuple[str, ...]:
     """Install only concrete capability handlers; external providers remain fail-closed."""
