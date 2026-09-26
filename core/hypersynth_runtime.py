@@ -18,12 +18,15 @@ from .verification import VerificationEngine
 from .tools import ToolExecutor
 from .frontier_capabilities import install_frontier_capabilities
 from .universal_intelligence import UniversalIntelligenceFabric
+from noryx7_runtime.engine import RuntimeEngine
 
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, universal_intelligence=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, universal_intelligence=None, runtime_engine=None):
         self.audit = audit or AuditLog()
+        if runtime_engine is not None and not isinstance(runtime_engine, RuntimeEngine): raise TypeError("invalid_runtime_engine")
+        self.runtime_engine = runtime_engine
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
         self.limits = limits or RuntimeLimits()
@@ -34,7 +37,7 @@ class HypersynthRuntime:
         self.identity_registry = getattr(self.router, "identity_registry", None)
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
-        self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
+        self.tool_executor = ToolExecutor(self.action_gate, self.verifier, runtime_engine=runtime_engine)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.collaboration = AgentCollaboration(self.verifier)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
