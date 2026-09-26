@@ -95,7 +95,7 @@ class ToolExecutor:
             (step,),
             executor=lambda envelope: handler(
                 envelope.target,
-                dict(envelope.parameters),
+                {**dict(envelope.parameters), "execution_id": envelope.execution_id},
             ),
             verifier=lambda envelope, output: bool(
                 self.verifier.verify_output(output, stage="runtime_result").valid
