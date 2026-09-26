@@ -255,7 +255,11 @@ class ActionGate:
                     return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant"))
             except Exception:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
-            evaluation_action = replace(\n                action,\n                requires_authorization=False,\n                risk_class="sensitive" if action.risk_class == "high" else action.risk_class,\n            )
+            evaluation_action = replace(
+                action,
+                requires_authorization=False,
+                risk_class="sensitive" if action.risk_class == "high" else action.risk_class,
+            )
         try:
             policy_allowed = self.policy.allows(evaluation_action)
         except Exception:
