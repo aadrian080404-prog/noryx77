@@ -52,7 +52,7 @@ jobs:
       - name: Real RuntimeEngine execution smoke
         run: |
           set -euo pipefail
-          python tests/real_runtime_scale_smoke.py
+          python -m tests.real_runtime_scale_smoke
       - name: Security and runtime binding audit
         run: |
           set -euo pipefail
