@@ -310,7 +310,7 @@ class ActionGate:
         if self.authorization is None or execution_id is None or grant is None or principal is None:
             return self.authorize(action, calls_used, execution_id=execution_id, grant=grant, principal=principal), None
 
-        evaluation_action = replace(action, requires_authorization=False)
+        evaluation_action = replace(action, requires_authorization=False, risk_class='sensitive' if action.risk_class == 'high' else action.risk_class)
         try:
             if not self.authorization.verify(action, execution_id, grant, principal=principal):
                 return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant")), None
