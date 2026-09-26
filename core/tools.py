@@ -5,6 +5,7 @@ from .contracts import ActionSpec, VerificationResult
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
 from .security import SecurityBoundary
+from noryx7_runtime.engine import Intent, PlanStep, RuntimeEngine
 
 
 class CapabilityRegistry:
@@ -42,7 +43,7 @@ class ToolExecutor:
         "bureaucracy": "NORYX7_BUREAUCRACY",
     }
 
-    def __init__(self, policy_or_gate, verifier):
+    def __init__(self, policy_or_gate, verifier, *, runtime_engine=None):
         if type(policy_or_gate) is object:
             raise ValueError("canonical_gate_or_policy_required")
         if isinstance(policy_or_gate, ActionGate):
@@ -51,7 +52,58 @@ class ToolExecutor:
             security = SecurityBoundary(policy_or_gate, verifier)
             self.action_gate = ActionGate(policy_or_gate, security, RuntimeLimits())
         self.verifier = verifier
+        if runtime_engine is not None and not isinstance(runtime_engine, RuntimeEngine):
+            raise TypeError("invalid_runtime_engine")
+        self.runtime_engine = runtime_engine
         self.capabilities = CapabilityRegistry()
+
+    def _runtime_dispatch(self, handler, action, capability_name, execution_id, principal):
+        """Route side-effect/high-risk capabilities through the operational execution kernel."""
+        risk = self.capabilities.risk(capability_name) or "normal"
+        if self._RISK_ORDER.get(risk, 99) < self._RISK_ORDER["high"]:
+            return handler(action.target, dict(action.parameters))
+
+        if self.runtime_engine is None:
+            raise RuntimeError("runtime_engine_required_for_high_risk_capability")
+
+        principal_id = getattr(principal, "identity", None)
+        if principal_id is None:
+            principal_id = getattr(principal, "principal_id", None)
+        if principal_id is None:
+            principal_id = str(principal or "noryx7")
+
+        step = PlanStep(
+            step_id=action.action_id,
+            action_type=capability_name,
+            target=action.target,
+            parameters=dict(action.parameters),
+        )
+        intent = Intent(
+            text=f"NORYX7 capability execution: {capability_name}",
+            principal_id=str(principal_id),
+            intent_id=execution_id or action.execution_id or action.action_id,
+        )
+
+        result = self.runtime_engine.execute(
+            intent,
+            (step,),
+            executor=lambda envelope: handler(
+                envelope.target,
+                dict(envelope.parameters),
+            ),
+            verifier=lambda envelope, output: bool(
+                self.verifier.verify_output(output, stage="runtime_result").valid
+            ),
+            execution_id=execution_id or action.execution_id or None,
+        )
+
+        if getattr(result.status, "value", result.status) != "succeeded":
+            raise RuntimeError(result.error or "runtime_execution_failed")
+
+        if len(result.outputs) != 1:
+            raise RuntimeError("runtime_execution_output_mismatch")
+
+        return result.outputs[0]
 
     def _bind_capability_risk(self, action: ActionSpec, capability_name: str) -> ActionSpec:
         configured_risk = self.capabilities.risk(capability_name) or "normal"
@@ -92,7 +144,13 @@ class ToolExecutor:
         try:
             decision, output = self.action_gate.authorize_and_execute(
                 effective_action,
-                lambda: handler(effective_action.target, dict(effective_action.parameters)),
+                lambda: self._runtime_dispatch(
+                    handler,
+                    effective_action,
+                    capability_name,
+                    effective_execution_id,
+                    principal,
+                ),
                 calls_used,
                 execution_id=effective_execution_id,
                 grant=grant,
