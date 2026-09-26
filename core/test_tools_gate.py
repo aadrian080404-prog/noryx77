@@ -1,5 +1,7 @@
 import unittest
 
+import pytest
+
 from .actions import ActionGate
 from .contracts import ActionSpec
 from .limits import RuntimeLimits
@@ -72,29 +74,34 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def test_high_risk_external_provider_crosses_action_gate_runtime_and_signed_journal(monkeypatch):
+@pytest.mark.parametrize("capability", ["flights", "payments", "contracts", "bureaucracy", "insurance"])
+def test_high_risk_external_provider_crosses_action_gate_runtime_and_signed_journal(monkeypatch, capability):
     import json
     from core.actions import AuthorizationAuthority
-    from core.identity import AgentIdentityAuthority
+    from core.identity import AgentIdentityAuthority, IdentityRegistry
     from core.frontier_capabilities import ExternalProviderCapability
-    from core.tools import ToolExecutor
     from noryx7_runtime.attestation import Ed25519AttestationSigner
     from noryx7_runtime.engine import RuntimeEngine
     from noryx7_runtime.state import StateJournal
 
-    identity, private_key = AgentIdentityAuthority.generate("browser-agent")
-    registry = __import__("core.identity", fromlist=["IdentityRegistry"]).IdentityRegistry()
+    verifier = VerificationEngine()
+    policy = PolicyEngine()
+    security = SecurityBoundary(policy, verifier)
+    identity, private_key = AgentIdentityAuthority.generate("browser-agent-" + capability)
+    registry = IdentityRegistry()
     registry.register(identity)
     signer = Ed25519AttestationSigner(private_key)
-    journal = StateJournal(require_signatures=True, verifier=signer, runtime_id="provider-e2e")
+    runtime_id = "provider-e2e-" + capability
+    execution_id = runtime_id + "-exec"
+    journal = StateJournal(require_signatures=True, verifier=signer, runtime_id=runtime_id)
     engine = RuntimeEngine(
         attestation_signer=signer,
-        runtime_id="provider-e2e",
+        runtime_id=runtime_id,
         state_journal=journal,
     )
     authority = AuthorizationAuthority(b"provider-e2e-secret-" + b"x" * 16, identity_registry=registry)
-    gate = ActionGate(self.policy, self.security, RuntimeLimits(max_actions_per_task=1), authorization=authority)
-    executor = ToolExecutor(gate, self.verifier, runtime_engine=engine)
+    gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=1), authorization=authority)
+    executor = ToolExecutor(gate, verifier, runtime_engine=engine)
 
     class Response:
         def __enter__(self): return self
@@ -102,47 +109,48 @@ def test_high_risk_external_provider_crosses_action_gate_runtime_and_signed_jour
         def read(self, _limit):
             return json.dumps({
                 "protocol": "NORYX7_PROVIDER_V1",
-                "provider": "flights",
+                "provider": capability,
                 "status": "completed",
-                "execution_id": "provider-e2e-exec",
-                "idempotency_key": "provider-e2e-exec",
+                "execution_id": execution_id,
+                "idempotency_key": execution_id,
                 "verified": True,
-                "receipt": {"receipt_id": "receipt-e2e-1"},
+                "receipt": {"receipt_id": "receipt-" + capability},
                 "effect": {"status": "applied"},
-                "result": {"booking_id": "BOOK-E2E"},
+                "result": {"capability": capability, "accepted": True},
             }).encode()
 
-    monkeypatch.setenv("NORYX7_FLIGHTS_ENDPOINT", "https://provider.example.test/execute")
-    monkeypatch.setenv("NORYX7_FLIGHTS_TOKEN", "provider-token")
+    prefix = "NORYX7_" + capability.upper()
+    monkeypatch.setenv(prefix + "_ENDPOINT", "https://provider.example.test/execute")
+    monkeypatch.setenv(prefix + "_TOKEN", "provider-token")
     import core.frontier_capabilities as frontier
     monkeypatch.setattr(frontier, "urlopen", lambda *_args, **_kwargs: Response())
 
     action = ActionSpec(
-        "provider-e2e-step",
-        "flights",
-        target="book",
-        parameters={"operation": "book"},
+        "provider-e2e-step-" + capability,
+        capability,
+        target="execute",
+        parameters={"operation": "execute"},
         risk_class="high",
         requires_authorization=True,
-        execution_id="provider-e2e-exec",
+        execution_id=execution_id,
     )
-    grant = authority.issue(action, "provider-e2e-exec", principal=identity)
+    grant = authority.issue(action, execution_id, principal=identity)
     output, check = executor.execute(
         action,
-        execution_id="provider-e2e-exec",
+        execution_id=execution_id,
         grant=grant,
         principal=identity,
     )
 
     assert check.valid
-    assert output["receipt"]["receipt_id"] == "receipt-e2e-1"
+    assert output["receipt"]["receipt_id"] == "receipt-" + capability
     assert output["effect"]["status"] == "applied"
     entries = journal.snapshot()
     assert len(entries) == 1
-    assert entries[0].execution_id == "provider-e2e-exec"
-    assert entries[0].step_id == "provider-e2e-step"
+    assert entries[0].execution_id == execution_id
+    assert entries[0].step_id == action.action_id
     assert entries[0].external_commit_status == "not_required"
     assert entries[0].output_digest
-    assert engine.runtime_id == "provider-e2e"
+    assert engine.runtime_id == runtime_id
     engine.close()
     journal.close()
