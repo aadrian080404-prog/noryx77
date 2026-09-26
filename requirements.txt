@@ -4,3 +4,4 @@ pydantic
 cryptography==46.0.7
 python-chess
 ddgs
+httpx2==2.13.1
