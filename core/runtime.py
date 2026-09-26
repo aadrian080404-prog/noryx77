@@ -26,7 +26,6 @@ from .security import SecurityBoundary
 from .state import NORYXState, StateStore
 from .state_journal import StateJournal
 from .verification import VerificationEngine
-from noryx7_runtime.engine import RuntimeEngine
 
 class NORYXRuntime:
     """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
@@ -36,6 +35,7 @@ class NORYXRuntime:
         self.user_understanding=user_understanding; self.verifier=VerificationEngine(); self.policy=PolicyEngine(); self.recovery=RecoveryController(); self.security=SecurityBoundary(self.policy,self.verifier,recovery=self.recovery); self.action_gate=ActionGate(self.policy,self.security,self.limits); self.memory=MemoryStore(max_items=self.limits.max_memory_items); self.state_journal=StateJournal(state_journal_path,max_commits=self.limits.max_memory_items) if state_journal_path else None; self.state=StateStore(max_commits=self.limits.max_memory_items,journal=self.state_journal); self.audit=AuditLog(); self.identity_registry=IdentityRegistry(); deterministic_identity,_=AgentIdentityAuthority.generate("deterministic"); self.identity_registry.register(deterministic_identity); self.router=ResourceRouter(identity_registry=self.identity_registry); self.router.register(DeterministicAgent(self.verifier,identity=deterministic_identity))
         if model_fabric is not None:
             llm_identity,_=AgentIdentityAuthority.generate("noryx7-llm"); self.identity_registry.register(llm_identity); self.router.register(LLMBackedAgent(model_fabric,verifier=self.verifier,self_knowledge=SelfKnowledgeProvider(runtime=self),identity=llm_identity))
+        from noryx7_runtime.engine import RuntimeEngine
         self.runtime_engine=RuntimeEngine(
             max_actions=self.limits.max_actions_per_task,
             state_journal=self.state_journal,
