@@ -21,3 +21,18 @@ services:
         sync: false
       - key: NORYX_SPONSORED_LOADING_URL
         sync: false
+      - key: NORYX7_FLIGHTS_ENDPOINT
+        sync: false
+      - key: NORYX7_FLIGHTS_TOKEN
+        sync: false
+
+  - type: web
+    name: noryx7-provider-e2e-20260926
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python provider_e2e/server.py
+    healthCheckPath: /health
+    envVars:
+      - key: NORYX7_E2E_PROVIDER_TOKEN
+        sync: false
