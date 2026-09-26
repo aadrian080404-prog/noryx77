@@ -37,12 +37,12 @@ jobs:
       - name: Verify installed dependency set
         run: python -m pip check
       - name: Compile Python sources
-        run: python -m compileall -q core noryx7_runtime ecosystem jarvis
+        run: python -m compileall -q core noryx7_runtime ecosystem jarvis provider_e2e
       - name: Run complete pytest suite
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest core noryx7_runtime ecosystem jarvis tests -q 2>&1 | tee test-output.txt
+          python -m pytest core noryx7_runtime ecosystem jarvis provider_e2e tests -q 2>&1 | tee test-output.txt
       - name: Verify NORYX Browser
         working-directory: noryx-browser
         run: gradle test assembleDebug --no-daemon
