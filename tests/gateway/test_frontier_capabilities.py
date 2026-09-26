@@ -182,3 +182,55 @@ def test_frontier_external_capabilities_lazy_register_as_high_risk(monkeypatch, 
     registry.register(capability, ExternalProviderCapability(capability, "NORYX7_" + capability.upper()), risk_class="high")
     assert registry.risk(capability) == "high"
     assert isinstance(registry.resolve(capability), ExternalProviderCapability)
+
+@pytest.mark.parametrize("capability", ["flights", "payments", "contracts", "bureaucracy", "insurance"])
+def test_configured_frontier_capability_is_exposed_and_executable_through_gateway_boundary(monkeypatch, capability):
+    import json
+    import core.frontier_capabilities as frontier
+
+    prefix = "NORYX7_" + capability.upper()
+    monkeypatch.setenv(prefix + "_ENDPOINT", "https://provider.example.test/execute")
+    monkeypatch.setenv(prefix + "_TOKEN", "configured-token")
+
+    class Response:
+        status = 200
+        def __enter__(self):
+            return self
+        def __exit__(self, *_args):
+            return False
+        def read(self, _limit):
+            return json.dumps({
+                "protocol": "NORYX7_PROVIDER_V1",
+                "provider": capability,
+                "status": "completed",
+                "execution_id": "gateway-provider-exec",
+                "idempotency_key": "gateway-provider-exec",
+                "verified": True,
+                "receipt": {"receipt_id": "receipt-" + capability},
+                "effect": {"status": "applied"},
+                "result": {"capability": capability, "accepted": True},
+            }).encode()
+
+    monkeypatch.setattr(frontier, "urlopen", lambda *_args, **_kwargs: Response())
+
+    gateway = NoryxGateway(
+        runtime_adapter=RuntimeAdapter(_CapabilityRuntime()),
+        bootstrap_token="bootstrap-test",
+        signing_secret="signing-test",
+    )
+    session = gateway.create_session(
+        bootstrap_token="bootstrap-test",
+        client_id="browser-frontier-matrix",
+    )
+
+    authorization = gateway.system_fabric.authorize(session["session_id"], capability)
+    assert authorization.identity_id == "browser-frontier-matrix"
+
+    task = RuntimeAdapter._build_task(
+        client_id="browser-frontier-matrix",
+        text="execute " + capability,
+        execution_id="gateway-provider-exec",
+        capability=capability,
+    )
+    assert task.task_type == capability
+\n
