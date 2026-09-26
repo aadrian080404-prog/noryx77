@@ -63,7 +63,7 @@ def main() -> None:
     signature = inspect.signature(engine.execute)
     print("EXECUTE_SIGNATURE =", signature)
 
-    if len(signature.parameters) != 7:
+    if len(signature.parameters) != 8:
         raise AssertionError(
             f"unexpected_execute_contract:{signature}"
         )
