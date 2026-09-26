@@ -26,6 +26,7 @@ from .security import SecurityBoundary
 from .state import NORYXState, StateStore
 from .state_journal import StateJournal
 from .verification import VerificationEngine
+from noryx7_runtime.engine import RuntimeEngine
 
 class NORYXRuntime:
     """Controlled runtime: validate -> understand -> represent -> route -> plan -> execute -> verify -> commit."""
@@ -35,10 +36,17 @@ class NORYXRuntime:
         self.user_understanding=user_understanding; self.verifier=VerificationEngine(); self.policy=PolicyEngine(); self.recovery=RecoveryController(); self.security=SecurityBoundary(self.policy,self.verifier,recovery=self.recovery); self.action_gate=ActionGate(self.policy,self.security,self.limits); self.memory=MemoryStore(max_items=self.limits.max_memory_items); self.state_journal=StateJournal(state_journal_path,max_commits=self.limits.max_memory_items) if state_journal_path else None; self.state=StateStore(max_commits=self.limits.max_memory_items,journal=self.state_journal); self.audit=AuditLog(); self.identity_registry=IdentityRegistry(); deterministic_identity,_=AgentIdentityAuthority.generate("deterministic"); self.identity_registry.register(deterministic_identity); self.router=ResourceRouter(identity_registry=self.identity_registry); self.router.register(DeterministicAgent(self.verifier,identity=deterministic_identity))
         if model_fabric is not None:
             llm_identity,_=AgentIdentityAuthority.generate("noryx7-llm"); self.identity_registry.register(llm_identity); self.router.register(LLMBackedAgent(model_fabric,verifier=self.verifier,self_knowledge=SelfKnowledgeProvider(runtime=self),identity=llm_identity))
-        self.decomposer=TaskDecomposer(); self.hypersynth=HypersynthRuntime(verifier=self.verifier,router=self.router,audit=self.audit,limits=self.limits,memory=self.memory,recovery=self.recovery); self.capability_registry=self.hypersynth.tool_executor.capabilities; self.tool_executor=self.hypersynth.tool_executor; self.frontier_capabilities=self.hypersynth.frontier_capabilities; self._offline=None; self._closed=False
+        self.runtime_engine=RuntimeEngine(
+            max_actions=self.limits.max_actions_per_task,
+            state_journal=self.state_journal,
+            runtime_id=f"runtime-{uuid4().hex}"
+        )
+        self.decomposer=TaskDecomposer(); self.hypersynth=HypersynthRuntime(verifier=self.verifier,router=self.router,audit=self.audit,limits=self.limits,memory=self.memory,recovery=self.recovery,runtime_engine=self.runtime_engine); self.capability_registry=self.hypersynth.tool_executor.capabilities; self.tool_executor=self.hypersynth.tool_executor; self.frontier_capabilities=self.hypersynth.frontier_capabilities; self._offline=None; self._closed=False
     def shutdown(self):
         if self._closed:return
         self._closed=True; journal=self.state_journal
+        if getattr(self, "runtime_engine", None) is not None:
+            self.runtime_engine.close()
         if journal is not None: journal.close()
         self.audit.record("runtime_shutdown",state_journal_closed=journal is not None)
     def configure_offline(self,*,cipher:AuthenticatedCipher,key_id:str,snapshot_authenticator,clock):
