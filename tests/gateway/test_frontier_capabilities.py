@@ -233,4 +233,3 @@ def test_configured_frontier_capability_is_exposed_and_executable_through_gatewa
         capability=capability,
     )
     assert task.task_type == capability
-\n
