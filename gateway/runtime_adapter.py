@@ -12,7 +12,7 @@ from core.system_identity import CANONICAL_SYSTEM_IDENTITY
 class RuntimeAdapter:
     """Translate an authenticated gateway request into the canonical operational runtime."""
     MAX_INPUT_BYTES = 8192
-    SUPPORTED_CAPABILITIES = frozenset({"web_research"})
+    SUPPORTED_CAPABILITIES = frozenset({"web_research", "flights", "payments", "contracts", "bureaucracy", "insurance"})
 
     def __init__(self, runtime: OperationalNORYXRuntime):
         required = ("heartbeat_agents", "run_hypersynth")

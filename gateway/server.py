@@ -41,8 +41,19 @@ class NoryxGateway:
         return os.environ.get("NORYX7_WEB_RESEARCH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
     @classmethod
+    def _configured_capabilities(cls) -> tuple[str, ...]:
+        capabilities = []
+        if cls._web_research_enabled():
+            capabilities.append("web_research")
+        for capability in ("flights", "payments", "contracts", "bureaucracy", "insurance"):
+            prefix = "NORYX7_" + capability.upper()
+            if os.environ.get(prefix + "_ENDPOINT", "").strip() and os.environ.get(prefix + "_TOKEN", "").strip():
+                capabilities.append(capability)
+        return tuple(capabilities)
+
+    @classmethod
     def _session_capabilities(cls) -> tuple[str, ...]:
-        return ("execute", "web_research") if cls._web_research_enabled() else ("execute",)
+        return ("execute",) + cls._configured_capabilities()
 
     def health(self) -> dict:
         statuses = self.runtime.runtime.heartbeat_agents()
@@ -67,8 +78,6 @@ class NoryxGateway:
         if authorization.identity_id != identity["client_id"]:
             raise PermissionError("session_client_identity_mismatch")
         if capability is not None:
-            if not self._web_research_enabled():
-                raise PermissionError("capability_disabled")
             self.system_fabric.authorize(session_id, capability)
         return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id, session_id=session_id, capability=capability, query=query)
 
