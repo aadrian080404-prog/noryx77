@@ -86,10 +86,9 @@ def test_high_risk_external_provider_crosses_action_gate_runtime_and_signed_jour
     registry = __import__("core.identity", fromlist=["IdentityRegistry"]).IdentityRegistry()
     registry.register(identity)
     signer = Ed25519AttestationSigner(private_key)
-    journal = StateJournal(require_signatures=True, verifier=signer, identity_registry=registry, runtime_id="provider-e2e")
+    journal = StateJournal(require_signatures=True, verifier=signer, runtime_id="provider-e2e")
     engine = RuntimeEngine(
         attestation_signer=signer,
-        identity_registry=registry,
         runtime_id="provider-e2e",
         state_journal=journal,
     )
