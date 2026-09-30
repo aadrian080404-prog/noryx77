@@ -15,6 +15,7 @@ from core.actions import ActionGate, AuthorizationAuthority
 from core.tools import ToolExecutor
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from noryx7_runtime.engine import RuntimeEngine
+from core.system_fabric import CanonicalSystemFabric
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -62,6 +63,14 @@ class JarvisRuntime:
             core_registry=self.tool_executor.capabilities,
         )
         self.runtime_engine = RuntimeEngine()
+        self.system_fabric = CanonicalSystemFabric(
+            runtime_engine=self.runtime_engine,
+            tool_executor=self.tool_executor,
+            verifier=self.core_verifier,
+            authorization=self.authorization,
+            principal=self.jarvis_identity,
+            policy=self.orchestrator.policy,
+        )
         self.runtime_bridge = JarvisRuntimeBridge(
             runtime_engine=self.runtime_engine,
             tool_executor=self.tool_executor,
@@ -69,6 +78,7 @@ class JarvisRuntime:
             authorization=self.authorization,
             principal=self.jarvis_identity,
             policy=self.orchestrator.policy,
+            system_fabric=self.system_fabric,
         )
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
     def grant(self, principal_id: str, capability: str, target: str) -> None:
