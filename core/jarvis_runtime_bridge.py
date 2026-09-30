@@ -10,6 +10,7 @@ from core.verification import VerificationEngine
 from jarvis.core.contracts import ActionResult, Plan, PlanStep, Request
 from noryx7_runtime.contracts import Intent, PlanStep as RuntimePlanStep
 from noryx7_runtime.engine import RuntimeEngine
+from core.system_fabric import CanonicalSystemFabric
 
 
 class JarvisRuntimeBridge:
@@ -30,6 +31,7 @@ class JarvisRuntimeBridge:
         authorization: AuthorizationAuthority | None = None,
         principal: AgentIdentity | None = None,
         policy: Any | None = None,
+        system_fabric: CanonicalSystemFabric | None = None,
     ) -> None:
         if not isinstance(runtime_engine, RuntimeEngine):
             raise TypeError("runtime_engine_required")
@@ -48,6 +50,22 @@ class JarvisRuntimeBridge:
         self.authorization = authorization
         self.principal = principal
         self.policy = policy
+        self.system_fabric = system_fabric or CanonicalSystemFabric(
+            runtime_engine=runtime_engine,
+            tool_executor=tool_executor,
+            verifier=self.verifier,
+            authorization=authorization,
+            principal=principal,
+            policy=policy,
+        )
+        self.system_fabric.assert_consistent(
+            runtime_engine=runtime_engine,
+            tool_executor=tool_executor,
+            verifier=self.verifier,
+            authorization=authorization,
+            principal=principal,
+            policy=policy,
+        )
 
     @staticmethod
     def _runtime_step(step: PlanStep) -> RuntimePlanStep:

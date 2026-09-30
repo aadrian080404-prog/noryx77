@@ -147,7 +147,7 @@ class AgentCollaboration:
             task.task_id,
             secondary_id,
             primary_id,
-            first == "APPROVE",
+            verdict_token == "APPROVE",
             normalized,
             self._digest(normalized),
         )
@@ -171,7 +171,7 @@ class AgentCollaboration:
             task.task_id,
             primary_id,
             secondary_id,
-            True,
+            verdict_token == "APPROVE",
             output.strip(),
             proposal.evidence_digest,
             critique.evidence_digest,
