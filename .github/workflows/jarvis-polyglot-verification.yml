@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --locked
+      - run: cargo test
   go:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: services/jarvis-gateway-go}}
