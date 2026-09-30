@@ -1,0 +1,31 @@
+name: NORYX7 JARVIS Polyglot Verification
+on:
+  push:
+    branches: [main, noryx7-jarvis-total-integration-2026-09-30]
+  pull_request:
+    branches: [main]
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m compileall -q core jarvis noryx7_runtime
+      - run: pip install -r requirements.txt
+      - run: pytest tests/test_jarvis_interaction.py tests/test_jarvis_facade.py -q
+  rust:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/jarvis-runtime-rs}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+  go:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: services/jarvis-gateway-go}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version: '1.22'}
+      - run: go test ./...
