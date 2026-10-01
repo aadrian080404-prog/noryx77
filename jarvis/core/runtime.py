@@ -120,8 +120,9 @@ class JarvisRuntime:
         )
         return {
             "provider": result.provider,
-            "capability": result.capability,
+            "capability": capability,
             "output": result.output,
+            "attempts": result.attempts,
         }
 
     def grant(self, principal_id: str, capability: str, target: str) -> None:
