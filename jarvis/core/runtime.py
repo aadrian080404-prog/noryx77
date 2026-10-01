@@ -19,6 +19,7 @@ from core.system_fabric import CanonicalSystemFabric
 from core.execution_trace import ExecutionTrace
 from core.provider_router import Provider
 from core.provider_execution import ProviderExecutionGateway
+from core.provider_resilience import ResilientProviderExecutor
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -66,6 +67,7 @@ class JarvisRuntime:
             core_registry=self.tool_executor.capabilities,
         )
         self.provider_execution = ProviderExecutionGateway()
+        self.provider_resilience = ResilientProviderExecutor()
         self.registry.register("provider_execute", self._execute_provider_capability)
         self.runtime_engine = RuntimeEngine()
         self.execution_traces: dict[str, ExecutionTrace] = {}
@@ -99,6 +101,7 @@ class JarvisRuntime:
 
     def register_provider(self, provider: Provider) -> None:
         self.provider_execution.register(provider)
+        self.provider_resilience.register(provider)
 
     def _execute_provider_capability(self, step):
         capability = step.parameters.get("provider_capability")
