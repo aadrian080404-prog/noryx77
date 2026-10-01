@@ -59,6 +59,7 @@ class ProviderExecutionGateway:
         *,
         principal_id: str,
         logical_target: str,
+        authorize_capability: str,
         authorize: Callable[[str, str, str], bool],
     ) -> ProviderExecutionResult:
         if not isinstance(principal_id, str) or not principal_id.strip():
@@ -72,7 +73,7 @@ class ProviderExecutionGateway:
         fabric = ExecutionFabric(
             authorize=lambda action: authorize(
                 principal_id,
-                capability,
+                authorize_capability,
                 logical_target,
             )
         )
