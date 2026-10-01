@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 from urllib import error as urlerror
 from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 from core.provider_router import Provider
 
@@ -61,7 +61,13 @@ class HttpJsonProvider:
         self.config = config
         self._headers = dict(headers or {})
         self._ssl_context = ssl_context
-        self._opener = build_opener(_NoRedirectHandler())
+        if ssl_context is None:
+            self._opener = build_opener(_NoRedirectHandler())
+        else:
+            self._opener = build_opener(
+                _NoRedirectHandler(),
+                HTTPSHandler(context=ssl_context),
+            )
 
     def __call__(self, parameters: Any) -> Any:
         if not isinstance(parameters, Mapping):
@@ -89,7 +95,6 @@ class HttpJsonProvider:
             with self._opener.open(
                 request,
                 timeout=self.config.timeout_seconds,
-                context=self._ssl_context,
             ) as response:
                 raw = response.read(self.config.max_response_bytes + 1)
                 status = getattr(response, "status", 200)
