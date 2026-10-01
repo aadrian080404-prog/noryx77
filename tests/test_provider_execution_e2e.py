@@ -125,3 +125,45 @@ def test_jarvis_provider_path_fails_closed_without_user_grant():
     trace = runtime.execution_traces[request_id]
     assert trace.verify() is True
     assert trace.events()[-1].event_type == "execution_denied"
+
+
+def test_jarvis_provider_runtime_failover_uses_secondary_and_preserves_provenance():
+    calls = []
+
+    def primary(parameters):
+        calls.append("primary")
+        raise RuntimeError("primary_down")
+
+    def secondary(parameters):
+        calls.append("secondary")
+        return {"provider_reply": parameters["payload"]["message"]}
+
+    runtime = JarvisRuntime()
+    runtime.register_provider(
+        Provider("primary", frozenset({"chat"}), primary)
+    )
+    runtime.register_provider(
+        Provider("secondary", frozenset({"chat"}), secondary)
+    )
+    runtime.grant("user", "provider_execute", "provider:chat")
+
+    request_id = "provider-runtime-failover-001"
+    frontend = _wake()
+    item = frontend.build_input("usa il provider")
+    result = JarvisFacade(runtime=runtime, frontend=frontend).accept_input(
+        item,
+        _plan(request_id),
+    )
+
+    assert result.accepted is True
+    assert result.results[0].success is True
+    assert result.results[0].output == {
+        "provider": "secondary",
+        "capability": "chat",
+        "output": {"provider_reply": "NORYX7-PROVIDER-E2E"},
+    }
+    assert calls == ["primary", "secondary"]
+    assert runtime.execution_traces[request_id].verify() is True
+    committed = runtime.state.get(request_id, principal_id="user")
+    assert committed is not None
+    assert committed.state.status == "committed"
