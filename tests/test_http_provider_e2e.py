@@ -51,7 +51,7 @@ def test_http_provider_executes_json_through_resilience_boundary():
             build_http_provider(
                 name="http-primary",
                 capabilities=frozenset({"chat"}),
-                config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=2.0),
+                config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=2.0, allow_insecure_http=True),
             )
         )
 
@@ -77,7 +77,7 @@ def test_http_provider_timeout_is_bounded_and_failover_reaches_secondary():
             build_http_provider(
                 name="http-primary",
                 capabilities=frozenset({"chat"}),
-                config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=0.05),
+                config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=0.05, allow_insecure_http=True),
             )
         )
         runtime.register(
