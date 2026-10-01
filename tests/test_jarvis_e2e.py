@@ -32,9 +32,9 @@ def test_jarvis_frontend_to_canonical_execution_is_real_end_to_end():
     runtime = JarvisRuntime()
     runtime.registry.register(
         "echo",
-        lambda target, parameters: {
-            "target": target,
-            "message": parameters["message"],
+        lambda step: {
+            "target": step.target,
+            "message": step.parameters["message"],
         },
     )
     runtime.grant("user", "echo", "local:test")
@@ -76,7 +76,7 @@ def test_jarvis_frontend_to_canonical_execution_is_real_end_to_end():
 
 def test_jarvis_end_to_end_fails_closed_without_user_grant():
     runtime = JarvisRuntime()
-    runtime.registry.register("echo", lambda target, parameters: parameters["message"])
+    runtime.registry.register("echo", lambda step: step.parameters["message"])
 
     request_id = "e2e-runtime-denied-001"
     plan = _plan(request_id)
