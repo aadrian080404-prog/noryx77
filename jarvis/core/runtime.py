@@ -19,6 +19,7 @@ from core.system_fabric import CanonicalSystemFabric
 from core.execution_trace import ExecutionTrace
 from core.provider_router import Provider
 from core.provider_execution import ProviderExecutionGateway
+from core.provider_resilience import ResilientProviderExecutor
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -66,6 +67,7 @@ class JarvisRuntime:
             core_registry=self.tool_executor.capabilities,
         )
         self.provider_execution = ProviderExecutionGateway()
+        self.provider_resilience = ResilientProviderExecutor()
         self.registry.register("provider_execute", self._execute_provider_capability)
         self.runtime_engine = RuntimeEngine()
         self.execution_traces: dict[str, ExecutionTrace] = {}
@@ -99,6 +101,7 @@ class JarvisRuntime:
 
     def register_provider(self, provider: Provider) -> None:
         self.provider_execution.register(provider)
+        self.provider_resilience.register(provider)
 
     def _execute_provider_capability(self, step):
         capability = step.parameters.get("provider_capability")
@@ -108,18 +111,26 @@ class JarvisRuntime:
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise PermissionError("provider_principal_required")
         payload = step.parameters.get("payload")
-        result = self.provider_execution.execute(
+        result = self.provider_resilience.execute(
             capability,
             payload,
             principal_id=principal_id,
             logical_target=step.target,
-            authorize_capability="provider_execute",
             authorize=self.orchestrator.policy.authorize,
         )
         return {
             "provider": result.provider,
-            "capability": result.capability,
+            "capability": capability,
             "output": result.output,
+            "attempts": tuple(
+                {
+                    "provider": attempt.provider,
+                    "attempt": attempt.attempt,
+                    "success": attempt.success,
+                    "error": attempt.error,
+                }
+                for attempt in result.attempts
+            ),
         }
 
     def grant(self, principal_id: str, capability: str, target: str) -> None:
