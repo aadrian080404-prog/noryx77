@@ -16,6 +16,7 @@ from core.tools import ToolExecutor
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from noryx7_runtime.engine import RuntimeEngine
 from core.system_fabric import CanonicalSystemFabric
+from core.execution_trace import ExecutionTrace
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -63,6 +64,7 @@ class JarvisRuntime:
             core_registry=self.tool_executor.capabilities,
         )
         self.runtime_engine = RuntimeEngine()
+        self.execution_traces: dict[str, ExecutionTrace] = {}
         self.system_fabric = CanonicalSystemFabric(
             runtime_engine=self.runtime_engine,
             tool_executor=self.tool_executor,
@@ -81,6 +83,16 @@ class JarvisRuntime:
             system_fabric=self.system_fabric,
         )
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
+    def _trace_for(self, execution_id: str) -> ExecutionTrace:
+        trace = self.execution_traces.get(execution_id)
+        if trace is None:
+            if len(self.execution_traces) >= 10_000:
+                oldest = next(iter(self.execution_traces))
+                self.execution_traces.pop(oldest, None)
+            trace = ExecutionTrace(execution_id)
+            self.execution_traces[execution_id] = trace
+        return trace
+
     def grant(self, principal_id: str, capability: str, target: str) -> None:
         if not isinstance(self.orchestrator.policy, Policy): raise TypeError("runtime policy does not support grants")
         self.orchestrator.policy.grant(principal_id, capability, target)
@@ -99,9 +111,12 @@ class JarvisRuntime:
         if plan.request_id != request.request_id:
             raise PermissionError("request_identity_mismatch")
 
+        trace = self._trace_for(request.request_id)
+        trace.append("execution_requested", {"principal_id": request.principal_id})
         recovery_state, recovery_epoch = self.recovery.snapshot()
         if recovery_state is not RecoveryState.NORMAL:
             self.audit.record("recovery_execution_denied", request.principal_id)
+            trace.append("execution_denied", {"reason": "recovery"})
             return ()
 
         if not plan.steps:
@@ -109,6 +124,7 @@ class JarvisRuntime:
                 "execution_authorization_rejected",
                 request.principal_id,
             )
+            trace.append("execution_denied", {"reason": "empty_plan"})
             raise PermissionError("capability_denied")
 
         # JARVIS user-level authorization is checked before reserving the
@@ -127,6 +143,7 @@ class JarvisRuntime:
                     request.principal_id,
                     reason="capability_denied",
                 )
+                trace.append("execution_denied", {"reason": "capability_denied", "step_id": step.step_id})
                 raise PermissionError("capability_denied")
 
         execution_id = request.request_id
@@ -146,6 +163,7 @@ class JarvisRuntime:
             return ()
 
         self.audit.record("execution_started", request.principal_id)
+        trace.append("execution_started", {"principal_id": request.principal_id, "step_count": len(plan.steps)})
 
         try:
             results = self.recovery.run_if_normal(
@@ -167,6 +185,8 @@ class JarvisRuntime:
             )
             return ()
 
+        trace.append("execution_bridge_completed", {"result_count": len(results) if isinstance(results, tuple) else -1})
+
         if not isinstance(results, tuple):
             self.audit.record(
                 "execution_failed",
@@ -180,6 +200,7 @@ class JarvisRuntime:
                 "execution_verification_failed",
                 request.principal_id,
             )
+            trace.append("execution_verification_failed", {"result_count": len(results)})
             return ()
 
         state = JarvisState(
@@ -205,6 +226,8 @@ class JarvisRuntime:
             )
             return ()
 
+        trace.append("state_committed", {"result_count": len(results)})
         self.audit.record("state_committed", request.principal_id)
         self.audit.record("execution_finished", request.principal_id)
+        trace.append("execution_finished", {"result_count": len(results)})
         return results
