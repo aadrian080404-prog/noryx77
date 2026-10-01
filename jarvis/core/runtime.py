@@ -20,6 +20,7 @@ from core.execution_trace import ExecutionTrace
 from core.provider_router import Provider
 from core.provider_execution import ProviderExecutionGateway
 from core.provider_resilience import ResilientProviderExecutor
+from core.http_provider import HttpProviderConfig, build_http_provider
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -102,6 +103,23 @@ class JarvisRuntime:
     def register_provider(self, provider: Provider) -> None:
         self.provider_execution.register(provider)
         self.provider_resilience.register(provider)
+
+    def register_http_provider(
+        self,
+        *,
+        name: str,
+        capabilities: frozenset[str],
+        config: HttpProviderConfig,
+        headers=None,
+    ) -> None:
+        self.register_provider(
+            build_http_provider(
+                name=name,
+                capabilities=capabilities,
+                config=config,
+                headers=headers,
+            )
+        )
 
     def _execute_provider_capability(self, step):
         capability = step.parameters.get("provider_capability")
