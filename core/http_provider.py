@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 from urllib import error as urlerror
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from core.provider_router import Provider
 
@@ -20,11 +20,14 @@ class HttpProviderConfig:
     max_response_bytes: int = 1_048_576
     api_key_env: str | None = None
     authorization_scheme: str = "Bearer"
+    allow_insecure_http: bool = False
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.endpoint)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("http_provider_endpoint_invalid")
+        if parsed.scheme == "http" and not self.allow_insecure_http:
+            raise ValueError("http_provider_insecure_transport")
         if parsed.username or parsed.password:
             raise ValueError("http_provider_credentials_must_not_be_in_url")
         if self.timeout_seconds <= 0:
@@ -33,6 +36,11 @@ class HttpProviderConfig:
             raise ValueError("http_provider_response_limit_invalid")
         if self.api_key_env is not None and not self.api_key_env.strip():
             raise ValueError("http_provider_api_key_env_invalid")
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError("http_provider_redirect_rejected")
 
 
 class HttpJsonProvider:
@@ -53,6 +61,7 @@ class HttpJsonProvider:
         self.config = config
         self._headers = dict(headers or {})
         self._ssl_context = ssl_context
+        self._opener = build_opener(_NoRedirectHandler())
 
     def __call__(self, parameters: Any) -> Any:
         if not isinstance(parameters, Mapping):
@@ -77,7 +86,7 @@ class HttpJsonProvider:
 
         request = Request(self.config.endpoint, data=body, headers=request_headers, method="POST")
         try:
-            with urlopen(
+            with self._opener.open(
                 request,
                 timeout=self.config.timeout_seconds,
                 context=self._ssl_context,
