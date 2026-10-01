@@ -111,12 +111,11 @@ class JarvisRuntime:
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise PermissionError("provider_principal_required")
         payload = step.parameters.get("payload")
-        result = self.provider_execution.execute(
+        result = self.provider_resilience.execute(
             capability,
             payload,
             principal_id=principal_id,
             logical_target=step.target,
-            authorize_capability="provider_execute",
             authorize=self.orchestrator.policy.authorize,
         )
         return {
