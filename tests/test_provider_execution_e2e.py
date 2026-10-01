@@ -95,7 +95,7 @@ def test_jarvis_provider_path_fails_closed_when_provider_is_unavailable():
     assert runtime.state.get(request_id, principal_id="user") is None
     trace = runtime.execution_traces[request_id]
     assert trace.verify() is True
-    assert trace.events()[-1].event_type == "execution_bridge_completed"
+    assert trace.events()[-1].event_type == "execution_verification_failed"
 
 
 def test_jarvis_provider_path_fails_closed_without_user_grant():
