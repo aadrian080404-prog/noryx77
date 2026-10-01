@@ -20,6 +20,7 @@ from core.execution_trace import ExecutionTrace
 from core.provider_router import Provider
 from core.provider_execution import ProviderExecutionGateway
 from core.provider_resilience import ResilientProviderExecutor
+from core.http_provider import HttpProviderConfig, build_http_provider
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -102,6 +103,23 @@ class JarvisRuntime:
     def register_provider(self, provider: Provider) -> None:
         self.provider_execution.register(provider)
         self.provider_resilience.register(provider)
+
+    def register_http_provider(
+        self,
+        *,
+        name: str,
+        capabilities: frozenset[str],
+        config: HttpProviderConfig,
+        headers=None,
+    ) -> None:
+        self.register_provider(
+            build_http_provider(
+                name=name,
+                capabilities=capabilities,
+                config=config,
+                headers=headers,
+            )
+        )
 
     def _execute_provider_capability(self, step):
         capability = step.parameters.get("provider_capability")
@@ -226,6 +244,26 @@ class JarvisRuntime:
             return ()
 
         trace.append("execution_bridge_completed", {"result_count": len(results) if isinstance(results, tuple) else -1})
+
+        if isinstance(results, tuple):
+            for result in results:
+                if not isinstance(result, ActionResult) or not isinstance(result.output, dict):
+                    continue
+                attempts = result.output.get("attempts", ())
+                if not isinstance(attempts, tuple):
+                    continue
+                for attempt in attempts:
+                    if not isinstance(attempt, dict):
+                        continue
+                    event_type = "provider_attempt_succeeded" if attempt.get("success") else "provider_attempt_failed"
+                    trace.append(
+                        event_type,
+                        {
+                            "provider": attempt.get("provider"),
+                            "attempt": attempt.get("attempt"),
+                            "error": attempt.get("error"),
+                        },
+                    )
 
         if not isinstance(results, tuple):
             self.audit.record(
