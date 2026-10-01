@@ -122,7 +122,15 @@ class JarvisRuntime:
             "provider": result.provider,
             "capability": capability,
             "output": result.output,
-            "attempts": result.attempts,
+            "attempts": tuple(
+                {
+                    "provider": attempt.provider,
+                    "attempt": attempt.attempt,
+                    "success": attempt.success,
+                    "error": attempt.error,
+                }
+                for attempt in result.attempts
+            ),
         }
 
     def grant(self, principal_id: str, capability: str, target: str) -> None:
