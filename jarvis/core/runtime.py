@@ -113,6 +113,7 @@ class JarvisRuntime:
             payload,
             principal_id=principal_id,
             logical_target=step.target,
+            authorize_capability="provider_execute",
             authorize=self.orchestrator.policy.authorize,
         )
         return {
