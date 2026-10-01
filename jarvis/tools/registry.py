@@ -33,7 +33,7 @@ class CapabilityRegistry:
                 # Reconstruct the JARVIS step at this boundary so both
                 # layers share one registry without changing either
                 # subsystem's public contract.
-                from jarvis.core.contracts import PlanStep
+                from jarvis.core.contracts import ActionResult, PlanStep
 
                 params = dict(parameters)
                 step_id = params.pop("__jarvis_step_id", None)
@@ -47,7 +47,14 @@ class CapabilityRegistry:
                     parameters=params,
                     dependencies=(),
                 )
-                return handler(step)
+                result = handler(step)
+                if isinstance(result, ActionResult):
+                    return result
+                return ActionResult(
+                    step_id=str(step_id),
+                    success=True,
+                    output=result,
+                )
 
             self._core_registry.register(name, core_handler)
             return
