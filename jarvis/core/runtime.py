@@ -227,6 +227,26 @@ class JarvisRuntime:
 
         trace.append("execution_bridge_completed", {"result_count": len(results) if isinstance(results, tuple) else -1})
 
+        if isinstance(results, tuple):
+            for result in results:
+                if not isinstance(result, ActionResult) or not isinstance(result.output, dict):
+                    continue
+                attempts = result.output.get("attempts", ())
+                if not isinstance(attempts, tuple):
+                    continue
+                for attempt in attempts:
+                    if not isinstance(attempt, dict):
+                        continue
+                    event_type = "provider_attempt_succeeded" if attempt.get("success") else "provider_attempt_failed"
+                    trace.append(
+                        event_type,
+                        {
+                            "provider": attempt.get("provider"),
+                            "attempt": attempt.get("attempt"),
+                            "error": attempt.get("error"),
+                        },
+                    )
+
         if not isinstance(results, tuple):
             self.audit.record(
                 "execution_failed",
