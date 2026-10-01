@@ -1,13 +1,12 @@
-"""Resilient provider execution with bounded retry/failover and provenance.
-
-Routing remains deterministic; authorization is evaluated by the execution
-fabric for every attempt. A failed provider is excluded for subsequent attempts.
-"""
+"""Resilient provider execution with bounded failover and provenance."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Callable
+
 from core.execution_fabric import ExecutionFabric, ProposedAction
 from core.provider_router import ProviderRouter, Provider
+
 
 @dataclass(frozen=True)
 class ProviderAttempt:
@@ -16,11 +15,13 @@ class ProviderAttempt:
     success: bool
     error: str | None = None
 
+
 @dataclass(frozen=True)
 class ResilientProviderResult:
     output: Any
     provider: str
     attempts: tuple[ProviderAttempt, ...]
+
 
 class ResilientProviderExecutor:
     def __init__(self, router: ProviderRouter | None = None, *, max_attempts: int = 3) -> None:
@@ -43,8 +44,10 @@ class ResilientProviderExecutor:
     ) -> ResilientProviderResult:
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise PermissionError("provider_principal_required")
+
         excluded: set[str] = set()
         attempts: list[ProviderAttempt] = []
+
         for attempt in range(1, self.max_attempts + 1):
             provider = self.router.resolve(capability, excluded=frozenset(excluded))
             action = ProposedAction(
@@ -55,24 +58,48 @@ class ResilientProviderExecutor:
                 parameters={"payload": payload},
             )
             fabric = ExecutionFabric(
-                authorize=lambda a: authorize(principal_id, "provider_execute", logical_target)
+                authorize=lambda _action: authorize(
+                    principal_id, "provider_execute", logical_target
+                )
             )
+
             class Adapter:
                 environment = provider.name
+
                 def observe(self):
                     from core.execution_fabric import Observation
-                    return Observation(environment=self.environment, observation_id=f"provider:{self.environment}", payload={})
-                def execute(self, action):
-                    return provider.handler(dict(action.parameters))
+                    return Observation(
+                        environment=self.environment,
+                        observation_id=f"provider:{self.environment}",
+                        payload={},
+                    )
+
+                def execute(self, execution_action):
+                    return provider.handler(dict(execution_action.parameters))
+
             fabric.register(Adapter())
             try:
                 output = fabric.execute(action)
+            except PermissionError:
+                # Policy denial is terminal; another provider cannot grant it.
+                raise
             except Exception as exc:
                 excluded.add(provider.name)
-                attempts.append(ProviderAttempt(provider.name, attempt, False, type(exc).__name__))
-                if len(excluded) >= len(self.router._providers):
-                    raise RuntimeError("provider_failover_exhausted")
+                attempts.append(
+                    ProviderAttempt(provider.name, attempt, False, type(exc).__name__)
+                )
+                if (
+                    len(excluded) >= self.router.provider_count
+                    or attempt >= self.max_attempts
+                ):
+                    raise RuntimeError("provider_failover_exhausted") from exc
                 continue
+
             attempts.append(ProviderAttempt(provider.name, attempt, True))
-            return ResilientProviderResult(output, provider.name, tuple(attempts))
+            return ResilientProviderResult(
+                output=output,
+                provider=provider.name,
+                attempts=tuple(attempts),
+            )
+
         raise RuntimeError("provider_failover_exhausted")
