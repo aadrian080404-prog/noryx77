@@ -17,6 +17,8 @@ from core.identity import AgentIdentityAuthority, IdentityRegistry
 from noryx7_runtime.engine import RuntimeEngine
 from core.system_fabric import CanonicalSystemFabric
 from core.execution_trace import ExecutionTrace
+from core.provider_router import Provider
+from core.provider_execution import ProviderExecutionGateway
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
@@ -63,6 +65,8 @@ class JarvisRuntime:
         self.registry = CapabilityRegistry(
             core_registry=self.tool_executor.capabilities,
         )
+        self.provider_execution = ProviderExecutionGateway()
+        self.registry.register("provider_execute", self._execute_provider_capability)
         self.runtime_engine = RuntimeEngine()
         self.execution_traces: dict[str, ExecutionTrace] = {}
         self.system_fabric = CanonicalSystemFabric(
@@ -92,6 +96,31 @@ class JarvisRuntime:
             trace = ExecutionTrace(execution_id)
             self.execution_traces[execution_id] = trace
         return trace
+
+    def register_provider(self, provider: Provider) -> None:
+        self.provider_execution.register(provider)
+
+    def _execute_provider_capability(self, step):
+        capability = step.parameters.get("provider_capability")
+        if not isinstance(capability, str) or not capability.strip():
+            raise ValueError("provider_capability_required")
+        principal_id = step.parameters.get("__jarvis_principal_id")
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            raise PermissionError("provider_principal_required")
+        payload = step.parameters.get("payload")
+        result = self.provider_execution.execute(
+            capability,
+            payload,
+            principal_id=principal_id,
+            logical_target=step.target,
+            authorize_capability="provider_execute",
+            authorize=self.orchestrator.policy.authorize,
+        )
+        return {
+            "provider": result.provider,
+            "capability": result.capability,
+            "output": result.output,
+        }
 
     def grant(self, principal_id: str, capability: str, target: str) -> None:
         if not isinstance(self.orchestrator.policy, Policy): raise TypeError("runtime policy does not support grants")

@@ -116,6 +116,7 @@ class JarvisRuntimeBridge:
                     **dict(envelope.parameters),
                     "__jarvis_step_id": envelope.step_id,
                     "__jarvis_capability": envelope.action_type,
+                    "__jarvis_principal_id": request.principal_id,
                 },
                 requires_authorization=True,
                 execution_id=envelope.execution_id,
