@@ -53,7 +53,7 @@ def test_full_jarvis_http_provider_path_reaches_commit_and_trace():
         runtime.register_http_provider(
             name="http-provider",
             capabilities=frozenset({"chat"}),
-            config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=2.0),
+            config=HttpProviderConfig(endpoint=endpoint, timeout_seconds=2.0, allow_insecure_http=True),
         )
         runtime.grant("user", "provider_execute", "provider:chat")
 
