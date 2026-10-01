@@ -1,4 +1,5 @@
 from core.provider_router import Provider
+from core.provider_resilience import ProviderAttempt
 from jarvis.core.contracts import Plan, PlanStep
 from jarvis.core.runtime import JarvisRuntime
 from jarvis.runtime_facade import JarvisFacade
@@ -65,6 +66,7 @@ def test_jarvis_provider_router_to_execution_fabric_to_provider_and_state():
         "provider": "deterministic-provider",
         "capability": "chat",
         "output": {"provider_reply": "NORYX7-PROVIDER-E2E"},
+        "attempts": (ProviderAttempt("deterministic-provider", 1, True),),
     }
     assert calls == [{"payload": {"message": "NORYX7-PROVIDER-E2E"}}]
 
@@ -161,6 +163,10 @@ def test_jarvis_provider_runtime_failover_uses_secondary_and_preserves_provenanc
         "provider": "secondary",
         "capability": "chat",
         "output": {"provider_reply": "NORYX7-PROVIDER-E2E"},
+        "attempts": (
+            ProviderAttempt("primary", 1, False, "RuntimeError"),
+            ProviderAttempt("secondary", 2, True),
+        ),
     }
     assert calls == ["primary", "secondary"]
     assert runtime.execution_traces[request_id].verify() is True
