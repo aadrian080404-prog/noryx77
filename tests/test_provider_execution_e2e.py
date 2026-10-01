@@ -66,7 +66,7 @@ def test_jarvis_provider_router_to_execution_fabric_to_provider_and_state():
         "provider": "deterministic-provider",
         "capability": "chat",
         "output": {"provider_reply": "NORYX7-PROVIDER-E2E"},
-        "attempts": (ProviderAttempt("deterministic-provider", 1, True),),
+        "attempts": ({"provider": "deterministic-provider", "attempt": 1, "success": True, "error": None},),
     }
     assert calls == [{"payload": {"message": "NORYX7-PROVIDER-E2E"}}]
 
@@ -164,8 +164,8 @@ def test_jarvis_provider_runtime_failover_uses_secondary_and_preserves_provenanc
         "capability": "chat",
         "output": {"provider_reply": "NORYX7-PROVIDER-E2E"},
         "attempts": (
-            ProviderAttempt("primary", 1, False, "RuntimeError"),
-            ProviderAttempt("secondary", 2, True),
+            {"provider": "primary", "attempt": 1, "success": False, "error": "RuntimeError"},
+            {"provider": "secondary", "attempt": 2, "success": True, "error": None},
         ),
     }
     assert calls == ["primary", "secondary"]
