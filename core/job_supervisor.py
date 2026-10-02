@@ -1,4 +1,4 @@
-"""Bounded long-running job state machine; execution remains adapter-owned."""
+"""Bounded long-running job state machine with race-safe cancellation publication."""
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
