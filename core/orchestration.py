@@ -1,6 +1,6 @@
 """Bounded orchestration boundary for the NORYX7 interaction plane.
 
-This module coordinates *references* between fronts without granting execution
+This module coordinates references between fronts without granting execution
 authority. Raw user content never enters the orchestration envelope; execution
 remains behind the existing policy, capability, authorization and verification
 boundaries.
@@ -59,11 +59,23 @@ class OrchestrationEnvelope:
                 raise ValueError(f"invalid_{name}")
         if not isinstance(self.metadata, tuple) or len(self.metadata) > MAX_METADATA:
             raise ValueError("metadata_capacity_exceeded")
+        seen_keys: set[str] = set()
         for item in self.metadata:
             if not isinstance(item, tuple) or len(item) != 2:
                 raise ValueError("invalid_metadata")
-            if any(not isinstance(v, str) or len(v.encode()) > MAX_REFERENCE for v in item):
+            key, value = item
+            if not isinstance(key, str) or not key.strip():
+                raise ValueError("invalid_metadata_key")
+            if key in seen_keys:
+                raise ValueError("duplicate_metadata_key")
+            seen_keys.add(key)
+            if not isinstance(value, str):
                 raise ValueError("invalid_metadata")
+            try:
+                if len(key.encode()) > MAX_REFERENCE or len(value.encode()) > MAX_REFERENCE:
+                    raise ValueError("invalid_metadata")
+            except UnicodeEncodeError as exc:
+                raise ValueError("invalid_metadata") from exc
 
 
 @dataclass(frozen=True)

@@ -5,7 +5,7 @@ from core.orchestration import OrchestrationCoordinator, OrchestrationEnvelope, 
 from core.user_understanding import SignalKind, UserSignal
 
 
-def _envelope():
+def _envelope(metadata=()):
     signal = UserSignal(SignalKind.FORMAT, "detailed", 0.8, ("evidence-test",))
     context = InteractionContext(
         profile_id="profile-test",
@@ -17,6 +17,7 @@ def _envelope():
         principal_id="exec-test",
         operation="compute",
         interaction_context=context,
+        metadata=metadata,
     )
 
 
@@ -59,3 +60,18 @@ def test_rejected_and_committed_are_terminal():
     committed, _ = OrchestrationCoordinator.transition(envelope, OrchestrationStage.COMMITTED)
     with pytest.raises(ValueError, match="terminal_orchestration_stage"):
         OrchestrationCoordinator.reject(committed)
+
+
+def test_metadata_rejects_duplicate_keys():
+    with pytest.raises(ValueError, match="duplicate_metadata_key"):
+        _envelope((("mode", "safe"), ("mode", "other")))
+
+
+def test_metadata_rejects_blank_keys():
+    with pytest.raises(ValueError, match="invalid_metadata_key"):
+        _envelope(((" ", "value"),))
+
+
+def test_metadata_accepts_unique_bounded_keys():
+    envelope = _envelope((("mode", "safe"), ("source", "verified")))
+    assert len(OrchestrationCoordinator.digest(envelope)) == 64
