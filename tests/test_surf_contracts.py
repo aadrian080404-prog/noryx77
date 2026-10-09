@@ -1,5 +1,5 @@
 from core.surf_contracts import (
-    EvidenceRecord, SystemNode, SystemGraph, Experiment,
+    EvidenceRecord, SystemNode, SystemEdge, SystemGraph, Experiment,
     HypothesisRecord, ImprovementCandidate,
 )
 from core.surf_engine import SURFEngine
@@ -25,6 +25,18 @@ def test_graph_rejects_malformed_or_duplicate_evidence():
     assert not SystemGraph("g1", (), (), (malformed,)).is_well_formed()
     ev = EvidenceRecord("e1", "static", "fixture", "observed")
     assert not SystemGraph("g1", (), (), (ev, ev)).is_well_formed()
+
+
+def test_contracts_fail_closed_on_unhashable_states():
+    ev = EvidenceRecord("e1", "static", "fixture", "observed", state=[])
+    node = SystemNode("n1", "component", "A", (), [])
+    edge = SystemEdge("n1", "n2", "links", (), 0.5, [])
+    hypothesis = HypothesisRecord("h1", "statement", (), [])
+    assert not ev.is_well_formed()
+    assert not node.is_well_formed()
+    assert not edge.is_well_formed()
+    assert not hypothesis.is_well_formed()
+    assert not SystemGraph("g1", (), (), (ev,)).is_well_formed()
 
 
 def test_experiment_requires_authorization_and_sandbox():

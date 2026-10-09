@@ -13,7 +13,12 @@ def _refs(v):
     return isinstance(v, tuple) and len(v) <= MAX_RECORDS and all(_text(x) for x in v) and len(set(v)) == len(v)
 
 def _confidence(v):
-    return isinstance(v, (int,float)) and not isinstance(v,bool) and isfinite(v) and 0.0 <= v <= 1.0
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    try:
+        return isfinite(v) and 0.0 <= v <= 1.0
+    except (OverflowError, TypeError, ValueError):
+        return False
 
 @dataclass(frozen=True)
 class EvidenceRecord:
@@ -27,7 +32,7 @@ class EvidenceRecord:
     provenance: str = ""
     def is_well_formed(self) -> bool:
         return (_text(self.evidence_id) and _text(self.kind) and _text(self.source) and _text(self.summary)
-                and _confidence(self.confidence) and self.state in VALID_STATES
+                and _confidence(self.confidence) and isinstance(self.state, str) and self.state in VALID_STATES
                 and isinstance(self.execution_id,str) and len(self.execution_id) <= 256
                 and isinstance(self.provenance,str) and len(self.provenance) <= 2048)
 
@@ -39,7 +44,8 @@ class SystemNode:
     evidence_ids: tuple[str,...] = ()
     state: str = "observed"
     def is_well_formed(self) -> bool:
-        return _text(self.node_id) and _text(self.node_type) and _text(self.label) and _refs(self.evidence_ids) and self.state in VALID_STATES
+        return (_text(self.node_id) and _text(self.node_type) and _text(self.label) and _refs(self.evidence_ids)
+                and isinstance(self.state, str) and self.state in VALID_STATES)
 
 @dataclass(frozen=True)
 class SystemEdge:
@@ -51,7 +57,7 @@ class SystemEdge:
     state: str = "inferred"
     def is_well_formed(self) -> bool:
         return (_text(self.source_id) and _text(self.target_id) and _text(self.relation) and _refs(self.evidence_ids)
-                and _confidence(self.confidence) and self.state in VALID_STATES)
+                and _confidence(self.confidence) and isinstance(self.state, str) and self.state in VALID_STATES)
 
 @dataclass(frozen=True)
 class SystemGraph:
@@ -83,7 +89,7 @@ class HypothesisRecord:
     alternatives: tuple[str,...] = ()
     def is_well_formed(self) -> bool:
         return (_text(self.hypothesis_id) and _text(self.statement) and _refs(self.evidence_ids)
-                and self.status in VALID_STATES and isinstance(self.alternatives,tuple)
+                and isinstance(self.status, str) and self.status in VALID_STATES and isinstance(self.alternatives,tuple)
                 and len(self.alternatives) <= MAX_RECORDS and all(_text(x) for x in self.alternatives))
 
 @dataclass(frozen=True)
