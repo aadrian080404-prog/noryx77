@@ -23,7 +23,7 @@ class SURFEngine:
         groups = (evidence, hypotheses, experiments, candidates)
         if not all(isinstance(group, tuple) and len(group) <= MAX_RECORDS for group in groups):
             return invalid
-        if not all(isinstance(item, EvidenceRecord) and item.is_well_formed() for item in evidence):
+        if not all(isinstance(item, EvidenceRecord) and _well_formed(item) for item in evidence):
             return invalid
         graph_evidence = {item.evidence_id: item for item in graph.evidence}
         if evidence and (len(evidence) != len(graph_evidence)
