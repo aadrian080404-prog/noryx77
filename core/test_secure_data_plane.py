@@ -117,3 +117,19 @@ def test_kms_failure_never_returns_plaintext_or_falls_back_to_local_keys():
     plane = SecureDataPlane(UnavailableKMS())
     with pytest.raises(PermissionError, match="key_generation_unavailable"):
         plane.encrypt(b"secret", tenant_id="t", record_id="r", purpose="p")
+
+
+
+def test_decrypt_enforces_the_receivers_configured_payload_limit():
+    kms = TestKMS()
+    writer = SecureDataPlane(kms)
+    reader = SecureDataPlane(kms, max_payload_bytes=8)
+    record = writer.encrypt(
+        b"123456789", tenant_id="tenant-a", record_id="record-1",
+        purpose="bounded-storage",
+    )
+    with pytest.raises(ValueError, match="encrypted_payload_size_exceeded"):
+        reader.decrypt(
+            record, tenant_id="tenant-a", record_id="record-1",
+            purpose="bounded-storage",
+        )
