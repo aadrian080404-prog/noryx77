@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .secure_data_plane import SecureDataPlane
 
 
-class _TestKMS:
+class __TestKMS:
     """Test-only envelope-key adapter; production keys remain outside NORYX7."""
 
     def __init__(self):
@@ -35,7 +35,7 @@ class _TestKMS:
 
 
 def test_per_record_envelope_encryption_round_trip_and_randomization():
-    plane = SecureDataPlane(_TestKMS())
+    plane = SecureDataPlane(__TestKMS())
     plaintext = b"highly confidential customer record"
     first = plane.encrypt(
         plaintext, tenant_id="tenant-a", record_id="record-1",
@@ -56,7 +56,7 @@ def test_per_record_envelope_encryption_round_trip_and_randomization():
 
 
 def test_ciphertext_cannot_be_moved_between_tenants_records_or_purposes():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(_TestKMS())
     record = plane.encrypt(
         b"secret", tenant_id="tenant-a", record_id="record-1",
         purpose="payments",
@@ -74,7 +74,7 @@ def test_ciphertext_cannot_be_moved_between_tenants_records_or_purposes():
 
 
 def test_ciphertext_and_authenticated_metadata_tampering_are_rejected():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(_TestKMS())
     record = plane.encrypt(
         b"secret", tenant_id="tenant-a", record_id="record-1",
         purpose="identity",
@@ -94,7 +94,7 @@ def test_ciphertext_and_authenticated_metadata_tampering_are_rejected():
 
 
 def test_invalid_records_and_payload_limits_fail_closed():
-    plane = SecureDataPlane(TestKMS(), max_payload_bytes=8)
+    plane = SecureDataPlane(_TestKMS(), max_payload_bytes=8)
     with pytest.raises(ValueError, match="payload_size_exceeded"):
         plane.encrypt(b"123456789", tenant_id="t", record_id="r", purpose="p")
     with pytest.raises(ValueError, match="invalid_data_classification"):
