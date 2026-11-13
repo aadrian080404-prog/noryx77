@@ -100,10 +100,15 @@ class AgentCoordinator:
             child_check = self.verifier.verify_task(child)
             if not isinstance(child_check, VerificationResult) or not child_check.is_well_formed() or not child_check.valid:
                 raise RuntimeError(f"child_task_unverified:{assignment.agent_id}")
+            requires_authorization = (
+                step.action_type in PolicyEngine.REQUIRES_AUTHORIZATION
+                or child.risk_class == "high"
+            )
             action = ActionSpec(
                 "act:" + child.task_id,
-                "compute",
+                step.action_type,
                 risk_class=child.risk_class,
+                requires_authorization=requires_authorization,
                 execution_id=execution_id,
             )
             decision, result = self.action_gate.authorize_and_execute(
