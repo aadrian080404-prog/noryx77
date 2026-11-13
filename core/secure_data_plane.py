@@ -141,7 +141,7 @@ class SecureDataPlane:
             raise ValueError("payload_size_exceeded")
         if not all(_valid_context(item) for item in (tenant_id, record_id, purpose)):
             raise ValueError("invalid_encryption_context")
-        if classification not in VALID_CLASSIFICATIONS:
+        if not isinstance(classification, str) or classification not in VALID_CLASSIFICATIONS:
             raise ValueError("invalid_data_classification")
 
         try:
@@ -198,6 +198,8 @@ class SecureDataPlane:
     ) -> bytes:
         if not isinstance(record, EncryptedRecord) or not record.is_well_formed():
             raise ValueError("invalid_encrypted_record")
+        if len(record.ciphertext) > self._max_payload_bytes + 16:
+            raise ValueError("encrypted_payload_size_exceeded")
         if (record.tenant_id, record.record_id, record.purpose) != (
             tenant_id,
             record_id,
