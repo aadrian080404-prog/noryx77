@@ -12,7 +12,13 @@ import sqlite3
 from threading import RLock
 from typing import Any
 
-from .journal_integrity import JournalAuthenticator, JournalRecordProof, ZERO_MAC
+from .journal_integrity import (
+    AnchorSnapshot,
+    JournalAuthenticator,
+    JournalRecordProof,
+    MonotonicAnchor,
+    ZERO_MAC,
+)
 from .state import NORYXState, StateCommit
 
 
@@ -21,13 +27,32 @@ class StateJournal:
 
     SCHEMA_VERSION = 2
 
-    def __init__(self, path: str, *, integrity_key: bytes, key_id: str,
-                 max_commits: int = 10_000) -> None:
+    def __init__(
+        self,
+        path: str,
+        *,
+        integrity_key: bytes,
+        key_id: str,
+        max_commits: int = 10_000,
+        monotonic_anchor: MonotonicAnchor | None = None,
+        require_external_anchor: bool = False,
+    ) -> None:
         if not isinstance(path, str) or not path.strip():
             raise ValueError("journal_path_required")
         if isinstance(max_commits, bool) or not isinstance(max_commits, int) or max_commits < 1:
             raise ValueError("max_commits_must_be_positive")
+        if not isinstance(require_external_anchor, bool):
+            raise ValueError("invalid_external_anchor_requirement")
+        if monotonic_anchor is not None and (
+            not callable(getattr(monotonic_anchor, "read", None))
+            or not callable(getattr(monotonic_anchor, "compare_and_swap", None))
+        ):
+            raise TypeError("invalid_monotonic_anchor")
+        if require_external_anchor and monotonic_anchor is None:
+            raise ValueError("external_monotonic_anchor_required")
         self._authenticator = JournalAuthenticator(integrity_key, key_id=key_id)
+        self._anchor = monotonic_anchor
+        self._require_external_anchor = require_external_anchor
         self.path = path
         self.max_commits = max_commits
         self._lock = RLock()
@@ -100,6 +125,58 @@ class StateJournal:
         except Exception as exc:
             raise RuntimeError("state_journal_integrity_failure") from exc
 
+    @property
+    def rollback_protected(self) -> bool:
+        return self._anchor is not None
+
+    def _reconcile_anchor_locked(self, rows: list[tuple[Any, ...]]) -> None:
+        if self._anchor is None:
+            return
+        try:
+            anchored = self._anchor.read()
+        except Exception as exc:
+            raise RuntimeError("state_journal_anchor_unavailable") from exc
+        if not isinstance(anchored, AnchorSnapshot):
+            raise RuntimeError("state_journal_anchor_invalid_snapshot")
+        if (
+            isinstance(anchored.sequence, bool)
+            or not isinstance(anchored.sequence, int)
+            or anchored.sequence < 0
+            or not isinstance(anchored.mac, str)
+            or len(anchored.mac) != 64
+        ):
+            raise RuntimeError("state_journal_anchor_invalid_snapshot")
+        try:
+            if len(bytes.fromhex(anchored.mac)) != 32:
+                raise ValueError
+        except ValueError as exc:
+            raise RuntimeError("state_journal_anchor_invalid_snapshot") from exc
+
+        if rows:
+            head = AnchorSnapshot(int(rows[-1][4]), rows[-1][10])
+        else:
+            head = AnchorSnapshot(0, ZERO_MAC)
+        if anchored == head:
+            return
+
+        # A single DB commit may have completed immediately before process death
+        # prevented the external CAS. Repair exactly that one-step gap only.
+        if (
+            head.sequence == anchored.sequence + 1
+            and rows
+            and rows[-1][9] == anchored.mac
+        ):
+            try:
+                advanced = self._anchor.compare_and_swap(anchored, head)
+                if advanced or self._anchor.read() == head:
+                    return
+                raise RuntimeError("state_journal_anchor_update_failed")
+            except Exception as exc:
+                if isinstance(exc, RuntimeError) and str(exc) == "state_journal_anchor_update_failed":
+                    raise
+                raise RuntimeError("state_journal_anchor_update_failed") from exc
+        raise RuntimeError("state_journal_anchor_mismatch")
+
     def _recover_locked(self) -> dict[str, StateCommit]:
         rows = self._db.execute(
             f"SELECT {self._select_columns()} FROM state_commits ORDER BY sequence"
@@ -118,6 +195,7 @@ class StateJournal:
                 raise RuntimeError("state_journal_duplicate_execution")
             commits[commit.execution_id] = commit
             expected_sequence += 1
+        self._reconcile_anchor_locked(rows)
         return commits
 
     def append(self, commit: StateCommit) -> None:
@@ -155,6 +233,11 @@ class StateJournal:
                     ),
                 )
                 self._db.execute("COMMIT")
+                if self._anchor is not None:
+                    rows = self._db.execute(
+                        f"SELECT {self._select_columns()} FROM state_commits ORDER BY sequence"
+                    ).fetchall()
+                    self._reconcile_anchor_locked(rows)
             except Exception:
                 if self._db.in_transaction:
                     self._db.execute("ROLLBACK")

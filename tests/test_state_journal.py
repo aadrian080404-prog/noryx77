@@ -99,3 +99,141 @@ def test_journal_refuses_legacy_unkeyed_schema_without_migration(tmp_path):
 def test_journal_requires_strong_external_key(tmp_path):
     with pytest.raises(ValueError, match="journal_integrity_key_too_short"):
         StateJournal(str(tmp_path / "short.db"), integrity_key=b"short", key_id="test-key")
+
+
+from core.journal_integrity import AnchorSnapshot, InMemoryMonotonicAnchor
+from core.journal_integrity import ZERO_MAC
+
+
+def _anchored_journal(path, anchor, **kwargs):
+    return StateJournal(
+        str(path),
+        integrity_key=TEST_KEY,
+        key_id="test-key",
+        monotonic_anchor=anchor,
+        require_external_anchor=True,
+        **kwargs,
+    )
+
+
+def test_external_anchor_tracks_durable_journal_head(tmp_path):
+    anchor = InMemoryMonotonicAnchor()
+    path = tmp_path / "anchored.db"
+    journal = _anchored_journal(path, anchor)
+    store = StateStore(journal=journal)
+    commit = store.commit(
+        make_state(), execution_id="anchor-1", task_id="task-anchor-1",
+        verification_valid=True, verification_stage="runtime_result",
+        principal_id="principal-anchor-1", principal_key_fingerprint="e" * 64,
+    )
+    assert anchor.read().sequence == commit.sequence
+    assert anchor.read().mac != ZERO_MAC
+    assert journal.rollback_protected
+    journal.close()
+
+
+def test_external_anchor_detects_database_rollback(tmp_path):
+    anchor = InMemoryMonotonicAnchor()
+    path = tmp_path / "rollback.db"
+    journal = _anchored_journal(path, anchor)
+    StateStore(journal=journal).commit(
+        make_state(), execution_id="anchor-rollback", task_id="task-rollback",
+        verification_valid=True, verification_stage="runtime_result",
+        principal_id="principal-rollback", principal_key_fingerprint="f" * 64,
+    )
+    journal._db.execute("DELETE FROM state_commits")
+    journal.close()
+
+    reopened = _anchored_journal(path, anchor)
+    with pytest.raises(RuntimeError, match="state_journal_anchor_mismatch"):
+        reopened.recover()
+    reopened.close()
+
+
+def test_external_anchor_repairs_single_commit_crash_gap(tmp_path):
+    class FailFirstCAS:
+        def __init__(self):
+            self.inner = InMemoryMonotonicAnchor()
+            self.failed = False
+
+        def read(self):
+            return self.inner.read()
+
+        def compare_and_swap(self, expected, replacement):
+            if not self.failed:
+                self.failed = True
+                return False
+            return self.inner.compare_and_swap(expected, replacement)
+
+    anchor = FailFirstCAS()
+    path = tmp_path / "crash-gap.db"
+    journal = _anchored_journal(path, anchor)
+    store = StateStore(journal=journal)
+    with pytest.raises(RuntimeError, match="state_journal_anchor_update_failed"):
+        store.commit(
+            make_state(), execution_id="anchor-crash", task_id="task-crash",
+            verification_valid=True, verification_stage="runtime_result",
+            principal_id="principal-crash", principal_key_fingerprint="1" * 64,
+        )
+    # The DB commit happened, but the caller did not publish it in memory.
+    assert store.version == 0
+    journal.close()
+
+    reopened = _anchored_journal(path, anchor)
+    recovered = StateStore(journal=reopened)
+    assert recovered.version == 1
+    assert recovered.get("anchor-crash") is not None
+    assert anchor.read().sequence == 1
+    reopened.close()
+
+
+def test_external_anchor_rejects_missing_anchor_when_required(tmp_path):
+    with pytest.raises(ValueError, match="external_monotonic_anchor_required"):
+        StateJournal(
+            str(tmp_path / "missing-anchor.db"),
+            integrity_key=TEST_KEY,
+            key_id="test-key",
+            require_external_anchor=True,
+        )
+
+
+def test_external_anchor_rejects_same_sequence_divergent_mac(tmp_path):
+    class DivergentAnchor:
+        def read(self):
+            return AnchorSnapshot(0, "a" * 64)
+
+        def compare_and_swap(self, expected, replacement):
+            return False
+
+    journal = _anchored_journal(tmp_path / "divergent.db", DivergentAnchor())
+    with pytest.raises(RuntimeError, match="state_journal_anchor_mismatch"):
+        journal.recover()
+    journal.close()
+
+
+def test_external_anchor_unavailable_fails_closed(tmp_path):
+    class UnavailableAnchor:
+        def read(self):
+            raise OSError("witness unavailable")
+
+        def compare_and_swap(self, expected, replacement):
+            return False
+
+    journal = _anchored_journal(tmp_path / "unavailable.db", UnavailableAnchor())
+    with pytest.raises(RuntimeError, match="state_journal_anchor_unavailable"):
+        journal.recover()
+    journal.close()
+
+
+def test_external_anchor_rejects_malformed_snapshot(tmp_path):
+    class MalformedAnchor:
+        def read(self):
+            return AnchorSnapshot(True, "not-a-mac")
+
+        def compare_and_swap(self, expected, replacement):
+            return False
+
+    journal = _anchored_journal(tmp_path / "malformed-anchor.db", MalformedAnchor())
+    with pytest.raises(RuntimeError, match="state_journal_anchor_invalid_snapshot"):
+        journal.recover()
+    journal.close()
