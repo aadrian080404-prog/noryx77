@@ -29,3 +29,33 @@ def test_inventory_does_not_promote_presence_to_verified(tmp_path):
     result = build_inventory(tmp_path)
     item = next(item for item in result["files"] if item["path"] == "core/feature.py")
     assert item["lifecycle"] == "source_present_not_proof_of_integration"
+
+
+def test_canonical_registry_has_17_valid_dependency_domains():
+    from pathlib import Path
+
+    registry_path = Path(__file__).resolve().parents[1] / "architecture" / "component_registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    domains = registry["domains"]
+    identifiers = {item["id"] for item in domains}
+    assert len(domains) == 17
+    assert len(identifiers) == 17
+    assert all(set(item["depends_on"]) <= identifiers for item in domains)
+    assert all(item["current_state"] for item in domains)
+
+    dependencies = {item["id"]: set(item["depends_on"]) for item in domains}
+    visited = set()
+    active = set()
+
+    def visit(node):
+        assert node not in active, f"dependency_cycle:{node}"
+        if node in visited:
+            return
+        active.add(node)
+        for dependency in dependencies[node]:
+            visit(dependency)
+        active.remove(node)
+        visited.add(node)
+
+    for identifier in identifiers:
+        visit(identifier)
