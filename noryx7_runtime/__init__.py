@@ -4,6 +4,7 @@ from .contracts import ActionEnvelope, Attestation, ExecutionContext, Intent, Pl
 from .engine import RuntimeEngine
 from .lifecycle import ExecutionLifecycle, LifecycleError
 from .durable_state import DurableStateJournal
+from .process_executor import ProcessExecutionAdapter, ProcessExecutionError, ProcessExecutionTimeout
 
 __all__ = [
     "ActionEnvelope",
@@ -14,5 +15,8 @@ __all__ = [
     "Intent",
     "LifecycleError",
     "PlanStep",
+    "ProcessExecutionAdapter",
+    "ProcessExecutionError",
+    "ProcessExecutionTimeout",
     "RuntimeEngine",
 ]
