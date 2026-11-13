@@ -1,6 +1,7 @@
 import pytest
 
 from core.actions import ActionGate, AuthorizationAuthority
+from core.authorization_replay import AuthorizationReplayGuard
 from core.contracts import ActionSpec, TaskSpec
 from core.coordination import AgentCoordinator
 from core.identity import AgentIdentityAuthority, IdentityRegistry
@@ -69,11 +70,11 @@ def test_payment_action_requires_high_risk_classification():
     assert not policy.allows(action, authorization_verified=True)
 
 
-def test_valid_one_shot_grant_allows_one_payment_execution_only():
+def test_valid_one_shot_grant_allows_one_payment_execution_only(tmp_path):
     identity, _ = AgentIdentityAuthority.generate("owner")
     registry = IdentityRegistry()
     registry.register(identity)
-    authority = AuthorizationAuthority(b"noryx7-test-secret-material-32-bytes", identity_registry=registry)
+    authority = AuthorizationAuthority(b"noryx7-test-secret-material-32-bytes", identity_registry=registry, replay_guard=AuthorizationReplayGuard(path=str(tmp_path / "payment-grants.sqlite3")))
     policy = PolicyEngine()
     security = SecurityBoundary(policy, VerificationEngine())
     gate = ActionGate(policy, security, RuntimeLimits(), authorization=authority)
@@ -179,11 +180,11 @@ def test_high_risk_capability_requires_explicit_authorization_flag():
     assert check.reason == "high_risk_capability_requires_authorization"
 
 
-def test_high_risk_capability_executes_only_with_valid_one_shot_grant():
+def test_high_risk_capability_executes_only_with_valid_one_shot_grant(tmp_path):
     identity, _ = AgentIdentityAuthority.generate("owner")
     registry = IdentityRegistry()
     registry.register(identity)
-    authority = AuthorizationAuthority(b"noryx7-capability-secret-32-bytes!!", identity_registry=registry)
+    authority = AuthorizationAuthority(b"noryx7-capability-secret-32-bytes!!", identity_registry=registry, replay_guard=AuthorizationReplayGuard(path=str(tmp_path / "capability-grants.sqlite3")))
     policy = PolicyEngine()
     security = SecurityBoundary(policy, VerificationEngine())
     gate = ActionGate(policy, security, RuntimeLimits(), authorization=authority)
@@ -215,3 +216,46 @@ def test_high_risk_capability_executes_only_with_valid_one_shot_grant():
     assert output == "executed"
     assert check.valid
     assert effects == ["system"]
+
+
+
+def test_action_gate_grant_replay_is_blocked_after_authority_restart(tmp_path):
+    identity, _ = AgentIdentityAuthority.generate("owner")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    secret = b"noryx7-persistent-grant-secret-32bytes"
+    path = str(tmp_path / "persistent-action-grants.sqlite3")
+    guard1 = AuthorizationReplayGuard(path=path)
+    authority1 = AuthorizationAuthority(secret, identity_registry=registry, replay_guard=guard1)
+    policy = PolicyEngine()
+    security = SecurityBoundary(policy, VerificationEngine())
+    gate1 = ActionGate(policy, security, RuntimeLimits(), authorization=authority1)
+    action = _high_risk_action(requires_authorization=True)
+    grant = authority1.issue(action, "execution-1", principal=identity)
+    effects = []
+
+    first_decision, first_output = gate1.authorize_and_execute(
+        action,
+        lambda: effects.append("paid") or "paid",
+        execution_id="execution-1",
+        grant=grant,
+        principal=identity,
+    )
+    guard1.close()
+
+    guard2 = AuthorizationReplayGuard(path=path)
+    authority2 = AuthorizationAuthority(secret, identity_registry=registry, replay_guard=guard2)
+    gate2 = ActionGate(policy, security, RuntimeLimits(), authorization=authority2)
+    replay_decision, replay_output = gate2.authorize_and_execute(
+        action,
+        lambda: effects.append("replayed") or "replayed",
+        execution_id="execution-1",
+        grant=grant,
+        principal=identity,
+    )
+
+    assert first_decision.allowed
+    assert first_output == "paid"
+    assert not replay_decision.allowed
+    assert replay_output is None
+    assert effects == ["paid"]
