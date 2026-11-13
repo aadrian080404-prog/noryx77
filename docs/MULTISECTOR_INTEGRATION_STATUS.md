@@ -10,7 +10,7 @@ It does not modify `main`, the frozen architecture branch, or the existing PR #7
 
 | Workstream | Existing foundation | Added in this branch | Remaining integration |
 |---|---|---|---|
-| State integrity | `core/state_journal.py` stores durable state with an unkeyed digest | `core/journal_integrity.py` adds HMAC-SHA256 record proofs, ordered chain validation and an external monotonic-anchor protocol | Integrate into SQLite journal transactionally; external KMS/HSM; persistent hardware/remote anchor; rollback-safe commit/recovery |
+| State integrity | `core/state_journal.py` now authenticates each durable SQLite record with HMAC-SHA256 using a caller-supplied external key; verifies sequence and previous-MAC chain on recovery and reads | `core/journal_integrity.py` supplies proof primitives and an external monotonic-anchor protocol | Production KMS/HSM adapter, key rotation/recovery, durable external anchor, crash-safe cross-domain anchoring and rollback protection |
 | Adversarial intelligence | `core/adversarial.py` generates deterministic synthetic scenarios | `core/adversarial_intelligence.py` adds bounded evidence-first jury contracts, frozen reference/candidate policy, receipt-gated bounded meta-adjustment and abstract self-play | Distinct attacker/defender agents, independent model/process identities, sandbox receipts, telemetry/provenance graph and persistent learning |
 | Scenario campaign | Existing deterministic synthetic generator capped at 1M | Raised to 10M; 9 entity classes × 7 power tiers (63 balanced strata), six difficulty classes, deterministic coordinates and up to 20 parallel shards | Actual live runtime execution, multi-run artifact aggregation and independent validation of real operational behavior |
 | Reverse engineering / SURF | Existing `core/surf_contracts.py` and `core/surf_engine.py` provide bounded evidence-grounded assessment | Fixes the depth check so the full variables mapping, including its root container, is counted against the nesting limit | Live observation adapters, trusted sandbox, independent receipts and end-to-end authorized system-understanding workflow |
@@ -39,11 +39,12 @@ It does not modify `main`, the frozen architecture branch, or the existing PR #7
 
 ## Integration gates
 
-1. Integrate HMAC proofs into `core/state_journal.py` and reconcile the separate
-   `noryx7_runtime/state.py` journal without weakening either persistence contract.
-2. Make journal append and external-anchor advancement crash-safe; define recovery for
-   failures between database commit and anchor compare-and-swap.
-3. Use externally managed keys and an independently protected monotonic anchor.
+1. Supply a production KMS/HSM key provider, key rotation and recovery; the SQLite
+   journal now requires an injected key and refuses legacy unkeyed schema silently.
+2. Reconcile the separate `noryx7_runtime/state.py` journal without weakening either
+   persistence contract; it is still an in-memory signed journal.
+3. Implement a durable external monotonic anchor with crash-safe prepare/commit and
+   recovery semantics; HMAC alone does not prevent whole-database rollback.
 4. Connect adversarial contracts to sandboxed, reproducible experiments and verifier
    receipts rooted in identities that the candidate agents cannot forge.
 5. Implement separate red-team and blue-team policies, independent model/process
@@ -59,7 +60,7 @@ It does not modify `main`, the frozen architecture branch, or the existing PR #7
 
 ## Non-claims
 
-The 10M campaign counts deterministic synthetic scenario-invariant checks, not 10M live agent decisions or real attack/defense executions. Entity and power tiers are test strata, not calibrated threat probabilities. CI uses 10,000 cases for pull requests and a 20-shard campaign for scheduled/manual full runs.
+The 10M campaign counts deterministic synthetic scenario-invariant checks, not 10M live agent decisions or real attack/defense executions. Entity and power tiers are test strata, not calibrated threat probabilities. CI uses 10,000 cases for pull requests and a 20-shard campaign for scheduled/manual full runs. SQLite state records are HMAC-authenticated, but rollback protection remains unavailable until the external monotonic anchor is deployed.
 
 This tranche is not a production KMS/HSM, globally replicated journal, distributed
 AI jury, live SEAT, zero-knowledge proof, microVM, institutional disclosure service,
