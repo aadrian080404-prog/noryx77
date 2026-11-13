@@ -21,6 +21,16 @@ class AccessMode(str, Enum):
     SUPERVISED = "supervised"
 
 
+MAX_TRUSTED_APPROVERS = 1024
+MAX_APPROVALS = 64
+MAX_DATA_SCOPES = 128
+MODE_OUTPUT_LIMITS = {
+    AccessMode.PREDICATE: 1,
+    AccessMode.AGGREGATE: 100,
+    AccessMode.SUPERVISED: 20,
+}
+
+
 @dataclass(frozen=True)
 class Mandate:
     mandate_id: str
@@ -93,7 +103,9 @@ class InstitutionalAccessGate:
             raise TypeError("institutional_signature_verifier_required")
         if not isinstance(trusted_approvers, Mapping) or not trusted_approvers:
             raise ValueError("trusted_approver_registry_required")
-        if isinstance(required_approvals, bool) or not isinstance(required_approvals, int) or required_approvals < 2:
+        if len(trusted_approvers) > MAX_TRUSTED_APPROVERS:
+            raise ValueError("trusted_approver_registry_limit_exceeded")
+        if isinstance(required_approvals, bool) or not isinstance(required_approvals, int) or not 2 <= required_approvals <= MAX_APPROVALS:
             raise ValueError("at_least_two_approvals_required")
         if not isinstance(required_roles, tuple) or not required_roles or any(
             not isinstance(role, str) or not role.strip() for role in required_roles
@@ -195,11 +207,11 @@ class InstitutionalAccessGate:
             mandate.purpose, mandate.issuer_id,
         )):
             return deny("invalid_request_fields")
-        if not isinstance(request.data_scopes, tuple) or not request.data_scopes or any(
+        if not isinstance(request.data_scopes, tuple) or not request.data_scopes or len(request.data_scopes) > MAX_DATA_SCOPES or any(
             not self._valid_text(scope) for scope in request.data_scopes
         ) or len(set(request.data_scopes)) != len(request.data_scopes):
             return deny("invalid_data_scopes")
-        if not isinstance(mandate.allowed_data_scopes, tuple) or not mandate.allowed_data_scopes or any(
+        if not isinstance(mandate.allowed_data_scopes, tuple) or not mandate.allowed_data_scopes or len(mandate.allowed_data_scopes) > MAX_DATA_SCOPES or any(
             not self._valid_text(scope) for scope in mandate.allowed_data_scopes
         ) or len(set(mandate.allowed_data_scopes)) != len(mandate.allowed_data_scopes):
             return deny("invalid_mandate_scopes")
@@ -221,7 +233,7 @@ class InstitutionalAccessGate:
             return deny("purpose_mismatch")
         if not set(request.data_scopes).issubset(set(mandate.allowed_data_scopes)):
             return deny("scope_exceeds_mandate")
-        if isinstance(request.output_limit, bool) or not isinstance(request.output_limit, int) or not 1 <= request.output_limit <= self._max_output_limit:
+        if isinstance(request.output_limit, bool) or not isinstance(request.output_limit, int) or not 1 <= request.output_limit <= min(self._max_output_limit, MODE_OUTPUT_LIMITS[mode]):
             return deny("output_limit_exceeded")
         if not isinstance(mandate.signature, bytes) or not mandate.signature:
             return deny("unsigned_mandate")
@@ -233,6 +245,11 @@ class InstitutionalAccessGate:
 
         if not isinstance(approvals, tuple) or len(approvals) < self._required_approvals:
             return deny("insufficient_approvals")
+        if len(approvals) > MAX_APPROVALS:
+            return deny("approval_limit_exceeded")
+        required_roles = set(self._required_roles)
+        if mode is AccessMode.SUPERVISED:
+            required_roles.add("independent_supervisor")
         seen_ids: set[str] = set()
         seen_domains: set[str] = set()
         seen_roles: set[str] = set()
@@ -251,7 +268,7 @@ class InstitutionalAccessGate:
             if trusted is None:
                 return deny("untrusted_approver")
             domain, trusted_role = trusted
-            if approval.role != trusted_role or approval.role not in self._required_roles:
+            if approval.role != trusted_role or approval.role not in required_roles:
                 return deny("approver_role_mismatch")
             if approval.approver_id in seen_ids or domain in seen_domains or approval.role in seen_roles:
                 return deny("approver_independence_violation")
@@ -271,6 +288,6 @@ class InstitutionalAccessGate:
             seen_ids.add(approval.approver_id)
             seen_domains.add(domain)
             seen_roles.add(approval.role)
-        if not self._required_roles.issubset(seen_roles) or len(seen_ids) < self._required_approvals:
+        if not required_roles.issubset(seen_roles) or len(seen_ids) < self._required_approvals:
             return deny("independent_approval_quorum_not_met")
         return AccessDecision(True, "authorized_plan_only", digest, mode, tuple(sorted(request.data_scopes)), tuple(sorted(seen_domains)))
