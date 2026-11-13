@@ -177,3 +177,13 @@ def test_assessment_rejects_duplicate_hypothesis_and_candidate_ids():
     assert not candidate_engine.assess(
         _graph((ev,)), (ev,), candidates=(candidate, candidate)
     ).graph_valid
+
+
+def test_surf_value_depth_accepts_exact_limit_and_rejects_one_beyond():
+    at_limit = "leaf"
+    for index in range(8):
+        at_limit = {f"level_{index}": at_limit}
+    beyond_limit = {"level_8": at_limit}
+
+    assert Experiment("within", "h", "observe", at_limit).is_well_formed()
+    assert not Experiment("beyond", "h", "observe", beyond_limit).is_well_formed()
