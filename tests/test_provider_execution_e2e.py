@@ -1,3 +1,5 @@
+import os
+import tempfile
 from core.provider_router import Provider
 from core.provider_resilience import ProviderAttempt
 from jarvis.core.contracts import Plan, PlanStep
@@ -6,6 +8,11 @@ from jarvis.runtime_facade import JarvisFacade
 from jarvis.agent.front_end import JarvisInteractionFrontEnd
 from jarvis.interaction.session import SessionController
 from jarvis.perception.audio import ClapDetector
+
+
+def _durable_runtime():
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    return JarvisRuntime(authorization_replay_path=os.path.join(directory, "replay.sqlite3"))
 
 
 def _wake():
@@ -41,7 +48,7 @@ def test_jarvis_provider_router_to_execution_fabric_to_provider_and_state():
         calls.append(parameters)
         return {"provider_reply": parameters["payload"]["message"]}
 
-    runtime = JarvisRuntime()
+    runtime = _durable_runtime()
     runtime.register_provider(
         Provider(
             name="deterministic-provider",
@@ -140,7 +147,7 @@ def test_jarvis_provider_runtime_failover_uses_secondary_and_preserves_provenanc
         calls.append("secondary")
         return {"provider_reply": parameters["payload"]["message"]}
 
-    runtime = JarvisRuntime()
+    runtime = _durable_runtime()
     runtime.register_provider(
         Provider("primary", frozenset({"chat"}), primary)
     )
