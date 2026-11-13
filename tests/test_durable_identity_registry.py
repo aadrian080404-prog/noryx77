@@ -66,3 +66,17 @@ def test_wrong_key_fails_closed(tmp_path):
     registry.close()
     with pytest.raises(RuntimeError, match="integrity_failure"):
         DurableIdentityRegistry(path, integrity_key=b"another-key-material-at-least-32-bytes-long", key_id=KEY_ID)
+
+
+
+def test_closed_identity_registry_fails_closed(tmp_path):
+    path = str(tmp_path / "identity.sqlite")
+    identity, _ = AgentIdentityAuthority.generate("agent-a")
+    registry = DurableIdentityRegistry(path, integrity_key=KEY, key_id=KEY_ID)
+    registry.register(identity)
+    registry.close()
+    assert not registry.durable
+    with pytest.raises(RuntimeError, match="closed"):
+        registry.is_trusted(identity)
+    with pytest.raises(RuntimeError, match="closed"):
+        registry.with_trusted_identity("agent-a", lambda value: value)
