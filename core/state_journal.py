@@ -170,7 +170,10 @@ class StateJournal:
                 advanced = self._anchor.compare_and_swap(anchored, head)
                 if advanced or self._anchor.read() == head:
                     return
+                raise RuntimeError("state_journal_anchor_update_failed")
             except Exception as exc:
+                if isinstance(exc, RuntimeError) and str(exc) == "state_journal_anchor_update_failed":
+                    raise
                 raise RuntimeError("state_journal_anchor_update_failed") from exc
         raise RuntimeError("state_journal_anchor_mismatch")
 
