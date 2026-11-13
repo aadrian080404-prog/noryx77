@@ -41,6 +41,7 @@ def _authorization_replay_token(envelope):
         "target": envelope.target,
         "parameters": dict(envelope.parameters),
         "risk_class": envelope.risk_class,
+        "plan_digest": envelope.plan_digest,
     }
     encoded = json.dumps(
         statement,
