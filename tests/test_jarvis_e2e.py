@@ -1,3 +1,5 @@
+import os
+import tempfile
 from jarvis.agent.front_end import AgentInput, JarvisInteractionFrontEnd
 from jarvis.core.contracts import Plan, PlanStep
 from jarvis.core.runtime import JarvisRuntime
@@ -28,8 +30,13 @@ def _plan(request_id: str) -> Plan:
     )
 
 
+def _durable_runtime():
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    return JarvisRuntime(authorization_replay_path=os.path.join(directory, "replay.sqlite3"))
+
+
 def test_jarvis_frontend_to_canonical_execution_is_real_end_to_end():
-    runtime = JarvisRuntime()
+    runtime = _durable_runtime()
     runtime.registry.register(
         "echo",
         lambda step: {
