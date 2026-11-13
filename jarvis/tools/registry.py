@@ -21,7 +21,7 @@ class CapabilityRegistry:
     def register(self, name: str, handler: Callable, *, risk_class: str = "normal"):
         if not isinstance(name, str) or not name.strip() or not callable(handler):
             raise ValueError("invalid_capability")
-        if risk_class not in {"normal", "sensitive", "high"}:
+        if not isinstance(risk_class, str) or risk_class not in {"normal", "sensitive", "high"}:
             raise ValueError("invalid_capability_risk")
 
         if self._core_registry is not None:
