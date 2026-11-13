@@ -1,5 +1,8 @@
 import os
 import tempfile
+import time
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
 import pytest
 from jarvis.core.contracts import Request, Plan, PlanStep, ActionResult
 from jarvis.core.runtime import JarvisRuntime
@@ -36,3 +39,61 @@ def test_unauthorized_request_does_not_consume_execution_reservation():
     assert runtime.state.reservation(request.request_id) is None
     runtime.grant("user", "tool", "target")
     assert runtime.execute(request, plan)[0].success
+
+
+
+def test_high_risk_capability_requires_independent_threshold_approval(tmp_path):
+    runtime = _durable_runtime()
+    effects = []
+    runtime.registry.register(
+        "bank.transfer",
+        lambda step: effects.append(step.parameters["amount"]) or ActionResult(step.step_id, True, "settled"),
+        risk_class="high",
+    )
+    request = Request("transfer", "user")
+    plan = Plan(request.request_id, (PlanStep("transfer-1", "bank.transfer", "bank:account-1", {"amount": 100}),))
+    runtime.grant("user", "bank.transfer", "bank:account-1")
+
+    result = runtime.execute(request, plan)
+
+    assert result == ()
+    assert effects == []
+
+
+def test_high_risk_capability_executes_only_after_signed_threshold_approval(tmp_path):
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes_raw()
+    authority = SignedApprovalAuthority(required_threshold=1, trusted_keys={"approver": public})
+
+    def proof_provider(envelope, statement):
+        expires_at = int(time.time()) + 60
+        approval = sign_approval(
+            "approver", private, action_id=envelope.execution_id,
+            epoch=0, action_statement=statement, expires_at=expires_at,
+        )
+        return SignedAuthorizationProof(
+            envelope.execution_id, 0, statement, (approval,), 1, expires_at,
+        )
+
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    runtime = JarvisRuntime(
+        authorization_replay_path=os.path.join(directory, "replay.sqlite3"),
+        multi_auth_authority=authority,
+        authorization_provider=proof_provider,
+    )
+    effects = []
+    runtime.registry.register(
+        "bank.transfer",
+        lambda step: effects.append(step.parameters["amount"]) or ActionResult(step.step_id, True, "settled"),
+        risk_class="high",
+    )
+    request = Request("transfer", "user")
+    plan = Plan(request.request_id, (PlanStep("transfer-1", "bank.transfer", "bank:account-1", {"amount": 100}),))
+    runtime.grant("user", "bank.transfer", "bank:account-1")
+
+    result = runtime.execute(request, plan)
+
+    assert len(result) == 1
+    assert result[0].success is True
+    assert result[0].output == "settled"
+    assert effects == [100]
