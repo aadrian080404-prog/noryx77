@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.state import StateJournal
+from .state import StateJournal
 from .contracts import Intent, PlanStep, ExecutionStatus
 from .engine import RuntimeEngine
 
