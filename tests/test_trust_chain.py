@@ -30,9 +30,9 @@ def _evidence():
     return evidence, agent, private, peer, registry, device, attestation, digest
 
 
-def test_valid_chain_is_accepted_once():
+def test_valid_chain_is_accepted_once(tmp_path):
     evidence, agent, private, peer, registry, device, attestation, digest = _evidence()
-    guard = AuthorizationReplayGuard()
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "trust-chain.sqlite3"))
     chain = TrustChain(registry, guard)
     assert chain.verify(evidence, attestation=attestation, expected_device=device,
                         expected_peer=peer, session_id="session-1", direction="send",
@@ -160,4 +160,26 @@ def test_live_device_epoch_and_identity_swaps_fail_closed():
     other.grant(CapabilityGrant("transfer", "device-b", expires_at=100, epoch=7))
     assert not chain.verify_live_device_capability(
         evidence, device_gate=other, capability="transfer", now=50, expected_epoch=7
+    )
+
+
+
+def test_trust_chain_rejects_volatile_replay_storage():
+    evidence, agent, private, peer, registry, device, attestation, digest = _evidence()
+    chain = TrustChain(registry, AuthorizationReplayGuard())
+    assert not chain.verify(
+        evidence, attestation=attestation, expected_device=device,
+        expected_peer=peer, session_id="session-1", direction="send",
+        expected_epoch=7,
+    )
+
+
+def test_trust_chain_evidence_expiry_is_authenticated():
+    evidence, agent, private, peer, registry, device, attestation, digest = _evidence()
+    forged = replace(evidence, expires_at=evidence.expires_at + 1)
+    chain = TrustChain(registry, AuthorizationReplayGuard(path=":memory:"))
+    assert not chain.verify(
+        forged, attestation=attestation, expected_device=device,
+        expected_peer=peer, session_id="session-1", direction="send",
+        expected_epoch=7,
     )
