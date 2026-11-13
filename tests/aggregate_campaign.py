@@ -92,24 +92,20 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
     ):
         raise ValueError("campaign_aggregate_matrix_mismatch")
 
+    expected_strata = expected_stratum_counts(cases, seed=seed)
     expected_full_matrix = {
-        "|".join(key): count
-        for key, count in expected_stratum_counts(cases, seed=seed).items()
+        "|".join(key): count for key, count in expected_strata.items()
     }
     if full_matrix != expected_full_matrix:
         raise ValueError("campaign_aggregate_strata_mismatch")
 
     expected_entity_power = {
-        f"{entity}|{power}": sum(
-            count
-            for (entity_key, power_key, _, _, _), count in expected_stratum_counts(
-                cases, seed=seed
-            ).items()
-            if entity_key == entity and power_key == power
-        )
+        f"{entity}|{power}": 0
         for entity in ENTITY_CLASSES
         for power in POWER_TIERS
     }
+    for (entity_key, power_key, _, _, _), count in expected_strata.items():
+        expected_entity_power[f"{entity_key}|{power_key}"] += count
     if matrix != expected_entity_power:
         raise ValueError("campaign_aggregate_entity_power_mismatch")
 
