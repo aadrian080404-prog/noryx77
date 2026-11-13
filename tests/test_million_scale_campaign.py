@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from core.scenario_matrix import (
+    ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES, BEHAVIOR_CLASSES,
+    IMPACT_CLASSES, expected_stratum_counts,
+)
 from tests.million_scale_campaign import DIFFICULTIES, run_campaign, scenario_for, verify_invariants
 
 
@@ -64,11 +68,33 @@ def test_campaign_reports_complete_entity_power_cross_matrix():
     matrix = result["entity_power_counts"]
     assert len(matrix) == 9 * 7
     assert sum(matrix.values()) == 10_000
-    assert max(matrix.values()) - min(matrix.values()) <= 1
+    expected = {
+        f"{entity}|{power}": 0
+        for entity in ENTITY_CLASSES
+        for power in POWER_TIERS
+    }
+    for (entity, power, _, _, _), count in expected_stratum_counts(
+        10_000, seed=20261113
+    ).items():
+        expected[f"{entity}|{power}"] += count
+    assert matrix == expected
     assert sum(result["entity_counts"].values()) == 10_000
     assert sum(result["power_counts"].values()) == 10_000
 
 
-def test_campaign_shard_count_preserves_all_entity_power_strata():
-    with pytest.raises(ValueError, match="shard_count_must_be_coprime_with_strata"):
-        run_campaign(1, 100, shard_index=0, shards=7)
+def test_campaign_reports_five_axis_counts_and_full_matrix():
+    result = run_campaign(20261113, 10_000)
+    assert sum(result["capability_counts"].values()) == 10_000
+    assert sum(result["behavior_counts"].values()) == 10_000
+    assert sum(result["impact_counts"].values()) == 10_000
+    assert sum(result["full_matrix_counts"].values()) == 10_000
+    assert len(result["full_matrix_counts"]) == (
+        len(ENTITY_CLASSES) * len(POWER_TIERS) * len(CAPABILITY_CLASSES)
+        * len(BEHAVIOR_CLASSES) * len(IMPACT_CLASSES)
+    )
+
+
+def test_campaign_shards_need_not_be_coprime_with_total_strata():
+    result = run_campaign(1, 100, shard_index=0, shards=7)
+    assert result["executed"] == 15
+    assert result["status"] == "passed"

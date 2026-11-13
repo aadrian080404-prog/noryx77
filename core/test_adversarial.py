@@ -1,6 +1,9 @@
 import pytest
 
 from core.adversarial import AdversarialEngine, MAX_SCENARIOS
+from core.scenario_matrix import (
+    CAPABILITY_CLASSES, BEHAVIOR_CLASSES, IMPACT_CLASSES, STRATA_COUNT,
+)
 
 
 def test_adversarial_engine_accepts_maximum_scenario_budget():
@@ -32,3 +35,18 @@ def test_adversarial_engine_rejects_invalid_difficulty(difficulty):
     engine = AdversarialEngine(max_scenarios=10)
     with pytest.raises(ValueError, match="invalid_difficulty"):
         engine.scenario(0, difficulty=difficulty)
+
+
+def test_adversarial_engine_scenarios_expose_all_five_matrix_dimensions():
+    engine = AdversarialEngine(seed=20261113, max_scenarios=STRATA_COUNT)
+    scenarios = [engine.scenario(index) for index in range(STRATA_COUNT)]
+    assert {item.capability_class for item in scenarios} == set(CAPABILITY_CLASSES)
+    assert {item.behavior_class for item in scenarios} == set(BEHAVIOR_CLASSES)
+    assert {item.impact_class for item in scenarios} == set(IMPACT_CLASSES)
+    assert len({
+        (
+            item.entity_class, item.power_tier, item.capability_class,
+            item.behavior_class, item.impact_class,
+        )
+        for item in scenarios
+    }) == STRATA_COUNT

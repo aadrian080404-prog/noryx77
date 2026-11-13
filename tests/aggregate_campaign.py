@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from core.scenario_matrix import ENTITY_CLASSES, POWER_TIERS, expected_stratum_counts
+from core.scenario_matrix import (
+    ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES, BEHAVIOR_CLASSES,
+    IMPACT_CLASSES, expected_stratum_counts,
+)
 
 DIFFICULTIES = ("trivial", "normal", "boundary", "pathological", "adversarial", "compound")
 
@@ -28,6 +31,17 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
     entities = {name: 0 for name in ENTITY_CLASSES}
     powers = {name: 0 for name in POWER_TIERS}
     matrix = {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS}
+    capabilities = {name: 0 for name in CAPABILITY_CLASSES}
+    behaviors = {name: 0 for name in BEHAVIOR_CLASSES}
+    impacts = {name: 0 for name in IMPACT_CLASSES}
+    full_matrix = {
+        f"{entity}|{power}|{capability}|{behavior}|{impact}": 0
+        for entity in ENTITY_CLASSES
+        for power in POWER_TIERS
+        for capability in CAPABILITY_CLASSES
+        for behavior in BEHAVIOR_CLASSES
+        for impact in IMPACT_CLASSES
+    }
     total_executed = 0
 
     for item in items:
@@ -42,11 +56,19 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         expected_executed = (cases - 1 - index) // shards + 1
         if item.get("executed") != expected_executed:
             raise ValueError("campaign_shard_execution_count_mismatch")
-        if item.get("verification_scope") != "one_structural_preflight_plus_synthetic_scenario_invariants":
+        if item.get("verification_scope") != "one_structural_preflight_plus_synthetic_invariants_across_entity_power_capability_behavior_impact":
             raise ValueError("campaign_shard_scope_mismatch")
 
-        for target, key in ((difficulty, "difficulty_counts"), (entities, "entity_counts"),
-                            (powers, "power_counts"), (matrix, "entity_power_counts")):
+        for target, key in (
+            (difficulty, "difficulty_counts"),
+            (entities, "entity_counts"),
+            (powers, "power_counts"),
+            (matrix, "entity_power_counts"),
+            (capabilities, "capability_counts"),
+            (behaviors, "behavior_counts"),
+            (impacts, "impact_counts"),
+            (full_matrix, "full_matrix_counts"),
+        ):
             counts = item.get(key)
             if not isinstance(counts, dict) or set(counts) != set(target):
                 raise ValueError(f"campaign_shard_{key}_schema_mismatch")
@@ -60,15 +82,32 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         raise ValueError("campaign_shards_do_not_cover_requested_range")
     if sum(difficulty.values()) != cases or sum(entities.values()) != cases:
         raise ValueError("campaign_aggregate_count_mismatch")
-    if sum(powers.values()) != cases or sum(matrix.values()) != cases:
+    if (
+        sum(powers.values()) != cases
+        or sum(matrix.values()) != cases
+        or sum(capabilities.values()) != cases
+        or sum(behaviors.values()) != cases
+        or sum(impacts.values()) != cases
+        or sum(full_matrix.values()) != cases
+    ):
         raise ValueError("campaign_aggregate_matrix_mismatch")
 
-    expected_matrix = {
-        f"{entity}|{power}": count
-        for (entity, power), count in expected_stratum_counts(cases, seed=seed).items()
+    expected_strata = expected_stratum_counts(cases, seed=seed)
+    expected_full_matrix = {
+        "|".join(key): count for key, count in expected_strata.items()
     }
-    if matrix != expected_matrix:
+    if full_matrix != expected_full_matrix:
         raise ValueError("campaign_aggregate_strata_mismatch")
+
+    expected_entity_power = {
+        f"{entity}|{power}": 0
+        for entity in ENTITY_CLASSES
+        for power in POWER_TIERS
+    }
+    for (entity_key, power_key, _, _, _), count in expected_strata.items():
+        expected_entity_power[f"{entity_key}|{power_key}"] += count
+    if matrix != expected_entity_power:
+        raise ValueError("campaign_aggregate_entity_power_mismatch")
 
     return {
         "seed": seed,
@@ -79,7 +118,11 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         "entity_counts": entities,
         "power_counts": powers,
         "entity_power_counts": matrix,
-        "verification_scope": "one_structural_preflight_per_shard_plus_synthetic_scenario_invariants",
+        "capability_counts": capabilities,
+        "behavior_counts": behaviors,
+        "impact_counts": impacts,
+        "full_matrix_counts": full_matrix,
+        "verification_scope": "one_structural_preflight_per_shard_plus_synthetic_invariants_across_entity_power_capability_behavior_impact",
         "status": "passed",
     }
 

@@ -11,18 +11,20 @@ import argparse
 import hashlib
 import json
 import random
-from math import gcd
 import time
 from dataclasses import dataclass
 from typing import Iterable
 
-from core.scenario_matrix import ENTITY_CLASSES, POWER_TIERS, coordinate_for
+from core.scenario_matrix import (
+    ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES, BEHAVIOR_CLASSES,
+    IMPACT_CLASSES, coordinate_for,
+)
 
 DIFFICULTIES = ("trivial", "normal", "boundary", "pathological", "adversarial", "compound")
 _DIFFICULTY_WEIGHTS = (2, 8, 15, 20, 25, 30)
 MAX_CAMPAIGN_CASES = 10_000_000
 MAX_SEED = 2**63 - 1
-VERIFICATION_SCOPE = "one_structural_preflight_plus_synthetic_scenario_invariants"
+VERIFICATION_SCOPE = "one_structural_preflight_plus_synthetic_invariants_across_entity_power_capability_behavior_impact"
 _MIN_DIFFICULTY_FRACTIONS = {
     "trivial": 0.005,
     "normal": 0.04,
@@ -46,6 +48,9 @@ class Scenario:
     payload_size: int
     entity_class: str
     power_tier: str
+    capability_class: str
+    behavior_class: str
+    impact_class: str
 
     def digest(self) -> str:
         encoded = json.dumps(self.__dict__, sort_keys=True, separators=(",", ":")).encode()
@@ -83,6 +88,9 @@ def scenario_for(seed: int, case_id: int) -> Scenario:
         payload_size=rng.randint(0, p1),
         entity_class=coordinate.entity_class,
         power_tier=coordinate.power_tier,
+        capability_class=coordinate.capability_class,
+        behavior_class=coordinate.behavior_class,
+        impact_class=coordinate.impact_class,
     )
 
 
@@ -93,6 +101,9 @@ def verify_invariants(scenario: Scenario) -> None:
     assert scenario.difficulty in DIFFICULTIES
     assert scenario.entity_class in ENTITY_CLASSES
     assert scenario.power_tier in POWER_TIERS
+    assert scenario.capability_class in CAPABILITY_CLASSES
+    assert scenario.behavior_class in BEHAVIOR_CLASSES
+    assert scenario.impact_class in IMPACT_CLASSES
     assert scenario.identity >= 0 and scenario.capability >= 0 and scenario.state >= 0
     assert 0 <= scenario.timing <= 65535
     assert 0 <= scenario.failure <= 7
@@ -127,15 +138,23 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         raise ValueError("shards must be between 1 and cases")
     if isinstance(shard_index, bool) or not isinstance(shard_index, int) or not 0 <= shard_index < shards:
         raise ValueError("invalid shard_index")
-    if gcd(shards, len(ENTITY_CLASSES) * len(POWER_TIERS)) != 1:
-        raise ValueError("shard_count_must_be_coprime_with_strata")
-
     started = time.monotonic()
     _preflight()
     counts = {difficulty: 0 for difficulty in DIFFICULTIES}
     entity_counts = {entity: 0 for entity in ENTITY_CLASSES}
     power_counts = {power: 0 for power in POWER_TIERS}
     entity_power_counts = {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS}
+    capability_counts = {name: 0 for name in CAPABILITY_CLASSES}
+    behavior_counts = {name: 0 for name in BEHAVIOR_CLASSES}
+    impact_counts = {name: 0 for name in IMPACT_CLASSES}
+    full_matrix_counts = {
+        f"{entity}|{power}|{capability}|{behavior}|{impact}": 0
+        for entity in ENTITY_CLASSES
+        for power in POWER_TIERS
+        for capability in CAPABILITY_CLASSES
+        for behavior in BEHAVIOR_CLASSES
+        for impact in IMPACT_CLASSES
+    }
     executed = 0
     first_digest: str | None = None
     last_digest: str | None = None
@@ -154,6 +173,13 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         entity_counts[scenario.entity_class] += 1
         power_counts[scenario.power_tier] += 1
         entity_power_counts[f"{scenario.entity_class}|{scenario.power_tier}"] += 1
+        capability_counts[scenario.capability_class] += 1
+        behavior_counts[scenario.behavior_class] += 1
+        impact_counts[scenario.impact_class] += 1
+        full_matrix_counts[
+            f"{scenario.entity_class}|{scenario.power_tier}|{scenario.capability_class}|"
+            f"{scenario.behavior_class}|{scenario.impact_class}"
+        ] += 1
         digest = scenario.digest()
         first_digest = first_digest or digest
         last_digest = digest
@@ -161,7 +187,8 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
 
     # Coverage is enforced only for an unsharded complete campaign. Each shard is
     # still required to execute its exact deterministic allocation.
-    _validate_coverage(counts, executed)
+    if shards == 1:
+        _validate_coverage(counts, executed)
     expected = ((cases - 1 - shard_index) // shards + 1)
     if executed != expected:
         raise RuntimeError("campaign_case_budget_not_reached")
@@ -178,6 +205,10 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         "entity_counts": entity_counts,
         "power_counts": power_counts,
         "entity_power_counts": entity_power_counts,
+        "capability_counts": capability_counts,
+        "behavior_counts": behavior_counts,
+        "impact_counts": impact_counts,
+        "full_matrix_counts": full_matrix_counts,
         "first_digest": first_digest,
         "last_digest": last_digest,
         "verification_scope": VERIFICATION_SCOPE,
