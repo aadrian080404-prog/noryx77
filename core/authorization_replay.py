@@ -78,8 +78,12 @@ class AuthorizationReplayGuard:
             except Exception:
                 db.close()
                 raise
-            if os.name == "posix":
-                os.chmod(path, 0o600)
+            try:
+                if os.name == "posix":
+                    os.chmod(path, 0o600)
+            except OSError:
+                db.close()
+                raise
             self._db = db
 
     @property
