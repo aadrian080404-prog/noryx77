@@ -63,7 +63,7 @@ class IndependentJury:
     def _valid_evidence(evidence: tuple[Evidence, ...]) -> bool:
         if not evidence or any(not isinstance(item, Evidence) for item in evidence):
             return False
-        if any(not item.verified or not item.independent for item in evidence):
+        if any(item.verified is not True or item.independent is not True for item in evidence):
             return False
         if any(not isinstance(item.source_id, str) or not item.source_id.strip() for item in evidence):
             return False
@@ -84,10 +84,10 @@ class IndependentJury:
         scope_ok = (
             isinstance(proposal.scope, str) and bool(proposal.scope.strip())
             and isinstance(proposal.action, str) and bool(proposal.action.strip())
-            and proposal.reversible
+            and proposal.reversible is True
         )
         # High-impact actions are never approved by this simulation jury.
-        if proposal.requires_human_approval:
+        if proposal.requires_human_approval is not False:
             scope_ok = False
         votes = (integrity_ok, scope_ok)
         if votes[0] and votes[1]:
@@ -151,18 +151,25 @@ class MetaMorphSES:
         self.failures = 0
 
     def learn(self, outcome: VerifiedOutcome) -> int:
-        if not isinstance(outcome, VerifiedOutcome) or not outcome.scenario_id or not outcome.proposal_id:
+        if (
+            not isinstance(outcome, VerifiedOutcome)
+            or not isinstance(outcome.scenario_id, str) or not outcome.scenario_id.strip()
+            or not isinstance(outcome.proposal_id, str) or not outcome.proposal_id.strip()
+            or not isinstance(outcome.succeeded, bool)
+        ):
             raise ValueError("invalid_verified_outcome")
         if (
             not isinstance(outcome.verifier_id, str) or not outcome.verifier_id.strip()
             or not isinstance(outcome.signature, bytes) or not outcome.signature
             or not isinstance(outcome.receipt_digest, str) or len(outcome.receipt_digest) != 64
             or not outcome.evidence
-            or any(not isinstance(item, Evidence) or not item.verified or not item.independent for item in outcome.evidence)
+            or any(not isinstance(item, Evidence) or item.verified is not True or item.independent is not True for item in outcome.evidence)
             or len({item.source_id for item in outcome.evidence}) < 2
         ):
             raise PermissionError("unverified_learning_evidence")
         try:
+            if len(bytes.fromhex(outcome.receipt_digest)) != 32:
+                raise PermissionError("learning_receipt_digest_invalid")
             receipt_valid = self._receipt_verifier(outcome)
         except Exception as exc:
             raise PermissionError("learning_receipt_verifier_failed") from exc
