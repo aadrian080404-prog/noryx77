@@ -191,5 +191,5 @@ class InstitutionalAccessPolicy:
             ):
                 return AccessDecision(False, "independent_supervisor_threshold_not_met", digest, required)
             return AccessDecision(True, "policy_authorized_only_no_data_released", digest, required)
-        except (TypeError, ValueError, AttributeError):
+        except (TypeError, ValueError, AttributeError, OverflowError):
             return AccessDecision(False, "malformed_request", digest, required)
