@@ -168,3 +168,49 @@ def test_boolean_timestamps_are_rejected():
     decision = gate.evaluate(request, approvals)
     assert decision.allowed is False
     assert decision.reason == "invalid_time"
+
+
+def test_numeric_overflow_in_timestamp_fails_closed():
+    gate, request, approvals = setup_case(created_at=10 ** 10000)
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is False
+
+
+def test_clock_exception_fails_closed():
+    gate, request, approvals = setup_case()
+    gate = InstitutionalAccessGate(
+        verifier=TestVerifier(),
+        trusted_approvers={
+            "authority-a": ("domain-a", "authorization"),
+            "oversight-b": ("domain-b", "oversight"),
+        },
+        required_approvals=2,
+        required_roles=("authorization", "oversight"),
+        clock=lambda: (_ for _ in ()).throw(RuntimeError("clock offline")),
+    )
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is False
+    assert decision.reason == "clock_unavailable"
+
+
+def test_impossible_quorum_configuration_is_rejected():
+    with pytest.raises(ValueError, match="invalid_required_roles_or_quorum"):
+        InstitutionalAccessGate(
+            verifier=TestVerifier(),
+            trusted_approvers={"a": ("domain-a", "authorization")},
+            required_approvals=2,
+            required_roles=("authorization",),
+            clock=lambda: 110.0,
+        )
+
+
+def test_approval_digest_binds_full_mandate_contents():
+    gate, request, approvals = setup_case()
+    changed_mandate = dataclasses.replace(
+        request.mandate,
+        allowed_data_scopes=("identity:predicate",),
+    )
+    changed_request = dataclasses.replace(request, mandate=changed_mandate)
+    decision = gate.evaluate(changed_request, approvals)
+    assert decision.allowed is False
+    assert decision.reason == "approval_binding_invalid"
