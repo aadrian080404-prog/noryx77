@@ -41,7 +41,7 @@ class RuntimeResult:
 
 class RuntimeEngine:
     """Operational kernel for the NORYX7 data plane."""
-    def __init__(self, *, max_actions: int = 32, clock: Callable[[], float] = time.monotonic, scheduler: Scheduler | None = None, adapter: ExecutionAdapter | None = None, attestation_signer: AttestationSigner | None = None, identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None, state_journal: StateJournal | None = None, multi_auth_authority: SignedApprovalAuthority | None = None, authorization_provider: AuthorizationProvider | None = None, high_risk_action_types: set[str] | frozenset[str] | None = None, authorization_epoch: int = 0, replay_guard: AuthorizationReplayGuard | None = None) -> None:
+    def __init__(self, *, max_actions: int = 32, clock: Callable[[], float] = time.monotonic, scheduler: Scheduler | None = None, adapter: ExecutionAdapter | None = None, attestation_signer: AttestationSigner | None = None, identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None, state_journal: StateJournal | None = None, multi_auth_authority: SignedApprovalAuthority | None = None, authorization_provider: AuthorizationProvider | None = None, high_risk_action_types: set[str] | frozenset[str] | None = None, authorization_epoch: int = 0, replay_guard: AuthorizationReplayGuard | None = None, require_authenticated_replay_guard: bool = False) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0: raise ValueError("max_actions must be a non-negative integer")
         if not callable(clock): raise TypeError("clock must be callable")
         if scheduler is not None and not isinstance(scheduler, Scheduler): raise TypeError("scheduler must be a Scheduler")
@@ -61,6 +61,10 @@ class RuntimeEngine:
         custom_high_risk_action_types = frozenset(high_risk_action_types)
         high_risk_action_types = custom_high_risk_action_types | MANDATORY_HIGH_RISK_ACTION_TYPES
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
+        if not isinstance(require_authenticated_replay_guard, bool): raise TypeError("require_authenticated_replay_guard must be bool")
+        if require_authenticated_replay_guard:
+            if replay_guard is None or not replay_guard.durable or not getattr(replay_guard, "integrity_protected", False):
+                raise ValueError("high_risk_actions_require_authenticated_replay_guard")
         if custom_high_risk_action_types:
             if replay_guard is None:
                 raise ValueError("high_risk_actions_require_replay_guard")
@@ -72,7 +76,7 @@ class RuntimeEngine:
             if not identity_registry.is_trusted(AgentIdentity(str(adapter.agent_id), public_key)): raise PermissionError("adapter identity is not trusted")
         self._max_actions, self._clock = max_actions, clock; self._scheduler, self._adapter = scheduler or Scheduler(), adapter
         self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = runtime_id or uuid4().hex
-        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard
+        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard; self._require_authenticated_replay_guard = require_authenticated_replay_guard
         if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
     @property
     def runtime_id(self) -> str: return self._runtime_id
@@ -107,6 +111,10 @@ class RuntimeEngine:
 
         if self._replay_guard is None or not self._replay_guard.durable:
             raise PermissionError("durable_replay_guard_required")
+        if self._require_authenticated_replay_guard and not getattr(
+            self._replay_guard, "integrity_protected", False
+        ):
+            raise PermissionError("authenticated_replay_guard_required")
 
         try:
             proof = self._authorization_provider(
