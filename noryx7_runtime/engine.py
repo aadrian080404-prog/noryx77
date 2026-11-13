@@ -129,7 +129,11 @@ class RuntimeEngine:
         ):
             raise PermissionError("authorization_proof_invalid")
 
-        if not self._replay_guard.consume(replay_token):
+        if not self._replay_guard.consume(
+            replay_token,
+            expires_at=proof.expires_at,
+            now=time.time(),
+        ):
             raise PermissionError("authorization_replay_detected")
 
     def execute(
