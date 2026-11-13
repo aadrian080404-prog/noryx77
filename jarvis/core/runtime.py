@@ -26,7 +26,7 @@ from core.http_provider import HttpProviderConfig, build_http_provider
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
-    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, authorization_replay_path=None):
+    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, authorization_replay_path=None, multi_auth_authority=None, authorization_provider=None, authorization_epoch=0):
         self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store or JarvisStateStore(); self.recovery = recovery or RecoveryController()
 
         # Canonical NORYX7 execution infrastructure.
@@ -81,7 +81,12 @@ class JarvisRuntime:
         self.provider_execution = ProviderExecutionGateway()
         self.provider_resilience = ResilientProviderExecutor()
         self.registry.register("provider_execute", self._execute_provider_capability)
-        self.runtime_engine = RuntimeEngine()
+        self.runtime_engine = RuntimeEngine(
+            replay_guard=self.authorization_replay_guard,
+            multi_auth_authority=multi_auth_authority,
+            authorization_provider=authorization_provider,
+            authorization_epoch=authorization_epoch,
+        )
         self.execution_traces: dict[str, ExecutionTrace] = {}
         self.system_fabric = CanonicalSystemFabric(
             runtime_engine=self.runtime_engine,
