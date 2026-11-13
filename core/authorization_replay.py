@@ -183,6 +183,67 @@ class AuthorizationReplayGuard:
             except sqlite3.Error:
                 return False
 
+    def consume_many(
+        self, tokens: tuple[bytes, ...], *, expires_at: float, now: float | None = None
+    ) -> bool:
+        """Atomically consume a bounded batch or consume none of it."""
+        if (
+            not isinstance(tokens, tuple) or not tokens or len(tokens) > 256
+            or any(not isinstance(token, bytes) or len(token) != TOKEN_SIZE for token in tokens)
+            or len(set(tokens)) != len(tokens)
+        ):
+            return False
+        now = time.time() if now is None else now
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            for value in (expires_at, now)
+        ) or expires_at <= now:
+            return False
+        with self._lock:
+            if self._closed:
+                return False
+            if self._db is None:
+                self._consumed = {
+                    key: expiry for key, expiry in self._consumed.items() if expiry > now
+                }
+                if any(token in self._consumed for token in tokens):
+                    return False
+                if len(self._consumed) + len(tokens) > self._max_tokens:
+                    return False
+                for token in tokens:
+                    self._consumed[bytes(token)] = float(expires_at)
+                return True
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                self._db.execute(
+                    "DELETE FROM replay_guard_tokens WHERE expires_at<=?", (float(now),)
+                )
+                placeholders = ",".join("?" for _ in tokens)
+                existing = self._db.execute(
+                    f"SELECT 1 FROM replay_guard_tokens WHERE token IN ({placeholders}) LIMIT 1",
+                    tuple(sqlite3.Binary(token) for token in tokens),
+                ).fetchone()
+                if existing is not None:
+                    self._db.execute("ROLLBACK")
+                    return False
+                count = self._db.execute(
+                    "SELECT COUNT(*) FROM replay_guard_tokens"
+                ).fetchone()[0]
+                if count + len(tokens) > self._max_tokens:
+                    self._db.execute("ROLLBACK")
+                    return False
+                self._db.executemany(
+                    "INSERT INTO replay_guard_tokens(token,expires_at) VALUES(?,?)",
+                    [(sqlite3.Binary(token), float(expires_at)) for token in tokens],
+                )
+                self._db.execute("COMMIT")
+                return True
+            except sqlite3.Error:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                return False
+
     def close(self) -> None:
         with self._lock:
             if self._db is not None:
@@ -391,6 +452,84 @@ class AuthenticatedAuthorizationReplayGuard(AuthorizationReplayGuard):
                         self._integrity_key_id,
                         sqlite3.Binary(self._record_mac(token_hash, expiry, self._integrity_key_id)),
                     ),
+                )
+                self._db.execute("COMMIT")
+                return True
+            except RuntimeError:
+                raise
+            except sqlite3.Error:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                return False
+
+    def consume_many(
+        self, tokens: tuple[bytes, ...], *, expires_at: float, now: float | None = None
+    ) -> bool:
+        """Atomically consume authenticated token fingerprints as one batch."""
+        if (
+            not isinstance(tokens, tuple) or not tokens or len(tokens) > 256
+            or any(not isinstance(token, bytes) or len(token) != TOKEN_SIZE for token in tokens)
+            or len(set(tokens)) != len(tokens)
+        ):
+            return False
+        now = time.time() if now is None else now
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            for value in (expires_at, now)
+        ) or expires_at <= now:
+            return False
+        with self._lock:
+            if self._closed or self._db is None:
+                return False
+            token_hashes = tuple(self._token_hash(token) for token in tokens)
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                expired_rows = self._db.execute(
+                    "SELECT token_hash,expires_at,key_id,record_mac "
+                    "FROM replay_guard_auth_tokens WHERE expires_at<=?",
+                    (float(now),),
+                ).fetchall()
+                if any(not self._verify_row(row) for row in expired_rows):
+                    self._db.execute("ROLLBACK")
+                    self._fail_integrity()
+                self._db.execute(
+                    "DELETE FROM replay_guard_auth_tokens WHERE expires_at<=?",
+                    (float(now),),
+                )
+                placeholders = ",".join("?" for _ in token_hashes)
+                existing_rows = self._db.execute(
+                    "SELECT token_hash,expires_at,key_id,record_mac "
+                    f"FROM replay_guard_auth_tokens WHERE token_hash IN ({placeholders})",
+                    tuple(sqlite3.Binary(value) for value in token_hashes),
+                ).fetchall()
+                if any(not self._verify_row(row) for row in existing_rows):
+                    self._db.execute("ROLLBACK")
+                    self._fail_integrity()
+                if existing_rows:
+                    self._db.execute("ROLLBACK")
+                    return False
+                count = self._db.execute(
+                    "SELECT COUNT(*) FROM replay_guard_auth_tokens"
+                ).fetchone()[0]
+                if count + len(token_hashes) > self._max_tokens:
+                    self._db.execute("ROLLBACK")
+                    return False
+                expiry = float(expires_at)
+                self._db.executemany(
+                    "INSERT INTO replay_guard_auth_tokens(token_hash,expires_at,key_id,record_mac) "
+                    "VALUES(?,?,?,?)",
+                    [
+                        (
+                            sqlite3.Binary(token_hash),
+                            expiry,
+                            self._integrity_key_id,
+                            sqlite3.Binary(self._record_mac(
+                                token_hash, expiry, self._integrity_key_id
+                            )),
+                        )
+                        for token_hash in token_hashes
+                    ],
                 )
                 self._db.execute("COMMIT")
                 return True
