@@ -100,6 +100,15 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
     def durable(self) -> bool:
         return not self._failed
 
+    @property
+    def authenticated_encryption(self) -> bool:
+        return not self._failed
+
+    @property
+    def rollback_protected(self) -> bool:
+        # AES-GCM authenticates rows but does not detect deletion or DB rollback.
+        return False
+
     def _initialize_metadata(self) -> None:
         rows = dict(self._db.execute("SELECT key,value FROM memory_store_meta").fetchall())
         if not rows:
