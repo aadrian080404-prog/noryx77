@@ -81,7 +81,7 @@ class ProcessExecutionAdapter:
     def execute_with_timeout(self, envelope: ActionEnvelope, timeout_seconds: float) -> Any:
         if not isinstance(envelope, ActionEnvelope):
             raise TypeError("envelope_must_be_ActionEnvelope")
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds_must_be_positive")
         context = multiprocessing.get_context("spawn")
         receive_conn, send_conn = context.Pipe(duplex=False)
