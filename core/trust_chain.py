@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import time
 from hmac import compare_digest
 from typing import Final
 
@@ -53,7 +54,7 @@ def channel_binding_digest(local: AgentIdentity, peer: AgentIdentity, session_id
 
 
 def _evidence_message(agent: AgentIdentity, device: DeviceIdentity, attestation_digest: bytes,
-                      channel_digest: bytes, epoch: int, action_digest: bytes) -> bytes:
+                      channel_digest: bytes, epoch: int, action_digest: bytes, expires_at: int) -> bytes:
     if not agent.is_well_formed():
         raise ValueError("invalid_agent_identity")
     if not isinstance(device, DeviceIdentity):
@@ -68,13 +69,15 @@ def _evidence_message(agent: AgentIdentity, device: DeviceIdentity, attestation_
         raise ValueError("invalid_epoch")
     if not isinstance(action_digest, bytes) or len(action_digest) != MAX_ACTION_DIGEST_SIZE:
         raise ValueError("invalid_action_digest")
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at <= 0:
+        raise ValueError("invalid_evidence_expiry")
     return (
         _DOMAIN + VERSION.to_bytes(2, "big")
         + _field(agent.agent_id, "agent_id") + agent.public_key
         + _field(device.device_id, "device_id") + _field(device.platform, "platform")
         + device.role.value.encode("ascii") + b"\x00"
         + attestation_digest + channel_digest
-        + epoch.to_bytes(8, "big") + action_digest
+        + epoch.to_bytes(8, "big") + action_digest + expires_at.to_bytes(8, "big")
     )
 
 
@@ -87,6 +90,7 @@ class TrustEvidence:
     epoch: int
     action_digest: bytes
     signature: bytes
+    expires_at: int
 
 
 class TrustChain:
@@ -107,7 +111,7 @@ class TrustChain:
     @staticmethod
     def sign(agent: AgentIdentity, private_key: Ed25519PrivateKey, device: DeviceIdentity,
              attestation: AgentAttestation, *, session_id: str, peer: AgentIdentity,
-             direction: str, epoch: int, action_digest: bytes) -> TrustEvidence:
+             direction: str, epoch: int, action_digest: bytes, expires_at: int | None = None) -> TrustEvidence:
         if agent.agent_id != attestation.identity.agent_id or agent.public_key != attestation.identity.public_key:
             raise ValueError("attestation_identity_mismatch")
         if not AgentIdentityAuthority.verify(attestation):
@@ -117,10 +121,13 @@ class TrustChain:
         raw_public = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         if not compare_digest(raw_public, agent.public_key):
             raise ValueError("identity_private_key_mismatch")
+        expires_at = int(time.time()) + 300 if expires_at is None else expires_at
+        if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at <= int(time.time()):
+            raise ValueError("invalid_evidence_expiry")
         channel_digest = channel_binding_digest(agent, peer, session_id, direction)
         attestation_digest = TrustChain.attest_digest(attestation)
-        message = _evidence_message(agent, device, attestation_digest, channel_digest, epoch, action_digest)
-        return TrustEvidence(agent, device, attestation_digest, channel_digest, epoch, bytes(action_digest), private_key.sign(message))
+        message = _evidence_message(agent, device, attestation_digest, channel_digest, epoch, action_digest, expires_at)
+        return TrustEvidence(agent, device, attestation_digest, channel_digest, epoch, bytes(action_digest), private_key.sign(message), expires_at)
 
     def verify(self, evidence: TrustEvidence, *, attestation: AgentAttestation,
                expected_device: DeviceIdentity, expected_peer: AgentIdentity,
@@ -132,7 +139,7 @@ class TrustChain:
             return False
         if expected_device.trust is not DeviceTrust.VERIFIED:
             return False
-        if evidence.epoch != expected_epoch:
+        if evidence.epoch != expected_epoch or not isinstance(evidence.expires_at, int) or isinstance(evidence.expires_at, bool) or evidence.expires_at <= int(time.time()):
             return False
         try:
             if not self.registry.is_trusted(evidence.agent):
@@ -145,10 +152,13 @@ class TrustChain:
             if not compare_digest(evidence.channel_digest, expected_channel):
                 return False
             message = _evidence_message(evidence.agent, evidence.device, evidence.attestation_digest,
-                                        evidence.channel_digest, evidence.epoch, evidence.action_digest)
+                                        evidence.channel_digest, evidence.epoch, evidence.action_digest, evidence.expires_at)
             Ed25519PublicKey.from_public_bytes(evidence.agent.public_key).verify(evidence.signature, message)
-            if consume_replay and not self.replay_guard.consume(evidence.action_digest):
-                return False
+            if consume_replay:
+                if not self.replay_guard.durable:
+                    return False
+                if not self.replay_guard.consume(evidence.action_digest, expires_at=evidence.expires_at, now=time.time()):
+                    return False
             return True
         except (InvalidSignature, ValueError, TypeError, PermissionError):
             return False
