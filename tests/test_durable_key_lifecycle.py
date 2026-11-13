@@ -24,7 +24,7 @@ def test_key_lifecycle_operations_survive_restart(tmp_path):
     lifecycle.close()
 
     recovered = open_store(path)
-    record = recovered.require_active("unknown") if False else recovered.snapshot()[0]
+    record = recovered.snapshot()[0]
     assert record.key_id == "kms-root"
     assert record.version == 2
     assert record.state is KeyState.REVOKED
