@@ -42,6 +42,8 @@ class DurableStateJournal(StateJournal):
             raise ValueError("integrity_key_must_be_at_least_32_bytes")
         if not isinstance(key_id, str) or not key_id.strip():
             raise ValueError("journal_key_id_required")
+        if not isinstance(runtime_id, str) or not runtime_id.strip():
+            raise ValueError("durable_runtime_id_required")
         super().__init__(
             require_signatures=require_signatures,
             verifier=verifier,
