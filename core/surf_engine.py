@@ -91,6 +91,10 @@ class SURFEngine:
             return invalid
         if not all(isinstance(item, EvidenceRecord) and _well_formed(item) for item in evidence):
             return invalid
+        if not all(isinstance(item, Experiment) and _well_formed(item) for item in experiments):
+            return invalid
+        if len({item.experiment_id for item in experiments}) != len(experiments):
+            return invalid
         graph_evidence = {item.evidence_id: item for item in graph.evidence}
         if evidence and (
             len(evidence) != len(graph_evidence)
@@ -106,6 +110,10 @@ class SURFEngine:
             item for item in candidates
             if isinstance(item, ImprovementCandidate) and _well_formed(item)
         )
+        if len({item.hypothesis_id for item in valid_hypotheses}) != len(valid_hypotheses):
+            return invalid
+        if len({item.candidate_id for item in valid_candidates}) != len(valid_candidates):
+            return invalid
 
         verified_evidence_ids = set()
         if self._evidence_verifier is not None:
