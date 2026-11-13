@@ -2,7 +2,7 @@ import pytest
 
 from core.crypto import AuthenticatedCipher
 from core.durable_key_lifecycle import DurableKeyLifecycle
-from core.key_lifecycle import ExternalKeyBoundary, KeyLifecycle, KeyState
+from core.key_lifecycle import ExternalKeyBoundary, KeyLifecycle
 from core.lifecycle_key_provider import LifecycleBoundKeyProvider
 
 
@@ -44,7 +44,7 @@ def test_lifecycle_bound_provider_rejects_retired_and_revoked_keys(tmp_path):
         key_id="metadata-v1",
     )
     lifecycle.register("signing-key")
-    provider = LifecycleBoundKeyProvider(TestExternalKMS(), lifecycle)
+    provider = LifecycleBoundKeyProvider(FakeExternalKMS(), lifecycle)
     lifecycle.retire("signing-key")
     with pytest.raises(PermissionError, match="key_not_active"):
         provider.get_key("signing-key")
@@ -56,7 +56,7 @@ def test_lifecycle_bound_provider_rejects_retired_and_revoked_keys(tmp_path):
 
 def test_lifecycle_bound_provider_requires_durable_metadata(tmp_path):
     with pytest.raises(ValueError, match="durable_key_lifecycle_required"):
-        LifecycleBoundKeyProvider(TestExternalKMS(), KeyLifecycle())
+        LifecycleBoundKeyProvider(FakeExternalKMS(), KeyLifecycle())
 
 
 def test_lifecycle_bound_provider_rejects_closed_lifecycle(tmp_path):
@@ -66,7 +66,7 @@ def test_lifecycle_bound_provider_rejects_closed_lifecycle(tmp_path):
         key_id="metadata-v1",
     )
     lifecycle.register("key")
-    provider = LifecycleBoundKeyProvider(TestExternalKMS(), lifecycle)
+    provider = LifecycleBoundKeyProvider(FakeExternalKMS(), lifecycle)
     lifecycle.close()
     with pytest.raises(RuntimeError, match="unavailable"):
         provider.get_key("key")
