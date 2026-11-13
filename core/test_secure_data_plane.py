@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .secure_data_plane import SecureDataPlane
 
 
-class TestKMS:
+class FakeKMS:
     """Test-only envelope-key adapter; production keys remain outside NORYX7."""
 
     def __init__(self):
@@ -35,7 +35,7 @@ class TestKMS:
 
 
 def test_per_record_envelope_encryption_round_trip_and_randomization():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(FakeKMS())
     plaintext = b"highly confidential customer record"
     first = plane.encrypt(
         plaintext, tenant_id="tenant-a", record_id="record-1",
@@ -56,7 +56,7 @@ def test_per_record_envelope_encryption_round_trip_and_randomization():
 
 
 def test_ciphertext_cannot_be_moved_between_tenants_records_or_purposes():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(FakeKMS())
     record = plane.encrypt(
         b"secret", tenant_id="tenant-a", record_id="record-1",
         purpose="payments",
@@ -74,7 +74,7 @@ def test_ciphertext_cannot_be_moved_between_tenants_records_or_purposes():
 
 
 def test_ciphertext_and_authenticated_metadata_tampering_are_rejected():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(FakeKMS())
     record = plane.encrypt(
         b"secret", tenant_id="tenant-a", record_id="record-1",
         purpose="identity",
@@ -94,7 +94,7 @@ def test_ciphertext_and_authenticated_metadata_tampering_are_rejected():
 
 
 def test_invalid_records_and_payload_limits_fail_closed():
-    plane = SecureDataPlane(TestKMS(), max_payload_bytes=8)
+    plane = SecureDataPlane(FakeKMS(), max_payload_bytes=8)
     with pytest.raises(ValueError, match="payload_size_exceeded"):
         plane.encrypt(b"123456789", tenant_id="t", record_id="r", purpose="p")
     with pytest.raises(ValueError, match="invalid_data_classification"):
@@ -121,7 +121,7 @@ def test_kms_failure_never_returns_plaintext_or_falls_back_to_local_keys():
 
 
 def test_decrypt_enforces_the_receivers_configured_payload_limit():
-    kms = TestKMS()
+    kms = FakeKMS()
     writer = SecureDataPlane(kms)
     reader = SecureDataPlane(kms, max_payload_bytes=8)
     record = writer.encrypt(
