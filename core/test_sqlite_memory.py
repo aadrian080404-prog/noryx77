@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -112,4 +113,46 @@ def test_encrypted_memory_rejects_json_type_coercion(tmp_path, content):
     with pytest.raises(TypeError):
         store.put(MemoryItem("mem-1", content, execution_id="exec-1"))
     assert len(store) == 0
+    store.close()
+
+
+
+def test_encrypted_memory_serializes_concurrent_writers_and_survives_restart(tmp_path):
+    path = tmp_path / "memory.sqlite"
+    store = _store(path)
+
+    def write(index):
+        store.put(MemoryItem(
+            f"mem-{index}",
+            {"value": index},
+            kind="long_term",
+            execution_id="exec-concurrent",
+        ))
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(write, range(64)))
+
+    assert len(store) == 64
+    assert len(store.list(execution_id="exec-concurrent")) == 64
+    store.close()
+    assert store.durable is False
+
+    recovered = _store(path)
+    assert len(recovered) == 64
+    assert recovered.get("mem-63", execution_id="exec-concurrent").content == {"value": 63}
+    recovered.close()
+
+
+def test_encrypted_memory_serializes_concurrent_updates_to_same_item(tmp_path):
+    store = _store(tmp_path / "memory.sqlite")
+
+    def update(index):
+        store.put(MemoryItem("shared", {"value": index}, execution_id="exec-shared"))
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(update, range(40)))
+
+    item = store.get("shared", execution_id="exec-shared")
+    assert item is not None
+    assert 0 <= item.content["value"] < 40
     store.close()
