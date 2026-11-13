@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -16,14 +17,16 @@ def _authority_and_proof_provider():
     authority = SignedApprovalAuthority(required_threshold=1, trusted_keys={"owner": public})
 
     def provider(envelope, digest):
+        expires_at = int(time.time()) + 60
         approval = sign_approval(
             "owner", private,
             action_id=envelope.execution_id,
             epoch=7,
             action_statement=digest,
+            expires_at=expires_at,
         )
         return SignedAuthorizationProof(
-            envelope.execution_id, 7, digest, (approval,), 1
+            envelope.execution_id, 7, digest, (approval,), 1, expires_at
         )
 
     return authority, provider
@@ -95,6 +98,6 @@ def test_replay_guard_tracks_the_signed_action_statement_not_attempt_nonce(tmp_p
 
     assert original.status is ExecutionStatus.SUCCEEDED
     token = _authorization_replay_token(calls[0])
-    assert guard.contains(token)
-    assert guard.consume(token) is False
+    assert guard.contains(token, now=time.time())
+    assert guard.consume(token, expires_at=int(time.time()) + 60, now=time.time()) is False
     assert token != bytes.fromhex(original.attestations[0].action_digest)
