@@ -1,5 +1,6 @@
 import hashlib
 import json
+import time
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -87,19 +88,13 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries(tmp_p
         required_threshold=1,
         trusted_keys={"approver-1": public_key},
     )
+    proof_expiry = int(time.time()) + 60
     approval = sign_approval(
-        "approver-1",
-        private_key,
-        action_id=execution_id,
-        epoch=0,
-        action_statement=action_statement,
+        "approver-1", private_key, action_id=execution_id, epoch=0,
+        action_statement=action_statement, expires_at=proof_expiry,
     )
     proof = SignedAuthorizationProof(
-        execution_id,
-        0,
-        action_statement,
-        (approval,),
-        1,
+        execution_id, 0, action_statement, (approval,), 1, proof_expiry,
     )
     engine = RuntimeEngine(
         multi_auth_authority=authority,
@@ -162,13 +157,14 @@ def test_durable_replay_guard_survives_runtime_restart(tmp_path):
     token = b"\x42" * 32
     first_process = AuthorizationReplayGuard(path=path)
     assert first_process.durable
-    assert first_process.consume(token)
+    expiry = int(time.time()) + 60
+    assert first_process.consume(token, expires_at=expiry, now=time.time())
     first_process.close()
 
     restarted_process = AuthorizationReplayGuard(path=path)
     assert restarted_process.durable
-    assert restarted_process.contains(token)
-    assert not restarted_process.consume(token)
+    assert restarted_process.contains(token, now=time.time())
+    assert not restarted_process.consume(token, expires_at=expiry, now=time.time())
 
 
 def test_runtime_rejects_in_memory_replay_guard_for_high_risk_actions():
