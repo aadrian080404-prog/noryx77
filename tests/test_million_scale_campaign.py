@@ -88,3 +88,19 @@ def test_campaign_reports_marginal_coverage_for_every_axis():
 def test_campaign_shard_count_preserves_all_entity_power_strata():
     with pytest.raises(ValueError, match="shard_count_must_be_coprime_with_strata"):
         run_campaign(1, 100, shard_index=0, shards=7)
+
+
+def test_campaign_reports_pairwise_interaction_histograms():
+    result = run_campaign(20261113, 10_000)
+    expected_sizes = {
+        "entity_behavior_counts": 9 * 8,
+        "entity_impact_counts": 9 * 6,
+        "power_capability_counts": 7 * 8,
+        "capability_impact_counts": 8 * 6,
+        "behavior_impact_counts": 8 * 6,
+    }
+    for key, size in expected_sizes.items():
+        counts = result[key]
+        assert len(counts) == size
+        assert sum(counts.values()) == 10_000
+        assert all(value > 0 for value in counts.values())
