@@ -208,6 +208,27 @@ class RuntimeEngine:
             for item in self._scheduler.schedule(tuple(steps))
         )
 
+        try:
+            plan_digest = _digest([
+                {
+                    "step_id": step.step_id,
+                    "action_type": step.action_type,
+                    "target": step.target,
+                    "parameters": dict(step.parameters),
+                    "dependencies": sorted(step.dependencies),
+                    "risk_class": step.risk_class,
+                }
+                for step in sorted(ordered, key=lambda item: item.step_id)
+            ])
+        except (TypeError, ValueError, OverflowError):
+            return self._result(
+                lifecycle,
+                ExecutionStatus.REJECTED,
+                (),
+                (),
+                "plan_digest_invalid",
+            )
+
         attestations: list[Attestation] = []
         outputs: list[Any] = []
         previous_attestation_digest = _ZERO_DIGEST
@@ -235,6 +256,7 @@ class RuntimeEngine:
                 dict(plan_step.parameters),
                 uuid4().hex,
                 plan_step.risk_class,
+                plan_digest,
             )
 
             reservation = None
@@ -250,6 +272,7 @@ class RuntimeEngine:
                         "target": envelope.target,
                         "parameters": envelope.parameters,
                         "risk_class": envelope.risk_class,
+                        "plan_digest": envelope.plan_digest,
                         "nonce": envelope.nonce,
                     }
                 )
@@ -267,6 +290,7 @@ class RuntimeEngine:
                             "target": envelope.target,
                             "parameters": envelope.parameters,
                             "risk_class": envelope.risk_class,
+                            "plan_digest": envelope.plan_digest,
                         }
                     )
                 )

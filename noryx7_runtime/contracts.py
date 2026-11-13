@@ -71,6 +71,7 @@ class ActionEnvelope:
     parameters: Mapping[str, Any]
     nonce: str
     risk_class: str = "normal"
+    plan_digest: str = ""
 
 
 @dataclass(frozen=True)

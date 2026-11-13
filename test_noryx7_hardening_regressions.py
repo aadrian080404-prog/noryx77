@@ -59,6 +59,20 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries(tmp_p
     execution_id = "replay-execution"
     principal_id = "principal-1"
     step = RuntimePlanStep("step-1", "financial", "transfer", {})
+    plan_payload = [{
+        "step_id": step.step_id,
+        "action_type": step.action_type,
+        "target": step.target,
+        "parameters": dict(step.parameters),
+        "dependencies": sorted(step.dependencies),
+        "risk_class": step.risk_class,
+    }]
+    plan_digest = hashlib.sha256(
+        json.dumps(
+            plan_payload, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
     statement = {
         "execution_id": execution_id,
         "principal_id": principal_id,
@@ -67,6 +81,7 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries(tmp_p
         "target": step.target,
         "parameters": dict(step.parameters),
         "risk_class": step.risk_class,
+        "plan_digest": plan_digest,
     }
     action_statement = bytes.fromhex(
         hashlib.sha256(
