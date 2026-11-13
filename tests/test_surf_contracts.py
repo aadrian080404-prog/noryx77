@@ -39,10 +39,26 @@ def test_contracts_fail_closed_on_unhashable_states():
     assert not SystemGraph("g1", (), (), (ev,)).is_well_formed()
 
 
-def test_experiment_requires_authorization_and_sandbox():
-    assert not SURFEngine.approve_experiment(Experiment("x", "h", "observe", {}, False, True))
-    assert not SURFEngine.approve_experiment(Experiment("x", "h", "observe", {}, True, False))
-    assert SURFEngine.approve_experiment(Experiment("x", "h", "observe", {}, True, True))
+def test_experiment_requires_external_authorization_and_sandbox_receipts():
+    claimed_only = Experiment("x", "h", "observe", {}, True, True)
+    assert not SURFEngine().approve_experiment(claimed_only)
+
+    engine = SURFEngine(
+        authorization_verifier=lambda receipt, experiment: receipt == "auth-receipt",
+        sandbox_verifier=lambda receipt, experiment: receipt == "sandbox-attestation",
+    )
+    missing_receipts = Experiment("x", "h", "observe", {}, True, True)
+    valid_receipts = Experiment(
+        "x", "h", "observe", {}, True, True,
+        "auth-receipt", "sandbox-attestation",
+    )
+    forged_receipt = Experiment(
+        "x", "h", "observe", {}, True, True,
+        "forged", "sandbox-attestation",
+    )
+    assert not engine.approve_experiment(missing_receipts)
+    assert not engine.approve_experiment(forged_receipt)
+    assert engine.approve_experiment(valid_receipts)
 
 
 def test_assessment_counts_unknowns_and_graph_evidence():
@@ -50,6 +66,7 @@ def test_assessment_counts_unknowns_and_graph_evidence():
     assessment = SURFEngine().assess(_graph((ev,), "unknown"), ())
     assert assessment.graph_valid
     assert assessment.evidence_count == 1
+    assert assessment.verified_evidence_count == 0
     assert assessment.unknowns == 1
 
 
@@ -73,8 +90,48 @@ def test_malformed_hypotheses_and_candidates_do_not_inflate_trust():
     assert not assessment.improvement_ready
 
 
-def test_only_well_formed_verified_candidate_is_ready():
+def test_verified_status_alone_does_not_count_as_verified_hypothesis():
+    ev = EvidenceRecord("e1", "static", "fixture", "observed", provenance="untrusted")
+    hypothesis = HypothesisRecord("h1", "component uses protocol X", ("e1",), "verified")
+    assessment = SURFEngine().assess(
+        _graph((ev,)),
+        (ev,),
+        (hypothesis,),
+    )
+    assert assessment.verified_hypotheses == 0
+    assert assessment.verified_evidence_count == 0
+
+
+def test_hypothesis_counts_only_after_independent_evidence_and_hypothesis_verification():
+    ev = EvidenceRecord("e1", "static", "fixture", "component observed", provenance="signed-fixture")
+    hypothesis = HypothesisRecord("h1", "component uses protocol X", ("e1",), "verified")
+    engine = SURFEngine(
+        evidence_verifier=lambda evidence, graph: evidence.provenance == "signed-fixture",
+        hypothesis_verifier=lambda item, graph, verified_ids: item.hypothesis_id == "h1" and "e1" in verified_ids,
+    )
+
+    assessment = engine.assess(_graph((ev,)), (ev,), (hypothesis,))
+
+    assert assessment.verified_evidence_count == 1
+    assert assessment.verified_hypotheses == 1
+
+
+def test_only_receipt_verified_candidate_is_ready():
+    ev = EvidenceRecord("e1", "static", "fixture", "observed")
+    candidate = ImprovementCandidate(
+        "c1", "meets requirements", (), True, True,
+        "candidate-receipt", "regression-receipt",
+    )
+    engine = SURFEngine(
+        candidate_verifier=lambda item, graph, evidence_ids: item.verification_receipt == "candidate-receipt",
+        regression_verifier=lambda item, graph: item.regression_receipt == "regression-receipt",
+    )
+    assessment = engine.assess(_graph((ev,)), (ev,), candidates=(candidate,))
+    assert assessment.improvement_ready
+
+
+def test_candidate_boolean_flags_without_independent_receipts_are_not_ready():
     ev = EvidenceRecord("e1", "static", "fixture", "observed")
     candidate = ImprovementCandidate("c1", "meets requirements", (), True, True)
     assessment = SURFEngine().assess(_graph((ev,)), (ev,), candidates=(candidate,))
-    assert assessment.improvement_ready
+    assert not assessment.improvement_ready
