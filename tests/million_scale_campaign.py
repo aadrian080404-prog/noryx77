@@ -135,6 +135,7 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
     counts = {difficulty: 0 for difficulty in DIFFICULTIES}
     entity_counts = {entity: 0 for entity in ENTITY_CLASSES}
     power_counts = {power: 0 for power in POWER_TIERS}
+    entity_power_counts = {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS}
     executed = 0
     first_digest: str | None = None
     last_digest: str | None = None
@@ -152,6 +153,7 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         counts[scenario.difficulty] += 1
         entity_counts[scenario.entity_class] += 1
         power_counts[scenario.power_tier] += 1
+        entity_power_counts[f"{scenario.entity_class}|{scenario.power_tier}"] += 1
         digest = scenario.digest()
         first_digest = first_digest or digest
         last_digest = digest
@@ -175,6 +177,7 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         "difficulty_counts": counts,
         "entity_counts": entity_counts,
         "power_counts": power_counts,
+        "entity_power_counts": entity_power_counts,
         "first_digest": first_digest,
         "last_digest": last_digest,
         "verification_scope": VERIFICATION_SCOPE,
