@@ -108,15 +108,13 @@ class RuntimeEngine:
         public_key = getattr(self._attestation_signer, "public_key_bytes", None)
         if not isinstance(public_key, bytes):
             raise PermissionError("identity-bound execution requires signer public key")
-        # Resolve trust under the registry lock, then release it before external
-        # execution. Revocation blocks subsequent dispatches; it does not cancel
-        # an action whose trust check already linearized.
-        identity = self._identity_registry.with_trusted_identity(
-            str(self._adapter.agent_id), lambda trusted: trusted
-        )
-        if identity.public_key != public_key:
-            raise PermissionError("adapter identity key mismatch")
-        return dispatch_adapter()
+        def run_if_trusted(identity: AgentIdentity) -> Any:
+            if identity.public_key != public_key:
+                raise PermissionError("adapter identity key mismatch")
+            # Keep revocation serialized with the authorized side effect. For
+            # ProcessExecutionAdapter, the runtime deadline bounds this section.
+            return dispatch_adapter()
+        return self._identity_registry.with_trusted_identity(str(self._adapter.agent_id), run_if_trusted)
     def _authorize_high_risk(
         self,
         envelope: ActionEnvelope,
