@@ -24,7 +24,8 @@ from .hypersynth_runtime import HypersynthRuntime
 from .interaction_context import InteractionContext, build_interaction_context
 from .key_lifecycle import ExternalKeyBoundary, KeyLifecycle, KeyRecord, KeyState
 from .limits import RuntimeLimits
-from .memory import MemoryStore
+from .memory import MemoryStore, MemoryItem
+from .tiered_memory import TieredMemoryRouter
 from .metacognition import MetacognitiveReflection
 from .metacognitive_challenge import AdaptiveChallengeController, ChallengeDomain, ChallengeScore, ChallengeSpec, ChallengeTrace, ChallengeVerification, ImprovementEvidence, IndependentChallengeVerifier, MetacognitiveChallengeEvaluator
 from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthority, SignedAuthorizationProof, ThresholdAuthorizer, action_digest, sign_approval
