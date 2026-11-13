@@ -96,7 +96,7 @@ class RuntimeEngine:
         action_statement: bytes,
         replay_token: bytes,
     ) -> None:
-        if envelope.action_type not in self._high_risk_action_types:
+        if envelope.risk_class != "high" and envelope.action_type not in self._high_risk_action_types:
             return
 
         if (
@@ -234,6 +234,7 @@ class RuntimeEngine:
                 plan_step.target,
                 dict(plan_step.parameters),
                 uuid4().hex,
+                plan_step.risk_class,
             )
 
             reservation = None
@@ -248,6 +249,7 @@ class RuntimeEngine:
                         "action_type": envelope.action_type,
                         "target": envelope.target,
                         "parameters": envelope.parameters,
+                        "risk_class": envelope.risk_class,
                         "nonce": envelope.nonce,
                     }
                 )
@@ -264,6 +266,7 @@ class RuntimeEngine:
                             "action_type": envelope.action_type,
                             "target": envelope.target,
                             "parameters": envelope.parameters,
+                            "risk_class": envelope.risk_class,
                         }
                     )
                 )
