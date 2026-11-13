@@ -57,7 +57,7 @@ class PlanStep:
             raise ValueError("plan step is incomplete")
         if len(set(self.dependencies)) != len(self.dependencies):
             raise ValueError("duplicate step dependency")
-        if self.risk_class not in {"normal", "sensitive", "high"}:
+        if not isinstance(self.risk_class, str) or self.risk_class not in {"normal", "sensitive", "high"}:
             raise ValueError("invalid_step_risk_class")
 
 
