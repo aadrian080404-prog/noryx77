@@ -215,3 +215,59 @@ def test_approval_digest_binds_full_mandate_contents():
     decision = gate.evaluate(changed_request, approvals)
     assert decision.allowed is False
     assert decision.reason == "approval_binding_invalid"
+
+
+def test_predicate_mode_has_single_result_output_limit():
+    gate, request, approvals = setup_case(mode=AccessMode.PREDICATE, output_limit=2)
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is False
+    assert decision.reason == "output_limit_exceeded"
+
+
+def test_supervised_mode_requires_an_independent_supervisor():
+    gate, request, approvals = setup_case(mode=AccessMode.SUPERVISED)
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is False
+    assert decision.reason == "independent_approval_quorum_not_met"
+
+
+def test_supervised_mode_requires_and_accepts_third_role_and_domain():
+    mandate = Mandate(
+        "mandate-2", "case-2", "IT", "fraud-investigation",
+        ("transaction:aggregate",), 90.0, 200.0, "issuer-1", b"valid",
+    )
+    request = AccessRequest(
+        "request-2", mandate, "IT", "fraud-investigation",
+        ("transaction:aggregate",), AccessMode.SUPERVISED, 100.0, 10,
+    )
+    gate = InstitutionalAccessGate(
+        verifier=TestVerifier(),
+        trusted_approvers={
+            "authority-a": ("domain-a", "authorization"),
+            "oversight-b": ("domain-b", "oversight"),
+            "supervisor-c": ("domain-c", "independent_supervisor"),
+        },
+        required_approvals=2,
+        required_roles=("authorization", "oversight"),
+        clock=lambda: 110.0,
+    )
+    digest = gate.request_digest(request)
+    approvals = (
+        Approval("authority-a", digest, "authorization", 105.0, b"valid"),
+        Approval("oversight-b", digest, "oversight", 106.0, b"valid"),
+        Approval("supervisor-c", digest, "independent_supervisor", 107.0, b"valid"),
+    )
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is True
+    assert decision.approver_domains == ("domain-a", "domain-b", "domain-c")
+
+
+def test_approval_count_is_bounded():
+    gate, request, approvals = setup_case()
+    oversized = approvals + tuple(
+        Approval("authority-a", approvals[0].request_digest, "authorization", 107.0, b"valid")
+        for _ in range(63)
+    )
+    decision = gate.evaluate(request, oversized)
+    assert decision.allowed is False
+    assert decision.reason == "approval_limit_exceeded"
