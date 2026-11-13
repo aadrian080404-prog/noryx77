@@ -54,6 +54,14 @@ class DurableIdentityRegistry(IdentityRegistry):
             self._closed = True
             raise
 
+    @property
+    def durable(self) -> bool:
+        return not self._closed
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("identity_registry_closed")
+
     @staticmethod
     def _canonical(event: dict) -> str:
         return json.dumps(event, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
@@ -134,6 +142,7 @@ class DurableIdentityRegistry(IdentityRegistry):
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
         with self._lock:
+            self._ensure_open()
             if identity.agent_id in self._keys:
                 raise ValueError("agent_identity_already_registered")
             import base64
@@ -148,10 +157,27 @@ class DurableIdentityRegistry(IdentityRegistry):
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
         with self._lock:
+            self._ensure_open()
             self._append_event({
                 "type": "revoke", "agent_id": agent_id, "public_key": None
             })
             super().revoke(agent_id)
+
+    def is_trusted(self, identity: AgentIdentity) -> bool:
+        with self._lock:
+            self._ensure_open()
+            return super().is_trusted(identity)
+
+    def with_trusted_identity(self, agent_id: str, callback):
+        with self._lock:
+            self._ensure_open()
+            return super().with_trusted_identity(agent_id, callback)
+
+    def close(self) -> None:
+        with self._lock:
+            if not self._closed:
+                self._db.close()
+                self._closed = True
 
     def close(self) -> None:
         with self._lock:
