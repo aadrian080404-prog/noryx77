@@ -87,15 +87,27 @@ class RuntimeEngine:
     def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult:
         final = lifecycle.transition(status)
         return RuntimeResult(final.execution_id, final.status, tuple(attestations), tuple(outputs), error)
-    def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None) -> Any:
-        dispatch = self._adapter.execute if self._adapter is not None else executor
-        if dispatch is None: raise RuntimeError("execution dispatch is unavailable")
-        if self._adapter is None or self._identity_registry is None: return dispatch(envelope)
+    def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None, timeout_seconds: float | None = None) -> Any:
+        if self._adapter is None:
+            if executor is None:
+                raise RuntimeError("execution dispatch is unavailable")
+            return executor(envelope)
+
+        def dispatch_adapter() -> Any:
+            bounded = getattr(self._adapter, "execute_with_timeout", None)
+            if timeout_seconds is not None and callable(bounded):
+                return bounded(envelope, timeout_seconds)
+            return self._adapter.execute(envelope)
+
+        if self._identity_registry is None:
+            return dispatch_adapter()
         public_key = getattr(self._attestation_signer, "public_key_bytes", None)
-        if not isinstance(public_key, bytes): raise PermissionError("identity-bound execution requires signer public key")
+        if not isinstance(public_key, bytes):
+            raise PermissionError("identity-bound execution requires signer public key")
         def run_if_trusted(identity: AgentIdentity) -> Any:
-            if identity.public_key != public_key: raise PermissionError("adapter identity key mismatch")
-            return dispatch(envelope)
+            if identity.public_key != public_key:
+                raise PermissionError("adapter identity key mismatch")
+            return dispatch_adapter()
         return self._identity_registry.with_trusted_identity(str(self._adapter.agent_id), run_if_trusted)
     def _authorize_high_risk(
         self,
@@ -323,7 +335,10 @@ class RuntimeEngine:
                         action_digest,
                     )
 
-                output = self._dispatch(envelope, executor)
+                remaining_seconds = context.deadline_monotonic - self._clock()
+                if remaining_seconds <= 0:
+                    raise TimeoutError("execution_deadline_exceeded_before_dispatch")
+                output = self._dispatch(envelope, executor, remaining_seconds)
 
                 # Verification is performed before any commit.
                 verified = bool(verifier(envelope, output))
