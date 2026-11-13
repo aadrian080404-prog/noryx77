@@ -172,3 +172,13 @@ def test_encrypted_memory_file_does_not_contain_raw_memory_id_content(tmp_path):
     # The row key is intentionally visible for indexed retrieval; payload is encrypted.
     raw = path.read_bytes()
     assert b"opaque-content-should-not-appear" not in raw
+
+
+def test_encrypted_memory_reports_its_actual_assurance_boundary(tmp_path):
+    store = _store(tmp_path / "assurance.sqlite")
+    assert store.durable is True
+    assert store.authenticated_encryption is True
+    assert store.rollback_protected is False
+    store.close()
+    assert store.durable is False
+    assert store.authenticated_encryption is False
