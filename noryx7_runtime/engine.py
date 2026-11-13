@@ -25,6 +25,7 @@ _ZERO_DIGEST = "0" * 64
 MANDATORY_HIGH_RISK_ACTION_TYPES = frozenset({
     "payments", "flights", "insurance", "financial",
     "execute_external", "publish", "delete_external", "system_change",
+    "jarvis_capability",
 })
 
 def _canonical(value: Any) -> str: return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
