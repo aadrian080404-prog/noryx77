@@ -164,6 +164,11 @@ class SQLiteStateJournal(StateJournal):
         if rows.get("key_id") != self._key_id:
             raise RuntimeError("runtime_journal_key_id_mismatch")
 
+    @staticmethod
+    def _event_digest(event_type: str, payload_json: str) -> str:
+        envelope = _canonical({"event_type": event_type, "payload_json": payload_json})
+        return hashlib.sha256(envelope.encode("utf-8")).hexdigest()
+
     def _mac(self, sequence: int, previous_mac: str, digest: str) -> str:
         statement = _canonical({
             "domain": "NORYX7_RUNTIME_JOURNAL_V1",
@@ -185,7 +190,7 @@ class SQLiteStateJournal(StateJournal):
         for sequence, event_type, payload_json, digest, previous, mac, key_id in rows:
             if sequence != expected_sequence or previous != previous_mac or key_id != self._key_id:
                 raise RuntimeError("runtime_journal_chain_discontinuity")
-            actual_digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+            actual_digest = self._event_digest(event_type, payload_json)
             if not hmac.compare_digest(actual_digest, digest):
                 raise RuntimeError("runtime_journal_payload_digest_mismatch")
             if not hmac.compare_digest(self._mac(sequence, previous, digest), mac):
@@ -231,7 +236,7 @@ class SQLiteStateJournal(StateJournal):
         with self._storage_lock:
             self._ensure_healthy()
             payload_json = _canonical(payload)
-            digest = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+            digest = self._event_digest(event_type, payload_json)
             sequence = self._head_sequence + 1
             mac = self._mac(sequence, self._head_mac, digest)
             try:
