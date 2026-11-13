@@ -25,7 +25,8 @@ class TieredMemoryRouter:
     ) -> None:
         if not isinstance(require_durable_local, bool):
             raise TypeError("require_durable_local_must_be_bool")
-        working_store = working_store or MemoryStore()
+        if working_store is None:
+            working_store = MemoryStore()
         if not isinstance(working_store, MemoryStore):
             raise TypeError("working_store_must_be_MemoryStore")
         for name, store in (
@@ -70,8 +71,8 @@ class TieredMemoryRouter:
         store = self._stores.get(tier)
         if store is None:
             raise RuntimeError("memory_tier_unavailable:" + tier)
-        if tier != "working" and not getattr(store, "durable", True):
-            raise RuntimeError("memory_tier_not_durable:" + tier)
+        if tier == "local" and not getattr(store, "durable", False):
+            raise RuntimeError("memory_tier_not_durable:local")
         return store
 
     def _unique_stores(self) -> tuple[MemoryStore, ...]:
@@ -111,7 +112,7 @@ class TieredMemoryRouter:
             for store in self._unique_stores():
                 for item in store.list(kind, execution_id=execution_id):
                     existing = items.get(item.memory_id)
-                    if existing is not None and existing != item:
+                    if existing is not None:
                         raise RuntimeError("memory_fabric_duplicate_memory_id")
                     items[item.memory_id] = item
             return tuple(items[key] for key in sorted(items))
