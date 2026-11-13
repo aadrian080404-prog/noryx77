@@ -1,4 +1,5 @@
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import time
 
 from core.authorization_replay import AuthorizationReplayGuard
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
@@ -21,19 +22,21 @@ def authority_and_keys():
     return authority, a, b
 
 
-def proof_provider(a, b, epoch=7, mutate=False, override_epoch=None):
+def proof_provider(a, b, epoch=7, mutate=False, override_epoch=None, expires_in=60):
     def provider(envelope, digest):
         statement = digest[:-1] + bytes([digest[-1] ^ 1]) if mutate else digest
         signed_epoch = epoch if override_epoch is None else override_epoch
+        expires_at = int(time.time()) + expires_in
         return SignedAuthorizationProof(
             action_id=envelope.execution_id,
             epoch=signed_epoch,
             action_statement=statement,
             approvals=(
-                sign_approval("A", a, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement),
-                sign_approval("B", b, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement),
+                sign_approval("A", a, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement, expires_at=expires_at),
+                sign_approval("B", b, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement, expires_at=expires_at),
             ),
             threshold=2,
+            expires_at=expires_at,
         )
     return provider
 
@@ -172,3 +175,23 @@ def test_non_high_risk_action_remains_compatible_without_multi_auth():
     )
     assert result.status is ExecutionStatus.SUCCEEDED
     assert called == ["step-1"]
+
+
+
+def test_expired_high_risk_proof_fails_before_side_effect(tmp_path):
+    authority, a, b = authority_and_keys()
+    called = []
+    engine = configured_engine(
+        authority,
+        proof_provider(a, b, expires_in=-1),
+        AuthorizationReplayGuard(path=str(tmp_path / "expired.sqlite3")),
+    )
+    result = engine.execute(
+        Intent("run", "user"), [step("money.transfer")],
+        executor=lambda action: called.append(action.step_id) or "ok",
+        verifier=lambda action, output: True,
+        execution_id="exec-expired",
+    )
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "PermissionError"
+    assert called == []
