@@ -23,6 +23,7 @@ from .hypersynth import CognitiveState, Hypersynth
 from .hypersynth_runtime import HypersynthRuntime
 from .interaction_context import InteractionContext, build_interaction_context
 from .key_lifecycle import ExternalKeyBoundary, KeyLifecycle, KeyRecord, KeyState
+from .lifecycle_key_provider import LifecycleBoundKeyProvider
 from .durable_key_lifecycle import DurableKeyLifecycle
 from .limits import RuntimeLimits
 from .memory import MemoryStore
