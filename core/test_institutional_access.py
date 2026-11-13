@@ -371,12 +371,7 @@ def test_institutional_quorum_overlap_cannot_reuse_one_approver_signature():
     assert gate.evaluate(request, approvals).allowed is True
 
     digest = gate.request_digest(request)
-    overlapping = (
-        Approval("authority-c", digest, "authorization", 107.0, b"new-valid"),
-        approvals[1],
-    )
-    # The test verifier only accepts b"valid", so use the same signed role proof
-    # to exercise reuse of the same approver credential in another quorum.
+    # Reuse the same signed oversight proof in a different otherwise-valid quorum.
     overlapping = (
         Approval("authority-c", digest, "authorization", 105.0, b"valid"),
         approvals[1],
