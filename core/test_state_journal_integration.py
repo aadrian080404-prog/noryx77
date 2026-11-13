@@ -24,7 +24,7 @@ def test_state_store_rehydrates_from_durable_journal(tmp_path):
     )
     journal.close()
 
-    reopened_journal = StateJournal(path)
+    reopened_journal = StateJournal(path, integrity_key=TEST_KEY, key_id="test-key")
     reopened = StateStore(journal=reopened_journal)
     recovered = reopened.get("exec-1")
     assert recovered is not None
