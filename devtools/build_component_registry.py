@@ -78,7 +78,7 @@ def build_inventory(repository_root: str | Path) -> dict[str, Any]:
         domains = [domain for domain, spec in DOMAINS.items() if _domain_matches(name, spec)]
         record: dict[str, Any] = {
             "path": name,
-            "kind": "source" if path.suffix in SOURCE_SUFFIXES else "test" if "test" in path.name.lower() else "documentation_or_config",
+            "kind": "test" if "test" in path.name.lower() else "source" if path.suffix in SOURCE_SUFFIXES else "documentation_or_config",
             "domains": domains,
             "lifecycle": "source_present_not_proof_of_integration",
             "test_candidates": [],
@@ -127,7 +127,7 @@ def main() -> int:
     result = build_inventory(args.root)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({key: result[key] for key in ("file_count", "source_file_count", "python_file_count", "dependency_edge_count")}, sort_keys=True))
     return 0
 
