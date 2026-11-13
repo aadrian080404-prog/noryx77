@@ -60,7 +60,13 @@ class AnchoredStateJournal(StateJournal):
         if not isinstance(commit, StateCommit):
             raise TypeError("state_commit_required")
         with self._lock:
-            previous = self._reconcile_anchor_locked()
+            self._reconcile_anchor_locked()
+            existing = self._recover_locked().get(commit.execution_id)
+            if existing is not None:
+                if existing == commit:
+                    return
+                raise PermissionError("execution_already_journaled")
+            previous = self._local_head_locked()
             super().append(commit)
             current = self._local_head_locked()
             if current.sequence != previous.sequence + 1:
