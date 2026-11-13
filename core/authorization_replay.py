@@ -135,7 +135,7 @@ class AuthorizationReplayGuard:
                     (sqlite3.Binary(token), float(now)),
                 ).fetchone()
                 if exists is not None:
-                    self._db.execute("ROLLBACK")
+                    self._db.execute("COMMIT")
                     return False
                 count = self._db.execute(
                     "SELECT COUNT(*) FROM replay_guard_tokens"
@@ -214,6 +214,12 @@ class AuthenticatedAuthorizationReplayGuard(AuthorizationReplayGuard):
         super().__init__(max_tokens=max_tokens, path=path)
         if self._db is None:
             raise RuntimeError("persistent_replay_guard_unavailable")
+        legacy_count = self._db.execute(
+            "SELECT COUNT(*) FROM replay_guard_tokens"
+        ).fetchone()[0]
+        if legacy_count:
+            self.close()
+            raise RuntimeError("legacy_replay_tokens_require_explicit_migration")
         self._integrity_key = bytes(integrity_key)
         self._integrity_key_id = key_id
         try:
