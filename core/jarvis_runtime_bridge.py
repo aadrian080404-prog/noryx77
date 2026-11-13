@@ -67,14 +67,17 @@ class JarvisRuntimeBridge:
             policy=policy,
         )
 
-    @staticmethod
-    def _runtime_step(step: PlanStep) -> RuntimePlanStep:
+    def _runtime_step(self, step: PlanStep) -> RuntimePlanStep:
+        risk_class = self.tool_executor.capabilities.risk(step.capability)
+        if risk_class not in {"normal", "sensitive", "high"}:
+            raise PermissionError("capability_risk_metadata_required")
         return RuntimePlanStep(
             step_id=step.step_id,
             action_type=step.capability,
             target=step.target,
             parameters=dict(step.parameters),
             dependencies=tuple(step.dependencies),
+            risk_class=risk_class,
         )
 
     def execute(self, request: Request, plan: Plan) -> tuple[ActionResult, ...]:
@@ -118,6 +121,7 @@ class JarvisRuntimeBridge:
                     "__jarvis_capability": envelope.action_type,
                     "__jarvis_principal_id": request.principal_id,
                 },
+                risk_class=envelope.risk_class,
                 requires_authorization=True,
                 execution_id=envelope.execution_id,
             )
