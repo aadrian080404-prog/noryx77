@@ -162,11 +162,8 @@ class StateJournal:
 
     def get(self, execution_id: str) -> StateCommit | None:
         with self._lock:
-            row = self._db.execute(
-                f"SELECT {self._select_columns()} FROM state_commits WHERE execution_id=?",
-                (execution_id,),
-            ).fetchone()
-            return None if row is None else self._from_row(row)
+            # Validate the full chain before returning an individual record.
+            return self._recover_locked().get(execution_id)
 
     def recover(self) -> dict[str, StateCommit]:
         with self._lock:
