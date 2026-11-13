@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .contracts import TaskSpec, VerificationResult
+from .policy import PolicyEngine
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,8 @@ class Planner:
                 return VerificationResult(False, "plan", "plan_step_policy_invalid")
             if step.risk_class != task.risk_class:
                 return VerificationResult(False, "plan", "plan_step_risk_mismatch")
+            if step.action_type in PolicyEngine.REQUIRES_AUTHORIZATION and step.risk_class != "high":
+                return VerificationResult(False, "plan", "high_risk_class_required")
             if not isinstance(step.dependencies, tuple) or any(not isinstance(dep, str) or not dep for dep in step.dependencies):
                 return VerificationResult(False, "plan", "plan_step_dependencies_invalid")
             if any(dep == step.step_id or dep not in ids for dep in step.dependencies):
