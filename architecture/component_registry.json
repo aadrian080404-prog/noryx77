@@ -378,5 +378,13 @@
         "Independent audit and release qualification"
       ]
     }
+  ],
+  "domain_status_vocabulary": [
+    "partial_foundation",
+    "implemented_partial_verification",
+    "implemented_partial_integration",
+    "specified_not_operational",
+    "policy_foundation_only",
+    "specified_partial_controls"
   ]
 }
