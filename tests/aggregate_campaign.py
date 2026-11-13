@@ -56,7 +56,7 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         expected_executed = (cases - 1 - index) // shards + 1
         if item.get("executed") != expected_executed:
             raise ValueError("campaign_shard_execution_count_mismatch")
-        if item.get("verification_scope") != "one_structural_preflight_plus_synthetic_scenario_invariants":
+        if item.get("verification_scope") != "one_structural_preflight_plus_synthetic_invariants_across_entity_power_capability_behavior_impact":
             raise ValueError("campaign_shard_scope_mismatch")
 
         for target, key in (
