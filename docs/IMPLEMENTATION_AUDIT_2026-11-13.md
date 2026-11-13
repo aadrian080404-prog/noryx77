@@ -113,3 +113,21 @@ After the source audit above, PR #12 received a new verification-quality tranche
 - `.github/workflows/million-scale-verification.yml` now writes unique per-shard result files, uploads them separately, downloads all campaign artifacts and runs a final aggregation job.
 
 These changes are pending CI on the new PR head and are not marked verified by this audit. The 10M full campaign remains unexecuted.
+
+
+## Architecture-First build method — reconciliation on PR #12
+
+The architecture-first manifest was found on the now-closed, unmerged PR #11 branch. It was absent from PR #12, so it has been restored to this active branch at `docs/ARCHITECTURE_BUILD_AND_VERIFICATION_MANIFEST.md`. PR #11 was closed without merging; its presence there must not be confused with inclusion in the active PR.
+
+New machine-inventory work on PR #12:
+- `devtools/build_component_registry.py`: standard-library static inventory generator for repository files, 17 architecture domains, Python AST symbols, statically resolvable internal import edges and candidate test filenames.
+- `tests/test_component_registry.py`: tests that dependency edges/domains are represented and that file presence is never promoted to a verified lifecycle state.
+- `.github/workflows/noryx7-foundation.yml`: generates `architecture/component_registry.generated.json` on the exact CI revision and uploads it as a workflow artifact.
+
+Important limits of this first registry iteration:
+- It inventories repository structure and static Python imports; it does not yet build a function-level call graph, resolve dynamic imports, prove runtime call paths, establish that candidate tests actually cover a component, or discover vulnerabilities.
+- Test filenames are candidate links only. Actual test evidence must be joined to the exact commit's CI logs/artifacts.
+- The generated inventory is an artifact, not committed source. This avoids stale generated reports being mistaken for current evidence.
+- Domain classification is heuristic and must be reviewed/refined against the manifest.
+
+This closes the previously missing transfer of the Architecture-First manifest and adds a repeatable CI-produced machine-readable inventory. It does not complete the full dependency/proof registry or the reverse-engineering audit requested in the manifest.
