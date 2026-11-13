@@ -54,10 +54,13 @@ class EncryptedRecord:
 
     def is_well_formed(self) -> bool:
         return (
-            self.version == VERSION
+            isinstance(self.version, int)
+            and not isinstance(self.version, bool)
+            and self.version == VERSION
             and _valid_context(self.tenant_id)
             and _valid_context(self.record_id)
             and _valid_context(self.purpose)
+            and isinstance(self.classification, str)
             and self.classification in VALID_CLASSIFICATIONS
             and _valid_context(self.key_id)
             and isinstance(self.wrapped_key, bytes)
@@ -65,7 +68,7 @@ class EncryptedRecord:
             and isinstance(self.nonce, bytes)
             and len(self.nonce) == NONCE_SIZE
             and isinstance(self.ciphertext, bytes)
-            and len(self.ciphertext) >= 16
+            and 16 <= len(self.ciphertext) <= DEFAULT_MAX_PAYLOAD_BYTES + 16
             and isinstance(self.aad_digest, str)
             and len(self.aad_digest) == 64
             and all(ch in "0123456789abcdef" for ch in self.aad_digest)
