@@ -31,6 +31,21 @@ def test_global_memory_rejects_single_replica_when_redundancy_required():
         fabric.require_redundancy("r1", 2)
 
 
+def test_global_memory_rejects_duplicate_replica_ids():
+    fabric = GlobalMemoryFabric()
+    with pytest.raises(ValueError, match="duplicate_replica_id"):
+        fabric.put("r1", MemoryLevel.L3_DISTRIBUTED, b"one", b"p", ("node-a", "node-a"))
+
+
+def test_global_memory_rejects_boolean_capacity_and_replica_requirement():
+    with pytest.raises(ValueError, match="invalid_memory_limit"):
+        GlobalMemoryFabric(max_records=True)
+    fabric = GlobalMemoryFabric()
+    fabric.put("r1", MemoryLevel.L2_REGIONAL, b"one", b"p", ("node-a",))
+    with pytest.raises(ValueError, match="invalid_replica_requirement"):
+        fabric.require_redundancy("r1", True)
+
+
 def test_identity_authorization_is_explicit_and_revocable():
     fabric = GlobalIdentityAuthorizationFabric()
     auth = IdentityAuthorization("id", "session", "device", "operator", ("read",), digest("policy"), digest("grant"))
@@ -41,6 +56,14 @@ def test_identity_authorization_is_explicit_and_revocable():
     fabric.revoke("session")
     with pytest.raises(PermissionError):
         fabric.authorize("session", "read", digest("policy"))
+
+
+def test_identity_authorization_rejects_duplicate_capabilities():
+    with pytest.raises(ValueError, match="duplicate_capability"):
+        IdentityAuthorization(
+            "id", "session", "device", "operator",
+            ("read", "read"), digest("policy"), digest("grant"),
+        )
 
 
 def test_existing_session_cannot_be_rebound_to_different_identity():
