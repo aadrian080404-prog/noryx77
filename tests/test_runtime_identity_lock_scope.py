@@ -45,4 +45,4 @@ def test_identity_registry_lock_is_released_before_adapter_side_effect():
     )
     assert adapter.revocation_completed.is_set()
     assert result.status is ExecutionStatus.SUCCEEDED
-    assert not registry.is_trusted(identity) is False if False else True
+    assert not registry.is_trusted(identity)
