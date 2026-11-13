@@ -58,3 +58,20 @@ def test_plan_digest_is_stable_under_input_order_permutation():
 def test_plan_digest_is_present_on_every_dispatched_step():
     _, envelopes = _execute(_steps(dependency=True))
     assert all(len(envelope.plan_digest) == 64 for envelope in envelopes.values())
+
+
+def test_noncanonical_plan_is_rejected_before_dispatch():
+    journal = StateJournal(require_signatures=False)
+    runtime = RuntimeEngine(max_actions=1, state_journal=journal)
+    dispatched = []
+    result = runtime.execute(
+        Intent("reject malformed plan", "principal-1"),
+        (PlanStep("step-a", "unsafe serialization", parameters={"opaque": object()}),),
+        executor=lambda envelope: dispatched.append(envelope),
+        verifier=lambda envelope, output: True,
+        execution_id="execution-invalid",
+    )
+    assert result.status is ExecutionStatus.REJECTED
+    assert result.error == "plan_digest_invalid"
+    assert dispatched == []
+    assert journal.snapshot() == ()
