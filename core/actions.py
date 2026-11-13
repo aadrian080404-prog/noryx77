@@ -44,6 +44,7 @@ class AuthorizationAuthority:
         max_ttl: float = 300.0,
         identity_registry: IdentityRegistry | None = None,
         replay_guard: AuthorizationReplayGuard | None = None,
+        require_authenticated_replay: bool = False,
     ):
         if not isinstance(secret, bytes) or len(secret) < 32:
             raise ValueError("authorization secret must be at least 32 bytes")
@@ -53,16 +54,30 @@ class AuthorizationAuthority:
             raise ValueError("invalid identity registry")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard):
             raise ValueError("invalid authorization replay guard")
+        if not isinstance(require_authenticated_replay, bool):
+            raise ValueError("invalid authenticated replay requirement")
+        selected_replay_guard = replay_guard or AuthorizationReplayGuard()
+        if require_authenticated_replay and not getattr(selected_replay_guard, "integrity_protected", False):
+            raise ValueError("authenticated_replay_guard_required")
+        self._require_authenticated_replay = require_authenticated_replay
         self._secret = bytes(secret)
         self._clock = clock
         self._max_ttl = float(max_ttl)
         self._identity_registry = identity_registry
-        self._replay_guard = replay_guard or AuthorizationReplayGuard()
+        self._replay_guard = selected_replay_guard
         self._lock = threading.Lock()
 
     @property
     def durable(self) -> bool:
         return self._replay_guard.durable
+
+    @property
+    def integrity_protected(self) -> bool:
+        return bool(getattr(self._replay_guard, "integrity_protected", False))
+
+    @property
+    def requires_authenticated_replay(self) -> bool:
+        return self._require_authenticated_replay
 
     @staticmethod
     def _replay_token(grant: AuthorizationGrant) -> bytes:
