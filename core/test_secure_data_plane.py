@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .secure_data_plane import SecureDataPlane
 
 
-class TestKMS:
+class _TestKMS:
     """Test-only envelope-key adapter; production keys remain outside NORYX7."""
 
     def __init__(self):
@@ -35,7 +35,7 @@ class TestKMS:
 
 
 def test_per_record_envelope_encryption_round_trip_and_randomization():
-    plane = SecureDataPlane(TestKMS())
+    plane = SecureDataPlane(_TestKMS())
     plaintext = b"highly confidential customer record"
     first = plane.encrypt(
         plaintext, tenant_id="tenant-a", record_id="record-1",
