@@ -1,4 +1,5 @@
 import secrets
+import os
 from .contracts import Request, Plan, ActionResult
 from .orchestrator import JarvisOrchestrator
 from .policy import Policy
@@ -45,7 +46,10 @@ class JarvisRuntime:
         )
         self.identity_registry.register(self.jarvis_identity)
         # Privileged actions stay disabled unless the host supplies a persistent
-        # replay database. Never silently promote an in-memory guard to production.
+        # replay database. A configured persistent volume can be supplied by the
+        # explicit argument or deployment environment; never fall back to RAM.
+        if authorization_replay_path is None:
+            authorization_replay_path = os.environ.get("NORYX7_AUTHORIZATION_REPLAY_DB")
         self.authorization_replay_guard = AuthorizationReplayGuard(
             path=authorization_replay_path,
         )
@@ -97,6 +101,10 @@ class JarvisRuntime:
             system_fabric=self.system_fabric,
         )
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
+    def close(self) -> None:
+        """Close the local replay-store connection; its durable records remain on disk."""
+        self.authorization_replay_guard.close()
+
     def _trace_for(self, execution_id: str) -> ExecutionTrace:
         trace = self.execution_traces.get(execution_id)
         if trace is None:
