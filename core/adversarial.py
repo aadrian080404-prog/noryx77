@@ -7,6 +7,7 @@ import hashlib
 from .scenario_matrix import coordinate_for
 
 MAX_SCENARIOS = 10_000_000
+MAX_SEED = 2**63 - 1
 
 
 @dataclass(frozen=True)
@@ -34,17 +35,21 @@ class AdversarialEngine:
     """Generates bounded deterministic scenarios; it never attacks external systems."""
 
     def __init__(self, *, seed: int = 0, max_scenarios: int = 100_000) -> None:
-        if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
+        if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
             raise ValueError("invalid_seed")
-        if not 1 <= max_scenarios <= MAX_SCENARIOS:
+        if (
+            isinstance(max_scenarios, bool)
+            or not isinstance(max_scenarios, int)
+            or not 1 <= max_scenarios <= MAX_SCENARIOS
+        ):
             raise ValueError("invalid_max_scenarios")
         self.seed = seed
         self.max_scenarios = max_scenarios
 
     def scenario(self, index: int, *, difficulty: int = 1) -> AttackScenario:
-        if not 0 <= index < self.max_scenarios:
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < self.max_scenarios:
             raise IndexError("scenario_index_out_of_range")
-        if not 1 <= difficulty <= 100:
+        if isinstance(difficulty, bool) or not isinstance(difficulty, int) or not 1 <= difficulty <= 100:
             raise ValueError("invalid_difficulty")
         digest = hashlib.sha256(f"{self.seed}:{index}:{difficulty}".encode()).hexdigest()
         surfaces = ("identity", "network", "memory", "tool", "runtime", "supply_chain", "sandbox")
@@ -54,6 +59,12 @@ class AdversarialEngine:
         technique = techniques[int(digest[8:16], 16) % len(techniques)]
         objective = objectives[int(digest[16:24], 16) % len(objectives)]
         seq_len = 1 + min(8, difficulty // 15)
-        sequence = tuple(techniques[int(digest[(24 + i * 2):(26 + i * 2)], 16) % len(techniques)] for i in range(seq_len))
+        sequence = tuple(
+            techniques[int(digest[(24 + i * 2):(26 + i * 2)], 16) % len(techniques)]
+            for i in range(seq_len)
+        )
         coordinate = coordinate_for(self.seed, index)
-        return AttackScenario(f"adv-{digest[:24]}", self.seed, difficulty, surface, technique, objective, sequence, coordinate.entity_class, coordinate.power_tier)
+        return AttackScenario(
+            f"adv-{digest[:24]}", self.seed, difficulty, surface, technique, objective,
+            sequence, coordinate.entity_class, coordinate.power_tier,
+        )
