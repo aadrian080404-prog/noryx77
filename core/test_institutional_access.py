@@ -171,7 +171,8 @@ def test_boolean_timestamps_are_rejected():
 
 
 def test_numeric_overflow_in_timestamp_fails_closed():
-    gate, request, approvals = setup_case(created_at=10 ** 10000)
+    gate, request, approvals = setup_case()
+    request = dataclasses.replace(request, created_at=10 ** 10000)
     decision = gate.evaluate(request, approvals)
     assert decision.allowed is False
 
@@ -208,7 +209,7 @@ def test_approval_digest_binds_full_mandate_contents():
     gate, request, approvals = setup_case()
     changed_mandate = dataclasses.replace(
         request.mandate,
-        allowed_data_scopes=("identity:predicate",),
+        allowed_data_scopes=("transaction:aggregate", "identity:predicate", "new-scope"),
     )
     changed_request = dataclasses.replace(request, mandate=changed_mandate)
     decision = gate.evaluate(changed_request, approvals)
