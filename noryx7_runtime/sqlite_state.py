@@ -270,6 +270,20 @@ class SQLiteStateJournal(StateJournal):
             raise
         return reservation
 
+    def restore_reservation(self, reservation: StepReservation) -> None:
+        self._ensure_healthy()
+        super().restore_reservation(reservation)
+        try:
+            self._persist_event("reserve", {
+                "execution_id": reservation.execution_id,
+                "principal_id": reservation.principal_id,
+                "step_id": reservation.step_id,
+                "action_digest": reservation.action_digest,
+            })
+        except Exception:
+            self._failed = True
+            raise
+
     def append(self, attestation: Attestation) -> JournalEntry:
         self._ensure_healthy()
         entry = super().append(attestation)
