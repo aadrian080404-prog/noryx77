@@ -135,3 +135,45 @@ def test_candidate_boolean_flags_without_independent_receipts_are_not_ready():
     candidate = ImprovementCandidate("c1", "meets requirements", (), True, True)
     assessment = SURFEngine().assess(_graph((ev,)), (ev,), candidates=(candidate,))
     assert not assessment.improvement_ready
+
+
+def test_surf_contracts_bound_text_and_reject_arbitrary_experiment_values():
+    oversized = EvidenceRecord("e1", "static", "fixture", "x" * 5000)
+    assert not oversized.is_well_formed()
+    arbitrary = Experiment("x", "h", "observe", {"payload": object()})
+    non_finite = Experiment("x", "h", "observe", {"payload": float("nan")})
+    assert not arbitrary.is_well_formed()
+    assert not non_finite.is_well_formed()
+
+
+def test_surf_experiment_values_have_a_depth_limit():
+    value = {"a": {"b": {"c": {"d": {"e": {"f": {"g": {"h": {"i": "too deep"}}}}}}}}}
+    experiment = Experiment("x", "h", "observe", value)
+    assert not experiment.is_well_formed()
+
+
+def test_assessment_rejects_malformed_or_duplicate_experiments():
+    graph = _graph()
+    malformed = Experiment("x", "h", "observe", {"value": object()})
+    assert not SURFEngine().assess(graph, experiments=(malformed,)).graph_valid
+    duplicate = Experiment("x", "h", "observe")
+    assert not SURFEngine().assess(graph, experiments=(duplicate, duplicate)).graph_valid
+
+
+def test_assessment_rejects_duplicate_hypothesis_and_candidate_ids():
+    ev = EvidenceRecord("e1", "static", "fixture", "observed", provenance="signed")
+    hypothesis = HypothesisRecord("h1", "claim", ("e1",), "verified")
+    engine = SURFEngine(
+        evidence_verifier=lambda evidence, graph: True,
+        hypothesis_verifier=lambda item, graph, verified: True,
+    )
+    assert not engine.assess(_graph((ev,)), (ev,), (hypothesis, hypothesis)).graph_valid
+
+    candidate = ImprovementCandidate("c1", "candidate", (), True, True, "v", "r")
+    candidate_engine = SURFEngine(
+        candidate_verifier=lambda item, graph, evidence: True,
+        regression_verifier=lambda item, graph: True,
+    )
+    assert not candidate_engine.assess(
+        _graph((ev,)), (ev,), candidates=(candidate, candidate)
+    ).graph_valid
