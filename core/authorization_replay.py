@@ -27,6 +27,7 @@ class AuthorizationReplayGuard:
         self._consumed: set[bytes] = set()
         self._lock = threading.RLock()
         self._db: sqlite3.Connection | None = None
+        self._closed = False
         if path is not None and path != ":memory:":
             db = sqlite3.connect(
                 path,
@@ -75,11 +76,13 @@ class AuthorizationReplayGuard:
 
     @property
     def durable(self) -> bool:
-        return self._db is not None
+        return self._db is not None and not self._closed
 
     @property
     def consumed_count(self) -> int:
         with self._lock:
+            if self._closed:
+                raise RuntimeError("replay_guard_closed")
             if self._db is None:
                 return len(self._consumed)
             try:
@@ -94,6 +97,8 @@ class AuthorizationReplayGuard:
         if not isinstance(token, bytes) or len(token) != TOKEN_SIZE:
             return False
         with self._lock:
+            if self._closed:
+                return False
             if self._db is None:
                 if token in self._consumed or len(self._consumed) >= self._max_tokens:
                     return False
@@ -129,6 +134,8 @@ class AuthorizationReplayGuard:
         if not isinstance(token, bytes) or len(token) != TOKEN_SIZE:
             return False
         with self._lock:
+            if self._closed:
+                return False
             if self._db is None:
                 return token in self._consumed
             try:
@@ -144,3 +151,4 @@ class AuthorizationReplayGuard:
             if self._db is not None:
                 self._db.close()
                 self._db = None
+            self._closed = True
