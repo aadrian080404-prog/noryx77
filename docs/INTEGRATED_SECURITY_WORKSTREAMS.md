@@ -3,7 +3,7 @@
 Status date: 2026-11-13
 Working branch: `repair/ci-dependency-preflight-2026-11-13`
 Integration PR: #8 (open; not merged)
-Separate SURF PR: #7 (open; not merged)
+SURF source integrated from PR #7 into this branch; original PR #7 remains open and separate until integration review is complete
 
 This document is the cross-workstream status ledger. A design, interface, synthetic test, or passing CI run is not evidence of production readiness.
 
@@ -14,7 +14,7 @@ This document is the cross-workstream status ledger. A design, interface, synthe
 | Runtime authorization | PR #8: risk-class propagation, capability registry enforcement, persistent replay guard for privileged RuntimeEngine actions, authorization-bound action statements | Does not eliminate every in-memory authorization path or provide globally rollback-resistant replay consensus |
 | Adversarial simulation | `core/adversarial_game.py`: deterministic bounded max-min game over an abstract security state; unit tests cover replay, tampering, exfiltration, disruption and defensive moves | Not SEAT, not a learned attacker, not AlphaZero, not a live red-team, not production telemetry, and not a calibrated probability model |
 | Institutional access | `core/institutional_access.py`: signed-mandate and approval-verification interfaces, purpose/jurisdiction/scope/expiry/output limits, exact request binding, M-of-N independent-domain and role checks | Policy gate only. It does not query or release data, implement zk-SNARKs, guarantee deletion/non-retention, or establish legal admissibility. Production requires a real cryptographic verifier and independently governed approver registry |
-| SURF system understanding | PR #7: bounded evidence-grounded architecture, contracts and assessment/experiment gate | Separate branch; not yet integrated with PR #8, and live observation adapters plus trusted sandbox receipts remain outstanding |
+| SURF system understanding | `core/surf_contracts.py`, `core/surf_engine.py`, tests and architecture document copied from reviewed PR #7 into this branch | Integrated as a bounded assessment/contract layer; not yet wired to live observation adapters, runtime identity authority, trusted verifier registry, or signed sandbox attestation service |
 | Encrypted data plane | `core/secure_data_plane.py`: per-record AES-GCM envelope primitive with injected key provider | Not wired through all persistence, backups, logs, browser storage, streaming, or distributed replication |
 | Cognitive state journal | `core/state_journal.py`: SQLite durability, canonical records, sequence checks, unkeyed SHA-256 tamper detection | Unkeyed digest is not authenticity; no external key custody or independent rollback anchor |
 | Runtime execution journal | `noryx7_runtime/state.py`: signed attestation checks and in-process chain/reservation semantics | Separate from cognitive SQLite journal; not yet a unified durable transaction journal |
