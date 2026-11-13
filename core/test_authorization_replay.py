@@ -220,3 +220,52 @@ def test_authority_does_not_claim_authenticated_integrity_in_legacy_mode():
     authority = AuthorizationAuthority(b"a" * 32)
     assert authority.requires_authenticated_replay is False
     assert authority.integrity_protected is False
+
+
+def test_consume_many_is_atomic_and_rejects_duplicate_batches():
+    guard = AuthorizationReplayGuard(max_tokens=3)
+    batch = (token(201), token(202))
+    assert guard.consume_many(batch, expires_at=500, now=100) is True
+    assert guard.consume_many(batch, expires_at=500, now=100) is False
+    assert guard.consumed_count == 2
+    assert guard.consume_many((token(203), token(204)), expires_at=500, now=100) is False
+    assert guard.consumed_count == 2
+
+
+def test_consume_many_rejects_duplicate_or_malformed_tokens_without_mutation():
+    guard = AuthorizationReplayGuard(max_tokens=4)
+    assert guard.consume_many((token(205), token(205)), expires_at=500, now=100) is False
+    assert guard.consume_many((token(206), b"bad"), expires_at=500, now=100) is False
+    assert guard.consumed_count == 0
+
+
+def test_authenticated_consume_many_persists_all_or_none(tmp_path):
+    path = tmp_path / "authenticated-batch.sqlite"
+    guard = _authenticated_guard(path, max_tokens=4)
+    batch = (token(207), token(208))
+    assert guard.consume_many(batch, expires_at=500, now=100) is True
+    assert guard.consumed_count == 2
+    guard.close()
+
+    reopened = _authenticated_guard(path, max_tokens=4)
+    assert reopened.consume_many(batch, expires_at=500, now=100) is False
+    assert reopened.consumed_count == 2
+    reopened.close()
+
+
+def test_authenticated_consume_many_fails_closed_on_tampered_expired_row(tmp_path):
+    path = tmp_path / "authenticated-batch-tamper.sqlite"
+    guard = _authenticated_guard(path)
+    assert guard.consume(token(209), expires_at=101, now=100)
+    guard.close()
+
+    import sqlite3
+    db = sqlite3.connect(path)
+    db.execute("UPDATE replay_guard_auth_tokens SET expires_at=102")
+    db.commit()
+    db.close()
+
+    reopened = _authenticated_guard(path)
+    with pytest.raises(RuntimeError, match="integrity_failure"):
+        reopened.consume_many((token(210), token(211)), expires_at=500, now=100)
+    reopened.close()
