@@ -104,3 +104,12 @@ def test_encrypted_memory_enforces_capacity_after_recovery(tmp_path):
             str(path), encryption_key=b"m" * 32,
             key_id="memory-kms-v1", max_items=1,
         )
+
+
+@pytest.mark.parametrize("content", [(1, 2), {"nested": (3, 4)}, {1: "non-string-key"}])
+def test_encrypted_memory_rejects_json_type_coercion(tmp_path, content):
+    store = _store(tmp_path / "memory.sqlite")
+    with pytest.raises(TypeError):
+        store.put(MemoryItem("mem-1", content, execution_id="exec-1"))
+    assert len(store) == 0
+    store.close()
