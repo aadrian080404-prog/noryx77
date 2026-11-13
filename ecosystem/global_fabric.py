@@ -33,7 +33,7 @@ class MemoryRecord:
 
     def __post_init__(self) -> None:
         _id(self.record_id)
-        if not isinstance(self.level, MemoryLevel) or not isinstance(self.version, int) or self.version < 1:
+        if not isinstance(self.level, MemoryLevel) or isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
             raise ValueError("invalid_memory_record")
         _digest(self.payload_digest, "payload_digest")
         _digest(self.provenance_digest, "provenance_digest")
@@ -41,6 +41,8 @@ class MemoryRecord:
             raise ValueError("invalid_replica_set")
         if any(not isinstance(replica, str) or not replica.strip() for replica in self.replicas):
             raise ValueError("invalid_replica_id")
+        if len(set(self.replicas)) != len(self.replicas):
+            raise ValueError("duplicate_replica_id")
 
 
 def _id(value: str) -> str:
@@ -57,7 +59,7 @@ def _digest(value: str, name: str) -> None:
 class GlobalMemoryFabric:
     """Bounded state index; encryption/durable storage/transport remain adapters."""
     def __init__(self, max_records: int = MAX_RECORDS) -> None:
-        if not isinstance(max_records, int) or not 1 <= max_records <= MAX_RECORDS:
+        if isinstance(max_records, bool) or not isinstance(max_records, int) or not 1 <= max_records <= MAX_RECORDS:
             raise ValueError("invalid_memory_limit")
         self._max = max_records
         self._records: dict[str, MemoryRecord] = {}
@@ -71,6 +73,10 @@ class GlobalMemoryFabric:
             raise ValueError("memory_payload_bounds_exceeded")
         if not isinstance(replicas, tuple) or not replicas or len(replicas) > MAX_REPLICAS:
             raise ValueError("invalid_replica_set")
+        if any(not isinstance(replica, str) or not replica.strip() for replica in replicas):
+            raise ValueError("invalid_replica_id")
+        if len(set(replicas)) != len(replicas):
+            raise ValueError("duplicate_replica_id")
         with self._lock:
             previous = self._records.get(record_id)
             if previous is None and len(self._records) >= self._max:
@@ -90,7 +96,7 @@ class GlobalMemoryFabric:
 
     def require_redundancy(self, record_id: str, minimum_replicas: int = 2) -> MemoryRecord:
         record = self.get(record_id)
-        if not isinstance(minimum_replicas, int) or minimum_replicas < 1:
+        if isinstance(minimum_replicas, bool) or not isinstance(minimum_replicas, int) or minimum_replicas < 1:
             raise ValueError("invalid_replica_requirement")
         if len(record.replicas) < minimum_replicas:
             raise RuntimeError("memory_redundancy_insufficient")
@@ -118,6 +124,8 @@ class IdentityAuthorization:
             raise ValueError("invalid_capabilities")
         if any(not isinstance(value, str) or not value.strip() for value in self.capabilities):
             raise ValueError("invalid_capability")
+        if len(set(self.capabilities)) != len(self.capabilities):
+            raise ValueError("duplicate_capability")
         _digest(self.policy_digest, "policy_digest")
         _digest(self.authorization_digest, "authorization_digest")
 
