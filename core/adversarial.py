@@ -16,7 +16,7 @@ class AttackScenario:
     technique: str
     objective: str
     sequence: tuple[str, ...]
-    entity_class: str = "unknown_or_untrusted"
+    entity_class: str = "unknown"
     power_tier: str = "p0_minimal"
 
 
