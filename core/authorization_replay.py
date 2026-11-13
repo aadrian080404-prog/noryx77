@@ -273,7 +273,7 @@ class AuthenticatedAuthorizationReplayGuard(AuthorizationReplayGuard):
     def _token_hash(self, token: bytes) -> bytes:
         return hmac.new(
             self._integrity_key,
-            b"NORYX7_AUTH_REPLAY_TOKEN_V1\\x00" + token,
+            b"NORYX7_AUTH_REPLAY_TOKEN_V1\x00" + token,
             hashlib.sha256,
         ).digest()
 
