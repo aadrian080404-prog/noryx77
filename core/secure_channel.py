@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-from hmac import compare_digest
 from threading import Lock
 from typing import Final
 
@@ -57,7 +56,8 @@ class SecureFrame:
             and isinstance(self.session_id, str) and bool(self.session_id.strip()) and len(self.session_id.encode("utf-8")) <= MAX_ID_SIZE
             and isinstance(self.sequence, int) and not isinstance(self.sequence, bool) and 0 <= self.sequence <= MAX_SEQUENCE
             and isinstance(self.payload, bytes) and len(self.payload) <= MAX_FRAME_SIZE
-            and isinstance(self.mac, bytes) and len(self.mac) == MAC_SIZE and self.version == PROTOCOL_VERSION
+            and isinstance(self.mac, bytes) and len(self.mac) == MAC_SIZE
+            and isinstance(self.version, int) and not isinstance(self.version, bool) and self.version == PROTOCOL_VERSION
         )
 
 
@@ -136,9 +136,6 @@ class SecureChannel:
     def _authenticated_data(self) -> bytes:
         return _DOMAIN + PROTOCOL_VERSION.to_bytes(2, "big") + _field(self._session_id) + self._identity_binding()
 
-    @staticmethod
-    def _encode(version: int, sender_id: str, session_id: str, sequence: int, payload: bytes) -> bytes:
-        return _DOMAIN + version.to_bytes(2, "big") + _field(sender_id) + _field(session_id) + sequence.to_bytes(8, "big") + len(payload).to_bytes(8, "big") + payload
 
     def _nonce(self, sender_id: str, sequence: int) -> bytes:
         prefix = sha256(
