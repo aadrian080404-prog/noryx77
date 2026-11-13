@@ -136,7 +136,7 @@ def test_expired_mandate_is_rejected():
     changed = dataclasses.replace(request, mandate=expired)
     decision = gate.evaluate(changed, approvals)
     assert decision.allowed is False
-    assert decision.reason == "mandate_not_valid_at_request_time"
+    assert decision.reason == "mandate_expired_or_not_yet_valid"
 
 
 def test_verifier_outage_fails_closed():
