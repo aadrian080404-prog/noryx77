@@ -41,7 +41,7 @@ def test_canonical_registry_has_17_valid_dependency_domains():
     assert len(domains) == 17
     assert len(identifiers) == 17
     assert all(set(item["depends_on"]) <= identifiers for item in domains)
-    assert all(item["current_state"] for item in domains)
+    assert all(item["current_state"] in registry["domain_status_vocabulary"] for item in domains)
 
     dependencies = {item["id"]: set(item["depends_on"]) for item in domains}
     visited = set()
