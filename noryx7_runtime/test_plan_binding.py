@@ -29,9 +29,9 @@ def _execute(steps):
 
 def _steps(*, dependency: bool):
     return (
-        PlanStep("step-a", "prepare", "compute", "normal", ()),
+        PlanStep("step-a", "compute", "local", {}, ()),
         PlanStep(
-            "step-b", "execute", "compute", "normal",
+            "step-b", "compute", "local", {},
             ("step-a",) if dependency else (),
         ),
     )
@@ -66,7 +66,7 @@ def test_noncanonical_plan_is_rejected_before_dispatch():
     dispatched = []
     result = runtime.execute(
         Intent("reject malformed plan", "principal-1"),
-        (PlanStep("step-a", "unsafe serialization", parameters={"opaque": object()}),),
+        (PlanStep("step-a", "compute", "local", {"opaque": object()}),),
         executor=lambda envelope: dispatched.append(envelope),
         verifier=lambda envelope, output: True,
         execution_id="execution-invalid",
