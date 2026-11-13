@@ -1,4 +1,4 @@
-"""SURF evidence-grounded system understanding contracts."""
+"""Bounded, evidence-grounded SURF contracts."""
 from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any, Mapping
@@ -6,17 +6,36 @@ from typing import Any, Mapping
 VALID_STATES = frozenset({"observed", "inferred", "hypothesized", "verified", "contradicted", "unknown"})
 MAX_RECORDS = 4096
 MAX_RECEIPT_LENGTH = 2048
+MAX_TEXT_BYTES = 4096
+MAX_ID_BYTES = 256
+MAX_VARIABLES = 256
+MAX_VALUE_DEPTH = 8
+MAX_VALUE_ITEMS = 256
 
 
-def _text(value):
-    return isinstance(value, str) and bool(value.strip())
+def _text(value: object, max_bytes: int = MAX_TEXT_BYTES) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        return len(value.encode("utf-8")) <= max_bytes
+    except UnicodeError:
+        return False
 
 
-def _refs(value):
-    return isinstance(value, tuple) and len(value) <= MAX_RECORDS and all(_text(item) for item in value) and len(set(value)) == len(value)
+def _optional_text(value: object, max_bytes: int) -> bool:
+    return value == "" or _text(value, max_bytes)
 
 
-def _confidence(value):
+def _refs(value: object) -> bool:
+    return (
+        isinstance(value, tuple)
+        and len(value) <= MAX_RECORDS
+        and all(_text(item, MAX_ID_BYTES) for item in value)
+        and len(set(value)) == len(value)
+    )
+
+
+def _confidence(value: object) -> bool:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return False
     try:
@@ -25,8 +44,36 @@ def _confidence(value):
         return False
 
 
-def _receipt(value):
-    return isinstance(value, str) and len(value) <= MAX_RECEIPT_LENGTH
+def _receipt(value: object) -> bool:
+    return isinstance(value, str) and len(value) <= MAX_RECEIPT_LENGTH and (
+        value == "" or _text(value, MAX_RECEIPT_LENGTH)
+    )
+
+
+def _safe_value(value: object, depth: int = 0) -> bool:
+    """Accept bounded JSON-like values only; reject arbitrary Python objects."""
+    if depth > MAX_VALUE_DEPTH:
+        return False
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, int):
+        return value.bit_length() <= 256
+    if isinstance(value, float):
+        return isfinite(value)
+    if isinstance(value, str):
+        return _text(value)
+    if isinstance(value, Mapping):
+        if len(value) > MAX_VALUE_ITEMS:
+            return False
+        return all(
+            _text(key, MAX_ID_BYTES) and _safe_value(item, depth + 1)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return len(value) <= MAX_VALUE_ITEMS and all(
+            _safe_value(item, depth + 1) for item in value
+        )
+    return False
 
 
 @dataclass(frozen=True)
@@ -42,10 +89,14 @@ class EvidenceRecord:
 
     def is_well_formed(self) -> bool:
         return (
-            _text(self.evidence_id) and _text(self.kind) and _text(self.source) and _text(self.summary)
-            and _confidence(self.confidence) and isinstance(self.state, str) and self.state in VALID_STATES
-            and isinstance(self.execution_id, str) and len(self.execution_id) <= 256
-            and isinstance(self.provenance, str) and len(self.provenance) <= MAX_RECEIPT_LENGTH
+            _text(self.evidence_id, MAX_ID_BYTES)
+            and _text(self.kind, 128)
+            and _text(self.source, 512)
+            and _text(self.summary)
+            and _confidence(self.confidence)
+            and isinstance(self.state, str) and self.state in VALID_STATES
+            and _optional_text(self.execution_id, MAX_ID_BYTES)
+            and _optional_text(self.provenance, MAX_RECEIPT_LENGTH)
         )
 
 
@@ -59,7 +110,10 @@ class SystemNode:
 
     def is_well_formed(self) -> bool:
         return (
-            _text(self.node_id) and _text(self.node_type) and _text(self.label) and _refs(self.evidence_ids)
+            _text(self.node_id, MAX_ID_BYTES)
+            and _text(self.node_type, 128)
+            and _text(self.label, 1024)
+            and _refs(self.evidence_ids)
             and isinstance(self.state, str) and self.state in VALID_STATES
         )
 
@@ -75,8 +129,12 @@ class SystemEdge:
 
     def is_well_formed(self) -> bool:
         return (
-            _text(self.source_id) and _text(self.target_id) and _text(self.relation) and _refs(self.evidence_ids)
-            and _confidence(self.confidence) and isinstance(self.state, str) and self.state in VALID_STATES
+            _text(self.source_id, MAX_ID_BYTES)
+            and _text(self.target_id, MAX_ID_BYTES)
+            and _text(self.relation, 128)
+            and _refs(self.evidence_ids)
+            and _confidence(self.confidence)
+            and isinstance(self.state, str) and self.state in VALID_STATES
         )
 
 
@@ -89,7 +147,7 @@ class SystemGraph:
 
     def is_well_formed(self) -> bool:
         try:
-            if not _text(self.graph_id):
+            if not _text(self.graph_id, MAX_ID_BYTES):
                 return False
             groups = (self.nodes, self.edges, self.evidence)
             if not all(isinstance(group, tuple) and len(group) <= MAX_RECORDS for group in groups):
@@ -130,7 +188,9 @@ class HypothesisRecord:
 
     def is_well_formed(self) -> bool:
         return (
-            _text(self.hypothesis_id) and _text(self.statement) and _refs(self.evidence_ids)
+            _text(self.hypothesis_id, MAX_ID_BYTES)
+            and _text(self.statement)
+            and _refs(self.evidence_ids)
             and isinstance(self.status, str) and self.status in VALID_STATES
             and isinstance(self.alternatives, tuple) and len(self.alternatives) <= MAX_RECORDS
             and all(_text(item) for item in self.alternatives)
@@ -149,13 +209,21 @@ class Experiment:
     sandbox_receipt: str = ""
 
     def is_well_formed(self) -> bool:
-        return (
-            _text(self.experiment_id) and _text(self.hypothesis_id) and _text(self.objective)
-            and isinstance(self.variables, Mapping) and len(self.variables) <= 256
-            and all(_text(key) for key in self.variables)
-            and isinstance(self.authorized, bool) and isinstance(self.sandboxed, bool)
-            and _receipt(self.authorization_receipt) and _receipt(self.sandbox_receipt)
-        )
+        try:
+            return (
+                _text(self.experiment_id, MAX_ID_BYTES)
+                and _text(self.hypothesis_id, MAX_ID_BYTES)
+                and _text(self.objective)
+                and isinstance(self.variables, Mapping)
+                and len(self.variables) <= MAX_VARIABLES
+                and all(_text(key, MAX_ID_BYTES) and _safe_value(value) for key, value in self.variables.items())
+                and isinstance(self.authorized, bool)
+                and isinstance(self.sandboxed, bool)
+                and _receipt(self.authorization_receipt)
+                and _receipt(self.sandbox_receipt)
+            )
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return False
 
 
 @dataclass(frozen=True)
@@ -170,9 +238,13 @@ class ImprovementCandidate:
 
     def is_well_formed(self) -> bool:
         return (
-            _text(self.candidate_id) and _text(self.rationale)
-            and isinstance(self.requirements, tuple) and len(self.requirements) <= MAX_RECORDS
-            and all(_text(item) for item in self.requirements)
-            and isinstance(self.verified, bool) and isinstance(self.regression_passed, bool)
-            and _receipt(self.verification_receipt) and _receipt(self.regression_receipt)
+            _text(self.candidate_id, MAX_ID_BYTES)
+            and _text(self.rationale)
+            and isinstance(self.requirements, tuple)
+            and len(self.requirements) <= MAX_RECORDS
+            and all(_text(item, 1024) for item in self.requirements)
+            and isinstance(self.verified, bool)
+            and isinstance(self.regression_passed, bool)
+            and _receipt(self.verification_receipt)
+            and _receipt(self.regression_receipt)
         )
