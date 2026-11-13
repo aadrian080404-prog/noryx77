@@ -181,11 +181,37 @@ def test_runtime_rejects_in_memory_replay_guard_for_high_risk_actions():
         required_threshold=1,
         trusted_keys={"approver-1": public_key},
     )
+    engine = RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=lambda envelope, statement: None,
+        high_risk_action_types={"financial"},
+        replay_guard=AuthorizationReplayGuard(),
+    )
+    effects = []
+    result = engine.execute(
+        Intent("financial operation", "principal-1"),
+        (RuntimePlanStep("step-1", "financial", "transfer", {}),),
+        executor=lambda envelope: effects.append("executed"),
+        verifier=lambda envelope, output: True,
+        execution_id="volatile-replay",
+    )
 
-    with pytest.raises(ValueError, match="durable_replay_guard"):
-        RuntimeEngine(
-            multi_auth_authority=authority,
-            authorization_provider=lambda envelope, statement: None,
-            high_risk_action_types={"financial"},
-            replay_guard=AuthorizationReplayGuard(),
-        )
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "PermissionError"
+    assert effects == []
+
+
+def test_runtime_treats_financial_actions_as_high_risk_by_default():
+    engine = RuntimeEngine()
+    effects = []
+    result = engine.execute(
+        Intent("financial operation", "principal-1"),
+        (RuntimePlanStep("step-1", "financial", "transfer", {}),),
+        executor=lambda envelope: effects.append("executed"),
+        verifier=lambda envelope, output: True,
+        execution_id="default-high-risk",
+    )
+
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "PermissionError"
+    assert effects == []
