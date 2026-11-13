@@ -41,6 +41,7 @@ def _authorization_replay_token(envelope):
         "target": envelope.target,
         "parameters": dict(envelope.parameters),
         "risk_class": envelope.risk_class,
+        "plan_digest": envelope.plan_digest,
     }
     encoded = json.dumps(
         statement,
@@ -102,3 +103,59 @@ def test_replay_guard_tracks_the_signed_action_statement_not_attempt_nonce(tmp_p
     assert guard.contains(token, now=time.time())
     assert guard.consume(token, expires_at=int(time.time()) + 60, now=time.time()) is False
     assert token != bytes.fromhex(original.attestations[0].action_digest)
+
+
+from core.authorization_replay import AuthenticatedAuthorizationReplayGuard
+
+
+def test_runtime_can_require_authenticated_replay_storage(tmp_path):
+    authority, provider = _authority_and_proof_provider()
+    guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"r" * 32,
+        key_id="runtime-replay-key",
+        path=str(tmp_path / "runtime-authenticated-replay.sqlite3"),
+    )
+    engine = RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=provider,
+        high_risk_action_types={"delete"},
+        authorization_epoch=7,
+        replay_guard=guard,
+        require_authenticated_replay_guard=True,
+    )
+    result = engine.execute(
+        Intent(text="delete", principal_id="principal-1"),
+        [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})],
+        executor=lambda envelope: "ok",
+        verifier=lambda envelope, output: True,
+        execution_id="exec-authenticated",
+    )
+    assert result.status is ExecutionStatus.SUCCEEDED
+    assert guard.integrity_protected is True
+    assert guard.consumed_count == 1
+    guard.close()
+
+
+def test_runtime_rejects_plain_durable_guard_when_authenticated_mode_is_required(tmp_path):
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-unkeyed.sqlite3"))
+    try:
+        try:
+            RuntimeEngine(
+                replay_guard=guard,
+                require_authenticated_replay_guard=True,
+            )
+        except ValueError as exc:
+            assert "authenticated_replay_guard" in str(exc)
+        else:
+            raise AssertionError("unkeyed replay guard accepted in authenticated mode")
+    finally:
+        guard.close()
+
+
+def test_runtime_authenticated_replay_mode_requires_a_guard():
+    try:
+        RuntimeEngine(require_authenticated_replay_guard=True)
+    except ValueError as exc:
+        assert "authenticated_replay_guard" in str(exc)
+    else:
+        raise AssertionError("missing replay guard accepted")
