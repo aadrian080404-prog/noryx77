@@ -97,8 +97,8 @@ class InstitutionalAccessGate:
             raise ValueError("at_least_two_approvals_required")
         if not isinstance(required_roles, tuple) or not required_roles or any(
             not isinstance(role, str) or not role.strip() for role in required_roles
-        ):
-            raise ValueError("invalid_required_roles")
+        ) or len(set(required_roles)) < required_approvals:
+            raise ValueError("invalid_required_roles_or_quorum")
         if isinstance(max_output_limit, bool) or not isinstance(max_output_limit, int) or max_output_limit < 1:
             raise ValueError("invalid_output_limit")
         if not callable(clock):
@@ -141,8 +141,7 @@ class InstitutionalAccessGate:
         mandate = request.mandate
         return cls._canonical({
             "request_id": request.request_id,
-            "mandate_id": mandate.mandate_id,
-            "case_id": mandate.case_id,
+            "mandate_digest": hashlib.sha256(cls.mandate_payload(mandate)).hexdigest(),
             "jurisdiction": request.jurisdiction,
             "purpose": request.purpose,
             "data_scopes": sorted(request.data_scopes),
@@ -196,7 +195,10 @@ class InstitutionalAccessGate:
             return deny("invalid_mandate_scopes")
         if not self._valid_time(request.created_at) or not self._valid_time(mandate.valid_from) or not self._valid_time(mandate.expires_at):
             return deny("invalid_time")
-        now = self._clock()
+        try:
+            now = self._clock()
+        except Exception:
+            return deny("clock_unavailable")
         if not self._valid_time(now):
             return deny("invalid_clock")
         if mandate.valid_from >= mandate.expires_at or request.created_at < mandate.valid_from or request.created_at >= mandate.expires_at:
