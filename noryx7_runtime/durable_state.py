@@ -53,6 +53,7 @@ class DurableStateJournal(StateJournal):
         self.path = str(Path(path))
         self.key_id = key_id
         self._integrity_key = bytes(integrity_key)
+        self._closed = False
         self._db = sqlite3.connect(
             self.path, timeout=30, isolation_level=None, check_same_thread=False
         )
@@ -254,6 +255,12 @@ class DurableStateJournal(StateJournal):
     def rollback_last(self, attestation: Attestation) -> None:
         raise RuntimeError("durable_runtime_journal_is_append_only")
 
+    @property
+    def durable(self) -> bool:
+        return not self._closed
+
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            if not self._closed:
+                self._db.close()
+                self._closed = True
