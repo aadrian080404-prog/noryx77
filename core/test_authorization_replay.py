@@ -265,7 +265,5 @@ def test_authenticated_consume_many_fails_closed_on_tampered_expired_row(tmp_pat
     db.commit()
     db.close()
 
-    reopened = _authenticated_guard(path)
     with pytest.raises(RuntimeError, match="integrity_failure"):
-        reopened.consume_many((token(210), token(211)), expires_at=500, now=100)
-    reopened.close()
+        _authenticated_guard(path)
