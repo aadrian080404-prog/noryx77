@@ -98,6 +98,17 @@ def build_inventory(repository_root: str | Path) -> dict[str, Any]:
     for record in records:
         for imported in record.get("internal_imports", []):
             dependency_edges.append({"source": record["path"], "imports": imported})
+
+    canonical_registry_path = root / "architecture" / "component_registry.json"
+    canonical_registry = None
+    if canonical_registry_path.is_file():
+        canonical_registry = json.loads(canonical_registry_path.read_text(encoding="utf-8"))
+        if canonical_registry.get("schema_version") != 1 or not isinstance(canonical_registry.get("domains"), list):
+            raise ValueError("canonical_component_registry_schema_invalid")
+        domain_ids = {item.get("id") for item in canonical_registry["domains"] if isinstance(item, dict)}
+        if len(domain_ids) != 17 or any(not set(item.get("depends_on", [])) <= domain_ids for item in canonical_registry["domains"]):
+            raise ValueError("canonical_component_registry_domains_invalid")
+
     return {
         "schema_version": 1,
         "inventory_scope": "repository_files_static_imports_and_ast_symbols",
@@ -109,7 +120,7 @@ def build_inventory(repository_root: str | Path) -> dict[str, Any]:
             "test_execution_evidence": "must_be_joined_from_exact_commit_CI_artifacts",
             "vulnerability_status": "not_assessed_by_inventory",
         },
-        "domain_catalog": list(DOMAINS),
+        "domain_catalog": canonical_registry["domains"] if canonical_registry else list(DOMAINS),\n        "canonical_registry_source": "architecture/component_registry.json" if canonical_registry else None,
         "file_count": len(records),
         "source_file_count": sum(item["kind"] == "source" for item in records),
         "python_file_count": sum(item["path"].endswith(".py") for item in records),
