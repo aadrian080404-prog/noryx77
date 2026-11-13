@@ -19,7 +19,13 @@ class TestVerifier:
         return signature == b"valid"
 
 
-def setup_case(**request_changes):
+def setup_case(
+    *,
+    approval_replay_guard=None,
+    require_durable_approval_replay=False,
+    require_authenticated_approval_replay=False,
+    **request_changes,
+):
     mandate = Mandate(
         mandate_id="mandate-1",
         case_id="case-1",
@@ -53,6 +59,9 @@ def setup_case(**request_changes):
         required_roles=("authorization", "oversight"),
         max_output_limit=20,
         clock=lambda: 110.0,
+        approval_replay_guard=approval_replay_guard,
+        require_durable_approval_replay=require_durable_approval_replay,
+        require_authenticated_approval_replay=require_authenticated_approval_replay,
     )
     digest = gate.request_digest(request)
     approvals = (
@@ -271,3 +280,86 @@ def test_approval_count_is_bounded():
     decision = gate.evaluate(request, oversized)
     assert decision.allowed is False
     assert decision.reason == "approval_limit_exceeded"
+
+
+from core.authorization_replay import (
+    AuthenticatedAuthorizationReplayGuard,
+    AuthorizationReplayGuard,
+)
+
+
+def test_institutional_approvals_are_consumed_once_as_an_atomic_batch():
+    guard = AuthorizationReplayGuard(max_tokens=8)
+    gate, request, approvals = setup_case(approval_replay_guard=guard)
+    first = gate.evaluate(request, approvals)
+    second = gate.evaluate(request, approvals)
+    assert first.allowed is True
+    assert second.allowed is False
+    assert second.reason == "approval_replay_or_capacity_rejected"
+    assert guard.consumed_count == 2
+
+
+def test_institutional_approval_batch_is_all_or_none_on_capacity():
+    guard = AuthorizationReplayGuard(max_tokens=1)
+    gate, request, approvals = setup_case(approval_replay_guard=guard)
+    decision = gate.evaluate(request, approvals)
+    assert decision.allowed is False
+    assert decision.reason == "approval_replay_or_capacity_rejected"
+    assert guard.consumed_count == 0
+
+
+def test_institutional_approval_replay_persists_across_restart(tmp_path):
+    path = str(tmp_path / "institutional-approval-replay.sqlite")
+    first_guard = AuthorizationReplayGuard(path=path, max_tokens=8)
+    gate, request, approvals = setup_case(
+        approval_replay_guard=first_guard,
+        require_durable_approval_replay=True,
+    )
+    assert gate.evaluate(request, approvals).allowed is True
+    first_guard.close()
+
+    second_guard = AuthorizationReplayGuard(path=path, max_tokens=8)
+    reopened_gate, _, _ = setup_case(
+        approval_replay_guard=second_guard,
+        require_durable_approval_replay=True,
+    )
+    replay = reopened_gate.evaluate(request, approvals)
+    assert replay.allowed is False
+    assert replay.reason == "approval_replay_or_capacity_rejected"
+    second_guard.close()
+
+
+def test_high_assurance_institutional_gate_requires_authenticated_replay(tmp_path):
+    path = str(tmp_path / "institutional-authenticated-replay.sqlite")
+    guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"i" * 32,
+        key_id="institutional-replay-key",
+        path=path,
+        max_tokens=8,
+    )
+    gate, request, approvals = setup_case(
+        approval_replay_guard=guard,
+        require_authenticated_approval_replay=True,
+    )
+    assert gate.approval_replay_durable is True
+    assert gate.approval_replay_integrity_protected is True
+    assert gate.evaluate(request, approvals).allowed is True
+    guard.close()
+
+
+def test_institutional_gate_refuses_unkeyed_store_for_authenticated_replay(tmp_path):
+    guard = AuthorizationReplayGuard(
+        path=str(tmp_path / "unkeyed-institutional-replay.sqlite"),
+        max_tokens=8,
+    )
+    with pytest.raises(ValueError, match="authenticated_approval_replay_guard_required"):
+        setup_case(
+            approval_replay_guard=guard,
+            require_authenticated_approval_replay=True,
+        )
+    guard.close()
+
+
+def test_institutional_gate_requires_durable_guard_when_requested():
+    with pytest.raises(ValueError, match="durable_approval_replay_guard_required"):
+        setup_case(require_durable_approval_replay=True)
