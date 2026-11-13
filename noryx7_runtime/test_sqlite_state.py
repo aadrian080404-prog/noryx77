@@ -110,3 +110,19 @@ def test_runtime_journal_fails_closed_on_concurrent_writer(tmp_path):
         second.snapshot()
     first.close()
     second.close()
+
+
+def test_runtime_journal_persists_compensating_rollback_event(tmp_path):
+    path = tmp_path / "runtime.sqlite"
+    journal = _journal(path)
+    journal.reserve_step("exec-1", "principal-1", "step-1", _digest("action"))
+    attestation = _attestation()
+    journal.append(attestation)
+    journal.rollback_last(attestation)
+    assert journal.snapshot() == ()
+    journal.close()
+
+    recovered = _journal(path)
+    assert recovered.snapshot() == ()
+    assert recovered.reservation("exec-1", "step-1") is not None
+    recovered.close()
