@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from core.scenario_matrix import (
-    ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES, BEHAVIOR_CLASSES, IMPACT_CLASSES,
+    ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES, BEHAVIOR_CLASSES,
+    IMPACT_CLASSES, expected_stratum_counts,
 )
 from tests.million_scale_campaign import DIFFICULTIES, run_campaign, scenario_for, verify_invariants
 
@@ -67,7 +68,16 @@ def test_campaign_reports_complete_entity_power_cross_matrix():
     matrix = result["entity_power_counts"]
     assert len(matrix) == 9 * 7
     assert sum(matrix.values()) == 10_000
-    assert max(matrix.values()) - min(matrix.values()) <= 1
+    expected = {
+        f"{entity}|{power}": 0
+        for entity in ENTITY_CLASSES
+        for power in POWER_TIERS
+    }
+    for (entity, power, _, _, _), count in expected_stratum_counts(
+        10_000, seed=20261113
+    ).items():
+        expected[f"{entity}|{power}"] += count
+    assert matrix == expected
     assert sum(result["entity_counts"].values()) == 10_000
     assert sum(result["power_counts"].values()) == 10_000
 
