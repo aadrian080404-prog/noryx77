@@ -1,4 +1,4 @@
-"""Verify and aggregate all deterministic shards of a generated-scenario campaign."""
+"""Verify and aggregate every shard and marginal axis of a deterministic campaign."""
 from __future__ import annotations
 
 import argparse
@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from core.scenario_matrix import ENTITY_CLASSES, POWER_TIERS, expected_stratum_counts
+from core.scenario_matrix import (
+    BEHAVIOR_CLASSES, CAPABILITY_CLASSES, ENTITY_CLASSES, IMPACT_CLASSES,
+    POWER_TIERS, expected_stratum_counts,
+)
 
 DIFFICULTIES = ("trivial", "normal", "boundary", "pathological", "adversarial", "compound")
 
@@ -24,10 +27,15 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         raise ValueError("campaign_shard_count_mismatch")
 
     seen: set[int] = set()
-    difficulty = {name: 0 for name in DIFFICULTIES}
-    entities = {name: 0 for name in ENTITY_CLASSES}
-    powers = {name: 0 for name in POWER_TIERS}
-    matrix = {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS}
+    totals = {
+        "difficulty_counts": {name: 0 for name in DIFFICULTIES},
+        "entity_counts": {name: 0 for name in ENTITY_CLASSES},
+        "power_counts": {name: 0 for name in POWER_TIERS},
+        "entity_power_counts": {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS},
+        "capability_counts": {name: 0 for name in CAPABILITY_CLASSES},
+        "behavior_counts": {name: 0 for name in BEHAVIOR_CLASSES},
+        "impact_counts": {name: 0 for name in IMPACT_CLASSES},
+    }
     total_executed = 0
 
     for item in items:
@@ -45,8 +53,7 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         if item.get("verification_scope") != "one_structural_preflight_plus_synthetic_scenario_invariants":
             raise ValueError("campaign_shard_scope_mismatch")
 
-        for target, key in ((difficulty, "difficulty_counts"), (entities, "entity_counts"),
-                            (powers, "power_counts"), (matrix, "entity_power_counts")):
+        for key, target in totals.items():
             counts = item.get(key)
             if not isinstance(counts, dict) or set(counts) != set(target):
                 raise ValueError(f"campaign_shard_{key}_schema_mismatch")
@@ -58,16 +65,15 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
 
     if seen != set(range(shards)) or total_executed != cases:
         raise ValueError("campaign_shards_do_not_cover_requested_range")
-    if sum(difficulty.values()) != cases or sum(entities.values()) != cases:
-        raise ValueError("campaign_aggregate_count_mismatch")
-    if sum(powers.values()) != cases or sum(matrix.values()) != cases:
-        raise ValueError("campaign_aggregate_matrix_mismatch")
+    for key, counts in totals.items():
+        if sum(counts.values()) != cases:
+            raise ValueError(f"campaign_aggregate_{key}_count_mismatch")
 
     expected_matrix = {
         f"{entity}|{power}": count
         for (entity, power), count in expected_stratum_counts(cases, seed=seed).items()
     }
-    if matrix != expected_matrix:
+    if totals["entity_power_counts"] != expected_matrix:
         raise ValueError("campaign_aggregate_strata_mismatch")
 
     return {
@@ -75,10 +81,8 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         "cases_requested": cases,
         "cases_verified": total_executed,
         "shards_verified": len(seen),
-        "difficulty_counts": difficulty,
-        "entity_counts": entities,
-        "power_counts": powers,
-        "entity_power_counts": matrix,
+        **totals,
+        "coverage_axes": ["entity", "power", "difficulty", "capability", "behavior", "impact"],
         "verification_scope": "one_structural_preflight_per_shard_plus_synthetic_scenario_invariants",
         "status": "passed",
     }
