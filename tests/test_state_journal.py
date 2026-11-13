@@ -29,7 +29,7 @@ def test_state_store_recovers_durable_commit(tmp_path):
     )
     journal.close()
 
-    reopened = StateJournal(path)
+    reopened = StateJournal(path, integrity_key=TEST_KEY, key_id="test-key")
     recovered = StateStore(journal=reopened)
     assert recovered.version == commit.sequence
     assert recovered.get("exec-1") == commit
@@ -38,7 +38,7 @@ def test_state_store_recovers_durable_commit(tmp_path):
 
 def test_journal_rejects_tampered_record(tmp_path):
     path = str(tmp_path / "state.db")
-    journal = StateJournal(path)
+    journal = StateJournal(path, integrity_key=TEST_KEY, key_id="test-key")
     store = StateStore(journal=journal)
     store.commit(
         make_state(), execution_id="exec-2", task_id="task-2",
@@ -52,7 +52,7 @@ def test_journal_rejects_tampered_record(tmp_path):
 
 
 def test_failed_durable_append_does_not_publish_in_memory(monkeypatch, tmp_path):
-    journal = StateJournal(str(tmp_path / "state.db"))
+    journal = StateJournal(str(tmp_path / "state.db"), integrity_key=TEST_KEY, key_id="test-key")
     store = StateStore(journal=journal)
     monkeypatch.setattr(journal, "append", lambda commit: (_ for _ in ()).throw(OSError("disk failure")))
     with pytest.raises(OSError, match="disk failure"):
