@@ -35,6 +35,11 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         "capability_counts": {name: 0 for name in CAPABILITY_CLASSES},
         "behavior_counts": {name: 0 for name in BEHAVIOR_CLASSES},
         "impact_counts": {name: 0 for name in IMPACT_CLASSES},
+        "entity_behavior_counts": {f"{entity}|{behavior}": 0 for entity in ENTITY_CLASSES for behavior in BEHAVIOR_CLASSES},
+        "entity_impact_counts": {f"{entity}|{impact}": 0 for entity in ENTITY_CLASSES for impact in IMPACT_CLASSES},
+        "power_capability_counts": {f"{power}|{capability}": 0 for power in POWER_TIERS for capability in CAPABILITY_CLASSES},
+        "capability_impact_counts": {f"{capability}|{impact}": 0 for capability in CAPABILITY_CLASSES for impact in IMPACT_CLASSES},
+        "behavior_impact_counts": {f"{behavior}|{impact}": 0 for behavior in BEHAVIOR_CLASSES for impact in IMPACT_CLASSES},
     }
     total_executed = 0
 
@@ -83,6 +88,7 @@ def aggregate_results(results: Iterable[dict[str, object]], *, cases: int, seed:
         "shards_verified": len(seen),
         **totals,
         "coverage_axes": ["entity", "power", "difficulty", "capability", "behavior", "impact"],
+        "pairwise_coverage": ["entity_behavior", "entity_impact", "power_capability", "capability_impact", "behavior_impact"],
         "verification_scope": "one_structural_preflight_per_shard_plus_synthetic_scenario_invariants",
         "status": "passed",
     }
