@@ -32,3 +32,15 @@ def test_adversarial_engine_rejects_invalid_difficulty(difficulty):
     engine = AdversarialEngine(max_scenarios=10)
     with pytest.raises(ValueError, match="invalid_difficulty"):
         engine.scenario(0, difficulty=difficulty)
+
+
+def test_adversarial_scenario_exposes_all_matrix_dimensions_reproducibly():
+    engine = AdversarialEngine(seed=20261113, max_scenarios=10_000)
+    first = engine.scenario(731, difficulty=42)
+    second = engine.scenario(731, difficulty=42)
+    assert first == second
+    assert first.entity_class != ""
+    assert first.power_tier.startswith("p")
+    assert first.capability_class != ""
+    assert first.behavior_class != ""
+    assert first.impact_class != ""
