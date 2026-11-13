@@ -6,6 +6,7 @@ Handlers run with the same user privileges as the parent and must be trusted.
 from __future__ import annotations
 
 import json
+import math
 import multiprocessing
 from multiprocessing.connection import Connection
 from typing import Any, Callable
@@ -62,9 +63,9 @@ class ProcessExecutionAdapter:
             raise TypeError("handler_must_be_callable")
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id_required")
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds_must_be_positive")
-        if isinstance(terminate_grace_seconds, bool) or not isinstance(terminate_grace_seconds, (int, float)) or terminate_grace_seconds < 0:
+        if isinstance(terminate_grace_seconds, bool) or not isinstance(terminate_grace_seconds, (int, float)) or not math.isfinite(terminate_grace_seconds) or terminate_grace_seconds < 0:
             raise ValueError("terminate_grace_seconds_invalid")
         if isinstance(max_result_bytes, bool) or not isinstance(max_result_bytes, int) or max_result_bytes < 1:
             raise ValueError("max_result_bytes_invalid")
@@ -80,7 +81,7 @@ class ProcessExecutionAdapter:
     def execute_with_timeout(self, envelope: ActionEnvelope, timeout_seconds: float) -> Any:
         if not isinstance(envelope, ActionEnvelope):
             raise TypeError("envelope_must_be_ActionEnvelope")
-        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds_must_be_positive")
         context = multiprocessing.get_context("spawn")
         receive_conn, send_conn = context.Pipe(duplex=False)

@@ -85,3 +85,24 @@ def test_runtime_deadline_overrides_longer_adapter_timeout():
     )
     assert result.status is ExecutionStatus.FAILED
     assert result.error == "ProcessExecutionTimeout"
+
+
+
+def test_executor_rejects_non_finite_deadlines():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        ProcessExecutionAdapter(echo_handler, agent_id="worker", timeout_seconds=float("nan"))
+    adapter = ProcessExecutionAdapter(echo_handler, agent_id="worker", timeout_seconds=10)
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        adapter.execute_with_timeout(make_envelope(), float("nan"))
+
+
+def test_runtime_rejects_non_finite_deadline():
+    engine = RuntimeEngine()
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        engine.execute(
+            Intent("deadline validation", "principal-1"),
+            [PlanStep("step-1", "test", "local", {})],
+            executor=echo_handler,
+            verifier=lambda envelope, output: True,
+            timeout_seconds=float("nan"),
+        )
