@@ -7,13 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       cases:
-        description: Generated scenarios (maximum 1000000)
+        description: Generated scenarios (maximum 10000000)
         required: false
-        default: "1000000"
+        default: "10000000"
       seed:
         description: Deterministic campaign seed
         required: false
         default: "20260906"
+      shards:
+        description: Parallel campaign shards (1-20; choose a value coprime with 63)
+        required: false
+        default: "20"
   schedule:
     - cron: "17 3 * * 0"
 
@@ -22,9 +26,14 @@ permissions:
 
 jobs:
   generated-scenarios:
-    name: Generated scenario verification — ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }} cases
+    name: Scenario shard ${{ matrix.shard_index }} — ${{ github.event_name == 'pull_request' && '10000' || github.event.inputs.cases || '10000000' }} cases
+    if: matrix.shard_index < fromJSON(github.event_name == 'pull_request' && '1' || github.event.inputs.shards || '20')
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,37 +48,43 @@ jobs:
           python -m pip check
       - name: Validate campaign bounds
         env:
-          CASES: ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }}
-          SEED: ${{ inputs.seed || '20260906' }}
+          CASES: ${{ github.event_name == 'pull_request' && '10000' || github.event.inputs.cases || '10000000' }}
+          SEED: ${{ github.event.inputs.seed || '20260906' }}
+          SHARDS: ${{ github.event_name == 'pull_request' && '1' || github.event.inputs.shards || '20' }}
         run: |
           set -euo pipefail
           [[ "$CASES" =~ ^[1-9][0-9]*$ ]]
           [[ "$SEED" =~ ^[0-9]+$ ]]
-          (( CASES <= 1000000 ))
+          [[ "$SHARDS" =~ ^[1-9][0-9]*$ ]]
+          (( CASES <= 10000000 ))
+          (( SHARDS <= 20 && SHARDS <= CASES ))
+          case "$SHARDS" in 1|2|4|5|8|10|11|13|16|17|19|20) ;; *) echo "SHARDS must be coprime with 63"; exit 1 ;; esac
           (( SEED <= 9223372036854775807 ))
       - name: Run generated-scenario campaign
         env:
-          CASES: ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }}
-          SEED: ${{ inputs.seed || '20260906' }}
+          CASES: ${{ github.event_name == 'pull_request' && '10000' || github.event.inputs.cases || '10000000' }}
+          SEED: ${{ github.event.inputs.seed || '20260906' }}
+          SHARDS: ${{ github.event_name == 'pull_request' && '1' || github.event.inputs.shards || '20' }}
+          SHARD_INDEX: ${{ matrix.shard_index }}
         run: |
           set -euo pipefail
-          python -m tests.million_scale_campaign --cases "$CASES" --seed "$SEED" | tee generated-scenario-result.json
+          python -m tests.million_scale_campaign --cases "$CASES" --seed "$SEED" --shards "$SHARDS" --shard-index "$SHARD_INDEX" | tee generated-scenario-result.json
       - name: Publish campaign evidence
         if: always()
         run: |
           {
             echo "## NORYX7 generated-scenario verification"
             echo ""
-            echo "Scope: one structural preflight plus deterministic synthetic scenario invariants; this is not one million live runtime executions."
+            echo "Scope: deterministic synthetic invariants stratified by entity class, power tier and difficulty; this is not live runtime execution."
             echo ""
-            echo ' ```json'
+            echo '```json'
             cat generated-scenario-result.json 2>/dev/null || true
-            echo ' ```'
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload campaign evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: noryx7-generated-scenarios-${{ github.run_id }}
+          name: noryx7-generated-scenarios-${{ github.run_id }}-${{ matrix.shard_index }}
           path: generated-scenario-result.json
           if-no-files-found: ignore

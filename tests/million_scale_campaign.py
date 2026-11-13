@@ -11,13 +11,16 @@ import argparse
 import hashlib
 import json
 import random
+from math import gcd
 import time
 from dataclasses import dataclass
 from typing import Iterable
 
+from core.scenario_matrix import ENTITY_CLASSES, POWER_TIERS, coordinate_for
+
 DIFFICULTIES = ("trivial", "normal", "boundary", "pathological", "adversarial", "compound")
 _DIFFICULTY_WEIGHTS = (2, 8, 15, 20, 25, 30)
-MAX_CAMPAIGN_CASES = 1_000_000
+MAX_CAMPAIGN_CASES = 10_000_000
 MAX_SEED = 2**63 - 1
 VERIFICATION_SCOPE = "one_structural_preflight_plus_synthetic_scenario_invariants"
 _MIN_DIFFICULTY_FRACTIONS = {
@@ -41,6 +44,8 @@ class Scenario:
     timing: int
     failure: int
     payload_size: int
+    entity_class: str
+    power_tier: str
 
     def digest(self) -> str:
         encoded = json.dumps(self.__dict__, sort_keys=True, separators=(",", ":")).encode()
@@ -65,6 +70,7 @@ def scenario_for(seed: int, case_id: int) -> Scenario:
         "compound": (0, 2**31 - 1, 0, 2**31 - 1, 0, 2**16 - 1, 0, 2**20),
     }[difficulty]
     i0, i1, c0, c1, s0, s1, f0, p1 = ranges
+    coordinate = coordinate_for(seed, case_id)
     return Scenario(
         case_id=case_id,
         seed=seed,
@@ -75,6 +81,8 @@ def scenario_for(seed: int, case_id: int) -> Scenario:
         timing=rng.randint(0, 2**16 - 1),
         failure=rng.randint(f0, 7),
         payload_size=rng.randint(0, p1),
+        entity_class=coordinate.entity_class,
+        power_tier=coordinate.power_tier,
     )
 
 
@@ -83,6 +91,8 @@ def verify_invariants(scenario: Scenario) -> None:
     assert scenario.case_id >= 0
     assert scenario.seed >= 0
     assert scenario.difficulty in DIFFICULTIES
+    assert scenario.entity_class in ENTITY_CLASSES
+    assert scenario.power_tier in POWER_TIERS
     assert scenario.identity >= 0 and scenario.capability >= 0 and scenario.state >= 0
     assert 0 <= scenario.timing <= 65535
     assert 0 <= scenario.failure <= 7
@@ -112,15 +122,19 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED
         or isinstance(cases, bool) or not isinstance(cases, int) or not 1 <= cases <= MAX_CAMPAIGN_CASES
     ):
-        raise ValueError("seed must be bounded and cases must be between 1 and 1000000")
+        raise ValueError("seed must be bounded and cases must be between 1 and 10000000")
     if isinstance(shards, bool) or not isinstance(shards, int) or not 1 <= shards <= cases:
         raise ValueError("shards must be between 1 and cases")
     if isinstance(shard_index, bool) or not isinstance(shard_index, int) or not 0 <= shard_index < shards:
         raise ValueError("invalid shard_index")
+    if gcd(shards, len(ENTITY_CLASSES) * len(POWER_TIERS)) != 1:
+        raise ValueError("shard_count_must_be_coprime_with_strata")
 
     started = time.monotonic()
     _preflight()
     counts = {difficulty: 0 for difficulty in DIFFICULTIES}
+    entity_counts = {entity: 0 for entity in ENTITY_CLASSES}
+    power_counts = {power: 0 for power in POWER_TIERS}
     executed = 0
     first_digest: str | None = None
     last_digest: str | None = None
@@ -136,6 +150,8 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
             failure_cases.append(case_id)
             raise
         counts[scenario.difficulty] += 1
+        entity_counts[scenario.entity_class] += 1
+        power_counts[scenario.power_tier] += 1
         digest = scenario.digest()
         first_digest = first_digest or digest
         last_digest = digest
@@ -143,8 +159,7 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
 
     # Coverage is enforced only for an unsharded complete campaign. Each shard is
     # still required to execute its exact deterministic allocation.
-    if shards == 1:
-        _validate_coverage(counts, cases)
+    _validate_coverage(counts, executed)
     expected = ((cases - 1 - shard_index) // shards + 1)
     if executed != expected:
         raise RuntimeError("campaign_case_budget_not_reached")
@@ -158,6 +173,8 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         "shard_index": shard_index,
         "shards": shards,
         "difficulty_counts": counts,
+        "entity_counts": entity_counts,
+        "power_counts": power_counts,
         "first_digest": first_digest,
         "last_digest": last_digest,
         "verification_scope": VERIFICATION_SCOPE,

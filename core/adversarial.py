@@ -4,7 +4,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 
-MAX_SCENARIOS = 1_000_000
+from .scenario_matrix import coordinate_for
+
+MAX_SCENARIOS = 10_000_000
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,8 @@ class AttackScenario:
     technique: str
     objective: str
     sequence: tuple[str, ...]
+    entity_class: str = "unknown"
+    power_tier: str = "p0_minimal"
 
 
 @dataclass(frozen=True)
@@ -51,4 +55,5 @@ class AdversarialEngine:
         objective = objectives[int(digest[16:24], 16) % len(objectives)]
         seq_len = 1 + min(8, difficulty // 15)
         sequence = tuple(techniques[int(digest[(24 + i * 2):(26 + i * 2)], 16) % len(techniques)] for i in range(seq_len))
-        return AttackScenario(f"adv-{digest[:24]}", self.seed, difficulty, surface, technique, objective, sequence)
+        coordinate = coordinate_for(self.seed, index)
+        return AttackScenario(f"adv-{digest[:24]}", self.seed, difficulty, surface, technique, objective, sequence, coordinate.entity_class, coordinate.power_tier)

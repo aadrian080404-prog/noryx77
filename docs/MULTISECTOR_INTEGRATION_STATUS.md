@@ -12,6 +12,7 @@ It does not modify `main`, the frozen architecture branch, or the existing PR #7
 |---|---|---|---|
 | State integrity | `core/state_journal.py` stores durable state with an unkeyed digest | `core/journal_integrity.py` adds HMAC-SHA256 record proofs, ordered chain validation and an external monotonic-anchor protocol | Integrate into SQLite journal transactionally; external KMS/HSM; persistent hardware/remote anchor; rollback-safe commit/recovery |
 | Adversarial intelligence | `core/adversarial.py` generates deterministic synthetic scenarios | `core/adversarial_intelligence.py` adds bounded evidence-first jury contracts, frozen reference/candidate policy, receipt-gated bounded meta-adjustment and abstract self-play | Distinct attacker/defender agents, independent model/process identities, sandbox receipts, telemetry/provenance graph and persistent learning |
+| Scenario campaign | Existing deterministic synthetic generator capped at 1M | Raised to 10M; 9 entity classes × 7 power tiers (63 balanced strata), six difficulty classes, deterministic coordinates and up to 20 parallel shards | Actual live runtime execution, multi-run artifact aggregation and independent validation of real operational behavior |
 | Reverse engineering / SURF | Existing `core/surf_contracts.py` and `core/surf_engine.py` provide bounded evidence-grounded assessment | Fixes the depth check so the full variables mapping, including its root container, is counted against the nesting limit | Live observation adapters, trusted sandbox, independent receipts and end-to-end authorized system-understanding workflow |
 | Institutional access | Existing `core/institutional_access.py` already implements a policy-only M-of-N gate, mandate and request binding, trusted approver roles/domains, output limits, expiry and supervised-mode oversight | No replacement module is introduced here; the existing stronger implementation is preserved | Production identity/signature trust roots, revocation, durable audit, legal/jurisdictional review, isolated query execution and data-release controls |
 
@@ -57,6 +58,8 @@ It does not modify `main`, the frozen architecture branch, or the existing PR #7
    verification, then independent security review and failure-injection testing.
 
 ## Non-claims
+
+The 10M campaign counts deterministic synthetic scenario-invariant checks, not 10M live agent decisions or real attack/defense executions. Entity and power tiers are test strata, not calibrated threat probabilities. CI uses 10,000 cases for pull requests and a 20-shard campaign for scheduled/manual full runs.
 
 This tranche is not a production KMS/HSM, globally replicated journal, distributed
 AI jury, live SEAT, zero-knowledge proof, microVM, institutional disclosure service,
