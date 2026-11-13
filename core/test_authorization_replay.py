@@ -1,3 +1,4 @@
+import pytest
 from concurrent.futures import ThreadPoolExecutor
 from .authorization_replay import AuthorizationReplayGuard, MAX_TOKENS, TOKEN_SIZE
 
