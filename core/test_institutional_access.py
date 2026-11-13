@@ -363,3 +363,27 @@ def test_institutional_gate_refuses_unkeyed_store_for_authenticated_replay(tmp_p
 def test_institutional_gate_requires_durable_guard_when_requested():
     with pytest.raises(ValueError, match="durable_approval_replay_guard_required"):
         setup_case(require_durable_approval_replay=True)
+
+
+def test_institutional_quorum_overlap_cannot_reuse_one_approver_signature():
+    guard = AuthorizationReplayGuard(max_tokens=8)
+    gate, request, approvals = setup_case(approval_replay_guard=guard)
+    assert gate.evaluate(request, approvals).allowed is True
+
+    digest = gate.request_digest(request)
+    overlapping = (
+        Approval("authority-c", digest, "authorization", 107.0, b"new-valid"),
+        approvals[1],
+    )
+    # The test verifier only accepts b"valid", so use the same signed role proof
+    # to exercise reuse of the same approver credential in another quorum.
+    overlapping = (
+        Approval("authority-c", digest, "authorization", 105.0, b"valid"),
+        approvals[1],
+    )
+    replay = gate.evaluate(request, overlapping)
+    assert replay.allowed is False
+    assert replay.reason == "approval_replay_or_capacity_rejected"
+    # The new authority-c token was not partially consumed when the reused
+    # oversight-b token caused the atomic batch to fail.
+    assert guard.consumed_count == 2
