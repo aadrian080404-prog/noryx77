@@ -156,11 +156,21 @@ class InstitutionalAccessGate:
 
     @staticmethod
     def _valid_text(value: object, limit: int = 256) -> bool:
-        return isinstance(value, str) and bool(value.strip()) and len(value.encode("utf-8")) <= limit
+        if not isinstance(value, str) or not value.strip():
+            return False
+        try:
+            return len(value.encode("utf-8")) <= limit
+        except UnicodeError:
+            return False
 
     @staticmethod
     def _valid_time(value: object) -> bool:
-        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return False
+        try:
+            return math.isfinite(float(value))
+        except (OverflowError, TypeError, ValueError):
+            return False
 
     def evaluate(self, request: AccessRequest, approvals: tuple[Approval, ...]) -> AccessDecision:
         digest = ""
