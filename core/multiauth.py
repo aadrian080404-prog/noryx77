@@ -22,14 +22,14 @@ def _id(value: str, name: str) -> str:
     return value
 
 
-def action_digest(action_id: str, epoch: int, action_statement: bytes = b"", *, expires_at: int) -> bytes:
+def action_digest(action_id: str, epoch: int, action_statement: bytes = b"", *, expires_at: int = 0) -> bytes:
     """Return a domain-separated digest binding approvals to one action/epoch."""
     _id(action_id, "action_id")
     if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 0:
         raise ValueError("invalid_epoch")
     if not isinstance(action_statement, bytes):
         raise TypeError("action_statement_must_be_bytes")
-    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at <= 0:
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at < 0:
         raise ValueError("invalid_proof_expiry")
     h = hashlib.sha256()
     h.update(_DOMAIN)
