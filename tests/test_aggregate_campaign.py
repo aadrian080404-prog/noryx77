@@ -20,6 +20,11 @@ def _shards(cases: int, seed: int, shards: int):
             "capability_counts": {name: 0 for name in CAPABILITY_CLASSES},
             "behavior_counts": {name: 0 for name in BEHAVIOR_CLASSES},
             "impact_counts": {name: 0 for name in IMPACT_CLASSES},
+            "entity_behavior_counts": {f"{entity}|{behavior}": 0 for entity in ENTITY_CLASSES for behavior in BEHAVIOR_CLASSES},
+            "entity_impact_counts": {f"{entity}|{impact}": 0 for entity in ENTITY_CLASSES for impact in IMPACT_CLASSES},
+            "power_capability_counts": {f"{power}|{capability}": 0 for power in POWER_TIERS for capability in CAPABILITY_CLASSES},
+            "capability_impact_counts": {f"{capability}|{impact}": 0 for capability in CAPABILITY_CLASSES for impact in IMPACT_CLASSES},
+            "behavior_impact_counts": {f"{behavior}|{impact}": 0 for behavior in BEHAVIOR_CLASSES for impact in IMPACT_CLASSES},
         }
         executed = 0
         for case_id in range(shard_index, cases, shards):
@@ -31,6 +36,11 @@ def _shards(cases: int, seed: int, shards: int):
             axes["capability_counts"][scenario.capability_class] += 1
             axes["behavior_counts"][scenario.behavior_class] += 1
             axes["impact_counts"][scenario.impact_class] += 1
+            axes["entity_behavior_counts"][f"{scenario.entity_class}|{scenario.behavior_class}"] += 1
+            axes["entity_impact_counts"][f"{scenario.entity_class}|{scenario.impact_class}"] += 1
+            axes["power_capability_counts"][f"{scenario.power_tier}|{scenario.capability_class}"] += 1
+            axes["capability_impact_counts"][f"{scenario.capability_class}|{scenario.impact_class}"] += 1
+            axes["behavior_impact_counts"][f"{scenario.behavior_class}|{scenario.impact_class}"] += 1
             executed += 1
         results.append({
             "seed": seed, "cases": cases, "executed": executed,
@@ -47,6 +57,13 @@ def test_aggregates_all_shards_and_exact_strata():
     assert result["shards_verified"] == 2
     assert sum(result["entity_power_counts"].values()) == 126
     assert result["coverage_axes"] == ["entity", "power", "difficulty", "capability", "behavior", "impact"]
+    assert len(result["entity_behavior_counts"]) == 9 * 8
+    assert len(result["entity_impact_counts"]) == 9 * 6
+    assert len(result["power_capability_counts"]) == 7 * 8
+    assert len(result["capability_impact_counts"]) == 8 * 6
+    assert len(result["behavior_impact_counts"]) == 8 * 6
+    for key in ("entity_behavior_counts", "entity_impact_counts", "power_capability_counts", "capability_impact_counts", "behavior_impact_counts"):
+        assert sum(result[key].values()) == 126
 
 
 def test_rejects_missing_shard():
