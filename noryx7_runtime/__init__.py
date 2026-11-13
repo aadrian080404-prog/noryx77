@@ -3,6 +3,7 @@
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, Intent, PlanStep
 from .engine import RuntimeEngine
 from .lifecycle import ExecutionLifecycle, LifecycleError
+from .sqlite_state import SQLiteStateJournal
 
 __all__ = [
     "ActionEnvelope",
@@ -13,4 +14,5 @@ __all__ = [
     "LifecycleError",
     "PlanStep",
     "RuntimeEngine",
+    "SQLiteStateJournal",
 ]
