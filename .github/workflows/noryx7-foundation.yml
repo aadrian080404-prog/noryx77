@@ -38,6 +38,8 @@ jobs:
         run: python -m pip check
       - name: Compile Python sources
         run: python -m compileall -q core noryx7_runtime ecosystem jarvis
+      - name: Generate machine-readable architecture inventory
+        run: python -m devtools.build_component_registry --root . --output architecture/component_registry.generated.json
       - name: Run complete pytest suite
         shell: bash
         run: |
@@ -62,6 +64,13 @@ jobs:
             tail -n 120 test-output.txt 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload architecture component registry
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: noryx7-component-registry-${{ github.run_id }}
+          path: architecture/component_registry.generated.json
+          if-no-files-found: ignore
       - name: Upload verification log
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
