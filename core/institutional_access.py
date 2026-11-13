@@ -1,9 +1,7 @@
-"""Policy-only institutional disclosure gate.
+"""Deny-by-default institutional-access policy gate.
 
-This module authorizes a narrowly scoped disclosure plan. It does not execute
-queries, expose records, implement zero-knowledge proofs, or guarantee legal
-non-retention. Signature verification and approver trust must be supplied by
-separately managed cryptographic and identity infrastructure.
+This module validates mandates and threshold approvals. It does not execute queries,
+create zero-knowledge proofs, guarantee non-retention, or decide legal admissibility.
 """
 from __future__ import annotations
 
@@ -12,57 +10,45 @@ from enum import Enum
 import hashlib
 import json
 import math
-from typing import Mapping, Protocol
+from typing import Callable
 
 
 class AccessMode(str, Enum):
     PREDICATE = "predicate"
-    AGGREGATE = "aggregate"
-    SUPERVISED = "supervised"
-
-
-MAX_TRUSTED_APPROVERS = 1024
-MAX_APPROVALS = 64
-MAX_DATA_SCOPES = 128
-MODE_OUTPUT_LIMITS = {
-    AccessMode.PREDICATE: 1,
-    AccessMode.AGGREGATE: 100,
-    AccessMode.SUPERVISED: 20,
-}
+    MINIMIZED_DISCLOSURE = "minimized_disclosure"
+    SUPERVISED_RECONSTRUCTION = "supervised_reconstruction"
 
 
 @dataclass(frozen=True)
-class Mandate:
+class InstitutionalMandate:
     mandate_id: str
-    case_id: str
+    institution_id: str
     jurisdiction: str
     purpose: str
-    allowed_data_scopes: tuple[str, ...]
-    valid_from: float
+    permitted_scopes: tuple[str, ...]
     expires_at: float
-    issuer_id: str
     signature: bytes
 
 
 @dataclass(frozen=True)
-class AccessRequest:
-    request_id: str
-    mandate: Mandate
-    jurisdiction: str
-    purpose: str
-    data_scopes: tuple[str, ...]
-    mode: AccessMode
-    created_at: float
-    output_limit: int
-
-
-@dataclass(frozen=True)
-class Approval:
+class InstitutionalApproval:
+    approval_id: str
     approver_id: str
     request_digest: str
-    role: str
-    issued_at: float
+    expires_at: float
     signature: bytes
+    role: str = "approver"
+
+
+@dataclass(frozen=True)
+class InstitutionalRequest:
+    request_id: str
+    institution_id: str
+    jurisdiction: str
+    purpose: str
+    requested_scopes: tuple[str, ...]
+    mode: AccessMode
+    created_at: float
 
 
 @dataclass(frozen=True)
@@ -70,224 +56,140 @@ class AccessDecision:
     allowed: bool
     reason: str
     request_digest: str
-    mode: AccessMode | None
-    approved_scopes: tuple[str, ...]
-    approver_domains: tuple[str, ...]
+    required_approvals: int
 
 
-class InstitutionalSignatureVerifier(Protocol):
-    def verify_mandate(self, issuer_id: str, payload: bytes, signature: bytes) -> bool: ...
-    def verify_approval(self, approver_id: str, payload: bytes, signature: bytes) -> bool: ...
-
-
-class InstitutionalAccessGate:
-    """Fail-closed M-of-N gate with mandate, purpose and scope binding.
-
-    trusted_approvers maps immutable approver IDs to (independence_domain, role).
-    It must come from a separately authenticated governance registry.
-    """
+class InstitutionalAccessPolicy:
+    """Policy-only gateway; signature verification is delegated to pinned trust roots."""
 
     def __init__(
         self,
         *,
-        verifier: InstitutionalSignatureVerifier,
-        trusted_approvers: Mapping[str, tuple[str, str]],
-        required_approvals: int = 2,
-        required_roles: tuple[str, ...] = ("authorization", "oversight"),
-        max_output_limit: int = 100,
-        clock,
+        mandate_verifier: Callable[[InstitutionalMandate], bool],
+        approval_verifier: Callable[[InstitutionalApproval], bool],
+        approval_threshold: int = 2,
+        supervisor_threshold: int = 1,
+        max_request_age: float = 300.0,
     ) -> None:
-        if not callable(getattr(verifier, "verify_mandate", None)) or not callable(
-            getattr(verifier, "verify_approval", None)
-        ):
-            raise TypeError("institutional_signature_verifier_required")
-        if not isinstance(trusted_approvers, Mapping) or not trusted_approvers:
-            raise ValueError("trusted_approver_registry_required")
-        if len(trusted_approvers) > MAX_TRUSTED_APPROVERS:
-            raise ValueError("trusted_approver_registry_limit_exceeded")
-        if isinstance(required_approvals, bool) or not isinstance(required_approvals, int) or not 2 <= required_approvals <= MAX_APPROVALS:
-            raise ValueError("at_least_two_approvals_required")
-        if not isinstance(required_roles, tuple) or not required_roles or any(
-            not isinstance(role, str) or not role.strip() for role in required_roles
-        ) or len(set(required_roles)) < required_approvals:
-            raise ValueError("invalid_required_roles_or_quorum")
-        if isinstance(max_output_limit, bool) or not isinstance(max_output_limit, int) or max_output_limit < 1:
-            raise ValueError("invalid_output_limit")
-        if not callable(clock):
-            raise TypeError("clock_must_be_callable")
-        normalized: dict[str, tuple[str, str]] = {}
-        for approver_id, metadata in trusted_approvers.items():
-            if (
-                not isinstance(approver_id, str) or not approver_id.strip()
-                or not isinstance(metadata, tuple) or len(metadata) != 2
-                or any(not isinstance(value, str) or not value.strip() for value in metadata)
-            ):
-                raise ValueError("invalid_trusted_approver")
-            normalized[approver_id] = metadata
-        self._verifier = verifier
-        self._trusted_approvers = normalized
-        self._required_approvals = required_approvals
-        self._required_roles = frozenset(required_roles)
-        self._max_output_limit = max_output_limit
-        self._clock = clock
+        if not callable(mandate_verifier) or not callable(approval_verifier):
+            raise ValueError("trusted_signature_verifiers_required")
+        if any(isinstance(x, bool) or not isinstance(x, int) for x in (approval_threshold, supervisor_threshold)):
+            raise ValueError("invalid_approval_threshold")
+        if approval_threshold < 2 or supervisor_threshold < 1:
+            raise ValueError("threshold_below_safe_minimum")
+        if isinstance(max_request_age, bool) or not isinstance(max_request_age, (int, float)) or not math.isfinite(float(max_request_age)) or max_request_age <= 0:
+            raise ValueError("invalid_request_age")
+        self._mandate_verifier = mandate_verifier
+        self._approval_verifier = approval_verifier
+        self.approval_threshold = approval_threshold
+        self.supervisor_threshold = supervisor_threshold
+        self.max_request_age = float(max_request_age)
 
     @staticmethod
-    def _canonical(value: object) -> bytes:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-
-    @classmethod
-    def mandate_payload(cls, mandate: Mandate) -> bytes:
-        return cls._canonical({
-            "mandate_id": mandate.mandate_id,
-            "case_id": mandate.case_id,
-            "jurisdiction": mandate.jurisdiction,
-            "purpose": mandate.purpose,
-            "allowed_data_scopes": sorted(mandate.allowed_data_scopes),
-            "valid_from": mandate.valid_from,
-            "expires_at": mandate.expires_at,
-            "issuer_id": mandate.issuer_id,
-        })
-
-    @classmethod
-    def request_payload(cls, request: AccessRequest) -> bytes:
-        mandate = request.mandate
-        return cls._canonical({
+    def digest(request: InstitutionalRequest) -> str:
+        if not isinstance(request, InstitutionalRequest):
+            raise TypeError("invalid_institutional_request")
+        payload = {
             "request_id": request.request_id,
-            "mandate_digest": hashlib.sha256(cls.mandate_payload(mandate)).hexdigest(),
+            "institution_id": request.institution_id,
             "jurisdiction": request.jurisdiction,
             "purpose": request.purpose,
-            "data_scopes": sorted(request.data_scopes),
+            "requested_scopes": list(request.requested_scopes),
             "mode": request.mode.value if isinstance(request.mode, AccessMode) else str(request.mode),
             "created_at": request.created_at,
-            "output_limit": request.output_limit,
-        })
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
-    @classmethod
-    def request_digest(cls, request: AccessRequest) -> str:
-        return hashlib.sha256(cls.request_payload(request)).hexdigest()
-
-    @staticmethod
-    def _valid_text(value: object, limit: int = 256) -> bool:
-        if not isinstance(value, str) or not value.strip():
-            return False
-        try:
-            return len(value.encode("utf-8")) <= limit
-        except UnicodeError:
-            return False
-
-    @staticmethod
-    def _valid_time(value: object) -> bool:
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
-            return False
-        try:
-            return math.isfinite(float(value))
-        except (OverflowError, TypeError, ValueError):
-            return False
-
-    def evaluate(self, request: AccessRequest, approvals: tuple[Approval, ...]) -> AccessDecision:
+    def evaluate(
+        self,
+        request: InstitutionalRequest,
+        mandate: InstitutionalMandate,
+        approvals: tuple[InstitutionalApproval, ...],
+        *,
+        now: float,
+    ) -> AccessDecision:
         digest = ""
-        mode = request.mode if isinstance(request, AccessRequest) and isinstance(request.mode, AccessMode) else None
-        if isinstance(request, AccessRequest):
-            try:
-                digest = self.request_digest(request)
-            except (TypeError, ValueError, AttributeError):
-                pass
-
-        def deny(reason: str) -> AccessDecision:
-            return AccessDecision(False, reason, digest, mode, (), ())
-
-        if not isinstance(request, AccessRequest) or not isinstance(request.mandate, Mandate):
-            return deny("invalid_request")
-        mandate = request.mandate
-        if mode is None:
-            return deny("unsupported_access_mode")
-        if not all(self._valid_text(value) for value in (
-            request.request_id, request.jurisdiction, request.purpose,
-            mandate.mandate_id, mandate.case_id, mandate.jurisdiction,
-            mandate.purpose, mandate.issuer_id,
-        )):
-            return deny("invalid_request_fields")
-        if not isinstance(request.data_scopes, tuple) or not request.data_scopes or len(request.data_scopes) > MAX_DATA_SCOPES or any(
-            not self._valid_text(scope) for scope in request.data_scopes
-        ) or len(set(request.data_scopes)) != len(request.data_scopes):
-            return deny("invalid_data_scopes")
-        if not isinstance(mandate.allowed_data_scopes, tuple) or not mandate.allowed_data_scopes or len(mandate.allowed_data_scopes) > MAX_DATA_SCOPES or any(
-            not self._valid_text(scope) for scope in mandate.allowed_data_scopes
-        ) or len(set(mandate.allowed_data_scopes)) != len(mandate.allowed_data_scopes):
-            return deny("invalid_mandate_scopes")
-        if not self._valid_time(request.created_at) or not self._valid_time(mandate.valid_from) or not self._valid_time(mandate.expires_at):
-            return deny("invalid_time")
+        required = self.approval_threshold
         try:
-            now = self._clock()
-        except Exception:
-            return deny("clock_unavailable")
-        if not self._valid_time(now):
-            return deny("invalid_clock")
-        if mandate.valid_from >= mandate.expires_at or request.created_at < mandate.valid_from or request.created_at >= mandate.expires_at:
-            return deny("mandate_not_valid_at_request_time")
-        if now < mandate.valid_from or now >= mandate.expires_at:
-            return deny("mandate_expired_or_not_yet_valid")
-        if request.jurisdiction != mandate.jurisdiction:
-            return deny("jurisdiction_mismatch")
-        if request.purpose != mandate.purpose:
-            return deny("purpose_mismatch")
-        if not set(request.data_scopes).issubset(set(mandate.allowed_data_scopes)):
-            return deny("scope_exceeds_mandate")
-        if isinstance(request.output_limit, bool) or not isinstance(request.output_limit, int) or not 1 <= request.output_limit <= min(self._max_output_limit, MODE_OUTPUT_LIMITS[mode]):
-            return deny("output_limit_exceeded")
-        if not isinstance(mandate.signature, bytes) or not mandate.signature:
-            return deny("unsigned_mandate")
-        try:
-            if self._verifier.verify_mandate(mandate.issuer_id, self.mandate_payload(mandate), mandate.signature) is not True:
-                return deny("invalid_mandate_signature")
-        except Exception:
-            return deny("mandate_verification_unavailable")
-
-        if not isinstance(approvals, tuple) or len(approvals) < self._required_approvals:
-            return deny("insufficient_approvals")
-        if len(approvals) > MAX_APPROVALS:
-            return deny("approval_limit_exceeded")
-        required_roles = set(self._required_roles)
-        if mode is AccessMode.SUPERVISED:
-            required_roles.add("independent_supervisor")
-        seen_ids: set[str] = set()
-        seen_domains: set[str] = set()
-        seen_roles: set[str] = set()
-        for approval in approvals:
-            if not isinstance(approval, Approval):
-                return deny("invalid_approval")
-            if (
-                not self._valid_text(approval.approver_id)
-                or not self._valid_text(approval.role)
-                or not self._valid_time(approval.issued_at)
-                or not isinstance(approval.signature, bytes) or not approval.signature
-                or approval.request_digest != digest
+            digest = self.digest(request)
+            if not isinstance(now, (int, float)) or isinstance(now, bool) or not math.isfinite(float(now)):
+                return AccessDecision(False, "invalid_clock", digest, required)
+            if not all(isinstance(x, str) and x.strip() for x in (
+                request.request_id, request.institution_id, request.jurisdiction, request.purpose
+            )):
+                return AccessDecision(False, "invalid_request_fields", digest, required)
+            if not isinstance(request.mode, AccessMode) or not request.requested_scopes:
+                return AccessDecision(False, "invalid_request_scope_or_mode", digest, required)
+            if len(set(request.requested_scopes)) != len(request.requested_scopes) or any(
+                not isinstance(scope, str) or not scope.strip() for scope in request.requested_scopes
             ):
-                return deny("approval_binding_invalid")
-            trusted = self._trusted_approvers.get(approval.approver_id)
-            if trusted is None:
-                return deny("untrusted_approver")
-            domain, trusted_role = trusted
-            if approval.role != trusted_role or approval.role not in required_roles:
-                return deny("approver_role_mismatch")
-            if approval.approver_id in seen_ids or domain in seen_domains or approval.role in seen_roles:
-                return deny("approver_independence_violation")
-            if approval.issued_at > now or approval.issued_at < request.created_at or approval.issued_at >= mandate.expires_at:
-                return deny("approval_outside_validity_window")
-            payload = self._canonical({
-                "approver_id": approval.approver_id,
-                "request_digest": digest,
-                "role": approval.role,
-                "issued_at": approval.issued_at,
-            })
+                return AccessDecision(False, "invalid_request_scopes", digest, required)
+            if (
+                not isinstance(request.created_at, (int, float))
+                or isinstance(request.created_at, bool)
+                or not math.isfinite(float(request.created_at))
+                or request.created_at > now
+                or now - request.created_at > self.max_request_age
+            ):
+                return AccessDecision(False, "request_expired_or_future", digest, required)
+            if not isinstance(mandate, InstitutionalMandate):
+                return AccessDecision(False, "mandate_required", digest, required)
+            if (
+                not mandate.mandate_id or not mandate.institution_id
+                or not isinstance(mandate.signature, bytes) or not mandate.signature
+                or not mandate.permitted_scopes
+                or any(not isinstance(scope, str) or not scope.strip() for scope in mandate.permitted_scopes)
+                or mandate.institution_id != request.institution_id
+                or mandate.jurisdiction != request.jurisdiction
+                or mandate.purpose != request.purpose
+                or not set(request.requested_scopes).issubset(set(mandate.permitted_scopes))
+                or not isinstance(mandate.expires_at, (int, float))
+                or isinstance(mandate.expires_at, bool)
+                or not math.isfinite(float(mandate.expires_at))
+                or now >= mandate.expires_at
+            ):
+                return AccessDecision(False, "mandate_scope_or_validity_mismatch", digest, required)
             try:
-                if self._verifier.verify_approval(approval.approver_id, payload, approval.signature) is not True:
-                    return deny("invalid_approval_signature")
+                if not self._mandate_verifier(mandate):
+                    return AccessDecision(False, "mandate_signature_invalid", digest, required)
             except Exception:
-                return deny("approval_verification_unavailable")
-            seen_ids.add(approval.approver_id)
-            seen_domains.add(domain)
-            seen_roles.add(approval.role)
-        if not required_roles.issubset(seen_roles) or len(seen_ids) < self._required_approvals:
-            return deny("independent_approval_quorum_not_met")
-        return AccessDecision(True, "authorized_plan_only", digest, mode, tuple(sorted(request.data_scopes)), tuple(sorted(seen_domains)))
+                return AccessDecision(False, "mandate_verifier_failed", digest, required)
+            if request.mode is AccessMode.SUPERVISED_RECONSTRUCTION:
+                required += self.supervisor_threshold
+            if not isinstance(approvals, tuple) or len(approvals) < required:
+                return AccessDecision(False, "approval_threshold_not_met", digest, required)
+            approver_ids: set[str] = set()
+            approval_ids: set[str] = set()
+            supervisor_ids: set[str] = set()
+            for approval in approvals:
+                if not isinstance(approval, InstitutionalApproval):
+                    return AccessDecision(False, "invalid_approval", digest, required)
+                if (
+                    not approval.approver_id or not approval.approval_id
+                    or approval.role not in ("approver", "independent_supervisor")
+                    or not isinstance(approval.signature, bytes) or not approval.signature
+                    or approval.approver_id in approver_ids or approval.approval_id in approval_ids
+                    or approval.request_digest != digest
+                    or not isinstance(approval.expires_at, (int, float))
+                    or isinstance(approval.expires_at, bool)
+                    or not math.isfinite(float(approval.expires_at))
+                    or now >= approval.expires_at
+                ):
+                    return AccessDecision(False, "approval_binding_or_expiry_invalid", digest, required)
+                try:
+                    if not self._approval_verifier(approval):
+                        return AccessDecision(False, "approval_signature_invalid", digest, required)
+                except Exception:
+                    return AccessDecision(False, "approval_verifier_failed", digest, required)
+                approver_ids.add(approval.approver_id)
+                approval_ids.add(approval.approval_id)
+                if approval.role == "independent_supervisor":
+                    supervisor_ids.add(approval.approver_id)
+            if (
+                request.mode is AccessMode.SUPERVISED_RECONSTRUCTION
+                and len(supervisor_ids) < self.supervisor_threshold
+            ):
+                return AccessDecision(False, "independent_supervisor_threshold_not_met", digest, required)
+            return AccessDecision(True, "policy_authorized_only_no_data_released", digest, required)
+        except (TypeError, ValueError, AttributeError, OverflowError):
+            return AccessDecision(False, "malformed_request", digest, required)
