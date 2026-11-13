@@ -208,17 +208,26 @@ class RuntimeEngine:
             for item in self._scheduler.schedule(tuple(steps))
         )
 
-        plan_digest = _digest([
-            {
-                "step_id": step.step_id,
-                "action_type": step.action_type,
-                "target": step.target,
-                "parameters": dict(step.parameters),
-                "dependencies": sorted(step.dependencies),
-                "risk_class": step.risk_class,
-            }
-            for step in sorted(ordered, key=lambda item: item.step_id)
-        ])
+        try:
+            plan_digest = _digest([
+                {
+                    "step_id": step.step_id,
+                    "action_type": step.action_type,
+                    "target": step.target,
+                    "parameters": dict(step.parameters),
+                    "dependencies": sorted(step.dependencies),
+                    "risk_class": step.risk_class,
+                }
+                for step in sorted(ordered, key=lambda item: item.step_id)
+            ])
+        except (TypeError, ValueError, OverflowError):
+            return self._result(
+                lifecycle,
+                ExecutionStatus.REJECTED,
+                (),
+                (),
+                "plan_digest_invalid",
+            )
 
         attestations: list[Attestation] = []
         outputs: list[Any] = []
