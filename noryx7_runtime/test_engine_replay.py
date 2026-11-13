@@ -48,9 +48,9 @@ def _authorization_replay_token(envelope):
     return bytes.fromhex(hashlib.sha256(encoded).hexdigest())
 
 
-def test_runtime_rejects_reuse_of_the_same_high_risk_authorization():
+def test_runtime_rejects_reuse_of_the_same_high_risk_authorization(tmp_path):
     authority, provider = _authority_and_proof_provider()
-    guard = AuthorizationReplayGuard()
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-replay-1.sqlite3"))
     calls = []
     engine = RuntimeEngine(
         multi_auth_authority=authority,
@@ -72,9 +72,9 @@ def test_runtime_rejects_reuse_of_the_same_high_risk_authorization():
     assert guard.consumed_count == 1
 
 
-def test_replay_guard_tracks_the_signed_action_statement_not_attempt_nonce():
+def test_replay_guard_tracks_the_signed_action_statement_not_attempt_nonce(tmp_path):
     authority, provider = _authority_and_proof_provider()
-    guard = AuthorizationReplayGuard()
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-replay-2.sqlite3"))
     calls = []
     engine = RuntimeEngine(
         multi_auth_authority=authority,
