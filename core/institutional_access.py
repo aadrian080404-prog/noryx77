@@ -37,6 +37,7 @@ class InstitutionalApproval:
     request_digest: str
     expires_at: float
     signature: bytes
+    role: str = "approver"
 
 
 @dataclass(frozen=True)
@@ -123,12 +124,22 @@ class InstitutionalAccessPolicy:
                 not isinstance(scope, str) or not scope.strip() for scope in request.requested_scopes
             ):
                 return AccessDecision(False, "invalid_request_scopes", digest, required)
-            if request.created_at > now or now - request.created_at > self.max_request_age:
+            if (
+                not isinstance(request.created_at, (int, float))
+                or isinstance(request.created_at, bool)
+                or not math.isfinite(float(request.created_at))
+                or request.created_at > now
+                or now - request.created_at > self.max_request_age
+            ):
                 return AccessDecision(False, "request_expired_or_future", digest, required)
             if not isinstance(mandate, InstitutionalMandate):
                 return AccessDecision(False, "mandate_required", digest, required)
             if (
-                mandate.institution_id != request.institution_id
+                not mandate.mandate_id or not mandate.institution_id
+                or not isinstance(mandate.signature, bytes) or not mandate.signature
+                or not mandate.permitted_scopes
+                or any(not isinstance(scope, str) or not scope.strip() for scope in mandate.permitted_scopes)
+                or mandate.institution_id != request.institution_id
                 or mandate.jurisdiction != request.jurisdiction
                 or mandate.purpose != request.purpose
                 or not set(request.requested_scopes).issubset(set(mandate.permitted_scopes))
@@ -149,11 +160,14 @@ class InstitutionalAccessPolicy:
                 return AccessDecision(False, "approval_threshold_not_met", digest, required)
             approver_ids: set[str] = set()
             approval_ids: set[str] = set()
+            supervisor_ids: set[str] = set()
             for approval in approvals:
                 if not isinstance(approval, InstitutionalApproval):
                     return AccessDecision(False, "invalid_approval", digest, required)
                 if (
                     not approval.approver_id or not approval.approval_id
+                    or approval.role not in ("approver", "independent_supervisor")
+                    or not isinstance(approval.signature, bytes) or not approval.signature
                     or approval.approver_id in approver_ids or approval.approval_id in approval_ids
                     or approval.request_digest != digest
                     or not isinstance(approval.expires_at, (int, float))
@@ -169,6 +183,13 @@ class InstitutionalAccessPolicy:
                     return AccessDecision(False, "approval_verifier_failed", digest, required)
                 approver_ids.add(approval.approver_id)
                 approval_ids.add(approval.approval_id)
+                if approval.role == "independent_supervisor":
+                    supervisor_ids.add(approval.approver_id)
+            if (
+                request.mode is AccessMode.SUPERVISED_RECONSTRUCTION
+                and len(supervisor_ids) < self.supervisor_threshold
+            ):
+                return AccessDecision(False, "independent_supervisor_threshold_not_met", digest, required)
             return AccessDecision(True, "policy_authorized_only_no_data_released", digest, required)
         except (TypeError, ValueError, AttributeError):
             return AccessDecision(False, "malformed_request", digest, required)
