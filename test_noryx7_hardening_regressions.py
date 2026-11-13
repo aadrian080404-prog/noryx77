@@ -144,7 +144,7 @@ def test_generated_campaign_reports_its_actual_evidence_scope():
         lambda: run_campaign(1, True),
         lambda: run_campaign(1, 100, shards="1"),
         lambda: run_campaign(1, 100, shard_index=True),
-        lambda: run_campaign(1, 1_000_001),
+        lambda: run_campaign(1, 10_000_001),
     ],
 )
 def test_generated_campaign_rejects_invalid_bounds_and_boolean_integers(call):

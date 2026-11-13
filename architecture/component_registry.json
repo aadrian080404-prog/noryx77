@@ -1,0 +1,390 @@
+{
+  "schema_version": 1,
+  "title": "NORYX7 architecture component and evidence registry",
+  "updated": "2026-11-13",
+  "lifecycle": [
+    "specified",
+    "generated",
+    "implemented",
+    "integrated",
+    "tested",
+    "independently_verified",
+    "production_qualified"
+  ],
+  "rules": {
+    "state_is_per_component": true,
+    "domain_state_is_summary_only": true,
+    "source_presence_is_not_implementation_proof": true,
+    "test_filename_is_not_test_coverage_proof": true,
+    "green_ci_is_not_independent_security_certification": true,
+    "evidence_must_bind_exact_commit": true
+  },
+  "domains": [
+    {
+      "id": "A_foundation_contracts",
+      "scope": "Canonical types, schemas, proofs and serialization",
+      "depends_on": [],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/contracts.py",
+        "jarvis/core/contracts.py",
+        "noryx7_runtime/contracts.py"
+      ],
+      "gaps": [
+        "One canonical cross-runtime contract registry",
+        "Schema compatibility and migration matrix",
+        "Independent proof verifier"
+      ]
+    },
+    {
+      "id": "B_identity_authorization",
+      "scope": "Principal identity, trust roots, capabilities, grants and replay protection",
+      "depends_on": [
+        "A_foundation_contracts"
+      ],
+      "current_state": "implemented_partial_verification",
+      "evidence": [
+        "core/identity.py",
+        "core/actions.py",
+        "core/authorization_replay.py",
+        "core/multiauth.py",
+        "core/key_lifecycle.py"
+      ],
+      "gaps": [
+        "Complete durable identity lifecycle",
+        "Revocation propagation",
+        "Cross-process race and rollback tests",
+        "Independent verifier identity registry"
+      ]
+    },
+    {
+      "id": "C_cryptography_privacy",
+      "scope": "Cryptographic primitives, key custody, privacy and data boundaries",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/crypto.py",
+        "core/secure_channel.py",
+        "core/secure_storage.py",
+        "core/secure_data_plane.py"
+      ],
+      "gaps": [
+        "Production KMS/HSM",
+        "Key rotation and recovery",
+        "PQC end-to-end migration",
+        "External trust-root operations"
+      ]
+    },
+    {
+      "id": "D_state_persistence",
+      "scope": "Authenticated journal, durable runtime state, anti-rollback and recovery",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "C_cryptography_privacy"
+      ],
+      "current_state": "implemented_partial_verification",
+      "evidence": [
+        "core/state_journal.py",
+        "core/journal_integrity.py",
+        "noryx7_runtime/state.py",
+        "noryx7_runtime/recovery.py"
+      ],
+      "gaps": [
+        "Unified core/runtime journal semantics",
+        "External monotonic anchor transaction protocol",
+        "Crash/fault injection across commit boundaries",
+        "Runtime journal durability"
+      ]
+    },
+    {
+      "id": "E_memory_fabric",
+      "scope": "Memory L0-L5, provenance, encrypted persistence and replication",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "C_cryptography_privacy",
+        "D_state_persistence"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/memory.py",
+        "core/memory_hierarchy.py",
+        "core/secure_memory.py"
+      ],
+      "gaps": [
+        "Durable encrypted distributed storage",
+        "Tenant isolation and conflict resolution",
+        "Retention/deletion and disaster recovery"
+      ]
+    },
+    {
+      "id": "F_cognition_hypersynth",
+      "scope": "HYPERSYNTH reasoning, context, agents, perception and cognitive orchestration",
+      "depends_on": [
+        "A_foundation_contracts",
+        "E_memory_fabric"
+      ],
+      "current_state": "implemented_partial_integration",
+      "evidence": [
+        "core/hypersynth.py",
+        "core/reasoning.py",
+        "core/agent_fabric.py",
+        "core/user_understanding.py"
+      ],
+      "gaps": [
+        "End-to-end verified cognitive loop",
+        "Evidence-bound tool outcomes",
+        "Measured uncertainty and calibration"
+      ]
+    },
+    {
+      "id": "G_planning_execution",
+      "scope": "TaskGraph, planning, scheduling, execution and idempotency",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "D_state_persistence",
+        "F_cognition_hypersynth"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/planning.py",
+        "core/orchestration.py",
+        "core/execution_fabric.py",
+        "noryx7_runtime/engine.py",
+        "noryx7_runtime/scheduler.py"
+      ],
+      "gaps": [
+        "Durable DAG transitions",
+        "Cancellation and uncertain-outcome recovery",
+        "Unified executor/journal path"
+      ]
+    },
+    {
+      "id": "H_metacognition_learning",
+      "scope": "Metacognitive challenge, evaluation, calibration and bounded learning",
+      "depends_on": [
+        "A_foundation_contracts",
+        "D_state_persistence",
+        "F_cognition_hypersynth",
+        "G_planning_execution"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/metacognition.py",
+        "core/metacognitive_challenge.py",
+        "core/self_improvement.py",
+        "core/evaluation_campaign.py"
+      ],
+      "gaps": [
+        "Independent outcome evidence",
+        "Persistent bounded learning",
+        "Rollback and approval for policy-affecting adaptation"
+      ]
+    },
+    {
+      "id": "I_runtime_assurance",
+      "scope": "Runtime policy, sandbox, supervision, cancellation and resource assurance",
+      "depends_on": [
+        "B_identity_authorization",
+        "D_state_persistence",
+        "G_planning_execution"
+      ],
+      "current_state": "implemented_partial_verification",
+      "evidence": [
+        "core/runtime.py",
+        "core/sandbox.py",
+        "core/supervisor.py",
+        "ecosystem/completeness.py"
+      ],
+      "gaps": [
+        "Hard cancellation of blocked executor",
+        "Independent signed verifier receipts",
+        "Production isolation and recovery qualification"
+      ]
+    },
+    {
+      "id": "J_adversarial_defense",
+      "scope": "Red/blue scenarios, threat simulation, defense evaluation and regression campaigns",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "D_state_persistence",
+        "I_runtime_assurance"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/adversarial.py",
+        "core/adversarial_game.py",
+        "core/adversarial_intelligence.py",
+        "core/scenario_matrix.py",
+        "tests/million_scale_campaign.py"
+      ],
+      "gaps": [
+        "Execute 1M and 10M campaigns",
+        "Independent agent processes/models",
+        "Live sandbox evidence and mutation/fault campaigns"
+      ]
+    },
+    {
+      "id": "K_surf_reverse_engineering",
+      "scope": "Authorized static/dynamic system understanding and reverse engineering",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "I_runtime_assurance",
+        "J_adversarial_defense"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/surf_contracts.py",
+        "core/surf_engine.py",
+        "docs/SURF_ARCHITECTURE.md"
+      ],
+      "gaps": [
+        "Authorized live observation adapters",
+        "Function/call/data-flow graph",
+        "Sandbox receipts and independent findings validation"
+      ]
+    },
+    {
+      "id": "L_deception_moving_target",
+      "scope": "Honeytokens, decoys, deception telemetry and moving-target defense",
+      "depends_on": [
+        "B_identity_authorization",
+        "I_runtime_assurance",
+        "J_adversarial_defense"
+      ],
+      "current_state": "specified_not_operational",
+      "evidence": [
+        "docs/INTEGRATED_SECURITY_WORKSTREAMS.md",
+        "core/defense.py"
+      ],
+      "gaps": [
+        "Isolated decoy service",
+        "Deception event provenance",
+        "Safe rotation and containment tests"
+      ]
+    },
+    {
+      "id": "M_osint_intelligence",
+      "scope": "External intelligence collection, provenance, corroboration and privacy",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "C_cryptography_privacy"
+      ],
+      "current_state": "specified_not_operational",
+      "evidence": [
+        "docs/THREAT_NATIVE_INTELLIGENCE.md"
+      ],
+      "gaps": [
+        "Lawful source adapters",
+        "Freshness/corroboration engine",
+        "Privacy and false-positive controls"
+      ]
+    },
+    {
+      "id": "N_communications_distributed",
+      "scope": "Secure communications, mesh, edge/cloud and distributed coordination",
+      "depends_on": [
+        "B_identity_authorization",
+        "C_cryptography_privacy",
+        "D_state_persistence",
+        "I_runtime_assurance"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "core/distributed.py",
+        "core/secure_channel.py",
+        "core/secure_data_plane.py",
+        "ecosystem/global_fabric.py",
+        "ecosystem/global_scale.py"
+      ],
+      "gaps": [
+        "Live node enrollment and discovery",
+        "Partition/consistency/recovery tests",
+        "Production transport and trust management"
+      ]
+    },
+    {
+      "id": "O_financial_institutional",
+      "scope": "Payments, ledgers, institutional access and controlled data release",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "C_cryptography_privacy",
+        "D_state_persistence",
+        "Q_governance_operations"
+      ],
+      "current_state": "policy_foundation_only",
+      "evidence": [
+        "core/institutional_access.py"
+      ],
+      "gaps": [
+        "Production payment/ledger rails",
+        "Settlement and reconciliation",
+        "Institutional data-release service",
+        "Legal and independent audit"
+      ]
+    },
+    {
+      "id": "P_device_hardware_energy",
+      "scope": "Browser, device enrollment, hardware trust, edge devices and energy",
+      "depends_on": [
+        "B_identity_authorization",
+        "C_cryptography_privacy",
+        "I_runtime_assurance",
+        "N_communications_distributed"
+      ],
+      "current_state": "partial_foundation",
+      "evidence": [
+        "noryx-browser/",
+        "android/",
+        "ios/",
+        "core/device.py",
+        "core/secure_boot.py"
+      ],
+      "gaps": [
+        "Device fleet attestation",
+        "Secure update and recovery chain",
+        "Hardware-backed adversarial validation",
+        "Energy/thermal orchestration"
+      ]
+    },
+    {
+      "id": "Q_governance_operations",
+      "scope": "Governance, audit, operations, incident response and release control",
+      "depends_on": [
+        "A_foundation_contracts",
+        "B_identity_authorization",
+        "C_cryptography_privacy",
+        "D_state_persistence"
+      ],
+      "current_state": "specified_partial_controls",
+      "evidence": [
+        "SECURITY.md",
+        "CODEOWNERS",
+        "gateway/",
+        "docs/IMPLEMENTATION_AUDIT_2026-11-13.md"
+      ],
+      "gaps": [
+        "Operational governance roles and trust roots",
+        "Incident-response exercises",
+        "Independent audit and release qualification"
+      ]
+    }
+  ],
+  "domain_status_vocabulary": [
+    "partial_foundation",
+    "implemented_partial_verification",
+    "implemented_partial_integration",
+    "specified_not_operational",
+    "policy_foundation_only",
+    "specified_partial_controls"
+  ]
+}

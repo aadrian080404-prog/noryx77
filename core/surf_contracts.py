@@ -216,7 +216,7 @@ class Experiment:
                 and _text(self.objective)
                 and isinstance(self.variables, Mapping)
                 and len(self.variables) <= MAX_VARIABLES
-                and all(_text(key, MAX_ID_BYTES) and _safe_value(value) for key, value in self.variables.items())
+                and _safe_value(self.variables)
                 and isinstance(self.authorized, bool)
                 and isinstance(self.sandboxed, bool)
                 and _receipt(self.authorization_receipt)

@@ -56,3 +56,19 @@ def test_invalid_campaign_budget_fails_closed() -> None:
 def test_invalid_shard_fails_closed() -> None:
     with pytest.raises(ValueError):
         run_campaign(1, 10, shard_index=10, shards=10)
+
+
+
+def test_campaign_reports_complete_entity_power_cross_matrix():
+    result = run_campaign(20261113, 10_000)
+    matrix = result["entity_power_counts"]
+    assert len(matrix) == 9 * 7
+    assert sum(matrix.values()) == 10_000
+    assert max(matrix.values()) - min(matrix.values()) <= 1
+    assert sum(result["entity_counts"].values()) == 10_000
+    assert sum(result["power_counts"].values()) == 10_000
+
+
+def test_campaign_shard_count_preserves_all_entity_power_strata():
+    with pytest.raises(ValueError, match="shard_count_must_be_coprime_with_strata"):
+        run_campaign(1, 100, shard_index=0, shards=7)
