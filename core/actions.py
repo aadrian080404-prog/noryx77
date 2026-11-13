@@ -257,13 +257,19 @@ class ActionGate:
                 return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure"))
             evaluation_action = replace(action, requires_authorization=False)
         try:
-            policy_allowed = self.policy.allows(evaluation_action)
+            policy_allowed = self.policy.allows(
+                evaluation_action,
+                authorization_verified=authorization_pending,
+            )
         except Exception:
             return ActionDecision(False, "policy evaluation failure", VerificationResult(False, "action_gate", "policy_evaluation_failure"))
         if not policy_allowed:
             return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy"))
         try:
-            security_allowed = self.security.allows(evaluation_action)
+            security_allowed = self.security.allows(
+                evaluation_action,
+                authorization_verified=authorization_pending,
+            )
         except Exception:
             return ActionDecision(False, "security evaluation failure", VerificationResult(False, "action_gate", "security_evaluation_failure"))
         if not security_allowed:
@@ -310,9 +316,9 @@ class ActionGate:
         try:
             if not self.authorization.verify(action, execution_id, grant, principal=principal):
                 return ActionDecision(False, "invalid authorization grant", VerificationResult(False, "action_gate", "invalid_authorization_grant")), None
-            if not self.policy.allows(evaluation_action):
+            if not self.policy.allows(evaluation_action, authorization_verified=True):
                 return ActionDecision(False, "policy denied", VerificationResult(False, "action_gate", "policy")), None
-            if not self.security.allows(evaluation_action):
+            if not self.security.allows(evaluation_action, authorization_verified=True):
                 return ActionDecision(False, "security boundary denied", VerificationResult(False, "action_gate", "security")), None
         except Exception:
             return ActionDecision(False, "authorization verification failure", VerificationResult(False, "action_gate", "authorization_verification_failure")), None
