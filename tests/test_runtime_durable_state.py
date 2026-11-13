@@ -24,6 +24,7 @@ def make_attestation():
         verified=True,
         detail="verified",
         previous_attestation_digest="0" * 64,
+        runtime_id="runtime-1",
     )
 
 
@@ -33,6 +34,7 @@ def open_journal(path):
         integrity_key=KEY,
         key_id=KEY_ID,
         require_signatures=False,
+        runtime_id="runtime-1",
     )
 
 
