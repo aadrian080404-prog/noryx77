@@ -12,6 +12,7 @@ from core.policy import PolicyEngine
 from core.security import SecurityBoundary
 from core.limits import RuntimeLimits
 from core.actions import ActionGate, AuthorizationAuthority
+from core.authorization_replay import AuthorizationReplayGuard
 from core.tools import ToolExecutor
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from noryx7_runtime.engine import RuntimeEngine
@@ -24,7 +25,7 @@ from core.http_provider import HttpProviderConfig, build_http_provider
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
-    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None):
+    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, authorization_replay_path=None):
         self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store or JarvisStateStore(); self.recovery = recovery or RecoveryController()
 
         # Canonical NORYX7 execution infrastructure.
@@ -43,9 +44,15 @@ class JarvisRuntime:
             AgentIdentityAuthority.generate("jarvis")
         )
         self.identity_registry.register(self.jarvis_identity)
+        # Privileged actions stay disabled unless the host supplies a persistent
+        # replay database. Never silently promote an in-memory guard to production.
+        self.authorization_replay_guard = AuthorizationReplayGuard(
+            path=authorization_replay_path,
+        )
         self.authorization = AuthorizationAuthority(
             secrets.token_bytes(32),
             identity_registry=self.identity_registry,
+            replay_guard=self.authorization_replay_guard,
         )
 
         self.core_action_gate = ActionGate(
