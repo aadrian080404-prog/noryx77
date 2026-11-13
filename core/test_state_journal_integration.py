@@ -3,13 +3,15 @@ import hashlib
 from .state import NORYXState, StateStore
 from .state_journal import StateJournal
 
+TEST_KEY = b"noryx7-test-integrity-key-material-32-bytes"
+
 
 def test_state_store_rehydrates_from_durable_journal(tmp_path):
     path = str(tmp_path / "state.db")
     digest = hashlib.sha256(b"input").hexdigest()
     state = NORYXState(input_digest=digest, goal="goal", confidence=1.0)
 
-    journal = StateJournal(path)
+    journal = StateJournal(path, integrity_key=TEST_KEY, key_id="test-key")
     store = StateStore(journal=journal)
     committed = store.commit(
         state,
