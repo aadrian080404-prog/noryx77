@@ -97,12 +97,15 @@ class SURFEngine:
             or {item.evidence_id: item for item in evidence} != graph_evidence
         ):
             return invalid
-        if not all(isinstance(item, HypothesisRecord) and _well_formed(item) for item in hypotheses):
-            return invalid
-        if not all(isinstance(item, Experiment) and _well_formed(item) for item in experiments):
-            return invalid
-        if not all(isinstance(item, ImprovementCandidate) and _well_formed(item) for item in candidates):
-            return invalid
+        # Malformed claims are ignored, never counted as evidence or trust.
+        valid_hypotheses = tuple(
+            item for item in hypotheses
+            if isinstance(item, HypothesisRecord) and _well_formed(item)
+        )
+        valid_candidates = tuple(
+            item for item in candidates
+            if isinstance(item, ImprovementCandidate) and _well_formed(item)
+        )
 
         verified_evidence_ids = set()
         if self._evidence_verifier is not None:
@@ -113,7 +116,7 @@ class SURFEngine:
         verified_hypotheses = 0
         contradictions = 0
         if self._hypothesis_verifier is not None:
-            for item in hypotheses:
+            for item in valid_hypotheses:
                 if not set(item.evidence_ids) <= verified_evidence_ids:
                     continue
                 if _verified(
@@ -130,9 +133,9 @@ class SURFEngine:
         unknowns = sum(1 for node in graph.nodes if node.state == "unknown")
         unknowns += sum(1 for edge in graph.edges if edge.state == "unknown")
 
-        improvement_ready = bool(candidates) and self._candidate_verifier is not None and self._regression_verifier is not None
+        improvement_ready = bool(valid_candidates) and self._candidate_verifier is not None and self._regression_verifier is not None
         if improvement_ready:
-            for candidate in candidates:
+            for candidate in valid_candidates:
                 if not candidate.verification_receipt or not candidate.regression_receipt:
                     improvement_ready = False
                     break
