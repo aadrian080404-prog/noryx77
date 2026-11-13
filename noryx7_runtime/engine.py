@@ -15,6 +15,7 @@ from .attestation import AttestationSigner, attestation_digest, signed_attestati
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
 from .lifecycle import ExecutionLifecycle
 from .scheduler import Scheduler
+from .state import StateJournal
 
 Executor = Callable[[ActionEnvelope], Any]
 Verifier = Callable[[ActionEnvelope, Any], bool]
