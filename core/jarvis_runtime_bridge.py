@@ -125,7 +125,6 @@ class JarvisRuntimeBridge:
                     "__jarvis_capability": envelope.action_type,
                     "__jarvis_principal_id": request.principal_id,
                 },
-                risk_class=envelope.risk_class,
                 risk_class=registered_risk,
                 requires_authorization=True,
                 execution_id=envelope.execution_id,
