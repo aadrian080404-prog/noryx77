@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import hashlib
 import hmac
 import json
-import math
 from typing import Protocol, Iterable
 
 ZERO_MAC = "0" * 64
@@ -19,10 +18,10 @@ def _hex_digest(value: object) -> bool:
     if not isinstance(value, str) or len(value) != 64:
         return False
     try:
-        bytes.fromhex(value)
+        decoded = bytes.fromhex(value)
     except ValueError:
         return False
-    return True
+    return len(decoded) == 32
 
 
 @dataclass(frozen=True)
