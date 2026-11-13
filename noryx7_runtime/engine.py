@@ -10,6 +10,7 @@ from uuid import uuid4
 from core.authorization_replay import AuthorizationReplayGuard
 from core.identity import AgentIdentity, IdentityRegistry
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof
+from core.observability import EventKind, SecurityEventBus
 from .adapters import ExecutionAdapter
 from .attestation import AttestationSigner, attestation_digest, signed_attestation
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
@@ -41,7 +42,7 @@ class RuntimeResult:
 
 class RuntimeEngine:
     """Operational kernel for the NORYX7 data plane."""
-    def __init__(self, *, max_actions: int = 32, clock: Callable[[], float] = time.monotonic, scheduler: Scheduler | None = None, adapter: ExecutionAdapter | None = None, attestation_signer: AttestationSigner | None = None, identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None, state_journal: StateJournal | None = None, multi_auth_authority: SignedApprovalAuthority | None = None, authorization_provider: AuthorizationProvider | None = None, high_risk_action_types: set[str] | frozenset[str] | None = None, authorization_epoch: int = 0, replay_guard: AuthorizationReplayGuard | None = None, require_authenticated_replay_guard: bool = False, require_durable_state_journal: bool = False) -> None:
+    def __init__(self, *, max_actions: int = 32, clock: Callable[[], float] = time.monotonic, scheduler: Scheduler | None = None, adapter: ExecutionAdapter | None = None, attestation_signer: AttestationSigner | None = None, identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None, state_journal: StateJournal | None = None, multi_auth_authority: SignedApprovalAuthority | None = None, authorization_provider: AuthorizationProvider | None = None, high_risk_action_types: set[str] | frozenset[str] | None = None, authorization_epoch: int = 0, replay_guard: AuthorizationReplayGuard | None = None, require_authenticated_replay_guard: bool = False, require_durable_state_journal: bool = False, security_event_bus: SecurityEventBus | None = None, require_durable_security_events: bool = False) -> None:
         if isinstance(max_actions, bool) or not isinstance(max_actions, int) or max_actions < 0: raise ValueError("max_actions must be a non-negative integer")
         if not callable(clock): raise TypeError("clock must be callable")
         if scheduler is not None and not isinstance(scheduler, Scheduler): raise TypeError("scheduler must be a Scheduler")
@@ -63,6 +64,10 @@ class RuntimeEngine:
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
         if not isinstance(require_authenticated_replay_guard, bool): raise TypeError("require_authenticated_replay_guard must be bool")
         if not isinstance(require_durable_state_journal, bool): raise TypeError("require_durable_state_journal must be bool")
+        if security_event_bus is not None and not isinstance(security_event_bus, SecurityEventBus): raise TypeError("security_event_bus must be a SecurityEventBus")
+        if not isinstance(require_durable_security_events, bool): raise TypeError("require_durable_security_events must be bool")
+        if require_durable_security_events and (security_event_bus is None or not getattr(security_event_bus, "durable", False)):
+            raise ValueError("durable_security_event_bus_required")
         if require_durable_state_journal and (state_journal is None or not getattr(state_journal, "durable", False)):
             raise ValueError("durable_runtime_state_journal_required")
         if require_authenticated_replay_guard:
@@ -79,8 +84,21 @@ class RuntimeEngine:
             if not identity_registry.is_trusted(AgentIdentity(str(adapter.agent_id), public_key)): raise PermissionError("adapter identity is not trusted")
         self._max_actions, self._clock = max_actions, clock; self._scheduler, self._adapter = scheduler or Scheduler(), adapter
         self._attestation_signer, self._identity_registry = attestation_signer, identity_registry; self._state_journal = state_journal; self._runtime_id = runtime_id or uuid4().hex
-        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard; self._require_authenticated_replay_guard = require_authenticated_replay_guard; self._require_durable_state_journal = require_durable_state_journal
+        self._multi_auth_authority, self._authorization_provider = multi_auth_authority, authorization_provider; self._high_risk_action_types = frozenset(high_risk_action_types); self._authorization_epoch = authorization_epoch; self._replay_guard = replay_guard; self._require_authenticated_replay_guard = require_authenticated_replay_guard; self._require_durable_state_journal = require_durable_state_journal; self._security_event_bus = security_event_bus; self._require_durable_security_events = require_durable_security_events
         if state_journal is not None and state_journal.runtime_id not in (None, self._runtime_id): raise ValueError("state journal runtime identity mismatch")
+    def _emit_security_event(self, kind: EventKind, envelope: ActionEnvelope, reason: str, severity: int) -> None:
+        if self._security_event_bus is None:
+            return
+        evidence_digest = _digest({
+            "execution_id": envelope.execution_id,
+            "step_id": envelope.step_id,
+            "action_type": envelope.action_type,
+            "reason": reason,
+        })
+        self._security_event_bus.publish(
+            kind, component="runtime", severity=severity, evidence_digest=evidence_digest
+        )
+
     @property
     def runtime_id(self) -> str: return self._runtime_id
     @staticmethod
@@ -105,6 +123,11 @@ class RuntimeEngine:
     ) -> None:
         if envelope.risk_class != "high" and envelope.action_type not in self._high_risk_action_types:
             return
+
+        if self._require_durable_security_events and (
+            self._security_event_bus is None or not getattr(self._security_event_bus, "durable", False)
+        ):
+            raise PermissionError("durable_security_event_bus_required")
 
         if (
             self._multi_auth_authority is None
@@ -380,6 +403,15 @@ class RuntimeEngine:
                 # Reservation intentionally remains if dispatch/commit has
                 # crossed the side-effect boundary. This is required for
                 # re-execution protection.
+                if self._security_event_bus is not None:
+                    event_kind = EventKind.AUTH_FAILURE if isinstance(exc, PermissionError) else EventKind.PROCESS_ANOMALY
+                    try:
+                        self._emit_security_event(event_kind, envelope, type(exc).__name__, 90 if event_kind is EventKind.AUTH_FAILURE else 70)
+                    except Exception:
+                        return self._result(
+                            lifecycle, ExecutionStatus.FAILED, attestations, outputs,
+                            "security_event_persistence_failed",
+                        )
                 return self._result(
                     lifecycle,
                     ExecutionStatus.FAILED,
@@ -392,6 +424,14 @@ class RuntimeEngine:
             # Verification rejection
             # ----------------------------
             if not verified:
+                if self._security_event_bus is not None:
+                    try:
+                        self._emit_security_event(EventKind.INTEGRITY_VIOLATION, envelope, "result_verification_failed", 85)
+                    except Exception:
+                        return self._result(
+                            lifecycle, ExecutionStatus.FAILED, attestations, outputs,
+                            "security_event_persistence_failed",
+                        )
                 return self._result(
                     lifecycle,
                     ExecutionStatus.REJECTED,
