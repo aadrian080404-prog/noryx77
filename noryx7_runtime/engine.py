@@ -53,15 +53,12 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
-        if high_risk_action_types and replay_guard is None:
-            if (
-                multi_auth_authority is not None
-                and multi_auth_authority.required_threshold == 1
-            ):
-                replay_guard = AuthorizationReplayGuard()
-            else:
-                raise ValueError("high_risk_actions_require_replay_guard")
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
+        if high_risk_action_types:
+            if replay_guard is None:
+                raise ValueError("high_risk_actions_require_replay_guard")
+            if not replay_guard.durable:
+                raise ValueError("high_risk_actions_require_durable_replay_guard")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
