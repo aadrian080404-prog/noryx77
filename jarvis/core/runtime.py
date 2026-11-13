@@ -1,4 +1,5 @@
 import secrets
+import os
 from .contracts import Request, Plan, ActionResult
 from .orchestrator import JarvisOrchestrator
 from .policy import Policy
@@ -12,6 +13,7 @@ from core.policy import PolicyEngine
 from core.security import SecurityBoundary
 from core.limits import RuntimeLimits
 from core.actions import ActionGate, AuthorizationAuthority
+from core.authorization_replay import AuthorizationReplayGuard
 from core.tools import ToolExecutor
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from noryx7_runtime.engine import RuntimeEngine
@@ -24,7 +26,7 @@ from core.http_provider import HttpProviderConfig, build_http_provider
 
 class JarvisRuntime:
     """Bounded JARVIS runtime: propose -> authorize -> reserve -> execute -> verify -> commit -> audit."""
-    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None):
+    def __init__(self, *, orchestrator=None, registry=None, audit=None, state_store=None, recovery=None, authorization_replay_path=None, multi_auth_authority=None, authorization_provider=None, authorization_epoch=0):
         self.orchestrator = orchestrator or JarvisOrchestrator(policy=Policy()); self.audit = audit or AuditLog(); self.state = state_store or JarvisStateStore(); self.recovery = recovery or RecoveryController()
 
         # Canonical NORYX7 execution infrastructure.
@@ -43,9 +45,18 @@ class JarvisRuntime:
             AgentIdentityAuthority.generate("jarvis")
         )
         self.identity_registry.register(self.jarvis_identity)
+        # Privileged actions stay disabled unless the host supplies a persistent
+        # replay database. A configured persistent volume can be supplied by the
+        # explicit argument or deployment environment; never fall back to RAM.
+        if authorization_replay_path is None:
+            authorization_replay_path = os.environ.get("NORYX7_AUTHORIZATION_REPLAY_DB")
+        self.authorization_replay_guard = AuthorizationReplayGuard(
+            path=authorization_replay_path,
+        )
         self.authorization = AuthorizationAuthority(
             secrets.token_bytes(32),
             identity_registry=self.identity_registry,
+            replay_guard=self.authorization_replay_guard,
         )
 
         self.core_action_gate = ActionGate(
@@ -70,7 +81,12 @@ class JarvisRuntime:
         self.provider_execution = ProviderExecutionGateway()
         self.provider_resilience = ResilientProviderExecutor()
         self.registry.register("provider_execute", self._execute_provider_capability)
-        self.runtime_engine = RuntimeEngine()
+        self.runtime_engine = RuntimeEngine(
+            replay_guard=self.authorization_replay_guard,
+            multi_auth_authority=multi_auth_authority,
+            authorization_provider=authorization_provider,
+            authorization_epoch=authorization_epoch,
+        )
         self.execution_traces: dict[str, ExecutionTrace] = {}
         self.system_fabric = CanonicalSystemFabric(
             runtime_engine=self.runtime_engine,
@@ -90,6 +106,10 @@ class JarvisRuntime:
             system_fabric=self.system_fabric,
         )
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
+    def close(self) -> None:
+        """Close the local replay-store connection; its durable records remain on disk."""
+        self.authorization_replay_guard.close()
+
     def _trace_for(self, execution_id: str) -> ExecutionTrace:
         trace = self.execution_traces.get(execution_id)
         if trace is None:

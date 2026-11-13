@@ -1,6 +1,9 @@
 import unittest
+import tempfile
+import os
 
 from .actions import ActionGate, AuthorizationAuthority
+from .authorization_replay import AuthorizationReplayGuard
 from .contracts import ActionSpec
 from .limits import RuntimeLimits
 from .policy import PolicyEngine
@@ -12,7 +15,10 @@ class AuthorizationGrantTests(unittest.TestCase):
     def setUp(self):
         self.now = 100.0
         self.clock = lambda: self.now
-        self.authority = AuthorizationAuthority(b"k" * 32, clock=self.clock)
+        self._replay_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._replay_dir.cleanup)
+        replay = AuthorizationReplayGuard(path=os.path.join(self._replay_dir.name, "grants.sqlite3"))
+        self.authority = AuthorizationAuthority(b"k" * 32, clock=self.clock, replay_guard=replay)
         policy = PolicyEngine()
         security = SecurityBoundary(policy, VerificationEngine())
         self.gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=4), self.authority)

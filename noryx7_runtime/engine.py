@@ -22,6 +22,11 @@ Verifier = Callable[[ActionEnvelope, Any], bool]
 Committer = Callable[[ActionEnvelope, Attestation, Any], None]
 AuthorizationProvider = Callable[[ActionEnvelope, bytes], SignedAuthorizationProof | None]
 _ZERO_DIGEST = "0" * 64
+MANDATORY_HIGH_RISK_ACTION_TYPES = frozenset({
+    "payments", "flights", "insurance", "financial",
+    "execute_external", "publish", "delete_external", "system_change",
+    "jarvis_capability",
+})
 
 def _canonical(value: Any) -> str: return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 def _digest(value: Any) -> str: return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
@@ -53,15 +58,14 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
-        if high_risk_action_types and replay_guard is None:
-            if (
-                multi_auth_authority is not None
-                and multi_auth_authority.required_threshold == 1
-            ):
-                replay_guard = AuthorizationReplayGuard()
-            else:
-                raise ValueError("high_risk_actions_require_replay_guard")
+        custom_high_risk_action_types = frozenset(high_risk_action_types)
+        high_risk_action_types = custom_high_risk_action_types | MANDATORY_HIGH_RISK_ACTION_TYPES
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
+        if custom_high_risk_action_types:
+            if replay_guard is None:
+                raise ValueError("high_risk_actions_require_replay_guard")
+            if not replay_guard.durable:
+                raise ValueError("high_risk_actions_require_durable_replay_guard")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
@@ -92,7 +96,7 @@ class RuntimeEngine:
         action_statement: bytes,
         replay_token: bytes,
     ) -> None:
-        if envelope.action_type not in self._high_risk_action_types:
+        if envelope.risk_class != "high" and envelope.action_type not in self._high_risk_action_types:
             return
 
         if (
@@ -101,8 +105,8 @@ class RuntimeEngine:
         ):
             raise PermissionError("multi_auth_required")
 
-        if self._replay_guard is None:
-            raise PermissionError("replay_guard_required")
+        if self._replay_guard is None or not self._replay_guard.durable:
+            raise PermissionError("durable_replay_guard_required")
 
         try:
             proof = self._authorization_provider(
@@ -125,7 +129,11 @@ class RuntimeEngine:
         ):
             raise PermissionError("authorization_proof_invalid")
 
-        if not self._replay_guard.consume(replay_token):
+        if not self._replay_guard.consume(
+            replay_token,
+            expires_at=proof.expires_at,
+            now=time.time(),
+        ):
             raise PermissionError("authorization_replay_detected")
 
     def execute(
@@ -226,6 +234,7 @@ class RuntimeEngine:
                 plan_step.target,
                 dict(plan_step.parameters),
                 uuid4().hex,
+                plan_step.risk_class,
             )
 
             reservation = None
@@ -240,11 +249,14 @@ class RuntimeEngine:
                         "action_type": envelope.action_type,
                         "target": envelope.target,
                         "parameters": envelope.parameters,
+                        "risk_class": envelope.risk_class,
                         "nonce": envelope.nonce,
                     }
                 )
 
-                # Authorization statement is stable and excludes nonce.
+                # Authorization statement is stable across retries and is the
+                # exact statement signed by the approvers. Replay protection
+                # must consume this identity, not a per-attempt nonce digest.
                 authorization_statement = bytes.fromhex(
                     _digest(
                         {
@@ -254,19 +266,12 @@ class RuntimeEngine:
                             "action_type": envelope.action_type,
                             "target": envelope.target,
                             "parameters": envelope.parameters,
+                            "risk_class": envelope.risk_class,
                         }
                     )
                 )
 
-                # threshold=1 -> concrete action replay identity
-                # threshold>1 -> stable authorization statement replay identity
-                if (
-                    self._multi_auth_authority is None
-                    or self._multi_auth_authority.required_threshold == 1
-                ):
-                    replay_token = bytes.fromhex(action_digest)
-                else:
-                    replay_token = authorization_statement
+                replay_token = authorization_statement
 
                 self._authorize_high_risk(
                     envelope,

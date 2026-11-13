@@ -1,4 +1,5 @@
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import time
 
 from core.authorization_replay import AuthorizationReplayGuard
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
@@ -21,30 +22,32 @@ def authority_and_keys():
     return authority, a, b
 
 
-def proof_provider(a, b, epoch=7, mutate=False, override_epoch=None):
+def proof_provider(a, b, epoch=7, mutate=False, override_epoch=None, expires_in=60):
     def provider(envelope, digest):
         statement = digest[:-1] + bytes([digest[-1] ^ 1]) if mutate else digest
         signed_epoch = epoch if override_epoch is None else override_epoch
+        expires_at = int(time.time()) + expires_in
         return SignedAuthorizationProof(
             action_id=envelope.execution_id,
             epoch=signed_epoch,
             action_statement=statement,
             approvals=(
-                sign_approval("A", a, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement),
-                sign_approval("B", b, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement),
+                sign_approval("A", a, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement, expires_at=expires_at),
+                sign_approval("B", b, action_id=envelope.execution_id, epoch=signed_epoch, action_statement=statement, expires_at=expires_at),
             ),
             threshold=2,
+            expires_at=expires_at,
         )
     return provider
 
 
-def configured_engine(authority, provider, replay_guard=None):
+def configured_engine(authority, provider, replay_guard):
     return RuntimeEngine(
         multi_auth_authority=authority,
         authorization_provider=provider,
         high_risk_action_types={"money.transfer"},
         authorization_epoch=7,
-        replay_guard=replay_guard or AuthorizationReplayGuard(),
+        replay_guard=replay_guard,
     )
 
 
@@ -63,10 +66,10 @@ def test_high_risk_requires_explicit_replay_guard():
         raise AssertionError("high-risk runtime accepted without replay guard")
 
 
-def test_high_risk_valid_multi_auth_is_required_before_executor():
+def test_high_risk_valid_multi_auth_is_required_before_executor(tmp_path):
     authority, a, b = authority_and_keys()
     called = []
-    engine = configured_engine(authority, proof_provider(a, b), AuthorizationReplayGuard())
+    engine = configured_engine(authority, proof_provider(a, b), AuthorizationReplayGuard(path=str(tmp_path / "valid.sqlite3")))
     result = engine.execute(
         Intent("run", "user"),
         [step("money.transfer")],
@@ -78,9 +81,9 @@ def test_high_risk_valid_multi_auth_is_required_before_executor():
     assert called == ["step-1"]
 
 
-def test_high_risk_replay_is_rejected_before_second_side_effect():
+def test_high_risk_replay_is_rejected_before_second_side_effect(tmp_path):
     authority, a, b = authority_and_keys()
-    replay = AuthorizationReplayGuard()
+    replay = AuthorizationReplayGuard(path=str(tmp_path / "replay.sqlite3"))
     provider = proof_provider(a, b)
     engine = configured_engine(authority, provider, replay)
     called = []
@@ -102,10 +105,10 @@ def test_high_risk_replay_is_rejected_before_second_side_effect():
     assert called == ["step-1"]
 
 
-def test_high_risk_missing_proof_fails_before_side_effect():
+def test_high_risk_missing_proof_fails_before_side_effect(tmp_path):
     authority, _, _ = authority_and_keys()
     called = []
-    engine = configured_engine(authority, lambda envelope, digest: None)
+    engine = configured_engine(authority, lambda envelope, digest: None, AuthorizationReplayGuard(path=str(tmp_path / "missing.sqlite3")))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -117,10 +120,10 @@ def test_high_risk_missing_proof_fails_before_side_effect():
     assert called == []
 
 
-def test_high_risk_wrong_signed_statement_fails_before_side_effect():
+def test_high_risk_wrong_signed_statement_fails_before_side_effect(tmp_path):
     authority, a, b = authority_and_keys()
     called = []
-    engine = configured_engine(authority, proof_provider(a, b, mutate=True))
+    engine = configured_engine(authority, proof_provider(a, b, mutate=True), AuthorizationReplayGuard(path=str(tmp_path / "mutate.sqlite3")))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -132,10 +135,10 @@ def test_high_risk_wrong_signed_statement_fails_before_side_effect():
     assert called == []
 
 
-def test_high_risk_wrong_epoch_fails_before_side_effect():
+def test_high_risk_wrong_epoch_fails_before_side_effect(tmp_path):
     authority, a, b = authority_and_keys()
     called = []
-    engine = configured_engine(authority, proof_provider(a, b, override_epoch=6))
+    engine = configured_engine(authority, proof_provider(a, b, override_epoch=6), AuthorizationReplayGuard(path=str(tmp_path / "epoch.sqlite3")))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -147,11 +150,11 @@ def test_high_risk_wrong_epoch_fails_before_side_effect():
     assert called == []
 
 
-def test_revoked_approver_fails_before_side_effect():
+def test_revoked_approver_fails_before_side_effect(tmp_path):
     authority, a, b = authority_and_keys()
     authority.revoke("A")
     called = []
-    engine = configured_engine(authority, proof_provider(a, b))
+    engine = configured_engine(authority, proof_provider(a, b), AuthorizationReplayGuard(path=str(tmp_path / "revoked.sqlite3")))
     result = engine.execute(
         Intent("run", "user"), [step("money.transfer")],
         executor=lambda action: called.append(action.step_id) or "ok",
@@ -172,3 +175,23 @@ def test_non_high_risk_action_remains_compatible_without_multi_auth():
     )
     assert result.status is ExecutionStatus.SUCCEEDED
     assert called == ["step-1"]
+
+
+
+def test_expired_high_risk_proof_fails_before_side_effect(tmp_path):
+    authority, a, b = authority_and_keys()
+    called = []
+    engine = configured_engine(
+        authority,
+        proof_provider(a, b, expires_in=-1),
+        AuthorizationReplayGuard(path=str(tmp_path / "expired.sqlite3")),
+    )
+    result = engine.execute(
+        Intent("run", "user"), [step("money.transfer")],
+        executor=lambda action: called.append(action.step_id) or "ok",
+        verifier=lambda action, output: True,
+        execution_id="exec-expired",
+    )
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "PermissionError"
+    assert called == []

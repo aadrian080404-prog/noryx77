@@ -1,9 +1,9 @@
-"""Deterministic, shardable million-scale NORYX7 verification campaign.
+"""Deterministic, shardable generated-scenario verification campaign.
 
-The campaign generates reproducible scenarios and performs a real architecture
-preflight before spending the configured case budget. It is deliberately biased
-toward boundary/pathological/adversarial/compound cases and refuses to report a
-successful campaign when the requested budget or difficulty coverage is not met.
+The campaign runs a real structural preflight once, then verifies reproducible
+synthetic boundary/pathological/adversarial scenario invariants. It does not
+execute one million live agent/runtime operations; its evidence scope is
+reported explicitly so synthetic coverage is not mistaken for runtime proof.
 """
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from typing import Iterable
 
 DIFFICULTIES = ("trivial", "normal", "boundary", "pathological", "adversarial", "compound")
 _DIFFICULTY_WEIGHTS = (2, 8, 15, 20, 25, 30)
-# Minimum fractions required in every complete campaign. This prevents a biased
-# generator from satisfying the million-case requirement with easy cases only.
+MAX_CAMPAIGN_CASES = 1_000_000
+MAX_SEED = 2**63 - 1
+VERIFICATION_SCOPE = "one_structural_preflight_plus_synthetic_scenario_invariants"
 _MIN_DIFFICULTY_FRACTIONS = {
     "trivial": 0.005,
     "normal": 0.04,
@@ -48,8 +49,11 @@ class Scenario:
 
 def scenario_for(seed: int, case_id: int) -> Scenario:
     """Generate exactly one deterministic scenario from a stable coordinate."""
-    if not isinstance(seed, int) or seed < 0 or not isinstance(case_id, int) or case_id < 0:
-        raise ValueError("seed and case_id must be non-negative integers")
+    if (
+        isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED
+        or isinstance(case_id, bool) or not isinstance(case_id, int) or case_id < 0
+    ):
+        raise ValueError("seed and case_id must be valid non-negative integers")
     rng = random.Random((seed << 32) ^ case_id)
     difficulty = rng.choices(DIFFICULTIES, weights=_DIFFICULTY_WEIGHTS, k=1)[0]
     ranges = {
@@ -104,12 +108,15 @@ def _validate_coverage(counts: dict[str, int], cases: int) -> None:
 
 
 def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1) -> dict[str, object]:
-    if not isinstance(seed, int) or seed < 0 or not isinstance(cases, int) or cases < 1:
-        raise ValueError("seed must be non-negative and cases must be positive")
-    if not isinstance(shard_index, int) or not 0 <= shard_index < shards:
-        raise ValueError("invalid shard_index")
-    if not isinstance(shards, int) or not 1 <= shards <= cases:
+    if (
+        isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED
+        or isinstance(cases, bool) or not isinstance(cases, int) or not 1 <= cases <= MAX_CAMPAIGN_CASES
+    ):
+        raise ValueError("seed must be bounded and cases must be between 1 and 1000000")
+    if isinstance(shards, bool) or not isinstance(shards, int) or not 1 <= shards <= cases:
         raise ValueError("shards must be between 1 and cases")
+    if isinstance(shard_index, bool) or not isinstance(shard_index, int) or not 0 <= shard_index < shards:
+        raise ValueError("invalid shard_index")
 
     started = time.monotonic()
     _preflight()
@@ -138,7 +145,8 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
     # still required to execute its exact deterministic allocation.
     if shards == 1:
         _validate_coverage(counts, cases)
-    if executed != ((cases - 1 - shard_index) // shards + 1):
+    expected = ((cases - 1 - shard_index) // shards + 1)
+    if executed != expected:
         raise RuntimeError("campaign_case_budget_not_reached")
     if failure_cases:
         raise RuntimeError(f"campaign_failures:{failure_cases[:20]}")
@@ -152,6 +160,7 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         "difficulty_counts": counts,
         "first_digest": first_digest,
         "last_digest": last_digest,
+        "verification_scope": VERIFICATION_SCOPE,
         "duration_seconds": round(time.monotonic() - started, 6),
         "status": "passed",
     }

@@ -3,13 +3,21 @@ name: NORYX7 tests
 on:
   push:
     branches:
-      - main
-      - frontier-hardening-2026-09-07
+      - "**"
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noryx7-tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,12 +25,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
       - name: Install runtime and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest python-chess
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+      - name: Validate installed dependencies
+        run: python -m pip check
       - name: Compile
         run: python -m compileall -q core noryx7_runtime jarvis web
       - name: Test
-        run: pytest -q
+        run: python -m pytest -q

@@ -1,8 +1,11 @@
 import threading
 import unittest
+import tempfile
+import os
 from dataclasses import replace
 
 from .actions import ActionGate, AuthorizationAuthority
+from .authorization_replay import AuthorizationReplayGuard
 from .contracts import ActionSpec, TaskSpec
 from .identity import AgentIdentityAuthority, IdentityRegistry
 from .limits import RuntimeLimits
@@ -19,7 +22,10 @@ class SecurityContractTests(unittest.TestCase):
         self.gate = ActionGate(policy, security, RuntimeLimits(max_actions_per_task=2))
 
     def setUp_authorized_gate(self):
-        authority = AuthorizationAuthority(b"x" * 32)
+        replay_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(replay_dir.cleanup)
+        replay = AuthorizationReplayGuard(path=os.path.join(replay_dir.name, "authorized.sqlite3"))
+        authority = AuthorizationAuthority(b"x" * 32, replay_guard=replay)
         verifier = VerificationEngine()
         policy = PolicyEngine()
         security = SecurityBoundary(policy, verifier)
@@ -29,7 +35,10 @@ class SecurityContractTests(unittest.TestCase):
         registry = IdentityRegistry()
         identity, _ = AgentIdentityAuthority.generate("agent-a")
         registry.register(identity)
-        authority = AuthorizationAuthority(b"x" * 32, identity_registry=registry)
+        replay_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(replay_dir.cleanup)
+        replay = AuthorizationReplayGuard(path=os.path.join(replay_dir.name, "identity.sqlite3"))
+        authority = AuthorizationAuthority(b"x" * 32, identity_registry=registry, replay_guard=replay)
         verifier = VerificationEngine()
         policy = PolicyEngine()
         security = SecurityBoundary(policy, verifier)

@@ -16,10 +16,13 @@ class CapabilityRegistry:
     def __init__(self, core_registry=None):
         self._core_registry = core_registry
         self._tools = {}
+        self._risks = {}
 
-    def register(self, name: str, handler: Callable):
-        if not name or not callable(handler):
+    def register(self, name: str, handler: Callable, *, risk_class: str = "normal"):
+        if not isinstance(name, str) or not name.strip() or not callable(handler):
             raise ValueError("invalid_capability")
+        if not isinstance(risk_class, str) or risk_class not in {"normal", "sensitive", "high"}:
+            raise ValueError("invalid_capability_risk")
 
         if self._core_registry is not None:
             @wraps(handler)
@@ -56,19 +59,25 @@ class CapabilityRegistry:
                     output=result,
                 )
 
-            self._core_registry.register(name, core_handler)
+            self._core_registry.register(name, core_handler, risk_class=risk_class)
             return
 
         if name in self._tools:
             raise ValueError("capability_already_registered")
 
         self._tools[name] = handler
+        self._risks[name] = risk_class
 
     def resolve(self, name: str) -> Optional[Callable]:
         if self._core_registry is not None:
             return self._core_registry.resolve(name)
 
         return self._tools.get(name)
+
+    def risk(self, name: str):
+        if self._core_registry is not None:
+            return self._core_registry.risk(name)
+        return self._risks.get(name)
 
     def names(self):
         if self._core_registry is not None:

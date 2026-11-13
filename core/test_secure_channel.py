@@ -12,9 +12,19 @@ class SecureChannelTests(unittest.TestCase):
         self.sender = SecureChannel(self.provider, key_id="channel", local_id="agent-a", peer_id="agent-b", session_id="session-1", direction="send")
         self.receiver = SecureChannel(self.provider, key_id="channel", local_id="agent-b", peer_id="agent-a", session_id="session-1", direction="send")
 
-    def test_round_trip(self):
-        frame = self.sender.send(b"hello")
-        self.assertEqual(self.receiver.receive(frame), b"hello")
+    def test_round_trip_encrypts_and_authenticates_payload(self):
+        plaintext = b"hello"
+        frame = self.sender.send(plaintext)
+        self.assertNotEqual(frame.payload, plaintext)
+        self.assertEqual(len(frame.mac), 16)
+        self.assertEqual(self.receiver.receive(frame), plaintext)
+
+    def test_repeated_plaintext_uses_distinct_ciphertext_and_nonce(self):
+        first = self.sender.send(b"same secret")
+        second = self.sender.send(b"same secret")
+        self.assertNotEqual(first.sequence, second.sequence)
+        self.assertNotEqual(first.payload, second.payload)
+        self.assertNotEqual(first.mac, second.mac)
 
     def test_replay_is_rejected(self):
         frame = self.sender.send(b"hello")

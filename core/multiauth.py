@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import threading
+import time
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -12,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 MAX_PARTIES = 32
 MAX_ID = 256
 SIGNATURE_SIZE = 64
-_DOMAIN = b"noryx7/multiauth/v1/"
+_DOMAIN = b"noryx7/multiauth/v2/"
 
 
 def _id(value: str, name: str) -> str:
@@ -21,13 +22,15 @@ def _id(value: str, name: str) -> str:
     return value
 
 
-def action_digest(action_id: str, epoch: int, action_statement: bytes = b"") -> bytes:
+def action_digest(action_id: str, epoch: int, action_statement: bytes = b"", *, expires_at: int = 0) -> bytes:
     """Return a domain-separated digest binding approvals to one action/epoch."""
     _id(action_id, "action_id")
     if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 0:
         raise ValueError("invalid_epoch")
     if not isinstance(action_statement, bytes):
         raise TypeError("action_statement_must_be_bytes")
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool) or expires_at < 0:
+        raise ValueError("invalid_proof_expiry")
     h = hashlib.sha256()
     h.update(_DOMAIN)
     raw_id = action_id.encode("utf-8")
@@ -36,6 +39,7 @@ def action_digest(action_id: str, epoch: int, action_statement: bytes = b"") -> 
     h.update(epoch.to_bytes(8, "big"))
     h.update(len(action_statement).to_bytes(8, "big"))
     h.update(action_statement)
+    h.update(expires_at.to_bytes(8, "big"))
     return h.digest()
 
 
@@ -82,6 +86,7 @@ class SignedAuthorizationProof:
     action_statement: bytes
     approvals: tuple[SignedApproval, ...]
     threshold: int
+    expires_at: int
 
     def __post_init__(self) -> None:
         _id(self.action_id, "action_id")
@@ -97,15 +102,21 @@ class SignedAuthorizationProof:
             raise ValueError("duplicate_approver")
         if not isinstance(self.threshold, int) or isinstance(self.threshold, bool) or not 1 <= self.threshold <= len(self.approvals):
             raise ValueError("invalid_threshold")
+        if not isinstance(self.expires_at, int) or isinstance(self.expires_at, bool) or self.expires_at <= 0:
+            raise ValueError("invalid_proof_expiry")
 
 
 class SignedApprovalAuthority:
     """Verifies independent Ed25519 approvals against a canonical action digest."""
 
-    def __init__(self, *, required_threshold: int, trusted_keys: dict[str, bytes] | None = None) -> None:
+    def __init__(self, *, required_threshold: int, trusted_keys: dict[str, bytes] | None = None, clock=time.time, max_ttl: int = 300) -> None:
         if not isinstance(required_threshold, int) or isinstance(required_threshold, bool) or not 1 <= required_threshold <= MAX_PARTIES:
             raise ValueError("invalid_required_threshold")
+        if not callable(clock) or not isinstance(max_ttl, int) or isinstance(max_ttl, bool) or max_ttl < 1:
+            raise ValueError("invalid_authorization_clock_or_ttl")
         self._required = required_threshold
+        self._clock = clock
+        self._max_ttl = max_ttl
         self._keys: dict[str, bytes] = {}
         self._lock = threading.RLock()
         for approver_id, public_key in (trusted_keys or {}).items():
@@ -136,7 +147,10 @@ class SignedApprovalAuthority:
             return False
         if proof.action_statement != action_statement:
             return False
-        digest = action_digest(action_id, epoch, action_statement)
+        now = self._clock()
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not now < proof.expires_at <= now + self._max_ttl:
+            return False
+        digest = action_digest(action_id, epoch, action_statement, expires_at=proof.expires_at)
         with self._lock:
             valid = sum(1 for approval in proof.approvals if self._valid(approval, digest))
             return valid >= self._required
@@ -176,9 +190,9 @@ class ThresholdAuthorizer:
         )
 
 
-def sign_approval(approver_id: str, private_key: Ed25519PrivateKey, *, action_id: str, epoch: int, action_statement: bytes = b"") -> SignedApproval:
+def sign_approval(approver_id: str, private_key: Ed25519PrivateKey, *, action_id: str, epoch: int, action_statement: bytes = b"", expires_at: int) -> SignedApproval:
     _id(approver_id, "approver_id")
     if not isinstance(private_key, Ed25519PrivateKey):
         raise TypeError("private_key_must_be_ed25519")
     public_key = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    return SignedApproval(approver_id, public_key, private_key.sign(action_digest(action_id, epoch, action_statement)))
+    return SignedApproval(approver_id, public_key, private_key.sign(action_digest(action_id, epoch, action_statement, expires_at=expires_at)))

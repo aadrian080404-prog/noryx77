@@ -1,3 +1,5 @@
+import os
+import tempfile
 from jarvis.agent.front_end import AgentInput, JarvisInteractionFrontEnd
 from jarvis.core.contracts import Plan, PlanStep
 from jarvis.core.runtime import JarvisRuntime
@@ -28,8 +30,13 @@ def _plan(request_id: str) -> Plan:
     )
 
 
+def _durable_runtime():
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    return JarvisRuntime(authorization_replay_path=os.path.join(directory, "replay.sqlite3"))
+
+
 def test_jarvis_frontend_to_canonical_execution_is_real_end_to_end():
-    runtime = JarvisRuntime()
+    runtime = _durable_runtime()
     runtime.registry.register(
         "echo",
         lambda step: {
@@ -95,4 +102,27 @@ def test_jarvis_end_to_end_fails_closed_without_user_grant():
     trace = runtime.execution_traces[request_id]
     assert trace.verify() is True
     assert trace.events()[-1].event_type == "execution_denied"
+    assert runtime.state.get(request_id, principal_id="user") is None
+
+
+
+def test_jarvis_refuses_authorized_side_effect_without_persistent_replay_storage():
+    runtime = JarvisRuntime()
+    effects = []
+    runtime.registry.register("echo", lambda step: effects.append(step.parameters["message"]) or step.parameters["message"])
+    runtime.grant("user", "echo", "local:test")
+
+    request_id = "e2e-runtime-volatile-denied"
+    frontend = _wake_frontend()
+    item = frontend.build_input("esegui echo")
+    from jarvis.runtime_facade import JarvisFacade
+
+    result = JarvisFacade(runtime=runtime, frontend=frontend).accept_input(
+        item,
+        _plan(request_id),
+    )
+
+    assert result.accepted is False
+    assert effects == []
+    assert runtime.authorization.durable is False
     assert runtime.state.get(request_id, principal_id="user") is None

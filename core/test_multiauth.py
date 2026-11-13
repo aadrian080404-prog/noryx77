@@ -1,4 +1,5 @@
 import pytest
+import time
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from .multiauth import (
@@ -48,11 +49,12 @@ def _authority(threshold=2):
 def test_signed_approvals_bind_to_exact_action_epoch_and_statement():
     auth, private = _authority()
     statement = b"canonical-action-v1"
+    expires_at = int(time.time()) + 60
     approvals = tuple(
-        sign_approval(p, private[p], action_id="delete-root", epoch=7, action_statement=statement)
+        sign_approval(p, private[p], action_id="delete-root", epoch=7, action_statement=statement, expires_at=expires_at)
         for p in ("a", "b")
     )
-    proof = SignedAuthorizationProof("delete-root", 7, statement, approvals, 2)
+    proof = SignedAuthorizationProof("delete-root", 7, statement, approvals, 2, expires_at)
     assert auth.verify(proof, action_id="delete-root", epoch=7, action_statement=statement)
     assert not auth.verify(proof, action_id="delete-root", epoch=8, action_statement=statement)
     assert not auth.verify(proof, action_id="delete-root", epoch=7, action_statement=b"different")
@@ -62,18 +64,19 @@ def test_signed_approvals_bind_to_exact_action_epoch_and_statement():
 def test_signed_approval_forgery_and_untrusted_key_are_rejected():
     auth, private = _authority()
     statement = b"action"
-    valid = sign_approval("a", private["a"], action_id="x", epoch=1, action_statement=statement)
+    expires_at = int(time.time()) + 60
+    valid = sign_approval("a", private["a"], action_id="x", epoch=1, action_statement=statement, expires_at=expires_at)
     forged = SignedApproval("b", private["b"].public_key().public_bytes_raw(), valid.signature)
     unknown_key = Ed25519PrivateKey.generate()
-    unknown = sign_approval("z", unknown_key, action_id="x", epoch=1, action_statement=statement)
+    unknown = sign_approval("z", unknown_key, action_id="x", epoch=1, action_statement=statement, expires_at=expires_at)
     assert not auth.verify(
-        SignedAuthorizationProof("x", 1, statement, (forged, valid), 2),
+        SignedAuthorizationProof("x", 1, statement, (forged, valid), 2, expires_at),
         action_id="x",
         epoch=1,
         action_statement=statement,
     )
     assert not auth.verify(
-        SignedAuthorizationProof("x", 1, statement, (valid, unknown), 2),
+        SignedAuthorizationProof("x", 1, statement, (valid, unknown), 2, expires_at),
         action_id="x",
         epoch=1,
         action_statement=statement,
@@ -82,8 +85,9 @@ def test_signed_approval_forgery_and_untrusted_key_are_rejected():
 
 def test_revoke_invalidates_future_authorization():
     auth, private = _authority(threshold=1)
-    approval = sign_approval("a", private["a"], action_id="x", epoch=1)
-    proof = SignedAuthorizationProof("x", 1, b"", (approval,), 1)
+    expires_at = int(time.time()) + 60
+    approval = sign_approval("a", private["a"], action_id="x", epoch=1, expires_at=expires_at)
+    proof = SignedAuthorizationProof("x", 1, b"", (approval,), 1, expires_at)
     assert auth.verify(proof, action_id="x", epoch=1)
     auth.revoke("a")
     assert not auth.verify(proof, action_id="x", epoch=1)
@@ -91,6 +95,21 @@ def test_revoke_invalidates_future_authorization():
 
 def test_signed_proof_rejects_duplicate_approver_ids():
     auth, private = _authority()
-    approval = sign_approval("a", private["a"], action_id="x", epoch=1)
+    expires_at = int(time.time()) + 60
+    approval = sign_approval("a", private["a"], action_id="x", epoch=1, expires_at=expires_at)
     with pytest.raises(ValueError):
-        SignedAuthorizationProof("x", 1, b"", (approval, approval), 2)
+        SignedAuthorizationProof("x", 1, b"", (approval, approval), 2, expires_at)
+
+
+
+def test_signed_proof_expiry_is_enforced_and_signed():
+    auth, private = _authority(threshold=1)
+    expired_at = int(time.time()) - 1
+    approval = sign_approval("a", private["a"], action_id="x", epoch=1, expires_at=expired_at)
+    proof = SignedAuthorizationProof("x", 1, b"", (approval,), 1, expired_at)
+    assert not auth.verify(proof, action_id="x", epoch=1)
+
+    future_at = int(time.time()) + 60
+    valid = sign_approval("a", private["a"], action_id="x", epoch=1, expires_at=future_at)
+    tampered_expiry = SignedAuthorizationProof("x", 1, b"", (valid,), 1, future_at + 1)
+    assert not auth.verify(tampered_expiry, action_id="x", epoch=1)
