@@ -73,7 +73,7 @@ jobs:
           {
             echo "## NORYX7 generated-scenario shard $SHARD_INDEX"
             echo ""
-            echo "Scope: deterministic synthetic invariants stratified by entity class, power tier and difficulty; this is not live runtime execution."
+            echo "Scope: deterministic synthetic invariants stratified across entity, power, capability, behavior, impact and difficulty; this is not live runtime execution."
             echo ""
             echo '```json'
             cat "generated-scenario-result-$SHARD_INDEX.json" 2>/dev/null || true
