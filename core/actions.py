@@ -40,7 +40,7 @@ class AuthorizationAuthority:
         self,
         secret: bytes,
         *,
-        clock=time.monotonic,
+        clock=time.time,
         max_ttl: float = 300.0,
         identity_registry: IdentityRegistry | None = None,
         replay_guard: AuthorizationReplayGuard | None = None,
@@ -202,7 +202,7 @@ class AuthorizationAuthority:
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
-            return not self._replay_guard.contains(self._replay_token(grant))
+            return not self._replay_guard.contains(self._replay_token(grant), now=self._clock())
 
     def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, *, principal: AgentIdentity | None = None) -> bool:
         """Atomically consume a still-valid, currently trusted grant."""
@@ -212,7 +212,7 @@ class AuthorizationAuthority:
             if self._identity_registry is not None:
                 if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
                     return False
-            return self._replay_guard.consume(self._replay_token(grant))
+            return self._replay_guard.consume(self._replay_token(grant), expires_at=grant.expires_at, now=self._clock())
 
     def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
         """Linearize grant consumption and dispatch against identity revocation."""
@@ -224,7 +224,7 @@ class AuthorizationAuthority:
             with self._identity_registry._lock:
                 if not self._identity_registry.is_trusted(principal):
                     return False, None
-                if not self._replay_guard.consume(self._replay_token(grant)):
+                if not self._replay_guard.consume(self._replay_token(grant), expires_at=grant.expires_at, now=self._clock()):
                     return False, None
                 # The durable capability is consumed before dispatch; executor failure is an
                 # execution failure, never a reason to restore the grant.
