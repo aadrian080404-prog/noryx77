@@ -15,7 +15,6 @@ from .attestation import AttestationSigner, attestation_digest, signed_attestati
 from .contracts import ActionEnvelope, Attestation, ExecutionContext, ExecutionStatus, Intent, PlanStep
 from .lifecycle import ExecutionLifecycle
 from .scheduler import Scheduler
-from .state import StateJournal
 
 Executor = Callable[[ActionEnvelope], Any]
 Verifier = Callable[[ActionEnvelope, Any], bool]
@@ -244,7 +243,9 @@ class RuntimeEngine:
                     }
                 )
 
-                # Authorization statement is stable and excludes nonce.
+                # Authorization statement is stable across retries and is the
+                # exact statement signed by the approvers. Replay protection
+                # must consume this identity, not a per-attempt nonce digest.
                 authorization_statement = bytes.fromhex(
                     _digest(
                         {
@@ -258,15 +259,7 @@ class RuntimeEngine:
                     )
                 )
 
-                # threshold=1 -> concrete action replay identity
-                # threshold>1 -> stable authorization statement replay identity
-                if (
-                    self._multi_auth_authority is None
-                    or self._multi_auth_authority.required_threshold == 1
-                ):
-                    replay_token = bytes.fromhex(action_digest)
-                else:
-                    replay_token = authorization_statement
+                replay_token = authorization_statement
 
                 self._authorize_high_risk(
                     envelope,
