@@ -40,20 +40,27 @@ def test_anchor_policy_reference_is_immutable_while_candidate_changes():
     assert policies.candidate_version == 2
 
 
+def outcome(name, succeeded=False, signature=b"trusted"):
+    return VerifiedOutcome(name, "p", succeeded,
+                           (ev(f"{name}-1", "sensor-a"), ev(f"{name}-2", "sensor-b")),
+                           "independent-verifier", "c" * 64, signature)
+
+
 def test_meta_learning_requires_verified_outcomes_and_is_bounded():
-    meta = MetaMorphSES(threshold=3, minimum=1, maximum=4)
+    verifier = lambda receipt: receipt.signature == b"trusted"
+    meta = MetaMorphSES(receipt_verifier=verifier, threshold=3, minimum=1, maximum=4)
     with pytest.raises(PermissionError):
-        meta.learn(VerifiedOutcome("s", "p", True, ()))
+        meta.learn(outcome("untrusted", signature=b"forged"))
     for index in range(5):
-        value = meta.learn(VerifiedOutcome(f"s{index}", "p", False, (ev(f"e{index}", "independent"),)))
+        value = meta.learn(outcome(f"s{index}"))
     assert value == 4
     assert meta.failures == 5
 
 
 def test_adversarial_twin_learns_from_defense_outcome():
-    twin = AdversarialTwin(seed=7, max_rounds=2)
+    twin = AdversarialTwin(receipt_verifier=lambda receipt: receipt.signature == b"trusted", seed=7, max_rounds=2)
     before = twin.meta.threshold
-    twin.learn(VerifiedOutcome("scenario", "defense", True, (ev("a", "sensor-a"),)))
+    twin.learn(outcome("scenario", succeeded=True))
     assert twin.meta.threshold == before - 1
     assert len(twin.scenario_id(0)) == 24
 
