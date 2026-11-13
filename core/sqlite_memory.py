@@ -89,8 +89,7 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
             )
             self._initialize_metadata()
             self._recover()
-            if os.name == "posix":
-                os.chmod(path, 0o600)
+            self._secure_permissions()
         except Exception:
             self._db.close()
             self._failed = True
@@ -98,7 +97,14 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
 
     @property
     def durable(self) -> bool:
-        return not self._failed
+        return not self._failed and self._db is not None
+
+    def _secure_permissions(self) -> None:
+        if os.name != "posix":
+            return
+        for candidate in (self.path, self.path + "-wal", self.path + "-shm"):
+            if os.path.exists(candidate) and not os.path.islink(candidate):
+                os.chmod(candidate, 0o600)
 
     def _initialize_metadata(self) -> None:
         rows = dict(self._db.execute("SELECT key,value FROM memory_store_meta").fetchall())
@@ -152,7 +158,7 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
             raise RuntimeError("memory_store_payload_invalid") from exc
 
     def _ensure_healthy(self) -> None:
-        if self._failed:
+        if self._failed or self._db is None:
             raise RuntimeError("memory_store_failed_closed")
 
     def _recover(self) -> None:
@@ -172,61 +178,68 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
             super().put(item)
 
     def put(self, item: MemoryItem) -> None:
-        self._ensure_healthy()
-        if not isinstance(item, MemoryItem):
-            raise ValueError("valid memory item with memory_id required")
-        # Validate JSON compatibility before mutating the in-memory view.
-        plaintext = self._serialize(item)
-        nonce = os.urandom(NONCE_SIZE)
-        ciphertext = self._cipher.encrypt(nonce, plaintext, self._aad(item.memory_id))
-        super().put(item)
-        try:
-            self._db.execute("BEGIN IMMEDIATE")
-            self._db.execute(
-                "INSERT INTO encrypted_memory_items(memory_id,nonce,ciphertext,key_id) "
-                "VALUES(?,?,?,?) ON CONFLICT(memory_id) DO UPDATE SET "
-                "nonce=excluded.nonce,ciphertext=excluded.ciphertext,key_id=excluded.key_id",
-                (item.memory_id, sqlite3.Binary(nonce), sqlite3.Binary(ciphertext), self._key_id),
-            )
-            self._db.execute("COMMIT")
-        except Exception:
-            if self._db.in_transaction:
-                self._db.execute("ROLLBACK")
-            self._failed = True
-            raise
+        with self._lock:
+            self._ensure_healthy()
+            if not isinstance(item, MemoryItem):
+                raise ValueError("valid memory item with memory_id required")
+            plaintext = self._serialize(item)
+            nonce = os.urandom(NONCE_SIZE)
+            ciphertext = self._cipher.encrypt(nonce, plaintext, self._aad(item.memory_id))
+            super().put(item)
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                self._db.execute(
+                    "INSERT INTO encrypted_memory_items(memory_id,nonce,ciphertext,key_id) "
+                    "VALUES(?,?,?,?) ON CONFLICT(memory_id) DO UPDATE SET "
+                    "nonce=excluded.nonce,ciphertext=excluded.ciphertext,key_id=excluded.key_id",
+                    (item.memory_id, sqlite3.Binary(nonce), sqlite3.Binary(ciphertext), self._key_id),
+                )
+                self._db.execute("COMMIT")
+                self._secure_permissions()
+            except Exception:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                self._failed = True
+                raise
 
     def get(self, memory_id: str, *, execution_id: str | None = None):
-        self._ensure_healthy()
-        return super().get(memory_id, execution_id=execution_id)
+        with self._lock:
+            self._ensure_healthy()
+            return super().get(memory_id, execution_id=execution_id)
 
     def list(self, kind: str | None = None, *, execution_id: str | None = None):
-        self._ensure_healthy()
-        return super().list(kind, execution_id=execution_id)
+        with self._lock:
+            self._ensure_healthy()
+            return super().list(kind, execution_id=execution_id)
 
     def delete(self, memory_id: str) -> bool:
-        self._ensure_healthy()
-        if not self._valid_memory_id(memory_id):
-            return False
-        try:
-            self._db.execute("BEGIN IMMEDIATE")
-            cursor = self._db.execute(
-                "DELETE FROM encrypted_memory_items WHERE memory_id=?", (memory_id,)
-            )
-            self._db.execute("COMMIT")
-        except Exception:
-            if self._db.in_transaction:
-                self._db.execute("ROLLBACK")
-            self._failed = True
-            raise
-        super().delete(memory_id)
-        return cursor.rowcount > 0
+        with self._lock:
+            self._ensure_healthy()
+            if not self._valid_memory_id(memory_id):
+                return False
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                cursor = self._db.execute(
+                    "DELETE FROM encrypted_memory_items WHERE memory_id=?", (memory_id,)
+                )
+                self._db.execute("COMMIT")
+                self._secure_permissions()
+            except Exception:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                self._failed = True
+                raise
+            super().delete(memory_id)
+            return cursor.rowcount > 0
 
     def __len__(self) -> int:
-        self._ensure_healthy()
-        return super().__len__()
+        with self._lock:
+            self._ensure_healthy()
+            return super().__len__()
 
     def close(self) -> None:
-        if self._db is not None:
-            self._db.close()
-            self._db = None
-        self._failed = True
+        with self._lock:
+            if self._db is not None:
+                self._db.close()
+                self._db = None
+            self._failed = True
