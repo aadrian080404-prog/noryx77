@@ -209,3 +209,31 @@ def test_external_anchor_rejects_same_sequence_divergent_mac(tmp_path):
     with pytest.raises(RuntimeError, match="state_journal_anchor_mismatch"):
         journal.recover()
     journal.close()
+
+
+def test_external_anchor_unavailable_fails_closed(tmp_path):
+    class UnavailableAnchor:
+        def read(self):
+            raise OSError("witness unavailable")
+
+        def compare_and_swap(self, expected, replacement):
+            return False
+
+    journal = _anchored_journal(tmp_path / "unavailable.db", UnavailableAnchor())
+    with pytest.raises(RuntimeError, match="state_journal_anchor_unavailable"):
+        journal.recover()
+    journal.close()
+
+
+def test_external_anchor_rejects_malformed_snapshot(tmp_path):
+    class MalformedAnchor:
+        def read(self):
+            return AnchorSnapshot(True, "not-a-mac")
+
+        def compare_and_swap(self, expected, replacement):
+            return False
+
+    journal = _anchored_journal(tmp_path / "malformed-anchor.db", MalformedAnchor())
+    with pytest.raises(RuntimeError, match="state_journal_anchor_invalid_snapshot"):
+        journal.recover()
+    journal.close()
