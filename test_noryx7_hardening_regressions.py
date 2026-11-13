@@ -5,6 +5,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from core.authorization_replay import AuthorizationReplayGuard
 from core.coordination import AgentCoordinator
 from core.contracts import TaskSpec
 from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
@@ -53,7 +54,7 @@ def test_agent_coordinator_rejects_plan_for_different_task():
         coordinator.execute(task, plan)
 
 
-def test_high_risk_authorization_replay_is_rejected_across_runtime_retries():
+def test_high_risk_authorization_replay_is_rejected_across_runtime_retries(tmp_path):
     execution_id = "replay-execution"
     principal_id = "principal-1"
     step = RuntimePlanStep("step-1", "financial", "transfer", {})
@@ -104,6 +105,7 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries():
         multi_auth_authority=authority,
         authorization_provider=lambda envelope, signed_statement: proof,
         high_risk_action_types={"financial"},
+        replay_guard=AuthorizationReplayGuard(path=str(tmp_path / "runtime-replay.sqlite3")),
     )
     effects = []
     intent = Intent("execute a financial operation", principal_id)
@@ -152,3 +154,38 @@ def test_generated_campaign_reports_its_actual_evidence_scope():
 def test_generated_campaign_rejects_invalid_bounds_and_boolean_integers(call):
     with pytest.raises(ValueError):
         call()
+
+
+
+def test_durable_replay_guard_survives_runtime_restart(tmp_path):
+    path = str(tmp_path / "persistent-replay.sqlite3")
+    token = b"\x42" * 32
+    first_process = AuthorizationReplayGuard(path=path)
+    assert first_process.durable
+    assert first_process.consume(token)
+    first_process.close()
+
+    restarted_process = AuthorizationReplayGuard(path=path)
+    assert restarted_process.durable
+    assert restarted_process.contains(token)
+    assert not restarted_process.consume(token)
+
+
+def test_runtime_rejects_in_memory_replay_guard_for_high_risk_actions():
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw,
+        serialization.PublicFormat.Raw,
+    )
+    authority = SignedApprovalAuthority(
+        required_threshold=1,
+        trusted_keys={"approver-1": public_key},
+    )
+
+    with pytest.raises(ValueError, match="durable_replay_guard"):
+        RuntimeEngine(
+            multi_auth_authority=authority,
+            authorization_provider=lambda envelope, statement: None,
+            high_risk_action_types={"financial"},
+            replay_guard=AuthorizationReplayGuard(),
+        )
