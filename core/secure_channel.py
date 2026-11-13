@@ -120,6 +120,10 @@ class SecureChannel:
         pair = b"".join(sorted((local_fp, peer_fp)))
         return _IDENTITY_BINDING_DOMAIN + pair
 
+    def _participant_binding(self) -> bytes:
+        pair = b"".join(sorted((_field(self._local_id), _field(self._peer_id))))
+        return _DOMAIN + b"participants/" + pair
+
     def _channel_key(self) -> bytes:
         try:
             root_key = self._provider.get_key(self._key_id)
@@ -128,18 +132,18 @@ class SecureChannel:
         if not isinstance(root_key, bytes) or len(root_key) != KEY_SIZE:
             raise ValueError("channel_key_required")
         try:
-            context = b"secure-channel/" + self._direction.encode("ascii") + self._identity_binding()
+            context = b"secure-channel/" + self._direction.encode("ascii") + self._participant_binding() + self._identity_binding()
             return derive_subkey(root_key, salt=self._session_id.encode("utf-8"), context=context)
         except Exception as exc:
             raise ValueError("channel_key_derivation_failed") from exc
 
     def _authenticated_data(self) -> bytes:
-        return _DOMAIN + PROTOCOL_VERSION.to_bytes(2, "big") + _field(self._session_id) + self._identity_binding()
+        return _DOMAIN + PROTOCOL_VERSION.to_bytes(2, "big") + _field(self._session_id) + self._participant_binding() + self._identity_binding()
 
 
     def _nonce(self, sender_id: str, sequence: int) -> bytes:
         prefix = sha256(
-            _DOMAIN + _field(sender_id) + _field(self._session_id) + self._identity_binding()
+            _DOMAIN + self._participant_binding() + _field(sender_id) + _field(self._session_id) + self._identity_binding()
         ).digest()[:4]
         return prefix + sequence.to_bytes(8, "big")
 
