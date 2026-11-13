@@ -16,7 +16,7 @@ class SecurityBoundary:
 
     Recovery state is part of the trust decision: anything other than NORMAL
     fails closed. High-risk actions are admitted only when ActionGate has
-    verified a one-shot authorization grant for the exact action.
+    verified a one-shot grant for the exact action.
     """
     ALLOWED_RISKS = {"normal", "sensitive"}
 
@@ -43,10 +43,15 @@ class SecurityBoundary:
             if not (action.risk_class == "high" and authorization_verified):
                 return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
         try:
-            policy_decision = self.policy.evaluate(
-                action,
-                authorization_verified=authorization_verified,
-            )
+            if authorization_verified:
+                policy_decision = self.policy.evaluate(
+                    action,
+                    authorization_verified=True,
+                )
+            else:
+                # Keep the one-argument verifier contract for custom fail-closed
+                # policy implementations. No authorization context is forwarded.
+                policy_decision = self.policy.evaluate(action)
         except Exception:
             return SecurityDecision(False, "policy_evaluation_failure", action.risk_class)
         try:
