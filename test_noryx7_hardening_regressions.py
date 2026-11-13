@@ -66,6 +66,7 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries(tmp_p
         "action_type": step.action_type,
         "target": step.target,
         "parameters": dict(step.parameters),
+        "risk_class": step.risk_class,
     }
     action_statement = bytes.fromhex(
         hashlib.sha256(
