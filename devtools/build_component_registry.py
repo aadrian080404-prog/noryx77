@@ -106,7 +106,12 @@ def build_inventory(repository_root: str | Path) -> dict[str, Any]:
         if canonical_registry.get("schema_version") != 1 or not isinstance(canonical_registry.get("domains"), list):
             raise ValueError("canonical_component_registry_schema_invalid")
         domain_ids = {item.get("id") for item in canonical_registry["domains"] if isinstance(item, dict)}
-        if len(domain_ids) != 17 or any(not set(item.get("depends_on", [])) <= domain_ids for item in canonical_registry["domains"]):
+        allowed_states = set(canonical_registry.get("domain_status_vocabulary", []))
+        if (
+            len(domain_ids) != 17
+            or any(not set(item.get("depends_on", [])) <= domain_ids for item in canonical_registry["domains"])
+            or any(item.get("current_state") not in allowed_states for item in canonical_registry["domains"])
+        ):
             raise ValueError("canonical_component_registry_domains_invalid")
 
     return {
