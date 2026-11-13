@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 import json
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 class Verdict(str, Enum):
@@ -49,6 +49,9 @@ class VerifiedOutcome:
     proposal_id: str
     succeeded: bool
     evidence: tuple[Evidence, ...]
+    verifier_id: str
+    receipt_digest: str
+    signature: bytes
 
 
 class IndependentJury:
@@ -62,8 +65,16 @@ class IndependentJury:
             return False
         if any(not item.verified or not item.independent for item in evidence):
             return False
-        if any(not isinstance(item.digest, str) or len(item.digest) != 64 for item in evidence):
+        if any(not isinstance(item.source_id, str) or not item.source_id.strip() for item in evidence):
             return False
+        for item in evidence:
+            if not isinstance(item.digest, str) or len(item.digest) != 64:
+                return False
+            try:
+                if len(bytes.fromhex(item.digest)) != 32:
+                    return False
+            except ValueError:
+                return False
         return len({item.source_id for item in evidence}) >= 2
 
     def adjudicate(self, proposal: DefensiveProposal, evidence: tuple[Evidence, ...]) -> JuryDecision:
@@ -126,20 +137,37 @@ class AnchoredBipolicy:
 class MetaMorphSES:
     """Bounded meta-adjustment from verified outcomes only; no autonomous model training."""
 
-    def __init__(self, *, threshold: int = 3, minimum: int = 1, maximum: int = 10) -> None:
+    def __init__(self, *, receipt_verifier: Callable[[VerifiedOutcome], bool],
+                 threshold: int = 3, minimum: int = 1, maximum: int = 10) -> None:
+        if not callable(receipt_verifier):
+            raise ValueError("trusted_outcome_receipt_verifier_required")
         if any(isinstance(x, bool) or not isinstance(x, int) for x in (threshold, minimum, maximum)):
             raise ValueError("integer_bounds_required")
         if minimum < 0 or maximum < minimum or not minimum <= threshold <= maximum:
             raise ValueError("invalid_meta_bounds")
         self.threshold, self.minimum, self.maximum = threshold, minimum, maximum
+        self._receipt_verifier = receipt_verifier
         self.successes = 0
         self.failures = 0
 
     def learn(self, outcome: VerifiedOutcome) -> int:
         if not isinstance(outcome, VerifiedOutcome) or not outcome.scenario_id or not outcome.proposal_id:
             raise ValueError("invalid_verified_outcome")
-        if not outcome.evidence or any(not item.verified for item in outcome.evidence):
+        if (
+            not isinstance(outcome.verifier_id, str) or not outcome.verifier_id.strip()
+            or not isinstance(outcome.signature, bytes) or not outcome.signature
+            or not isinstance(outcome.receipt_digest, str) or len(outcome.receipt_digest) != 64
+            or not outcome.evidence
+            or any(not isinstance(item, Evidence) or not item.verified or not item.independent for item in outcome.evidence)
+            or len({item.source_id for item in outcome.evidence}) < 2
+        ):
             raise PermissionError("unverified_learning_evidence")
+        try:
+            receipt_valid = self._receipt_verifier(outcome)
+        except Exception as exc:
+            raise PermissionError("learning_receipt_verifier_failed") from exc
+        if not receipt_valid:
+            raise PermissionError("learning_receipt_invalid")
         if outcome.succeeded:
             self.successes += 1
             self.threshold = max(self.minimum, self.threshold - 1)
@@ -152,14 +180,15 @@ class MetaMorphSES:
 class AdversarialTwin:
     """SEAT-like bounded twin that learns from both verified attacks and defenses."""
 
-    def __init__(self, *, seed: int = 0, max_rounds: int = 64) -> None:
+    def __init__(self, *, receipt_verifier: Callable[[VerifiedOutcome], bool],
+                 seed: int = 0, max_rounds: int = 64) -> None:
         if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
             raise ValueError("invalid_seed")
         if isinstance(max_rounds, bool) or not isinstance(max_rounds, int) or not 1 <= max_rounds <= 256:
             raise ValueError("invalid_max_rounds")
         self.seed = seed
         self.max_rounds = max_rounds
-        self.meta = MetaMorphSES()
+        self.meta = MetaMorphSES(receipt_verifier=receipt_verifier)
 
     def scenario_id(self, round_index: int) -> str:
         if isinstance(round_index, bool) or not isinstance(round_index, int) or not 0 <= round_index < self.max_rounds:
