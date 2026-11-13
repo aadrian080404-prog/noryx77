@@ -79,3 +79,16 @@ def test_expired_or_invalid_expiry_values_fail_closed():
     assert not guard.consume(token(2), expires_at=float("inf"), now=100)
     assert not guard.consume(token(3), expires_at=200, now=float("nan"))
     assert guard.consumed_count == 0
+
+
+
+def test_persistent_replay_store_rejects_relative_and_symlink_paths(tmp_path):
+    with pytest.raises(ValueError, match="absolute_replay_guard_path_required"):
+        AuthorizationReplayGuard(path="relative-replay.sqlite3")
+
+    target = tmp_path / "target.sqlite3"
+    target.write_bytes(b"")
+    link = tmp_path / "link.sqlite3"
+    link.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink_path_rejected"):
+        AuthorizationReplayGuard(path=str(link))
