@@ -1,3 +1,5 @@
+import os
+import tempfile
 import json
 import threading
 from contextlib import contextmanager
@@ -39,6 +41,11 @@ def _server():
         thread.join(timeout=2)
 
 
+def _durable_runtime():
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    return JarvisRuntime(authorization_replay_path=os.path.join(directory, "replay.sqlite3"))
+
+
 def _frontend():
     detector = ClapDetector()
     frontend = JarvisInteractionFrontEnd(SessionController())
@@ -49,7 +56,7 @@ def _frontend():
 
 def test_full_jarvis_http_provider_path_reaches_commit_and_trace():
     with _server() as endpoint:
-        runtime = JarvisRuntime()
+        runtime = _durable_runtime()
         runtime.register_http_provider(
             name="http-provider",
             capabilities=frozenset({"chat"}),
