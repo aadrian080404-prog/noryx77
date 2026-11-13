@@ -40,17 +40,28 @@ class AgentCoordinator:
             raise ValueError("invalid_plan")
         if not isinstance(execution_id, str) or len(execution_id.encode("utf-8")) > 256:
             raise ValueError("invalid_execution_id")
-        agent_ids = self.router.available()
+        available = self.router.available()
+        if not available:
+            raise LookupError("no agents available")
+        # max_agents limits the worker pool, not the number of plan steps.
+        # Every verified step must receive exactly one assignment.
+        agent_ids = tuple(available[:self.max_agents])
         if not agent_ids:
             raise LookupError("no agents available")
         assignments = []
-        for index, step in enumerate(plan.steps[:self.max_agents]):
+        seen_step_ids = set()
+        for index, step in enumerate(plan.steps):
             agent_id = agent_ids[index % len(agent_ids)]
             if not isinstance(agent_id, str) or not agent_id.strip():
                 raise ValueError("invalid_agent_id")
             if not isinstance(getattr(step, "step_id", None), str) or not step.step_id.strip():
                 raise ValueError("invalid_step_id")
+            if step.step_id in seen_step_ids:
+                raise ValueError("duplicate_step_id")
+            seen_step_ids.add(step.step_id)
             assignments.append(AgentAssignment(agent_id, plan.task_id, step.step_id, execution_id))
+        if len(assignments) != len(plan.steps):
+            raise RuntimeError("plan_assignment_incomplete")
         return tuple(assignments)
 
     def _trusted_agent(self, agent_id: str):
@@ -74,6 +85,8 @@ class AgentCoordinator:
     def execute(self, task: TaskSpec, plan: Plan) -> tuple[AgentResult, ...]:
         if not isinstance(task, TaskSpec) or not task.is_well_formed():
             raise ValueError("invalid_task")
+        if not isinstance(plan, Plan) or plan.task_id != task.task_id:
+            raise ValueError("plan_task_mismatch")
         execution_id = uuid4().hex
         assignments = self.assign(plan, execution_id)
         results = []
