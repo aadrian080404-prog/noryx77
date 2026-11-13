@@ -1,3 +1,5 @@
+from threading import RLock
+
 from .actions import ActionGate
 from .contracts import ActionSpec, VerificationResult
 from .limits import RuntimeLimits
@@ -6,33 +8,41 @@ from .security import SecurityBoundary
 
 
 class CapabilityRegistry:
-    """Explicit registry of capabilities. Unknown capabilities are denied."""
+    """Explicit registry of capabilities. Unknown or downgraded capabilities are denied."""
+    VALID_RISKS = frozenset({"normal", "sensitive", "high"})
+    _RISK_ORDER = {"normal": 0, "sensitive": 1, "high": 2}
+
     def __init__(self):
         self._capabilities = {}
+        self._lock = RLock()
 
     def register(self, name, handler, *, risk_class="normal"):
         if not isinstance(name, str) or not name.strip() or not callable(handler):
             raise ValueError("invalid_capability")
-        if name in self._capabilities:
-            raise ValueError("capability_already_registered")
-        if not isinstance(risk_class, str) or not risk_class.strip():
+        if not isinstance(risk_class, str) or risk_class not in self.VALID_RISKS:
             raise ValueError("invalid_capability_risk")
-        self._capabilities[name] = (handler, risk_class)
+        with self._lock:
+            if name in self._capabilities:
+                raise ValueError("capability_already_registered")
+            self._capabilities[name] = (handler, risk_class)
 
     def resolve(self, name):
-        item = self._capabilities.get(name)
-        return None if item is None else item[0]
+        with self._lock:
+            item = self._capabilities.get(name)
+            return None if item is None else item[0]
 
     def risk(self, name):
-        item = self._capabilities.get(name)
-        return None if item is None else item[1]
+        with self._lock:
+            item = self._capabilities.get(name)
+            return None if item is None else item[1]
 
     def names(self):
-        return tuple(sorted(self._capabilities))
+        with self._lock:
+            return tuple(sorted(self._capabilities))
 
 
 class ToolExecutor:
-    """Tool boundary: capability lookup -> canonical ActionGate -> execution -> verification."""
+    """Tool boundary: capability lookup -> risk binding -> ActionGate -> execution -> verification."""
 
     def __init__(self, policy_or_gate, verifier):
         if type(policy_or_gate) is object:
@@ -78,6 +88,28 @@ class ToolExecutor:
                 False,
                 "tool_policy",
                 "unknown_capability",
+            )
+
+        registered_risk = self.capabilities.risk(capability_name)
+        action_risk = action.risk_class
+        if (
+            registered_risk not in CapabilityRegistry.VALID_RISKS
+            or action_risk not in CapabilityRegistry.VALID_RISKS
+            or CapabilityRegistry._RISK_ORDER[action_risk]
+            < CapabilityRegistry._RISK_ORDER[registered_risk]
+        ):
+            return None, VerificationResult(
+                False,
+                "tool_policy",
+                "capability_risk_downgrade",
+            )
+        if registered_risk == "high" and (
+            action_risk != "high" or not action.requires_authorization
+        ):
+            return None, VerificationResult(
+                False,
+                "tool_policy",
+                "high_risk_capability_requires_authorization",
             )
 
         effective_execution_id = (
