@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import secrets
 from threading import Lock
 from typing import Final
 
@@ -68,6 +69,11 @@ class SecureChannel:
     channel key epoch. Sequence state is process-local; session rotation is
     mandatory after process restart or state loss.
     """
+
+    @staticmethod
+    def new_session_id() -> str:
+        """Generate a fresh 256-bit session identifier; never reuse it after restart."""
+        return secrets.token_urlsafe(32)
 
     def __init__(self, provider: KeyProvider, *, key_id: str, local_id: str, peer_id: str, session_id: str, direction: str,
                  identity_registry: IdentityRegistry | None = None, local_identity: AgentIdentity | None = None,
