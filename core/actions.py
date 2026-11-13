@@ -158,7 +158,7 @@ class AuthorizationAuthority:
             return False
         if grant.execution_id != execution_id or action.execution_id != execution_id:
             return False
-        if not grant.nonce or not isinstance(grant.signature, str):
+        if not isinstance(grant.nonce, str) or not grant.nonce or not isinstance(grant.signature, str):
             return False
         if self._identity_registry is not None:
             if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
@@ -216,7 +216,7 @@ class AuthorizationAuthority:
 
     def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
         """Linearize grant consumption and dispatch against identity revocation."""
-        if not callable(executor) or self._identity_registry is None:
+        if not callable(executor) or self._identity_registry is None or not self._replay_guard.durable:
             return False, None
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False, None
