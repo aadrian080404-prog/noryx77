@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Sequence
@@ -87,7 +88,7 @@ class RuntimeEngine:
     def _result(lifecycle: ExecutionLifecycle, status: ExecutionStatus, attestations: Sequence[Attestation], outputs: Sequence[Any], error: str | None = None) -> RuntimeResult:
         final = lifecycle.transition(status)
         return RuntimeResult(final.execution_id, final.status, tuple(attestations), tuple(outputs), error)
-    def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None, timeout_seconds: float | None = None) -> Any:
+    def _dispatch(self, envelope: ActionEnvelope, executor: Executor | None, deadline_monotonic: float | None = None) -> Any:
         if self._adapter is None:
             if executor is None:
                 raise RuntimeError("execution dispatch is unavailable")
@@ -95,8 +96,11 @@ class RuntimeEngine:
 
         def dispatch_adapter() -> Any:
             bounded = getattr(self._adapter, "execute_with_timeout", None)
-            if timeout_seconds is not None and callable(bounded):
-                return bounded(envelope, timeout_seconds)
+            if deadline_monotonic is not None and callable(bounded):
+                remaining = deadline_monotonic - self._clock()
+                if remaining <= 0:
+                    raise TimeoutError("execution_deadline_exceeded_before_dispatch")
+                return bounded(envelope, remaining)
             return self._adapter.execute(envelope)
 
         if self._identity_registry is None:
@@ -198,6 +202,7 @@ class RuntimeEngine:
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
             or timeout_seconds <= 0
         ):
             raise ValueError("timeout_seconds must be positive")
@@ -339,10 +344,7 @@ class RuntimeEngine:
                         action_digest,
                     )
 
-                remaining_seconds = context.deadline_monotonic - self._clock()
-                if remaining_seconds <= 0:
-                    raise TimeoutError("execution_deadline_exceeded_before_dispatch")
-                output = self._dispatch(envelope, executor, remaining_seconds)
+                output = self._dispatch(envelope, executor, context.deadline_monotonic)
 
                 # Verification is performed before any commit.
                 verified = bool(verifier(envelope, output))
