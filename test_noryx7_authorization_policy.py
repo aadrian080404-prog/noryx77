@@ -9,6 +9,7 @@ from core.planning import Planner
 from core.policy import PolicyEngine
 from core.router import ResourceRouter
 from core.security import SecurityBoundary
+from core.tools import CapabilityRegistry, ToolExecutor
 from core.verification import VerificationEngine
 
 
@@ -125,3 +126,92 @@ def test_agent_coordinator_cannot_downgrade_payment_plan_to_compute():
         coordinator.execute(task, plan)
 
     assert agent.calls == []
+
+
+def test_capability_registry_rejects_unknown_risk_classes():
+    registry = CapabilityRegistry()
+    with pytest.raises(ValueError, match="invalid_capability_risk"):
+        registry.register("danger", lambda target, params: "ok", risk_class="critical")
+
+
+def test_tool_executor_rejects_capability_risk_downgrade():
+    tool = ToolExecutor(PolicyEngine(), VerificationEngine())
+    effects = []
+    tool.capabilities.register(
+        "danger",
+        lambda target, params: effects.append("executed") or "ok",
+        risk_class="high",
+    )
+    action = ActionSpec(
+        "capability-call",
+        "jarvis_capability",
+        "system",
+        {"__jarvis_capability": "danger"},
+        risk_class="normal",
+        execution_id="execution-3",
+    )
+
+    output, check = tool.execute(action, execution_id="execution-3")
+
+    assert output is None
+    assert not check.valid
+    assert check.reason == "capability_risk_downgrade"
+    assert effects == []
+
+
+def test_high_risk_capability_requires_explicit_authorization_flag():
+    tool = ToolExecutor(PolicyEngine(), VerificationEngine())
+    tool.capabilities.register("danger", lambda target, params: "executed", risk_class="high")
+    action = ActionSpec(
+        "capability-call",
+        "jarvis_capability",
+        "system",
+        {"__jarvis_capability": "danger"},
+        risk_class="high",
+        requires_authorization=False,
+        execution_id="execution-4",
+    )
+
+    output, check = tool.execute(action, execution_id="execution-4")
+
+    assert output is None
+    assert not check.valid
+    assert check.reason == "high_risk_capability_requires_authorization"
+
+
+def test_high_risk_capability_executes_only_with_valid_one_shot_grant():
+    identity, _ = AgentIdentityAuthority.generate("owner")
+    registry = IdentityRegistry()
+    registry.register(identity)
+    authority = AuthorizationAuthority(b"noryx7-capability-secret-32-bytes!!", identity_registry=registry)
+    policy = PolicyEngine()
+    security = SecurityBoundary(policy, VerificationEngine())
+    gate = ActionGate(policy, security, RuntimeLimits(), authorization=authority)
+    tool = ToolExecutor(gate, VerificationEngine())
+    effects = []
+    tool.capabilities.register(
+        "danger",
+        lambda target, params: effects.append(target) or "executed",
+        risk_class="high",
+    )
+    action = ActionSpec(
+        "capability-call",
+        "jarvis_capability",
+        "system",
+        {"__jarvis_capability": "danger"},
+        risk_class="high",
+        requires_authorization=True,
+        execution_id="execution-5",
+    )
+    grant = authority.issue(action, "execution-5", principal=identity)
+
+    output, check = tool.execute(
+        action,
+        execution_id="execution-5",
+        grant=grant,
+        principal=identity,
+    )
+
+    assert output == "executed"
+    assert check.valid
+    assert effects == ["system"]
