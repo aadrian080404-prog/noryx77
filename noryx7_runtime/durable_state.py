@@ -254,6 +254,10 @@ class DurableStateJournal(StateJournal):
     def rollback_last(self, attestation: Attestation) -> None:
         raise RuntimeError("durable_runtime_journal_is_append_only")
 
+    @property
+    def durable(self) -> bool:
+        return self._db is not None
+
     def close(self) -> None:
         with self._lock:
             self._db.close()
