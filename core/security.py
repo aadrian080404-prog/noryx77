@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from .contracts import ActionSpec, VerificationResult
-from .recovery import RecoveryController, RecoveryState
+from .recovery import RecoveryController
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,8 @@ class SecurityBoundary:
     """Defensive authorization boundary for autonomous actions; deny by default.
 
     Recovery state is part of the trust decision: anything other than NORMAL
-    fails closed. The boundary never performs recovery transitions itself.
+    fails closed. High-risk actions are admitted only when ActionGate has
+    verified a one-shot authorization grant for the exact action.
     """
     ALLOWED_RISKS = {"normal", "sensitive"}
 
@@ -28,18 +29,24 @@ class SecurityBoundary:
         self.verifier = verifier
         self.recovery = recovery or RecoveryController()
 
-    def inspect(self, action: ActionSpec) -> SecurityDecision:
+    def inspect(self, action: ActionSpec, *, authorization_verified: bool = False) -> SecurityDecision:
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return SecurityDecision(False, "invalid_action", "unknown")
+        if not isinstance(authorization_verified, bool):
+            return SecurityDecision(False, "invalid_authorization_state", action.risk_class)
         try:
             self.recovery.require_normal()
             _, epoch = self.recovery.snapshot()
         except PermissionError:
             return SecurityDecision(False, "recovery_state_denies_execution", action.risk_class)
         if action.risk_class not in self.ALLOWED_RISKS:
-            return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
+            if not (action.risk_class == "high" and authorization_verified):
+                return SecurityDecision(False, "risk_requires_explicit_review", action.risk_class)
         try:
-            policy_decision = self.policy.evaluate(action)
+            policy_decision = self.policy.evaluate(
+                action,
+                authorization_verified=authorization_verified,
+            )
         except Exception:
             return SecurityDecision(False, "policy_evaluation_failure", action.risk_class)
         try:
@@ -60,8 +67,8 @@ class SecurityBoundary:
             return SecurityDecision(False, reason, action.risk_class)
         return SecurityDecision(True, "allowed", action.risk_class)
 
-    def allows(self, action: ActionSpec) -> bool:
-        return self.inspect(action).allowed
+    def allows(self, action: ActionSpec, *, authorization_verified: bool = False) -> bool:
+        return self.inspect(action, authorization_verified=authorization_verified).allowed
 
     def verify(self, action: ActionSpec, output):
         decision = self.inspect(action)
