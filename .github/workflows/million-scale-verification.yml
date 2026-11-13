@@ -1,4 +1,4 @@
-name: NORYX7 Million-Scale Verification
+name: NORYX7 Generated Scenario Verification
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       cases:
-        description: Generated scenarios
+        description: Generated scenarios (maximum 1000000)
         required: false
         default: "1000000"
       seed:
@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  million-scale:
-    name: Generated verification — ${{ inputs.cases || '1000000' }} cases
+  generated-scenarios:
+    name: Generated scenario verification — ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }} cases
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -37,27 +37,39 @@ jobs:
           python -m pip install --disable-pip-version-check --upgrade pip
           python -m pip install --disable-pip-version-check -r requirements.txt
           python -m pip check
-      - name: Run generated campaign
+      - name: Validate campaign bounds
         env:
-          CASES: ${{ inputs.cases || '1000000' }}
+          CASES: ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }}
           SEED: ${{ inputs.seed || '20260906' }}
         run: |
           set -euo pipefail
-          python -m tests.million_scale_campaign --cases "$CASES" --seed "$SEED" | tee million-scale-result.json
+          [[ "$CASES" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SEED" =~ ^[0-9]+$ ]]
+          (( CASES <= 1000000 ))
+          (( SEED <= 9223372036854775807 ))
+      - name: Run generated-scenario campaign
+        env:
+          CASES: ${{ github.event_name == 'pull_request' && '10000' || inputs.cases || '1000000' }}
+          SEED: ${{ inputs.seed || '20260906' }}
+        run: |
+          set -euo pipefail
+          python -m tests.million_scale_campaign --cases "$CASES" --seed "$SEED" | tee generated-scenario-result.json
       - name: Publish campaign evidence
         if: always()
         run: |
           {
-            echo "## NORYX7 million-scale verification"
+            echo "## NORYX7 generated-scenario verification"
+            echo ""
+            echo "Scope: one structural preflight plus deterministic synthetic scenario invariants; this is not one million live runtime executions."
             echo ""
             echo ' ```json'
-            cat million-scale-result.json 2>/dev/null || true
+            cat generated-scenario-result.json 2>/dev/null || true
             echo ' ```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload campaign evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: noryx7-million-scale-${{ github.run_id }}
-          path: million-scale-result.json
+          name: noryx7-generated-scenarios-${{ github.run_id }}
+          path: generated-scenario-result.json
           if-no-files-found: ignore
