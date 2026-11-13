@@ -5,7 +5,7 @@ from core.sqlite_memory import SQLiteEncryptedMemoryStore
 from core.tiered_memory import TieredMemoryRouter
 
 
-KEY = b"tiered-memory-router-test-key-material-32-bytes"
+KEY = b"t" * 32
 
 
 def local_store(path):
