@@ -141,3 +141,18 @@ def test_runtime_journal_persists_reservation_restored_after_commit_failure(tmp_
     assert len(recovered.snapshot()) == 1
     assert recovered.reservation("exec-1", "step-1") == reservation
     recovered.close()
+
+
+def test_runtime_journal_authenticates_event_type(tmp_path):
+    path = tmp_path / "runtime.sqlite"
+    journal = _journal(path)
+    journal.reserve_step("exec-1", "principal-1", "step-1", _digest("action"))
+    journal.close()
+
+    db = sqlite3.connect(path)
+    db.execute("UPDATE runtime_journal_events SET event_type='append' WHERE sequence=1")
+    db.commit()
+    db.close()
+
+    with pytest.raises(RuntimeError, match="payload_digest_mismatch"):
+        _journal(path)
