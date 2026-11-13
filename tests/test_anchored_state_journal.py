@@ -163,3 +163,26 @@ def test_anchor_cas_failure_leaves_recoverable_single_record_gap(tmp_path):
     assert anchor.read().sequence == 1
     assert recovered.get("exec-gap") is not None
     recovered.close()
+
+
+
+def test_retry_after_ambiguous_anchor_commit_is_idempotent(tmp_path):
+    path = str(tmp_path / "state.sqlite")
+    anchor = InMemoryMonotonicAnchor()
+    journal = AnchoredStateJournal(
+        path, anchor=anchor, integrity_key=KEY, key_id="state-v1"
+    )
+    class FailingAnchor:
+        def read(self):
+            return anchor.read()
+        def compare_and_swap(self, expected, replacement):
+            return False
+    commit = make_commit(1, "exec-idempotent")
+    journal._anchor = FailingAnchor()
+    with pytest.raises(RuntimeError, match="anchor_update_failed"):
+        journal.append(commit)
+    journal._anchor = anchor
+    journal.append(commit)
+    assert anchor.read().sequence == 1
+    assert journal.get("exec-idempotent") == commit
+    journal.close()
