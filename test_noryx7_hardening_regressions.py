@@ -13,6 +13,7 @@ from core.router import ResourceRouter
 from core.verification import VerificationEngine
 from noryx7_runtime.contracts import ExecutionStatus, Intent, PlanStep as RuntimePlanStep
 from noryx7_runtime.engine import RuntimeEngine
+from tests.million_scale_campaign import VERIFICATION_SCOPE, run_campaign, scenario_for
 
 
 class StubAgent:
@@ -126,3 +127,28 @@ def test_high_risk_authorization_replay_is_rejected_across_runtime_retries():
     assert replay.status is ExecutionStatus.FAILED
     assert replay.error == "PermissionError"
     assert effects == ["step-1"]
+
+
+def test_generated_campaign_reports_its_actual_evidence_scope():
+    result = run_campaign(seed=20261113, cases=10_000)
+
+    assert result["status"] == "passed"
+    assert result["executed"] == 10_000
+    assert result["verification_scope"] == VERIFICATION_SCOPE
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: scenario_for(True, 0),
+        lambda: scenario_for(1, True),
+        lambda: run_campaign(True, 100),
+        lambda: run_campaign(1, True),
+        lambda: run_campaign(1, 100, shards="1"),
+        lambda: run_campaign(1, 100, shard_index=True),
+        lambda: run_campaign(1, 1_000_001),
+    ],
+)
+def test_generated_campaign_rejects_invalid_bounds_and_boolean_integers(call):
+    with pytest.raises(ValueError):
+        call()
