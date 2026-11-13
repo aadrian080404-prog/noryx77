@@ -6,7 +6,7 @@ from core.key_lifecycle import ExternalKeyBoundary, KeyLifecycle, KeyState
 from core.lifecycle_key_provider import LifecycleBoundKeyProvider
 
 
-class TestExternalKMS(ExternalKeyBoundary):
+class FakeExternalKMS(ExternalKeyBoundary):
     def __init__(self):
         self.calls = []
 
@@ -22,7 +22,7 @@ def test_lifecycle_bound_provider_fetches_active_version_only(tmp_path):
         key_id="metadata-v1",
     )
     lifecycle.register("memory-key")
-    kms = TestExternalKMS()
+    kms = FakeExternalKMS()
     provider = LifecycleBoundKeyProvider(kms, lifecycle)
     cipher = AuthenticatedCipher(provider)
 
