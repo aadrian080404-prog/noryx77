@@ -78,10 +78,6 @@ def expected_stratum_counts(cases: int, *, seed: int = 0) -> dict[tuple[str, str
         raise ValueError("invalid_scenario_case_count")
     if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2**63 - 1:
         raise ValueError("invalid_scenario_seed")
-    dimensions = (
-        ENTITY_CLASSES, POWER_TIERS, CAPABILITY_CLASSES,
-        BEHAVIOR_CLASSES, IMPACT_CLASSES,
-    )
     base, remainder = divmod(cases, STRATA_COUNT)
     counts = {
         (entity, power, capability, behavior, impact): base
