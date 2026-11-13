@@ -14,10 +14,14 @@ def build_mandate():
                                 ("transaction:tx-1",), 500.0, b"mandate-signature")
 
 
-def build_approvals(policy, request, count=2):
+def build_approvals(policy, request, count=2, supervisors=0):
     digest = policy.digest(request)
     return tuple(
-        InstitutionalApproval(f"approval-{i}", f"reviewer-{i}", digest, 400.0, b"approval-signature")
+        InstitutionalApproval(
+            f"approval-{i}", f"reviewer-{i}", digest, 400.0,
+            b"approval-signature",
+            "independent_supervisor" if i >= count - supervisors else "approver",
+        )
         for i in range(count)
     )
 
@@ -62,6 +66,8 @@ def test_supervised_reconstruction_requires_additional_approval():
     assert not decision.allowed
     assert decision.required_approvals == 3
     decision = policy.evaluate(request, build_mandate(), build_approvals(policy, request, 3), now=200.0)
+    assert not decision.allowed
+    decision = policy.evaluate(request, build_mandate(), build_approvals(policy, request, 3, supervisors=1), now=200.0)
     assert decision.allowed
 
 
