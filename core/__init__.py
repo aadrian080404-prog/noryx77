@@ -29,6 +29,7 @@ from .metacognition import MetacognitiveReflection
 from .metacognitive_challenge import AdaptiveChallengeController, ChallengeDomain, ChallengeScore, ChallengeSpec, ChallengeTrace, ChallengeVerification, ImprovementEvidence, IndependentChallengeVerifier, MetacognitiveChallengeEvaluator
 from .multiauth import AuthorizationProof, SignedApproval, SignedApprovalAuthority, SignedAuthorizationProof, ThresholdAuthorizer, action_digest, sign_approval
 from .observability import EventKind, ObservedEvent, SecurityEventBus
+from .durable_security_events import DurableSecurityEventBus
 from .offline import OfflineConflictError, OfflineDeniedError, OfflineExecution, OfflineRuntime, OfflineSnapshot, OfflineState, OfflineSyncQueue, SyncEnvelope
 from .offline_adapters import BoundAuthenticatedCipher, PolicyOfflineAdapter, VerificationOfflineAdapter
 from .offline_anchor import MonotonicAnchor
