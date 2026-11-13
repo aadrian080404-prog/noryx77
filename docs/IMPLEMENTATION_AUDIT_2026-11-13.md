@@ -99,3 +99,17 @@ The Foundation job includes dependency validation, Python compilation, complete 
 - PR #8 is the base repair PR and remains open.
 - PR #7 remains separately open but its SURF files are already integrated in the repair lineage; do not merge PR #7 independently without reconciling duplicate changes.
 - No change to `main` or the frozen architecture branch is part of this audit.
+
+
+## Additional documentation consistency finding
+
+The repository's `NORYX7_CONTEXT/ARCHITECTURE_STATUS.md` and `NORYX7_CONTEXT/VERIFIED_TESTS.md` still describe an older `frontier-hardening-2026-09-07` branch and a 702-test baseline. They are historical evidence, not the current branch state, and must not be used as the current implementation/verification ledger. The current branch-specific evidence is the CI run set above plus this audit. A later documentation pass should reconcile these context files while preserving their historical record rather than silently rewriting old results.
+
+## New work after the audited revision
+
+After the source audit above, PR #12 received a new verification-quality tranche:
+- `tests/aggregate_campaign.py` validates complete shard presence, unique shard indices, configuration consistency, per-shard execution counts, aggregate totals and the exact entity × power matrix.
+- `tests/test_aggregate_campaign.py` adds focused tests for successful aggregation, missing/duplicate shards, tampered matrix counts and configuration mismatch.
+- `.github/workflows/million-scale-verification.yml` now writes unique per-shard result files, uploads them separately, downloads all campaign artifacts and runs a final aggregation job.
+
+These changes are pending CI on the new PR head and are not marked verified by this audit. The 10M full campaign remains unexecuted.
