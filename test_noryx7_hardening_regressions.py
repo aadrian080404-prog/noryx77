@@ -184,7 +184,6 @@ def test_runtime_rejects_in_memory_replay_guard_for_high_risk_actions():
     engine = RuntimeEngine(
         multi_auth_authority=authority,
         authorization_provider=lambda envelope, statement: None,
-        high_risk_action_types={"financial"},
         replay_guard=AuthorizationReplayGuard(),
     )
     effects = []
