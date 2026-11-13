@@ -9,9 +9,9 @@ from .memory import MemoryItem
 from .sqlite_memory import SQLiteEncryptedMemoryStore
 
 
-def _store(path, key=b"m" * 32, key_id="memory-kms-v1"):
+def _store(path, key=b"m" * 32, key_id="memory-kms-v1", max_items=20):
     return SQLiteEncryptedMemoryStore(
-        str(path), encryption_key=key, key_id=key_id, max_items=20,
+        str(path), encryption_key=key, key_id=key_id, max_items=max_items,
     )
 
 
@@ -119,7 +119,7 @@ def test_encrypted_memory_rejects_json_type_coercion(tmp_path, content):
 
 def test_encrypted_memory_serializes_concurrent_writers_and_survives_restart(tmp_path):
     path = tmp_path / "memory.sqlite"
-    store = _store(path)
+    store = _store(path, max_items=100)
 
     def write(index):
         store.put(MemoryItem(
@@ -137,7 +137,7 @@ def test_encrypted_memory_serializes_concurrent_writers_and_survives_restart(tmp
     store.close()
     assert store.durable is False
 
-    recovered = _store(path)
+    recovered = _store(path, max_items=100)
     assert len(recovered) == 64
     assert recovered.get("mem-63", execution_id="exec-concurrent").content == {"value": 63}
     recovered.close()
