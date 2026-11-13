@@ -87,4 +87,4 @@ def test_closed_durable_event_bus_denies_high_risk_authorization(tmp_path):
         verifier=lambda envelope, output: True,
     )
     assert result.status is ExecutionStatus.FAILED
-    assert result.error == "PermissionError"
+    assert result.error == "security_event_persistence_failed"
