@@ -30,7 +30,7 @@ guard = AuthenticatedAuthorizationReplayGuard(
     path="/var/lib/noryx7/authorization-replay.sqlite3",
 )
 authority = AuthorizationAuthority(
-    authorization_secret=authorization_secret,
+    secret=authorization_secret,
     replay_guard=guard,
     require_authenticated_replay=True,
 )
