@@ -50,12 +50,15 @@ class PlanStep:
     target: str
     parameters: Mapping[str, Any]
     dependencies: Tuple[str, ...] = ()
+    risk_class: str = "normal"
 
     def __post_init__(self) -> None:
         if not self.step_id or not self.action_type or not self.target:
             raise ValueError("plan step is incomplete")
         if len(set(self.dependencies)) != len(self.dependencies):
             raise ValueError("duplicate step dependency")
+        if self.risk_class not in {"normal", "sensitive", "high"}:
+            raise ValueError("invalid_step_risk_class")
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,7 @@ class ActionEnvelope:
     target: str
     parameters: Mapping[str, Any]
     nonce: str
+    risk_class: str = "normal"
 
 
 @dataclass(frozen=True)
