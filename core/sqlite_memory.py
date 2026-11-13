@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from pathlib import Path
+import math
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -18,6 +18,26 @@ from .memory import MemoryItem, MemoryStore
 
 SCHEMA_VERSION = 1
 NONCE_SIZE = 12
+
+
+def _validate_json_value(value: Any) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise TypeError("memory_content_non_finite_number")
+        return
+    if isinstance(value, list):
+        for item in value:
+            _validate_json_value(item)
+        return
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("memory_content_object_keys_must_be_strings")
+        for item in value.values():
+            _validate_json_value(item)
+        return
+    raise TypeError("memory_content_must_use_json_stable_types")
 
 
 def _canonical(value: Any) -> bytes:
@@ -109,6 +129,7 @@ class SQLiteEncryptedMemoryStore(MemoryStore):
 
     @staticmethod
     def _serialize(item: MemoryItem) -> bytes:
+        _validate_json_value(item.content)
         return _canonical({
             "memory_id": item.memory_id,
             "content": item.content,
