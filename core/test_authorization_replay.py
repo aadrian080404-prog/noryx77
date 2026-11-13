@@ -185,3 +185,38 @@ def test_authenticated_replay_guard_rejects_short_key_and_memory_store(tmp_path)
         AuthenticatedAuthorizationReplayGuard(
             integrity_key=b"k" * 32, key_id="test", path=":memory:"
         )
+
+
+from .actions import AuthorizationAuthority
+
+
+def test_authority_can_require_authenticated_replay_guard(tmp_path):
+    authenticated = _authenticated_guard(tmp_path / "authority-authenticated.sqlite3")
+    authority = AuthorizationAuthority(
+        b"a" * 32,
+        replay_guard=authenticated,
+        require_authenticated_replay=True,
+    )
+    assert authority.durable
+    assert authority.integrity_protected
+    assert authority.requires_authenticated_replay
+    authenticated.close()
+
+
+def test_authority_rejects_unkeyed_replay_guard_when_integrity_is_required(tmp_path):
+    legacy = AuthorizationReplayGuard(
+        path=str(tmp_path / "authority-legacy.sqlite3")
+    )
+    with pytest.raises(ValueError, match="authenticated_replay_guard_required"):
+        AuthorizationAuthority(
+            b"a" * 32,
+            replay_guard=legacy,
+            require_authenticated_replay=True,
+        )
+    legacy.close()
+
+
+def test_authority_does_not_claim_authenticated_integrity_in_legacy_mode():
+    authority = AuthorizationAuthority(b"a" * 32)
+    assert authority.requires_authenticated_replay is False
+    assert authority.integrity_protected is False
