@@ -75,8 +75,13 @@ class ProcessExecutionAdapter:
         self.max_result_bytes = max_result_bytes
 
     def execute(self, envelope: ActionEnvelope) -> Any:
+        return self.execute_with_timeout(envelope, self.timeout_seconds)
+
+    def execute_with_timeout(self, envelope: ActionEnvelope, timeout_seconds: float) -> Any:
         if not isinstance(envelope, ActionEnvelope):
             raise TypeError("envelope_must_be_ActionEnvelope")
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds_must_be_positive")
         context = multiprocessing.get_context("spawn")
         receive_conn, send_conn = context.Pipe(duplex=False)
         process = context.Process(
@@ -87,7 +92,7 @@ class ProcessExecutionAdapter:
         try:
             process.start()
             send_conn.close()
-            if not receive_conn.poll(self.timeout_seconds):
+            if not receive_conn.poll(float(timeout_seconds)):
                 self._stop(process)
                 raise ProcessExecutionTimeout("executor_deadline_exceeded")
             try:
@@ -115,6 +120,7 @@ class ProcessExecutionAdapter:
             return response["result"]
         finally:
             receive_conn.close()
+            send_conn.close()
             if process.pid is not None and process.is_alive():
                 self._stop(process)
             if process.pid is not None:

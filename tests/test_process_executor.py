@@ -3,6 +3,9 @@ import time
 import pytest
 
 from noryx7_runtime.contracts import ActionEnvelope
+from noryx7_runtime.attestation import Ed25519AttestationSigner
+from noryx7_runtime.contracts import Intent, PlanStep, ExecutionStatus
+from noryx7_runtime.engine import RuntimeEngine
 from noryx7_runtime.process_executor import (
     ProcessExecutionAdapter,
     ProcessExecutionError,
@@ -60,3 +63,25 @@ def test_process_executor_rejects_non_picklable_or_invalid_configuration():
         ProcessExecutionAdapter(echo_handler, agent_id=" ")
     with pytest.raises(ValueError, match="timeout_seconds"):
         ProcessExecutionAdapter(echo_handler, agent_id="worker", timeout_seconds=0)
+
+
+
+def test_runtime_deadline_overrides_longer_adapter_timeout():
+    adapter = ProcessExecutionAdapter(
+        slow_handler,
+        agent_id="isolated-worker",
+        timeout_seconds=20,
+        terminate_grace_seconds=0.1,
+    )
+    engine = RuntimeEngine(
+        adapter=adapter,
+        attestation_signer=Ed25519AttestationSigner.generate(),
+    )
+    result = engine.execute(
+        Intent("deadline test", "principal-1"),
+        [PlanStep("step-1", "test", "local", {})],
+        verifier=lambda envelope, output: True,
+        timeout_seconds=1.5,
+    )
+    assert result.status is ExecutionStatus.FAILED
+    assert result.error == "ProcessExecutionTimeout"
