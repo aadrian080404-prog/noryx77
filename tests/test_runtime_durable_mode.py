@@ -35,6 +35,13 @@ def test_strict_durable_state_mode_accepts_persistent_journal(tmp_path):
     )
     assert engine.runtime_id == "runtime-1"
     journal.close()
+    assert not journal.durable
+    with pytest.raises(ValueError, match="durable_runtime_state_journal_required"):
+        RuntimeEngine(
+            runtime_id="runtime-1",
+            state_journal=journal,
+            require_durable_state_journal=True,
+        )
 
 
 def test_strict_durable_state_mode_requires_boolean():
