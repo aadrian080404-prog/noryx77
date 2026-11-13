@@ -49,6 +49,8 @@ from .security import SecurityBoundary, SecurityDecision
 from .self_improvement import ImprovementPipeline, ImprovementProposal, ImprovementStage
 from .state import NORYXState, StateCommit, StateStore
 from .state_journal import StateJournal
+from .remote_witness import RemoteMonotonicAnchor, RemoteWitnessClient, SignedWitnessReceipt
+from .anchored_state_journal import AnchoredStateJournal
 from .supervisor import AgentDecision, AgentSupervisor
 from .supply_chain import ArtifactManifest, SupplyChainVerifier, manifest_digest
 from .tools import CapabilityRegistry, ToolExecutor
