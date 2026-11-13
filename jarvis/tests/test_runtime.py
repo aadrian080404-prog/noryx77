@@ -1,10 +1,17 @@
+import os
+import tempfile
 import pytest
 from jarvis.core.contracts import Request, Plan, PlanStep, ActionResult
 from jarvis.core.runtime import JarvisRuntime
 
 
+def _durable_runtime():
+    directory = tempfile.mkdtemp(prefix="noryx7-replay-")
+    return JarvisRuntime(authorization_replay_path=os.path.join(directory, "replay.sqlite3"))
+
+
 def test_runtime_requires_explicit_grant_and_registered_capability():
-    runtime = JarvisRuntime(); request = Request("run", "user"); step = PlanStep("a", "tool", "target", {}); plan = Plan(request.request_id, (step,)); runtime.registry.register("tool", lambda s: ActionResult(s.step_id, True, "ok"))
+    runtime = _durable_runtime(); request = Request("run", "user"); step = PlanStep("a", "tool", "target", {}); plan = Plan(request.request_id, (step,)); runtime.registry.register("tool", lambda s: ActionResult(s.step_id, True, "ok"))
     with pytest.raises(PermissionError, match="capability_denied"): runtime.execute(request, plan)
     runtime.grant("user", "tool", "target"); result = runtime.execute(request, plan)
     assert result[0].success and result[0].output == "ok"
