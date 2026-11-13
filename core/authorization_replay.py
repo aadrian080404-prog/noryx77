@@ -98,6 +98,10 @@ class AuthorizationReplayGuard:
         return self._db is not None and not self._closed
 
     @property
+    def integrity_protected(self) -> bool:
+        return False
+
+    @property
     def consumed_count(self) -> int:
         with self._lock:
             if self._closed:
@@ -269,6 +273,10 @@ class AuthenticatedAuthorizationReplayGuard(AuthorizationReplayGuard):
     @property
     def authenticated(self) -> bool:
         return self._db is not None and not self._closed
+
+    @property
+    def integrity_protected(self) -> bool:
+        return self.authenticated
 
     def _token_hash(self, token: bytes) -> bytes:
         return hmac.new(
