@@ -21,6 +21,9 @@ class AttackScenario:
     sequence: tuple[str, ...]
     entity_class: str = "unknown"
     power_tier: str = "p0_minimal"
+    capability_class: str = "reconnaissance"
+    behavior_class: str = "probing"
+    impact_class: str = "none"
 
 
 @dataclass(frozen=True)
@@ -67,4 +70,5 @@ class AdversarialEngine:
         return AttackScenario(
             f"adv-{digest[:24]}", self.seed, difficulty, surface, technique, objective,
             sequence, coordinate.entity_class, coordinate.power_tier,
+            coordinate.capability_class, coordinate.behavior_class, coordinate.impact_class,
         )
