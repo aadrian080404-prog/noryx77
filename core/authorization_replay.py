@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import math
+import time
 
-MAX_TOKENS = 4096
+MAX_TOKENS = 1_000_000
 TOKEN_SIZE = 32
 
 
@@ -15,7 +17,7 @@ class AuthorizationReplayGuard:
     High-risk RuntimeEngine actions require a file-backed SQLite guard.
     """
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, *, max_tokens: int = MAX_TOKENS, path: str | None = None) -> None:
         if isinstance(max_tokens, bool) or not isinstance(max_tokens, int) or not 1 <= max_tokens <= MAX_TOKENS:
@@ -24,7 +26,7 @@ class AuthorizationReplayGuard:
             raise ValueError("invalid_replay_guard_path")
         self._max_tokens = max_tokens
         self._path = path
-        self._consumed: set[bytes] = set()
+        self._consumed: dict[bytes, float] = {}
         self._lock = threading.RLock()
         self._db: sqlite3.Connection | None = None
         self._closed = False
@@ -40,7 +42,7 @@ class AuthorizationReplayGuard:
                 db.execute("PRAGMA synchronous=FULL")
                 db.execute(
                     "CREATE TABLE IF NOT EXISTS replay_guard_tokens ("
-                    "token BLOB PRIMARY KEY) WITHOUT ROWID"
+                    "token BLOB PRIMARY KEY, expires_at REAL NOT NULL) WITHOUT ROWID"
                 )
                 db.execute(
                     "CREATE TABLE IF NOT EXISTS replay_guard_meta ("
@@ -92,23 +94,28 @@ class AuthorizationReplayGuard:
             except sqlite3.Error as exc:
                 raise RuntimeError("replay_guard_storage_unavailable") from exc
 
-    def consume(self, token: bytes) -> bool:
-        """Atomically consume token; malformed, replayed, full or storage-error inputs fail closed."""
+    def consume(self, token: bytes, *, expires_at: float, now: float | None = None) -> bool:
+        """Atomically consume a token until expiry; expired rows are reclaimed safely."""
         if not isinstance(token, bytes) or len(token) != TOKEN_SIZE:
+            return False
+        now = time.time() if now is None else now
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) for value in (expires_at, now)) or expires_at <= now:
             return False
         with self._lock:
             if self._closed:
                 return False
             if self._db is None:
+                self._consumed = {key: expiry for key, expiry in self._consumed.items() if expiry > now}
                 if token in self._consumed or len(self._consumed) >= self._max_tokens:
                     return False
-                self._consumed.add(bytes(token))
+                self._consumed[bytes(token)] = float(expires_at)
                 return True
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                self._db.execute("DELETE FROM replay_guard_tokens WHERE expires_at<=?", (float(now),))
                 exists = self._db.execute(
-                    "SELECT 1 FROM replay_guard_tokens WHERE token=?",
-                    (sqlite3.Binary(token),),
+                    "SELECT 1 FROM replay_guard_tokens WHERE token=? AND expires_at>?",
+                    (sqlite3.Binary(token), float(now)),
                 ).fetchone()
                 if exists is not None:
                     self._db.execute("ROLLBACK")
@@ -120,8 +127,8 @@ class AuthorizationReplayGuard:
                     self._db.execute("ROLLBACK")
                     return False
                 self._db.execute(
-                    "INSERT INTO replay_guard_tokens(token) VALUES(?)",
-                    (sqlite3.Binary(token),),
+                    "INSERT INTO replay_guard_tokens(token,expires_at) VALUES(?,?)",
+                    (sqlite3.Binary(token), float(expires_at)),
                 )
                 self._db.execute("COMMIT")
                 return True
@@ -130,18 +137,27 @@ class AuthorizationReplayGuard:
                     self._db.execute("ROLLBACK")
                 return False
 
-    def contains(self, token: bytes) -> bool:
+    def contains(self, token: bytes, *, now: float | None = None) -> bool:
         if not isinstance(token, bytes) or len(token) != TOKEN_SIZE:
             return False
+        now = time.time() if now is None else now
+        if isinstance(now, bool) or not isinstance(now, (int, float)) or not math.isfinite(float(now)):
+            return True
         with self._lock:
             if self._closed:
                 return False
             if self._db is None:
-                return token in self._consumed
+                expiry = self._consumed.get(token)
+                if expiry is None:
+                    return False
+                if expiry <= now:
+                    self._consumed.pop(token, None)
+                    return False
+                return True
             try:
                 return self._db.execute(
-                    "SELECT 1 FROM replay_guard_tokens WHERE token=?",
-                    (sqlite3.Binary(token),),
+                    "SELECT 1 FROM replay_guard_tokens WHERE token=? AND expires_at>?",
+                    (sqlite3.Binary(token), float(now)),
                 ).fetchone() is not None
             except sqlite3.Error:
                 return False
