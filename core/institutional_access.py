@@ -14,6 +14,8 @@ import json
 import math
 from typing import Mapping, Protocol
 
+from .authorization_replay import AuthorizationReplayGuard
+
 
 class AccessMode(str, Enum):
     PREDICATE = "predicate"
@@ -96,6 +98,9 @@ class InstitutionalAccessGate:
         required_roles: tuple[str, ...] = ("authorization", "oversight"),
         max_output_limit: int = 100,
         clock,
+        approval_replay_guard: AuthorizationReplayGuard | None = None,
+        require_durable_approval_replay: bool = False,
+        require_authenticated_approval_replay: bool = False,
     ) -> None:
         if not callable(getattr(verifier, "verify_mandate", None)) or not callable(
             getattr(verifier, "verify_approval", None)
@@ -115,6 +120,24 @@ class InstitutionalAccessGate:
             raise ValueError("invalid_output_limit")
         if not callable(clock):
             raise TypeError("clock_must_be_callable")
+        if approval_replay_guard is not None and not isinstance(
+            approval_replay_guard, AuthorizationReplayGuard
+        ):
+            raise TypeError("invalid_approval_replay_guard")
+        if not isinstance(require_durable_approval_replay, bool) or not isinstance(
+            require_authenticated_approval_replay, bool
+        ):
+            raise ValueError("invalid_approval_replay_policy")
+        if require_authenticated_approval_replay:
+            require_durable_approval_replay = True
+        if require_durable_approval_replay and (
+            approval_replay_guard is None or not approval_replay_guard.durable
+        ):
+            raise ValueError("durable_approval_replay_guard_required")
+        if require_authenticated_approval_replay and not getattr(
+            approval_replay_guard, "integrity_protected", False
+        ):
+            raise ValueError("authenticated_approval_replay_guard_required")
         normalized: dict[str, tuple[str, str]] = {}
         for approver_id, metadata in trusted_approvers.items():
             if (
@@ -130,6 +153,23 @@ class InstitutionalAccessGate:
         self._required_roles = frozenset(required_roles)
         self._max_output_limit = max_output_limit
         self._clock = clock
+        self._approval_replay_guard = approval_replay_guard
+        self._require_durable_approval_replay = require_durable_approval_replay
+        self._require_authenticated_approval_replay = require_authenticated_approval_replay
+
+    @property
+    def approval_replay_durable(self) -> bool:
+        return bool(
+            self._approval_replay_guard is not None
+            and self._approval_replay_guard.durable
+        )
+
+    @property
+    def approval_replay_integrity_protected(self) -> bool:
+        return bool(
+            self._approval_replay_guard is not None
+            and getattr(self._approval_replay_guard, "integrity_protected", False)
+        )
 
     @staticmethod
     def _canonical(value: object) -> bytes:
@@ -290,4 +330,28 @@ class InstitutionalAccessGate:
             seen_roles.add(approval.role)
         if not required_roles.issubset(seen_roles) or len(seen_ids) < self._required_approvals:
             return deny("independent_approval_quorum_not_met")
+
+        if self._approval_replay_guard is not None:
+            replay_tokens = tuple(
+                hashlib.sha256(self._canonical({
+                    "domain": "NORYX7_INSTITUTIONAL_APPROVAL_REPLAY_V1",
+                    "request_digest": digest,
+                    "approver_id": approval.approver_id,
+                    "role": approval.role,
+                    "issued_at": approval.issued_at,
+                    "signature_digest": hashlib.sha256(approval.signature).hexdigest(),
+                })).digest()
+                for approval in approvals
+            )
+            try:
+                consumed = self._approval_replay_guard.consume_many(
+                    replay_tokens,
+                    expires_at=mandate.expires_at,
+                    now=now,
+                )
+            except Exception:
+                return deny("approval_replay_storage_unavailable")
+            if not consumed:
+                return deny("approval_replay_or_capacity_rejected")
+
         return AccessDecision(True, "authorized_plan_only", digest, mode, tuple(sorted(request.data_scopes)), tuple(sorted(seen_domains)))
