@@ -134,6 +134,11 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
     behavior_counts = {name: 0 for name in BEHAVIOR_CLASSES}
     impact_counts = {name: 0 for name in IMPACT_CLASSES}
     entity_power_counts = {f"{entity}|{power}": 0 for entity in ENTITY_CLASSES for power in POWER_TIERS}
+    entity_behavior_counts = {f"{entity}|{behavior}": 0 for entity in ENTITY_CLASSES for behavior in BEHAVIOR_CLASSES}
+    entity_impact_counts = {f"{entity}|{impact}": 0 for entity in ENTITY_CLASSES for impact in IMPACT_CLASSES}
+    power_capability_counts = {f"{power}|{capability}": 0 for power in POWER_TIERS for capability in CAPABILITY_CLASSES}
+    capability_impact_counts = {f"{capability}|{impact}": 0 for capability in CAPABILITY_CLASSES for impact in IMPACT_CLASSES}
+    behavior_impact_counts = {f"{behavior}|{impact}": 0 for behavior in BEHAVIOR_CLASSES for impact in IMPACT_CLASSES}
     executed = 0
     first_digest: str | None = None
     last_digest: str | None = None
@@ -148,6 +153,11 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         behavior_counts[scenario.behavior_class] += 1
         impact_counts[scenario.impact_class] += 1
         entity_power_counts[f"{scenario.entity_class}|{scenario.power_tier}"] += 1
+        entity_behavior_counts[f"{scenario.entity_class}|{scenario.behavior_class}"] += 1
+        entity_impact_counts[f"{scenario.entity_class}|{scenario.impact_class}"] += 1
+        power_capability_counts[f"{scenario.power_tier}|{scenario.capability_class}"] += 1
+        capability_impact_counts[f"{scenario.capability_class}|{scenario.impact_class}"] += 1
+        behavior_impact_counts[f"{scenario.behavior_class}|{scenario.impact_class}"] += 1
         digest = scenario.digest()
         first_digest = first_digest or digest
         last_digest = digest
@@ -165,6 +175,11 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
         "power_counts": power_counts, "entity_power_counts": entity_power_counts,
         "capability_counts": capability_counts, "behavior_counts": behavior_counts,
         "impact_counts": impact_counts,
+        "entity_behavior_counts": entity_behavior_counts,
+        "entity_impact_counts": entity_impact_counts,
+        "power_capability_counts": power_capability_counts,
+        "capability_impact_counts": capability_impact_counts,
+        "behavior_impact_counts": behavior_impact_counts,
         "first_digest": first_digest, "last_digest": last_digest,
         "verification_scope": VERIFICATION_SCOPE,
         "duration_seconds": round(time.monotonic() - started, 6), "status": "passed",
