@@ -1,7 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-import os
-import tempfile
-
 from .authorization_replay import AuthorizationReplayGuard, MAX_TOKENS, TOKEN_SIZE
 
 
@@ -35,7 +32,7 @@ def test_capacity_is_bounded_and_fails_closed():
 def test_maximum_capacity_is_policy_bounded():
     assert MAX_TOKENS == 1_000_000
     assert TOKEN_SIZE == 32
-    for invalid in (0, MAX_TOKENS + 1, True, "4096"):
+    for invalid in (0, MAX_TOKENS + 1, True, "1000000"):
         try:
             AuthorizationReplayGuard(max_tokens=invalid)
         except ValueError:
@@ -57,7 +54,8 @@ def test_expired_tokens_are_reclaimed_without_replay_window_overlap():
     guard = AuthorizationReplayGuard(max_tokens=1)
     assert guard.consume(token(1), expires_at=101, now=100)
     assert not guard.consume(token(2), expires_at=300, now=100)
-    assert not guard.contains(token(1), now=100)
+    assert guard.contains(token(1), now=100)
+    assert not guard.contains(token(1), now=101)
     assert guard.consume(token(2), expires_at=300, now=101)
 
 
