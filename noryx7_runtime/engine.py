@@ -22,6 +22,10 @@ Verifier = Callable[[ActionEnvelope, Any], bool]
 Committer = Callable[[ActionEnvelope, Attestation, Any], None]
 AuthorizationProvider = Callable[[ActionEnvelope, bytes], SignedAuthorizationProof | None]
 _ZERO_DIGEST = "0" * 64
+MANDATORY_HIGH_RISK_ACTION_TYPES = frozenset({
+    "payments", "flights", "insurance", "financial",
+    "execute_external", "publish", "delete_external", "system_change",
+})
 
 def _canonical(value: Any) -> str: return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 def _digest(value: Any) -> str: return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
@@ -53,12 +57,8 @@ class RuntimeEngine:
         if not isinstance(authorization_epoch, int) or isinstance(authorization_epoch, bool) or authorization_epoch < 0: raise ValueError("authorization_epoch must be a non-negative integer")
         high_risk_action_types = frozenset() if high_risk_action_types is None else high_risk_action_types
         if not isinstance(high_risk_action_types, (set, frozenset)) or any(not isinstance(item, str) or not item for item in high_risk_action_types): raise TypeError("high_risk_action_types must contain non-empty strings")
+        high_risk_action_types = frozenset(high_risk_action_types) | MANDATORY_HIGH_RISK_ACTION_TYPES
         if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard): raise TypeError("replay_guard must be an AuthorizationReplayGuard")
-        if high_risk_action_types:
-            if replay_guard is None:
-                raise ValueError("high_risk_actions_require_replay_guard")
-            if not replay_guard.durable:
-                raise ValueError("high_risk_actions_require_durable_replay_guard")
         if adapter is not None and identity_registry is not None:
             public_key = getattr(attestation_signer, "public_key_bytes", None)
             if not isinstance(public_key, bytes): raise ValueError("identity-bound execution requires signer public key")
@@ -98,8 +98,8 @@ class RuntimeEngine:
         ):
             raise PermissionError("multi_auth_required")
 
-        if self._replay_guard is None:
-            raise PermissionError("replay_guard_required")
+        if self._replay_guard is None or not self._replay_guard.durable:
+            raise PermissionError("durable_replay_guard_required")
 
         try:
             proof = self._authorization_provider(
