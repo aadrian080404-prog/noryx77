@@ -187,7 +187,8 @@ def run_campaign(seed: int, cases: int, *, shard_index: int = 0, shards: int = 1
 
     # Coverage is enforced only for an unsharded complete campaign. Each shard is
     # still required to execute its exact deterministic allocation.
-    _validate_coverage(counts, executed)
+    if shards == 1:
+        _validate_coverage(counts, executed)
     expected = ((cases - 1 - shard_index) // shards + 1)
     if executed != expected:
         raise RuntimeError("campaign_case_budget_not_reached")
