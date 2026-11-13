@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import math
 import time
+import os
 
 MAX_TOKENS = 1_000_000
 TOKEN_SIZE = 32
@@ -31,6 +32,10 @@ class AuthorizationReplayGuard:
         self._db: sqlite3.Connection | None = None
         self._closed = False
         if path is not None and path != ":memory:":
+            if not os.path.isabs(path):
+                raise ValueError("absolute_replay_guard_path_required")
+            if os.path.islink(path):
+                raise ValueError("replay_guard_symlink_path_rejected")
             db = sqlite3.connect(
                 path,
                 timeout=30,
@@ -40,6 +45,9 @@ class AuthorizationReplayGuard:
             try:
                 db.execute("PRAGMA journal_mode=WAL")
                 db.execute("PRAGMA synchronous=FULL")
+                db.execute("PRAGMA busy_timeout=30000")
+                db.execute("PRAGMA trusted_schema=OFF")
+                db.execute("PRAGMA secure_delete=ON")
                 db.execute(
                     "CREATE TABLE IF NOT EXISTS replay_guard_tokens ("
                     "token BLOB PRIMARY KEY, expires_at REAL NOT NULL) WITHOUT ROWID"
@@ -70,6 +78,8 @@ class AuthorizationReplayGuard:
             except Exception:
                 db.close()
                 raise
+            if os.name == "posix":
+                os.chmod(path, 0o600)
             self._db = db
 
     @property
