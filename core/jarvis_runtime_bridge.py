@@ -107,6 +107,10 @@ class JarvisRuntimeBridge:
             ):
                 raise PermissionError("capability_denied")
 
+            registered_risk = self.tool_executor.capabilities.risk(envelope.action_type)
+            if registered_risk not in {"normal", "sensitive", "high"}:
+                raise PermissionError("capability_risk_metadata_missing")
+
             action = ActionSpec(
                 action_id=f"{envelope.execution_id}:{envelope.step_id}:{envelope.nonce}",
                 # JARVIS capabilities and Core action types are distinct
@@ -122,6 +126,7 @@ class JarvisRuntimeBridge:
                     "__jarvis_principal_id": request.principal_id,
                 },
                 risk_class=envelope.risk_class,
+                risk_class=registered_risk,
                 requires_authorization=True,
                 execution_id=envelope.execution_id,
             )
