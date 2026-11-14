@@ -1,0 +1,82 @@
+import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from core.journal_integrity import AnchorSnapshot, ZERO_MAC
+from core.quorum_witness import QuorumMonotonicAnchor
+from core.remote_witness import InProcessWitnessClient, RemoteMonotonicAnchor
+from core.witness_authority import SQLiteWitnessAuthority
+
+
+def make_witnesses(tmp_path):
+    anchors = []
+    authorities = []
+    for index in range(3):
+        key = Ed25519PrivateKey.generate()
+        authority = SQLiteWitnessAuthority(
+            str(tmp_path / f"witness-{index}.sqlite"),
+            witness_id=f"witness-{index}",
+            signing_key=key,
+        )
+        authorities.append(authority)
+        anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"witness-{index}",
+            trusted_public_key=key.public_key().public_bytes_raw(),
+        ))
+    return anchors, authorities
+
+
+def test_quorum_anchor_requires_majority_and_advances_atomically(tmp_path):
+    anchors, authorities = make_witnesses(tmp_path)
+    quorum = QuorumMonotonicAnchor({f"witness-{i}": anchor for i, anchor in enumerate(anchors)})
+    initial = AnchorSnapshot(0, ZERO_MAC)
+    next_head = AnchorSnapshot(1, "a" * 64)
+    assert quorum.read() == initial
+    assert quorum.compare_and_swap(initial, next_head)
+    assert quorum.read() == next_head
+    assert not quorum.compare_and_swap(initial, AnchorSnapshot(2, "b" * 64))
+    for authority in authorities:
+        authority.close()
+
+
+def test_quorum_anchor_fails_closed_without_majority(tmp_path):
+    anchors, authorities = make_witnesses(tmp_path)
+
+    class Unavailable:
+        witness_id = "witness-2"
+        def read(self):
+            raise OSError("offline")
+        def compare_and_swap(self, expected, replacement):
+            raise OSError("offline")
+
+    quorum = QuorumMonotonicAnchor({
+        "witness-0": anchors[0],
+        "witness-1": anchors[1],
+        "witness-2": Unavailable(),
+    })
+    assert quorum.read() == AnchorSnapshot(0, ZERO_MAC)
+    for authority in authorities:
+        authority.close()
+
+    class AlsoUnavailable:
+        witness_id = "witness-1"
+        def read(self):
+            raise OSError("offline")
+        def compare_and_swap(self, expected, replacement):
+            raise OSError("offline")
+
+    broken = QuorumMonotonicAnchor({
+        "witness-0": anchors[0],
+        "witness-1": AlsoUnavailable(),
+        "witness-2": Unavailable(),
+    })
+    with pytest.raises(RuntimeError, match="quorum_unavailable"):
+        broken.read()
+
+
+def test_quorum_anchor_requires_odd_three_or_more_witnesses(tmp_path):
+    anchors, authorities = make_witnesses(tmp_path)
+    with pytest.raises(ValueError, match="odd_witness_count"):
+        QuorumMonotonicAnchor({"witness-0": anchors[0], "witness-1": anchors[1]})
+    for authority in authorities:
+        authority.close()
