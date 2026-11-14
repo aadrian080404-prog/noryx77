@@ -50,3 +50,9 @@ an outbound connection attempt fails inside the network namespace. The test
 is skipped by default in generic CI because hosted runners may not permit user
 namespaces. A skipped test is not evidence that production isolation is
 working; deployments must run it on their target host.
+
+The runner also requires the Linux `prlimit` and `setpriv` utilities. It applies
+CPU, address-space, file-size, descriptor, process-count and core-dump limits
+through `prlimit`, and sets `no_new_privs` through `setpriv` before starting
+Bubblewrap. It deliberately avoids Python `preexec_fn` hooks, which are unsafe
+in multithreaded parent processes. Missing utilities fail closed.
