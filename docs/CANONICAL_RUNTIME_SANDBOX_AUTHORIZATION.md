@@ -38,11 +38,17 @@ nested dispatch, same-thread revocation and failure recovery.
 
 - Unit/integration tests use a stub adapter to verify the runtime's identity,
   authorization, one-shot consumption and replay behavior.
-- The dedicated Bubblewrap CI workflow separately exercises the real OS runner,
+- The dedicated Bubblewrap CI workflow exercises the real OS runner,
   network namespace, workspace boundary and effective resource limits.
-- These two test groups do not yet constitute one end-to-end test in which a
-  real authorization grant drives a real Bubblewrap process and the resulting
-  process evidence is committed to the production audit backend.
+- The `NORYX7_RUN_BWRAP_E2E=1` integration test combines the real
+  authorization grant, authenticated persistent replay guard, canonical
+  runtime, actual Bubblewrap process, workspace marker, and replay rejection.
+  It verifies that a second use of the same grant does not launch another
+  process.
+- The runtime's current `AuditLog` remains an in-memory audit component.
+  The real Bubblewrap test does not yet commit process evidence to the
+  `SQLiteAuditLog` / external quorum anchor chain; that integration is
+  still required before claiming end-to-end durable process auditing.
 - Production deployment still requires target-host validation, durable key
   provisioning, external anti-rollback protection, and an explicit policy for
   revocation and uncertain process outcomes.
