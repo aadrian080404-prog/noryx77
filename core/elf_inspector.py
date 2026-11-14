@@ -192,7 +192,12 @@ def inspect_elf_file(path: str | os.PathLike[str], *, max_bytes: int = MAX_ELF_B
     target = Path(path)
     if target.is_symlink():
         raise ValueError("elf_path_must_not_be_symlink")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
     descriptor = os.open(target, flags)
     try:
         metadata = os.fstat(descriptor)
