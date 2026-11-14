@@ -380,3 +380,47 @@ def test_sqlite_audit_recovers_process_death_during_external_anchor_advancement(
         reopened.close()
     finally:
         close_all(recovery_authorities)
+
+
+def test_independent_audit_writers_converge_on_same_external_anchor(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    quorum, authorities = make_quorum(tmp_path)
+    second_quorum = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor
+        for index, anchor in enumerate(quorum._witnesses.values())
+    })
+    path = str(tmp_path / "concurrent-anchor-audit.sqlite")
+    seed = SQLiteAuditLog(path)
+    seed.record("shared-event-1")
+    seed.record("shared-event-2")
+    seed.record("shared-event-3")
+    expected_sequence = len(seed.snapshot())
+    seed.close()
+
+    first_log = SQLiteAuditLog(path)
+    second_log = SQLiteAuditLog(path)
+    barrier = Barrier(3)
+
+    def advance(log, anchor):
+        barrier.wait(timeout=10)
+        return log.verify_and_advance_anchor(anchor)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(advance, first_log, quorum)
+            second = pool.submit(advance, second_log, second_quorum)
+            barrier.wait(timeout=10)
+            first_head = first.result(timeout=20)
+            second_head = second.result(timeout=20)
+        assert first_head == second_head
+        assert first_head.sequence == expected_sequence
+        assert quorum.read() == first_head
+        assert second_quorum.read() == first_head
+        assert first_log.verify_integrity()
+        assert second_log.verify_integrity()
+    finally:
+        first_log.close()
+        second_log.close()
+        close_all(authorities)
