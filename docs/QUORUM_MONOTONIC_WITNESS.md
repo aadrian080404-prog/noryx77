@@ -38,3 +38,16 @@ cannot establish separate ownership, cloud accounts, power/network paths,
 administrators, hardware roots, or anti-rollback guarantees. Deployment
 reviews must verify those properties out of band; distinct labels alone do
 not make a quorum Byzantine-fault tolerant.
+
+## Concurrent coordinator limitation
+
+Each `QuorumMonotonicAnchor` serializes compare-and-swap calls made through that
+same object. This is only an in-process coordinator lock; it is not a
+cross-process lease, leader election protocol, or consensus algorithm. The
+witness-level compare-and-swap intersection prevents two conflicting values
+from both obtaining a majority, but concurrent independent coordinators can
+still split updates so that no value has a majority (particularly with larger
+odd clusters). Reads then fail closed until operators reconcile the witness
+set. Production deployments that require continued availability under
+concurrent writers need a shared consensus/lease protocol or a single fenced
+writer, not merely this quorum wrapper.
