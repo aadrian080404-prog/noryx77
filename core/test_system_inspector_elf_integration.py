@@ -74,3 +74,17 @@ def test_malformed_source_cannot_bypass_total_byte_budget(tmp_path):
     assert report.bytes_scanned == len(malformed)
     assert any(error.endswith(":SyntaxError") for error in report.parse_errors)
     assert any(error.startswith("size_limit_skipped:b.py") for error in report.parse_errors)
+
+
+def test_inspector_bounds_directory_entries_including_irrelevant_files(tmp_path):
+    for name in ("a.bin", "b.bin", "c.bin"):
+        (tmp_path / name).write_bytes(b"ordinary non-ELF data")
+    report = PythonSystemInspector(max_entries=2).inspect(tmp_path)
+    assert report.files_scanned == 0
+    assert "entry_limit_reached" in report.parse_errors
+
+
+def test_inspector_validates_entry_budget():
+    import pytest
+    with pytest.raises(ValueError, match="max_entries"):
+        PythonSystemInspector(max_entries=True)
