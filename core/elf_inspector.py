@@ -86,8 +86,37 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
      phentsize, phnum, shentsize, shnum, shstrndx) = fields
     if version != 1 or ehsize < header_size or ehsize > len(data):
         raise ValueError("elf_header_invalid")
+    # ELF extended numbering stores the real counts/indices in section
+    # header zero. Resolve it before applying table limits and bounds checks.
+    needs_section_zero = (
+        (shnum == 0 and shoff != 0)
+        or phnum == 0xFFFF
+        or shstrndx == 0xFFFF
+    )
+    section_zero = None
+    if needs_section_zero:
+        if shoff == 0 or shentsize < sh_min:
+            raise ValueError("elf_extended_numbering_section_zero_missing")
+        if shoff > len(data) or shentsize > len(data) - shoff:
+            raise ValueError("elf_section_header_table_out_of_bounds")
+        section_zero = struct.unpack_from(sh_format, data, shoff)
+        if elf_class == 2:
+            _n, _t, _f, _a, _o, ext_shnum, ext_shstrndx, ext_phnum, _al, _es = section_zero
+        else:
+            _n, _t, _f, _a, _o, ext_shnum, ext_shstrndx, ext_phnum, _al, _es = section_zero
+        if shnum == 0 and shoff != 0:
+            shnum = ext_shnum
+        if phnum == 0xFFFF:
+            phnum = ext_phnum
+        if shstrndx == 0xFFFF:
+            shstrndx = ext_shstrndx
+    elif shnum == 0 and shstrndx != 0:
+        raise ValueError("elf_section_name_table_invalid")
+
     _bounded_table(data, phoff, phnum, phentsize, ph_min, "program_header")
     _bounded_table(data, shoff, shnum, shentsize, sh_min, "section_header")
+    if shnum == 0 and shstrndx != 0:
+        raise ValueError("elf_section_name_table_invalid")
     findings: list[ELFFinding] = []
     section_names: list[str] = []
 
