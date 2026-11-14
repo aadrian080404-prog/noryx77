@@ -213,16 +213,11 @@ class LocalReservationBook:
         if new_grant.generation <= self._node.grant.generation:
             raise ValueError("grant_generation_must_increase")
         cancelled = tuple(sorted(self._reservations))
-        self._reservations.clear()
-        envelope = ResourceEnvelope(
-            self._node.envelope.capacity,
-            self._node.envelope.committed,
-            self._node.envelope.reserve,
-        )
-        # Existing work must be released before new grant takes effect.
-        released = envelope
+        # Release every local reservation before switching the generation.
+        released = self._node.envelope
         for resources in self._reservations.values():
             released = released.release_work(resources)
+        self._reservations.clear()
         self._node = NodeProfile(
             self._node.node_id, self._node.failure_domain, self._node.attested,
             self._node.sandbox_ready, released, new_grant,
