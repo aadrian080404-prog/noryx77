@@ -23,10 +23,12 @@ PF_X = 1
 PF_W = 2
 SHT_STRTAB = 3
 SHT_DYNAMIC = 6
+SHT_DYNSYM = 11
 DT_NULL = 0
 DT_NEEDED = 1
 MAX_DYNAMIC_ENTRIES = 4096
 MAX_DYNAMIC_LIBRARIES = 256
+MAX_DYNAMIC_SYMBOLS = 4096
 
 
 @dataclass(frozen=True, order=True)
@@ -50,6 +52,7 @@ class ELFInspectionReport:
     section_names: tuple[str, ...]
     findings: tuple[ELFFinding, ...]
     dynamic_libraries: tuple[str, ...] = ()
+    dynamic_imports: tuple[str, ...] = ()
 
 
 def _bounded_table(data: bytes, offset: int, count: int, entry_size: int,
@@ -236,10 +239,59 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             "dynamic dependencies: " + ", ".join(dynamic_libraries[:8]),
         ))
 
+    # Resolve undefined dynamic symbols as import metadata. Symbol tables are
+    # never interpreted as code and every name is checked against its linked
+    # bounded string table.
+    dynamic_imports: list[str] = []
+    symbol_format = endian + ("IBBHQQ" if elf_class == 2 else "IIIBBH")
+    minimum_symbol_size = struct.calcsize(symbol_format)
+    for _name, section_type, file_offset, size, link, entry_size in section_rows:
+        if section_type != SHT_DYNSYM:
+            continue
+        if (
+            entry_size < minimum_symbol_size
+            or size % entry_size != 0
+            or size // entry_size > MAX_DYNAMIC_SYMBOLS
+            or link >= shnum
+        ):
+            raise ValueError("elf_dynamic_symbol_table_invalid")
+        string_section = section_rows[link]
+        if string_section[1] != SHT_STRTAB:
+            raise ValueError("elf_dynamic_symbol_string_table_invalid")
+        _str_name, _str_type, string_offset, string_size, _str_link, _str_entsize = string_section
+        symbol_strings = data[string_offset:string_offset + string_size]
+        for index in range(size // entry_size):
+            values = struct.unpack_from(
+                symbol_format, data, file_offset + index * entry_size
+            )
+            if elf_class == 2:
+                name_offset, _info, _other, section_index, _value, _symbol_size = values
+            else:
+                name_offset, _value, _symbol_size, _info, _other, section_index = values
+            if name_offset == 0 or section_index != 0:
+                continue
+            if name_offset >= len(symbol_strings):
+                raise ValueError("elf_dynamic_symbol_name_offset_invalid")
+            end = symbol_strings.find(b"\\x00", name_offset)
+            if end < 0:
+                raise ValueError("elf_dynamic_symbol_name_unterminated")
+            name = symbol_strings[name_offset:end].decode("utf-8", "replace")
+            if not name:
+                raise ValueError("elf_dynamic_symbol_name_empty")
+            if len(dynamic_imports) >= MAX_DYNAMIC_SYMBOLS:
+                raise ValueError("elf_dynamic_symbol_count_limit")
+            dynamic_imports.append(name)
+    if dynamic_imports:
+        findings.append(ELFFinding(
+            "ELF-007", "info",
+            "undefined dynamic symbols: " + ", ".join(dynamic_imports[:8]),
+        ))
+
     return ELFInspectionReport(
         hashlib.sha256(data).hexdigest(), len(data), 64 if elf_class == 2 else 32,
         endian_name, object_type, machine, entry, phnum, shnum,
-        tuple(section_names), tuple(sorted(set(findings))), tuple(dynamic_libraries),
+        tuple(section_names), tuple(sorted(set(findings))),
+        tuple(dynamic_libraries), tuple(dynamic_imports),
     )
 
 
