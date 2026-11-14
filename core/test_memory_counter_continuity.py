@@ -306,3 +306,29 @@ def test_memory_recovers_uncommitted_append_after_process_death(tmp_path):
         assert recovered.vector_clock() == {"crash-actor": 1}
     finally:
         recovered.close()
+
+
+def test_export_since_limit_preserves_cross_actor_causal_dependencies(tmp_path):
+    source = DistributedMemoryStore(str(tmp_path / "source-causal-pages.sqlite"), actor_id="source")
+    dependency = MemoryEvent("peer-b", 1, "source", "base", False, (("peer-b", 1),))
+    dependent = MemoryEvent(
+        "peer-a", 1, "derived", "computed", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    try:
+        assert source.merge((dependent, dependency)) == 2
+        first_page = source.export_since({}, limit=1)
+        assert first_page == (dependency,)
+
+        target = DistributedMemoryStore(str(tmp_path / "target-causal-pages.sqlite"), actor_id="target")
+        try:
+            assert target.merge(first_page) == 1
+            next_clock = target.vector_clock()
+            second_page = source.export_since(next_clock, limit=1)
+            assert second_page == (dependent,)
+            assert target.merge(second_page) == 1
+            assert target.read("derived") == dependent
+        finally:
+            target.close()
+    finally:
+        source.close()
