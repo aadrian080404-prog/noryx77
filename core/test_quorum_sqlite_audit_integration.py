@@ -162,3 +162,51 @@ def test_sqlite_audit_serializes_concurrent_independent_writers(tmp_path):
 
     first.close()
     second.close()
+
+
+def _multiprocess_audit_writer(database_path, writer_id, event_count):
+    """Top-level worker so the test also runs with multiprocessing spawn."""
+    audit = SQLiteAuditLog(database_path, busy_timeout_ms=15000)
+    try:
+        for index in range(event_count):
+            audit.record("multiprocess_event", writer=writer_id, index=index)
+    finally:
+        audit.close()
+
+
+def test_sqlite_audit_serializes_independent_process_writers(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "multiprocess-audit.sqlite")
+    context = multiprocessing.get_context("spawn")
+    workers = [
+        context.Process(
+            target=_multiprocess_audit_writer,
+            args=(path, f"writer-{index}", 12),
+        )
+        for index in range(3)
+    ]
+
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=30)
+    try:
+        assert all(not worker.is_alive() for worker in workers), "audit_writer_process_timeout"
+        assert [worker.exitcode for worker in workers] == [0, 0, 0]
+    finally:
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=5)
+
+    audit = SQLiteAuditLog(path)
+    events = audit.snapshot()
+    assert len(events) == 36
+    assert audit.verify_integrity()
+    assert audit.digest() == SQLiteAuditLog(path).digest()
+    counts = {}
+    for event in events:
+        counts[event["writer"]] = counts.get(event["writer"], 0) + 1
+    assert counts == {"writer-0": 12, "writer-1": 12, "writer-2": 12}
+    audit.close()
