@@ -42,3 +42,5 @@ guarantee against a hostile process concurrently replacing parent directories.
 For adversarial live filesystems, inspect a read-only snapshot or add a
 platform-specific directory-descriptor traversal before treating path
 containment as a security boundary.
+
+The integrated report now exposes bounded ELF `DT_NEEDED` library names and undefined dynamic symbol names from `SHT_DYNSYM` tables. These are static metadata only: no binary, dependency, or symbol is loaded or executed.
