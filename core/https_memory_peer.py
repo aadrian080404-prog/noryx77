@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import Mapping
+from hashlib import sha256
+from threading import BoundedSemaphore
 import json
 import ssl
 from urllib.error import HTTPError, URLError
@@ -17,6 +20,17 @@ from .signed_memory_replication import (
 )
 
 _PATH = "/v1/memory/merge"
+
+
+def _authenticated_peer_agent_id(certificate_der: bytes, fingerprint_to_agent: Mapping[str, str]) -> str:
+    """Bind a CA-validated TLS client certificate to one configured agent ID."""
+    if not isinstance(certificate_der, bytes) or not certificate_der:
+        raise PermissionError("memory_peer_client_certificate_missing")
+    fingerprint = sha256(certificate_der).hexdigest()
+    agent_id = fingerprint_to_agent.get(fingerprint)
+    if not isinstance(agent_id, str) or not agent_id.strip():
+        raise PermissionError("memory_peer_certificate_unmapped")
+    return agent_id
 
 
 def _batch_to_bytes(batch: SignedMemoryBatch) -> bytes:
@@ -129,13 +143,30 @@ class HTTPSMemoryPeerClient:
 
 def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityRegistry, *,
                             host: str, port: int, cert_file: str, key_file: str,
-                            client_ca_file: str) -> ThreadingHTTPServer:
+                            client_ca_file: str,
+                            peer_certificate_agents: Mapping[str, str] | None = None,
+                            request_timeout: float = 5.0,
+                            max_concurrent_requests: int = 16) -> ThreadingHTTPServer:
     if not isinstance(store, DistributedMemoryStore) or not isinstance(registry, IdentityRegistry):
         raise TypeError("memory_peer_dependencies_required")
     if not isinstance(host, str) or not host.strip():
         raise ValueError("memory_peer_bind_host_required")
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("memory_peer_bind_port_invalid")
+    if not isinstance(peer_certificate_agents, Mapping) or not peer_certificate_agents:
+        raise ValueError("memory_peer_certificate_mapping_required")
+    certificate_agents = dict(peer_certificate_agents)
+    for fingerprint, agent_id in certificate_agents.items():
+        if (not isinstance(fingerprint, str) or len(fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in fingerprint)
+                or not isinstance(agent_id, str) or not agent_id.strip()):
+            raise ValueError("memory_peer_certificate_mapping_invalid")
+    if len(set(certificate_agents.values())) != len(certificate_agents):
+        raise ValueError("memory_peer_certificate_agent_duplicate")
+    if isinstance(request_timeout, bool) or not isinstance(request_timeout, (int, float)) or not 0.1 <= request_timeout <= 30:
+        raise ValueError("memory_peer_request_timeout_invalid")
+    if isinstance(max_concurrent_requests, bool) or not isinstance(max_concurrent_requests, int) or not 1 <= max_concurrent_requests <= 128:
+        raise ValueError("memory_peer_concurrency_limit_invalid")
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -173,7 +204,12 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
                 raw = self.rfile.read(int(length))
                 if len(raw) != int(length):
                     raise ValueError("truncated_body")
+                peer_agent_id = _authenticated_peer_agent_id(
+                    self.connection.getpeercert(binary_form=True), certificate_agents
+                )
                 batch = _batch_from_bytes(raw)
+                if batch.attestation.identity.agent_id != peer_agent_id:
+                    raise PermissionError("memory_peer_certificate_identity_mismatch")
                 inserted = verify_and_merge_memory_batch(store, batch, registry)
                 body = json.dumps({"inserted": inserted}, separators=(",", ":")).encode("utf-8")
                 self.respond(200, body)
@@ -184,9 +220,36 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
             except Exception:
                 self.respond(503, b'{"error":"memory_peer_unavailable"}')
 
-    server = ThreadingHTTPServer((host, port), Handler)
-    server.daemon_threads = True
-    server.request_queue_size = 32
+    class BoundedMemoryPeerServer(ThreadingHTTPServer):
+        daemon_threads = True
+        request_queue_size = 32
+
+        def __init__(self, address, handler):
+            self._request_slots = BoundedSemaphore(max_concurrent_requests)
+            super().__init__(address, handler)
+
+        def get_request(self):
+            request, address = super().get_request()
+            request.settimeout(float(request_timeout))
+            return request, address
+
+        def process_request(self, request, client_address):
+            if not self._request_slots.acquire(blocking=False):
+                request.close()
+                return
+            try:
+                super().process_request(request, client_address)
+            except Exception:
+                self._request_slots.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                self._request_slots.release()
+
+    server = BoundedMemoryPeerServer((host, port), Handler)
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(certfile=cert_file, keyfile=key_file)
