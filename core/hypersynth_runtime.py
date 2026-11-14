@@ -55,7 +55,7 @@ class HypersynthRuntime:
             self.tool_executor.capabilities.register(
                 "sandboxed_process", execute_sandboxed_process, risk_class="high"
             )
-        self.collaboration = AgentCollaboration(self.verifier)
+        self.collaboration = AgentCollaboration(self.verifier, identity_registry=self.identity_registry)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
