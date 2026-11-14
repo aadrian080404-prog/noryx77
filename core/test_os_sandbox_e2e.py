@@ -40,3 +40,33 @@ def test_bubblewrap_executes_in_workspace_without_network(tmp_path):
     assert result.exit_code == 0, result.stderr.decode("utf-8", "replace")
     assert result.stdout.strip() == b"network-denied"
     assert (workspace / "noryx7-e2e-marker").read_text() == "sandbox-ok"
+
+def test_bubblewrap_command_sets_limits_without_preexec_hooks(tmp_path):
+    runner = object.__new__(BubblewrapSandboxRunner)
+    runner._prlimit = "/usr/bin/prlimit"
+    runner._setpriv = "/usr/bin/setpriv"
+    runner._bwrap = "/usr/bin/bwrap"
+    limits = SandboxLimits(
+        cpu_seconds=3,
+        memory_bytes=64 * 1024 * 1024,
+        file_size_bytes=1234,
+        open_files=20,
+        processes=5,
+    )
+
+    command = runner._command(("/usr/bin/true",), str(tmp_path), limits)
+
+    assert command[:10] == [
+        "/usr/bin/prlimit",
+        "--cpu=3:4",
+        "--as=67108864:67108864",
+        "--fsize=1234:1234",
+        "--nofile=20:20",
+        "--core=0:0",
+        "--nproc=5:5",
+        "--",
+        "/usr/bin/setpriv",
+        "--no-new-privs",
+    ]
+    assert command[10] == "--"
+    assert command[11] == "/usr/bin/bwrap"
