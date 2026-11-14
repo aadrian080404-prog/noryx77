@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections.abc import Mapping
+from threading import BoundedSemaphore
+import hashlib
 import json
 import ssl
 from urllib.error import HTTPError, URLError
@@ -87,6 +90,51 @@ def _batch_from_bytes(raw: bytes) -> SignedMemoryBatch:
     return SignedMemoryBatch(attestation, tuple(events))
 
 
+def _certificate_agent_id(cert_der: bytes, pins: Mapping[str, str], batch_agent_id: str) -> str:
+    """Bind the TLS client certificate to the signed NORYX7 agent identity."""
+    if not isinstance(cert_der, bytes) or not cert_der:
+        raise PermissionError("memory_peer_client_certificate_missing")
+    fingerprint = hashlib.sha256(cert_der).hexdigest()
+    expected_agent_id = pins.get(fingerprint)
+    if not isinstance(expected_agent_id, str) or not expected_agent_id.strip():
+        raise PermissionError("memory_peer_client_certificate_unpinned")
+    if not isinstance(batch_agent_id, str) or batch_agent_id != expected_agent_id:
+        raise PermissionError("memory_peer_certificate_identity_mismatch")
+    return expected_agent_id
+
+
+class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    """Threaded server with a hard worker cap and accepted-socket deadline."""
+
+    daemon_threads = True
+
+    def __init__(self, server_address, handler, *, max_workers: int, request_timeout: float):
+        self._worker_slots = BoundedSemaphore(max_workers)
+        self._request_timeout = request_timeout
+        super().__init__(server_address, handler)
+
+    def get_request(self):
+        request, client_address = super().get_request()
+        request.settimeout(self._request_timeout)
+        return request, client_address
+
+    def process_request(self, request, client_address):
+        if not self._worker_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._worker_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._worker_slots.release()
+
+
 class HTTPSMemoryPeerClient:
     """TLS-verifying client with mandatory client certificate authentication."""
 
@@ -129,13 +177,34 @@ class HTTPSMemoryPeerClient:
 
 def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityRegistry, *,
                             host: str, port: int, cert_file: str, key_file: str,
-                            client_ca_file: str) -> ThreadingHTTPServer:
+                            client_ca_file: str, certificate_identity_pins: Mapping[str, str],
+                            max_workers: int = 32, request_timeout: float = 5.0) -> ThreadingHTTPServer:
     if not isinstance(store, DistributedMemoryStore) or not isinstance(registry, IdentityRegistry):
         raise TypeError("memory_peer_dependencies_required")
     if not isinstance(host, str) or not host.strip():
         raise ValueError("memory_peer_bind_host_required")
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("memory_peer_bind_port_invalid")
+    if isinstance(max_workers, bool) or not isinstance(max_workers, int) or not 1 <= max_workers <= 256:
+        raise ValueError("memory_peer_worker_limit_invalid")
+    if isinstance(request_timeout, bool) or not isinstance(request_timeout, (int, float)) or not 0.1 <= request_timeout <= 30:
+        raise ValueError("memory_peer_request_timeout_invalid")
+    if not isinstance(certificate_identity_pins, Mapping) or not certificate_identity_pins:
+        raise ValueError("memory_peer_certificate_pins_required")
+    pins = {}
+    for fingerprint, agent_id in certificate_identity_pins.items():
+        if not isinstance(fingerprint, str) or len(fingerprint) != 64:
+            raise ValueError("memory_peer_certificate_fingerprint_invalid")
+        try:
+            bytes.fromhex(fingerprint)
+        except ValueError as exc:
+            raise ValueError("memory_peer_certificate_fingerprint_invalid") from exc
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("memory_peer_certificate_agent_id_invalid")
+        normalized = fingerprint.lower()
+        if normalized in pins:
+            raise ValueError("memory_peer_certificate_fingerprint_duplicate")
+        pins[normalized] = agent_id
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -170,10 +239,14 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
                 self.respond(413, b'{"error":"body_size_invalid"}')
                 return
             try:
+                peer_certificate = self.connection.getpeercert(binary_form=True)
                 raw = self.rfile.read(int(length))
                 if len(raw) != int(length):
                     raise ValueError("truncated_body")
                 batch = _batch_from_bytes(raw)
+                _certificate_agent_id(
+                    peer_certificate, pins, batch.attestation.identity.agent_id
+                )
                 inserted = verify_and_merge_memory_batch(store, batch, registry)
                 body = json.dumps({"inserted": inserted}, separators=(",", ":")).encode("utf-8")
                 self.respond(200, body)
@@ -184,8 +257,9 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
             except Exception:
                 self.respond(503, b'{"error":"memory_peer_unavailable"}')
 
-    server = ThreadingHTTPServer((host, port), Handler)
-    server.daemon_threads = True
+    server = _BoundedThreadingHTTPServer(
+        (host, port), Handler, max_workers=max_workers, request_timeout=float(request_timeout)
+    )
     server.request_queue_size = 32
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
