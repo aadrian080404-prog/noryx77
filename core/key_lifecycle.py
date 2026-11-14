@@ -131,6 +131,12 @@ class SQLiteKeyLifecycle:
             self._closed = True
             raise
 
+    @staticmethod
+    def _validate_key_id(key_id: object) -> str:
+        if not isinstance(key_id, str) or not key_id.strip() or len(key_id.encode("utf-8")) > 256:
+            raise ValueError("invalid_key_id")
+        return key_id
+
     def _ensure_open(self) -> None:
         if self._closed:
             raise RuntimeError("key_lifecycle_closed")
@@ -157,13 +163,13 @@ class SQLiteKeyLifecycle:
             raise RuntimeError("key_lifecycle_database_corrupt") from exc
 
     def _read(self, key_id: str) -> KeyRecord:
+        self._validate_key_id(key_id)
         return self._record(self._db.execute(
             "SELECT key_id, version, state FROM key_lifecycle WHERE key_id=?", (key_id,)
         ).fetchone())
 
     def register(self, key_id: str, *, version: int = 1) -> KeyRecord:
-        if not isinstance(key_id, str) or not key_id.strip() or len(key_id.encode("utf-8")) > 256:
-            raise ValueError("invalid_key_id")
+        self._validate_key_id(key_id)
         if isinstance(version, bool) or not isinstance(version, int) or version < 1:
             raise ValueError("invalid_key_version")
         with self._lock:
