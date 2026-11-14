@@ -16,3 +16,13 @@ Default maximum input is 64 MiB and program/section tables are capped at 4096
 entries. For dynamic analysis, use a separately provisioned, disposable
 sandbox with kernel-enforced isolation; never execute unknown binaries as part
 of static inspection.
+
+
+## Unified system inspection
+
+PythonSystemInspector.inspect(root) now recognizes ELF files by their magic
+header alongside .py sources. Python AST findings and ELF structural findings
+are returned in the same deterministic finding list; detailed ELF metadata is
+also available through InspectionReport.binary_reports. The same file-count,
+per-file byte and aggregate byte budgets apply. Other binary formats are
+skipped rather than guessed or executed.
