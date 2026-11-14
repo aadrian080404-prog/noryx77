@@ -270,7 +270,11 @@ class SQLiteAuditLog(AuditLog):
                     continue
 
                 # A competing writer may have committed this exact prefix.
-                latest = anchor.read()
+                # If the read-back also fails, the durable outcome is unknown.
+                try:
+                    latest = anchor.read()
+                except Exception as read_exc:
+                    raise ValueError("audit_anchor_outcome_uncertain") from read_exc
                 if latest == replacement:
                     current = replacement
                     continue
