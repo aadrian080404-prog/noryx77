@@ -44,3 +44,11 @@ security policy. This PR does not add seccomp, Landlock, or cgroups.
 canonical runtime construction boundary. It remains disabled when no adapter
 is supplied; no automatic Bubblewrap runner or workspace is created, and this
 does not claim that unrelated legacy or external execution paths are sandboxed.
+
+The canonical runtime currently constructs its `ActionGate` without an
+`AuthorizationAuthority` injection point. Consequently, the registered
+high-risk capability remains fail-closed and cannot yet be executed through
+the public canonical constructor, even when an adapter is supplied. This PR
+only proves registration and routing configuration; it does not make
+production process execution operational. A follow-up must add a durable,
+identity-registry-bound authorization authority before enabling that route.
