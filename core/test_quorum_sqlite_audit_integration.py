@@ -204,7 +204,10 @@ def test_sqlite_audit_serializes_independent_process_writers(tmp_path):
     events = audit.snapshot()
     assert len(events) == 36
     assert audit.verify_integrity()
-    assert audit.digest() == SQLiteAuditLog(path).digest()
+    independent = SQLiteAuditLog(path)
+    assert independent.digest() == audit.digest()
+    assert independent.verify_integrity()
+    independent.close()
     counts = {}
     for event in events:
         counts[event["writer"]] = counts.get(event["writer"], 0) + 1
