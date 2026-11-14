@@ -1,8 +1,9 @@
 import hashlib
 import inspect
+import json
 import time
 
-from .actions import ActionGate
+from .actions import ActionGate, AuthorizationAuthority
 from .audit import AuditLog
 from .collaboration import AgentCollaboration
 from .contracts import TaskSpec, VerificationResult
@@ -22,7 +23,7 @@ from .frontier_capabilities import install_frontier_capabilities
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, sandboxed_process_adapter=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, sandboxed_process_adapter=None, authorization_authority=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -32,8 +33,17 @@ class HypersynthRuntime:
         self.recovery = recovery or RecoveryController()
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
         self.identity_registry = getattr(self.router, "identity_registry", None)
+        if authorization_authority is not None and (
+            not isinstance(authorization_authority, AuthorizationAuthority)
+            or self.identity_registry is None
+            or authorization_authority.identity_registry is not self.identity_registry
+            or not authorization_authority.durable
+            or not authorization_authority.integrity_protected
+            or not authorization_authority.requires_authenticated_replay
+        ):
+            raise ValueError("invalid_runtime_authorization_authority")
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
-        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.action_gate = ActionGate(self.policy, self.security, self.limits, authorization=authorization_authority)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.sandboxed_process_adapter = sandboxed_process_adapter
@@ -48,17 +58,60 @@ class HypersynthRuntime:
                 if not action_id:
                     raise ValueError("sandbox_action_id_required")
                 forwarded = {key: value for key, value in parameters.items() if key != "action_id"}
-                return sandboxed_process_adapter.execute(ProposedAction(
-                    environment=sandboxed_process_adapter.environment,
-                    action_id=action_id,
-                    action_type="process",
-                    target=target,
-                    parameters=forwarded,
-                ))
+                try:
+                    canonical_parameters = json.dumps(
+                        forwarded, sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=False, allow_nan=False,
+                    ).encode("utf-8")
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("sandbox_action_parameters_not_canonical") from exc
+                parameters_digest = hashlib.sha256(canonical_parameters).hexdigest()
+                audit_context = {
+                    "action_id": action_id,
+                    "target": target,
+                    "parameters_sha256": parameters_digest,
+                    "environment": sandboxed_process_adapter.environment,
+                }
+                self.audit.record("sandbox_process_dispatch_started", **audit_context)
+                try:
+                    result = sandboxed_process_adapter.execute(ProposedAction(
+                        environment=sandboxed_process_adapter.environment,
+                        action_id=action_id,
+                        action_type="process",
+                        target=target,
+                        parameters=forwarded,
+                    ))
+                except Exception as exc:
+                    self.audit.record(
+                        "sandbox_process_dispatch_failed",
+                        **audit_context,
+                        error_type=type(exc).__name__,
+                    )
+                    raise
+                stdout = getattr(result, "stdout", b"")
+                stderr = getattr(result, "stderr", b"")
+                try:
+                    self.audit.record(
+                        "sandbox_process_dispatch_completed",
+                        **audit_context,
+                        result_type=type(result).__name__,
+                        exit_code=getattr(result, "exit_code", None),
+                        timed_out=getattr(result, "timed_out", None),
+                        output_truncated=getattr(result, "output_truncated", None),
+                        stdout_sha256=hashlib.sha256(stdout).hexdigest() if isinstance(stdout, bytes) else None,
+                        stderr_sha256=hashlib.sha256(stderr).hexdigest() if isinstance(stderr, bytes) else None,
+                    )
+                except Exception as exc:
+                    # The process may already have produced side effects. Do
+                    # not report ordinary execution failure or retry it: the
+                    # missing durable completion record makes the outcome
+                    # explicitly uncertain and requires operator reconciliation.
+                    raise RuntimeError("sandbox_process_audit_commit_uncertain") from exc
+                return result
             self.tool_executor.capabilities.register(
                 "sandboxed_process", execute_sandboxed_process, risk_class="high"
             )
-        self.collaboration = AgentCollaboration(self.verifier)
+        self.collaboration = AgentCollaboration(self.verifier, identity_registry=self.identity_registry)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(

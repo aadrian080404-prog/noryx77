@@ -5,6 +5,7 @@ from hashlib import sha256
 from typing import Any
 
 from .contracts import AgentResult, TaskSpec, VerificationResult
+from .identity import AgentIdentity, IdentityRegistry
 
 
 @dataclass(frozen=True)
@@ -47,8 +48,56 @@ class AgentCollaboration:
     boundaries, and neither agent can grant itself execution authority.
     """
 
-    def __init__(self, verifier: Any) -> None:
+    def __init__(self, verifier: Any, *, identity_registry: IdentityRegistry | None = None) -> None:
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise TypeError("invalid_collaboration_identity_registry")
         self.verifier = verifier
+        self.identity_registry = identity_registry
+
+    def _require_trusted(self, agent: Any) -> AgentIdentity | None:
+        if self.identity_registry is None:
+            return None
+        identity = getattr(agent, "identity", None)
+        agent_id = getattr(agent, "agent_id", None)
+        if (
+            not isinstance(identity, AgentIdentity)
+            or not isinstance(agent_id, str)
+            or identity.agent_id != agent_id
+            or not self.identity_registry.is_trusted(identity)
+        ):
+            raise PermissionError("collaboration_agent_identity_untrusted")
+        return identity
+
+    def _run_agent(self, agent: Any, task: TaskSpec) -> AgentResult:
+        # Never hold the registry lock across agent/model inference. Capture
+        # both the exact identity and its trust epoch, then revalidate them.
+        agent_id_before = getattr(agent, "agent_id", None)
+        identity_before = self._require_trusted(agent)
+        generation_before = (
+            self.identity_registry.generation(identity_before)
+            if self.identity_registry is not None and identity_before is not None
+            else None
+        )
+        result = agent.run(task)
+        identity_after = self._require_trusted(agent)
+        generation_after = (
+            self.identity_registry.generation(identity_after)
+            if self.identity_registry is not None and identity_after is not None
+            else None
+        )
+        if (
+            getattr(agent, "agent_id", None) != agent_id_before
+            or identity_after != identity_before
+            or generation_after != generation_before
+        ):
+            raise PermissionError("collaboration_agent_identity_changed")
+        if (
+            not isinstance(result, AgentResult)
+            or result.agent_id != agent_id_before
+            or (identity_before is not None and result.agent_id != identity_before.agent_id)
+        ):
+            raise RuntimeError("collaboration_agent_result_identity_mismatch")
+        return result
 
     @staticmethod
     def _digest(value: str) -> str:
@@ -106,7 +155,7 @@ class AgentCollaboration:
         if not task.execution_id:
             raise ValueError("execution_id_required")
 
-        proposal_result: AgentResult = primary.run(task)
+        proposal_result: AgentResult = self._run_agent(primary, task)
         if not isinstance(proposal_result, AgentResult) or proposal_result.execution_id != task.execution_id:
             raise RuntimeError("proposal_execution_identity_mismatch")
         proposal_check = proposal_result.verification
@@ -118,7 +167,7 @@ class AgentCollaboration:
         proposal = Proposal(task.execution_id, task.task_id, primary_id, proposal_output.strip(), self._digest(proposal_output.strip()))
 
         critique_task = self._review_task(task, proposal.output, primary_id)
-        critique_result: AgentResult = secondary.run(critique_task)
+        critique_result: AgentResult = self._run_agent(secondary, critique_task)
         if not isinstance(critique_result, AgentResult) or critique_result.execution_id != task.execution_id:
             raise RuntimeError("critique_execution_identity_mismatch")
         critique_check = critique_result.verification
@@ -153,7 +202,7 @@ class AgentCollaboration:
         )
 
         revision_task = self._revision_task(task, proposal.output, critique.output, primary_id, secondary_id)
-        reconciliation_result: AgentResult = primary.run(revision_task)
+        reconciliation_result: AgentResult = self._run_agent(primary, revision_task)
         if not isinstance(reconciliation_result, AgentResult) or reconciliation_result.execution_id != task.execution_id:
             raise RuntimeError("reconciliation_execution_identity_mismatch")
         reconciliation_check = reconciliation_result.verification
