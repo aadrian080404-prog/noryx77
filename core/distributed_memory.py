@@ -278,7 +278,33 @@ class DistributedMemoryStore:
             self._ensure_open()
             pending = [e for e in self._all_events() if e.counter > normalized.get(e.actor_id, 0)]
             pending.sort(key=lambda e: (e.actor_id, e.counter))
-            return tuple(pending[:limit])
+            # A page boundary must never export a dependent event without the
+            # cross-actor history it references. Select a causally closed,
+            # contiguous prefix even when that means skipping an earlier
+            # lexicographic actor until its dependency has been included.
+            available = dict(normalized)
+            selected: list[MemoryEvent] = []
+            remaining = list(pending)
+            while remaining and len(selected) < limit:
+                progress = False
+                for event in tuple(remaining):
+                    if event.counter != available.get(event.actor_id, 0) + 1:
+                        continue
+                    if any(
+                        actor != event.actor_id
+                        and available.get(actor, 0) < counter
+                        for actor, counter in event.clock
+                    ):
+                        continue
+                    selected.append(event)
+                    available[event.actor_id] = event.counter
+                    remaining.remove(event)
+                    progress = True
+                    if len(selected) >= limit:
+                        break
+                if not progress:
+                    raise RuntimeError("memory_causal_history_incomplete")
+            return tuple(selected)
 
     def merge(self, events: Sequence[MemoryEvent]) -> int:
         if isinstance(events, (str, bytes)) or not isinstance(events, Sequence) or len(events) > MAX_BATCH_EVENTS:
