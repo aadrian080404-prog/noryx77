@@ -81,7 +81,7 @@ def test_table_count_is_bounded():
 
 
 def test_elf_extended_section_count_resolves_then_enforces_parser_limit():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0,
@@ -95,7 +95,7 @@ def test_elf_extended_section_count_resolves_then_enforces_parser_limit():
 
 
 def test_elf_extended_numbering_rejects_non_extended_values():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0xFFFF,
@@ -108,7 +108,7 @@ def test_elf_extended_numbering_rejects_non_extended_values():
 
 
 def test_elf_extended_program_count_enforces_parser_limit():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 1, 0,
