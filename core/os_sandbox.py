@@ -6,7 +6,6 @@ required Linux isolation features are unavailable.
 """
 from __future__ import annotations
 
-import ctypes
 import os
 from pathlib import Path
 import shutil
@@ -16,11 +15,6 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from typing import Sequence
-
-try:
-    import resource
-except ImportError:  # pragma: no cover - non-POSIX platforms fail closed
-    resource = None
 
 
 @dataclass(frozen=True)
@@ -67,15 +61,27 @@ class BubblewrapSandboxRunner:
     absence or namespace failure is an error, never a request to run unsandboxed.
     """
 
-    def __init__(self, *, bwrap_path: str | None = None) -> None:
-        if sys.platform != "linux" or resource is None:
-            raise RuntimeError("linux_resource_limits_required")
-        resolved = bwrap_path or shutil.which("bwrap")
-        if not isinstance(resolved, str) or not os.path.isabs(resolved):
-            raise RuntimeError("bubblewrap_not_available")
-        if not os.path.isfile(resolved) or not os.access(resolved, os.X_OK):
-            raise RuntimeError("bubblewrap_not_executable")
-        self._bwrap = resolved
+    def __init__(
+        self,
+        *,
+        bwrap_path: str | None = None,
+        prlimit_path: str | None = None,
+        setpriv_path: str | None = None,
+    ) -> None:
+        if sys.platform != "linux":
+            raise RuntimeError("linux_sandbox_required")
+
+        def resolve_executable(explicit: str | None, command: str, error: str) -> str:
+            resolved = explicit or shutil.which(command)
+            if not isinstance(resolved, str) or not os.path.isabs(resolved):
+                raise RuntimeError(error)
+            if not os.path.isfile(resolved) or not os.access(resolved, os.X_OK):
+                raise RuntimeError(error)
+            return resolved
+
+        self._bwrap = resolve_executable(bwrap_path, "bwrap", "bubblewrap_not_available")
+        self._prlimit = resolve_executable(prlimit_path, "prlimit", "prlimit_not_available")
+        self._setpriv = resolve_executable(setpriv_path, "setpriv", "setpriv_not_available")
 
     @staticmethod
     def _validate_argv(argv: Sequence[str]) -> tuple[str, ...]:
@@ -105,10 +111,21 @@ class BubblewrapSandboxRunner:
             raise ValueError("sandbox_workspace_must_be_directory")
         return str(resolved)
 
-    def _command(self, argv: tuple[str, ...], workspace: str) -> list[str]:
+    def _command(self, argv: tuple[str, ...], workspace: str, limits: SandboxLimits) -> list[str]:
         if not os.path.isdir("/usr"):
             raise RuntimeError("sandbox_runtime_directory_missing")
         command = [
+            self._prlimit,
+            f"--cpu={limits.cpu_seconds}:{limits.cpu_seconds + 1}",
+            f"--as={limits.memory_bytes}:{limits.memory_bytes}",
+            f"--fsize={limits.file_size_bytes}:{limits.file_size_bytes}",
+            f"--nofile={limits.open_files}:{limits.open_files}",
+            "--core=0:0",
+            f"--nproc={limits.processes}:{limits.processes}",
+            "--",
+            self._setpriv,
+            "--no-new-privs",
+            "--",
             self._bwrap,
             "--die-with-parent",
             "--new-session",
@@ -150,22 +167,6 @@ class BubblewrapSandboxRunner:
         return command
 
     @staticmethod
-    def _apply_limits(limits: SandboxLimits) -> None:
-        assert resource is not None
-        resource.setrlimit(resource.RLIMIT_CPU, (limits.cpu_seconds, limits.cpu_seconds + 1))
-        resource.setrlimit(resource.RLIMIT_AS, (limits.memory_bytes, limits.memory_bytes))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (limits.file_size_bytes, limits.file_size_bytes))
-        resource.setrlimit(resource.RLIMIT_NOFILE, (limits.open_files, limits.open_files))
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        if hasattr(resource, "RLIMIT_NPROC"):
-            resource.setrlimit(resource.RLIMIT_NPROC, (limits.processes, limits.processes))
-        libc = ctypes.CDLL(None, use_errno=True)
-        # PR_SET_NO_NEW_PRIVS: descendants cannot gain privilege through exec.
-        if libc.prctl(38, 1, 0, 0, 0) != 0:
-            error = ctypes.get_errno()
-            raise OSError(error, "prctl(PR_SET_NO_NEW_PRIVS) failed")
-
-    @staticmethod
     def _read_bounded(stream, limit: int) -> tuple[bytes, bool]:
         stream.seek(0)
         data = stream.read(limit + 1)
@@ -182,7 +183,7 @@ class BubblewrapSandboxRunner:
             raise TypeError("sandbox_limits_required")
         checked_argv = self._validate_argv(argv)
         checked_workspace = self._workspace_path(workspace)
-        command = self._command(checked_argv, checked_workspace)
+        command = self._command(checked_argv, checked_workspace, limits)
 
         with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
             try:
@@ -195,7 +196,6 @@ class BubblewrapSandboxRunner:
                     env={"PATH": "/usr/bin:/bin"},
                     close_fds=True,
                     start_new_session=True,
-                    preexec_fn=lambda: self._apply_limits(limits),
                 )
             except OSError as exc:
                 raise RuntimeError("sandbox_process_start_failed") from exc
