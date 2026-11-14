@@ -44,3 +44,10 @@ platform-specific directory-descriptor traversal before treating path
 containment as a security boundary.
 
 The integrated report now exposes bounded ELF `DT_NEEDED` library names and undefined dynamic symbol names from `SHT_DYNSYM` tables. These are static metadata only: no binary, dependency, or symbol is loaded or executed.
+
+The current dependency and dynamic-import extraction uses bounded section
+headers (`SHT_DYNAMIC` and `SHT_DYNSYM`). It does not yet reconstruct these
+tables from `PT_DYNAMIC` when section headers are absent (for example, some
+stripped binaries); such files may still contain dynamic dependencies that
+this version does not report. Treat an empty dependency/import list as
+'information not found by this parser', not proof that the ELF has none.
