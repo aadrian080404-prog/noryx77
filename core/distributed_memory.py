@@ -139,7 +139,7 @@ class DistributedMemoryStore:
             ).fetchone()[0]
             if stored_actor != actor_id:
                 raise ValueError("memory_database_actor_mismatch")
-            self._load_events()
+            self._validate_causal_history(self._load_events())
         except Exception:
             self._db.close()
             self._closed = True
@@ -169,6 +169,33 @@ class DistributedMemoryStore:
                 raise RuntimeError("memory_event_integrity_failure")
             events.append(event)
         return tuple(events)
+
+    @staticmethod
+    def _validate_causal_history(events: Sequence[MemoryEvent]) -> None:
+        """Reject legacy databases whose stored events are not causally closed.
+
+        Earlier store versions enforced actor-counter continuity but did not
+        verify cross-actor vector dependencies. Validate the complete history
+        once at startup before allowing new writes or replication.
+        """
+        pending = {(event.actor_id, event.counter): event for event in events}
+        maxima: dict[str, int] = {}
+        while pending:
+            ready = []
+            for identity, event in pending.items():
+                if event.counter != maxima.get(event.actor_id, 0) + 1:
+                    continue
+                if all(
+                    actor == event.actor_id or maxima.get(actor, 0) >= counter
+                    for actor, counter in event.clock
+                ):
+                    ready.append((identity, event))
+            if not ready:
+                raise RuntimeError("memory_causal_history_incomplete")
+            ready.sort(key=lambda item: (item[1].actor_id, item[1].counter))
+            for identity, event in ready:
+                maxima[event.actor_id] = event.counter
+                pending.pop(identity)
 
     def _all_events(self) -> tuple[MemoryEvent, ...]:
         return self._load_events()
@@ -235,7 +262,14 @@ class DistributedMemoryStore:
             raise ValueError("invalid_peer_vector_clock")
         normalized: dict[str, int] = {}
         for actor, counter in peer_clock.items():
-            if not isinstance(actor, str) or not actor.strip() or isinstance(counter, bool) or not isinstance(counter, int) or counter < 0:
+            if (
+                not isinstance(actor, str)
+                or not actor.strip()
+                or len(actor.encode("utf-8")) > MAX_ACTOR_ID
+                or isinstance(counter, bool)
+                or not isinstance(counter, int)
+                or counter < 0
+            ):
                 raise ValueError("invalid_peer_vector_clock")
             normalized[actor] = counter
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_BATCH_EVENTS:
@@ -244,7 +278,33 @@ class DistributedMemoryStore:
             self._ensure_open()
             pending = [e for e in self._all_events() if e.counter > normalized.get(e.actor_id, 0)]
             pending.sort(key=lambda e: (e.actor_id, e.counter))
-            return tuple(pending[:limit])
+            # A page boundary must never export a dependent event without the
+            # cross-actor history it references. Select a causally closed,
+            # contiguous prefix even when that means skipping an earlier
+            # lexicographic actor until its dependency has been included.
+            available = dict(normalized)
+            selected: list[MemoryEvent] = []
+            remaining = list(pending)
+            while remaining and len(selected) < limit:
+                progress = False
+                for event in tuple(remaining):
+                    if event.counter != available.get(event.actor_id, 0) + 1:
+                        continue
+                    if any(
+                        actor != event.actor_id
+                        and available.get(actor, 0) < counter
+                        for actor, counter in event.clock
+                    ):
+                        continue
+                    selected.append(event)
+                    available[event.actor_id] = event.counter
+                    remaining.remove(event)
+                    progress = True
+                    if len(selected) >= limit:
+                        break
+                if not progress:
+                    raise RuntimeError("memory_causal_history_incomplete")
+            return tuple(selected)
 
     def merge(self, events: Sequence[MemoryEvent]) -> int:
         if isinstance(events, (str, bytes)) or not isinstance(events, Sequence) or len(events) > MAX_BATCH_EVENTS:
@@ -272,7 +332,7 @@ class DistributedMemoryStore:
                         "SELECT actor_id,MAX(counter) FROM memory_events GROUP BY actor_id"
                     ).fetchall()
                 }
-                pending: dict[str, list[int]] = {}
+                pending: dict[tuple[str, int], MemoryEvent] = {}
                 for event in validated:
                     existing = self._db.execute(
                         "SELECT event_id FROM memory_events WHERE actor_id=? AND counter=?",
@@ -282,14 +342,40 @@ class DistributedMemoryStore:
                         if existing[0] != _event_id(event):
                             raise ValueError("memory_actor_counter_equivocation")
                         continue
-                    pending.setdefault(event.actor_id, []).append(event.counter)
-                for actor, counters in pending.items():
-                    expected = maxima.get(actor, 0) + 1
-                    for counter in sorted(counters):
-                        if counter != expected:
+                    pending[(event.actor_id, event.counter)] = event
+
+                # Per-actor continuity is necessary but not sufficient: every
+                # cross-actor vector-clock dependency must also exist locally
+                # or be supplied earlier in this same atomic batch.
+                inserted = 0
+                while pending:
+                    ready = []
+                    for identity, event in pending.items():
+                        expected = maxima.get(event.actor_id, 0) + 1
+                        if event.counter != expected:
+                            continue
+                        dependencies_present = all(
+                            actor == event.actor_id
+                            or maxima.get(actor, 0) >= counter
+                            for actor, counter in event.clock
+                        )
+                        if dependencies_present:
+                            ready.append((identity, event))
+                    if not ready:
+                        actor_gaps = any(
+                            (actor, maxima.get(actor, 0) + 1) not in pending
+                            for actor, counter in pending
+                            if counter > maxima.get(actor, 0) + 1
+                        )
+                        if actor_gaps:
                             raise ValueError("memory_actor_counter_gap")
-                        expected += 1
-                inserted = sum(1 for event in validated if self._insert_event(event))
+                        raise ValueError("memory_causal_dependency_missing")
+                    ready.sort(key=lambda item: (item[1].actor_id, item[1].counter))
+                    for identity, event in ready:
+                        if self._insert_event(event):
+                            inserted += 1
+                        maxima[event.actor_id] = event.counter
+                        pending.pop(identity)
                 self._db.execute("COMMIT")
                 return inserted
             except Exception:
