@@ -6,6 +6,7 @@ nonce-bound receipts and never stores witness credentials or private keys.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from typing import Protocol
 
@@ -44,6 +45,7 @@ class RemoteMonotonicAnchor:
         *,
         witness_id: str,
         trusted_public_key: bytes,
+        failure_domain: str | None = None,
     ) -> None:
         if not callable(getattr(client, "read_anchor", None)) or not callable(
             getattr(client, "compare_and_swap_anchor", None)
@@ -53,9 +55,21 @@ class RemoteMonotonicAnchor:
             raise ValueError("witness_id_required")
         if not isinstance(trusted_public_key, bytes) or len(trusted_public_key) != 32:
             raise ValueError("witness_ed25519_public_key_required")
+        if failure_domain is not None:
+            if not isinstance(failure_domain, str):
+                raise ValueError("invalid_witness_failure_domain")
+            failure_domain = failure_domain.strip().casefold()
+            if not failure_domain or len(failure_domain.encode("utf-8")) > 256:
+                raise ValueError("invalid_witness_failure_domain")
         self._client = client
         self.witness_id = witness_id
+        self.failure_domain = failure_domain
         self._public_key = Ed25519PublicKey.from_public_bytes(trusted_public_key)
+        self._public_key_fingerprint = hashlib.sha256(trusted_public_key).hexdigest()
+
+    @property
+    def public_key_fingerprint(self) -> str:
+        return self._public_key_fingerprint
 
     @classmethod
     def _message(cls, receipt: SignedWitnessReceipt) -> bytes:
@@ -97,7 +111,12 @@ class RemoteMonotonicAnchor:
         ):
             raise RuntimeError("remote_witness_snapshot_invalid")
         try:
-            bytes.fromhex(snapshot.mac)
+            decoded_mac = bytes.fromhex(snapshot.mac)
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("remote_witness_snapshot_invalid") from exc
+        if len(decoded_mac) != 32 or decoded_mac.hex() != snapshot.mac:
+            raise RuntimeError("remote_witness_snapshot_invalid")
+        try:
             self._public_key.verify(receipt.signature, self._message(receipt))
         except (InvalidSignature, ValueError, TypeError) as exc:
             raise RuntimeError("remote_witness_signature_verification_failed") from exc
