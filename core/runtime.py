@@ -41,6 +41,7 @@ class NORYXRuntime:
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
         audit_log: AuditLog | None = None,
+        sandboxed_process_adapter=None,
     ):
         if audit_log is not None and not isinstance(audit_log, AuditLog):
             raise TypeError("invalid_audit_log")
@@ -84,6 +85,7 @@ class NORYXRuntime:
             limits=self.limits,
             memory=self.memory,
             recovery=self.recovery,
+            sandboxed_process_adapter=sandboxed_process_adapter,
         )
         self.capability_registry = self.hypersynth.tool_executor.capabilities
         self.tool_executor = self.hypersynth.tool_executor
