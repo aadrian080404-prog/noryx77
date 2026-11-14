@@ -424,3 +424,29 @@ def test_independent_audit_writers_converge_on_same_external_anchor(tmp_path):
         first_log.close()
         second_log.close()
         close_all(authorities)
+
+
+def test_sqlite_audit_resolves_lost_quorum_cas_ack_by_authenticated_readback(tmp_path):
+    """A committed majority with a lost reply is success only after read-back."""
+    quorum, authorities = make_quorum(tmp_path)
+    audit = SQLiteAuditLog(str(tmp_path / "lost-quorum-ack-audit.sqlite"))
+
+    class LoseReplyAfterCommit:
+        def read(self):
+            return quorum.read()
+
+        def compare_and_swap(self, expected, replacement):
+            accepted = quorum.compare_and_swap(expected, replacement)
+            if accepted:
+                raise OSError("reply_lost_after_quorum_commit")
+            return accepted
+
+    try:
+        audit.record("commit-before-reply-loss")
+        expected = AnchorSnapshot(1, audit.digest())
+        assert audit.verify_and_advance_anchor(LoseReplyAfterCommit()) == expected
+        assert quorum.read() == expected
+        assert audit.verify_integrity()
+    finally:
+        audit.close()
+        close_all(authorities)
