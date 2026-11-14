@@ -28,6 +28,7 @@ SHT_DYNSYM = 11
 DT_NULL = 0
 DT_NEEDED = 1
 DT_HASH = 4
+DT_GNU_HASH = 0x6FFFFEF5
 DT_STRTAB = 5
 DT_SYMTAB = 6
 DT_STRSZ = 10
@@ -282,6 +283,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             strtab_values = [value for tag, value in tags if tag == DT_STRTAB]
             strsz_values = [value for tag, value in tags if tag == DT_STRSZ]
             hash_values = [value for tag, value in tags if tag == DT_HASH]
+            gnu_hash_values = [value for tag, value in tags if tag == DT_GNU_HASH]
             symtab_values = [value for tag, value in tags if tag == DT_SYMTAB]
             syment_values = [value for tag, value in tags if tag == DT_SYMENT]
             if needed_offsets or hash_values or symtab_values or syment_values:
@@ -321,34 +323,80 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                         raise ValueError("elf_dynamic_library_name_empty")
                     dynamic_libraries.append(library)
 
-                # SysV DT_HASH exposes a bounded symbol count for stripped ELF.
-                # GNU-hash-only symbol enumeration remains unsupported.
-                if hash_values or symtab_values or syment_values:
-                    if len(hash_values) != 1 or len(symtab_values) != 1 or len(syment_values) != 1:
+                # SysV DT_HASH stores nchain explicitly. GNU hash stores
+                # per-bucket chain terminators, so derive the bounded symbol
+                # count by walking each populated bucket independently.
+                if hash_values or gnu_hash_values or symtab_values or syment_values:
+                    if (len(hash_values) > 1 or len(gnu_hash_values) > 1
+                            or len(hash_values) + len(gnu_hash_values) == 0
+                            or len(symtab_values) != 1 or len(syment_values) != 1):
                         raise ValueError("elf_dynamic_symbol_metadata_invalid")
                     symbol_format = endian + ("IBBHQQ" if elf_class == 2 else "IIIBBH")
                     symbol_size = struct.calcsize(symbol_format)
                     if syment_values[0] != symbol_size:
                         raise ValueError("elf_dynamic_symbol_entry_size_invalid")
-                    hash_offset = map_load_address(
-                        hash_values[0], 8, "elf_dynamic_hash_table_unmapped"
-                    )
-                    bucket_count, symbol_count = struct.unpack_from(
-                        endian + "II", data, hash_offset
-                    )
-                    if bucket_count > MAX_DYNAMIC_SYMBOLS or symbol_count > MAX_DYNAMIC_SYMBOLS:
-                        raise ValueError("elf_dynamic_symbol_count_limit")
-                    hash_table_size = 8 + bucket_count * 4 + symbol_count * 4
-                    map_load_address(
-                        hash_values[0], hash_table_size, "elf_dynamic_hash_table_unmapped"
-                    )
+                    symbol_count = 0
+                    if hash_values:
+                        hash_offset = map_load_address(
+                            hash_values[0], 8, "elf_dynamic_hash_table_unmapped"
+                        )
+                        bucket_count, symbol_count = struct.unpack_from(
+                            endian + "II", data, hash_offset
+                        )
+                        if bucket_count > MAX_DYNAMIC_SYMBOLS or symbol_count > MAX_DYNAMIC_SYMBOLS:
+                            raise ValueError("elf_dynamic_symbol_count_limit")
+                        hash_table_size = 8 + bucket_count * 4 + symbol_count * 4
+                        map_load_address(
+                            hash_values[0], hash_table_size, "elf_dynamic_hash_table_unmapped"
+                        )
+                    else:
+                        gnu_hash_offset = map_load_address(
+                            gnu_hash_values[0], 16, "elf_dynamic_gnu_hash_table_unmapped"
+                        )
+                        bucket_count, symbol_offset_base, bloom_size, _bloom_shift = struct.unpack_from(
+                            endian + "IIII", data, gnu_hash_offset
+                        )
+                        if (not 1 <= bucket_count <= MAX_DYNAMIC_SYMBOLS
+                                or not 1 <= bloom_size <= MAX_DYNAMIC_SYMBOLS
+                                or symbol_offset_base > MAX_DYNAMIC_SYMBOLS):
+                            raise ValueError("elf_dynamic_symbol_count_limit")
+                        word_size = 8 if elf_class == 2 else 4
+                        buckets_address = gnu_hash_values[0] + 16 + bloom_size * word_size
+                        buckets_bytes = bucket_count * 4
+                        buckets_offset = map_load_address(
+                            buckets_address, buckets_bytes,
+                            "elf_dynamic_gnu_hash_table_unmapped",
+                        )
+                        buckets = struct.unpack_from(
+                            endian + str(bucket_count) + "I", data, buckets_offset
+                        )
+                        chain_address = buckets_address + buckets_bytes
+                        highest_symbol = symbol_offset_base - 1
+                        for bucket in buckets:
+                            if bucket == 0:
+                                continue
+                            if bucket < symbol_offset_base or bucket >= MAX_DYNAMIC_SYMBOLS:
+                                raise ValueError("elf_dynamic_symbol_count_limit")
+                            symbol_index = bucket
+                            while True:
+                                chain_index = symbol_index - symbol_offset_base
+                                chain_offset = map_load_address(
+                                    chain_address + chain_index * 4, 4,
+                                    "elf_dynamic_gnu_hash_chain_unmapped",
+                                )
+                                chain_value = struct.unpack_from(endian + "I", data, chain_offset)[0]
+                                highest_symbol = max(highest_symbol, symbol_index)
+                                if chain_value & 1:
+                                    break
+                                symbol_index += 1
+                                if symbol_index >= MAX_DYNAMIC_SYMBOLS:
+                                    raise ValueError("elf_dynamic_symbol_count_limit")
+                        symbol_count = max(symbol_offset_base, highest_symbol + 1)
                     symbol_table_size = symbol_count * symbol_size
                     symbol_offset = map_load_address(
                         symtab_values[0], symbol_table_size,
                         "elf_dynamic_symbol_table_unmapped",
                     )
-                    if symbol_count > MAX_DYNAMIC_SYMBOLS:
-                        raise ValueError("elf_dynamic_symbol_count_limit")
                     for index in range(symbol_count):
                         values = struct.unpack_from(
                             symbol_format, data, symbol_offset + index * symbol_size
@@ -361,7 +409,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                             continue
                         if name_offset >= len(strings):
                             raise ValueError("elf_dynamic_symbol_name_offset_invalid")
-                        end = strings.find(b"\x00", name_offset)
+                        end = strings.find(b"\\x00", name_offset)
                         if end < 0:
                             raise ValueError("elf_dynamic_symbol_name_unterminated")
                         name = strings[name_offset:end].decode("utf-8", "replace")
