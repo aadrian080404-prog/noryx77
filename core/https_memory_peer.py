@@ -116,6 +116,12 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
     def get_request(self):
         request, client_address = super().get_request()
         request.settimeout(self._request_timeout)
+        try:
+            # Defer TLS handshake until after the accepted socket timeout is set.
+            request.do_handshake()
+        except Exception:
+            request.close()
+            raise
         return request, client_address
 
     def process_request(self, request, client_address):
@@ -266,5 +272,5 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
     tls.load_cert_chain(certfile=cert_file, keyfile=key_file)
     tls.load_verify_locations(cafile=client_ca_file)
     tls.verify_mode = ssl.CERT_REQUIRED
-    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    server.socket = tls.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
     return server
