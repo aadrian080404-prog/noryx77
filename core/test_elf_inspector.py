@@ -81,7 +81,7 @@ def test_table_count_is_bounded():
 
 
 def test_elf64_extended_header_numbering_is_resolved():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
@@ -91,7 +91,7 @@ def test_elf64_extended_header_numbering_is_resolved():
     section_zero = struct.pack(
         "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 2, 1, 1, 0, 0,
     )
-    names = b"\\x00.shstrtab\\x00"
+    names = b"\x00.shstrtab\x00"
     string_table = struct.pack(
         "<IIQQQQIIQQ", 1, 3, 0, 0, 248, len(names), 0, 0, 1, 0,
     )
