@@ -1,7 +1,9 @@
 # System Inspector descriptor-relative traversal
 
 The unified System Inspector traverses a selected directory tree using pinned
-directory file descriptors. It opens child directories and regular files
+directory file descriptors. It opens every component of the selected root
+path from the filesystem root without following symlinks, then opens child
+directories and regular files
 relative to the already-open parent descriptor and uses O_NOFOLLOW plus
 O_DIRECTORY for directory opens. File descriptors are checked with fstat
 before reading, and symlink entries are not followed.
