@@ -105,10 +105,16 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
         else:
             _n, _t, _f, _a, _o, ext_shnum, ext_shstrndx, ext_phnum, _al, _es = section_zero
         if shnum == 0 and shoff != 0:
+            if ext_shnum < 0xFF00:
+                raise ValueError("elf_extended_section_count_invalid")
             shnum = ext_shnum
         if phnum == 0xFFFF:
+            if ext_phnum < 0xFFFF:
+                raise ValueError("elf_extended_program_count_invalid")
             phnum = ext_phnum
         if shstrndx == 0xFFFF:
+            if ext_shstrndx < 0xFF00:
+                raise ValueError("elf_extended_string_index_invalid")
             shstrndx = ext_shstrndx
     elif shnum == 0 and shstrndx != 0:
         raise ValueError("elf_section_name_table_invalid")
