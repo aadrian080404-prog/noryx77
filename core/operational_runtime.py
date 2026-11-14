@@ -11,10 +11,16 @@ class OperationalNORYXRuntime(NORYXRuntime):
 
     REQUIRED_AGENT_IDS = frozenset({"noryx7-llm", "noryx7-secondary"})
 
-    def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None, audit_log=None):
+    def __init__(self, limits=None, *, state_journal_path=None, model_fabric=None, audit_log=None, sandboxed_process_adapter=None):
         if model_fabric is None:
             raise ValueError("model_fabric_required_for_operational_agents")
-        super().__init__(limits, state_journal_path=state_journal_path, model_fabric=model_fabric, audit_log=audit_log)
+        super().__init__(
+            limits,
+            state_journal_path=state_journal_path,
+            model_fabric=model_fabric,
+            audit_log=audit_log,
+            sandboxed_process_adapter=sandboxed_process_adapter,
+        )
         self.agent_runtime = AgentRuntime(self.router, self.identity_registry)
         self.agent_fabric = OperationalAgentFabric(self.router, self.verifier, audit=self.audit)
         self.hypersynth.kernel.planner = Planner(
