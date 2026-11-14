@@ -272,7 +272,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                 continue
             if name_offset >= len(symbol_strings):
                 raise ValueError("elf_dynamic_symbol_name_offset_invalid")
-            end = symbol_strings.find(b"\\x00", name_offset)
+            end = symbol_strings.find(b"\x00", name_offset)
             if end < 0:
                 raise ValueError("elf_dynamic_symbol_name_unterminated")
             name = symbol_strings[name_offset:end].decode("utf-8", "replace")
