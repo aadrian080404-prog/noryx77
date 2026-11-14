@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .execution_fabric import Observation, ProposedAction
-from .os_sandbox import BubblewrapSandboxRunner, SandboxLimits, SandboxResult
+from .os_sandbox import SandboxLimits, SandboxResult
 
 
 class SandboxedProcessAdapter:
@@ -20,13 +20,15 @@ class SandboxedProcessAdapter:
 
     def __init__(
         self,
-        runner: BubblewrapSandboxRunner,
+        runner,
         *,
         workspace: str | Path,
         limits: SandboxLimits = SandboxLimits(),
     ) -> None:
-        if not isinstance(runner, BubblewrapSandboxRunner):
-            raise TypeError("bubblewrap_runner_required")
+        if not callable(getattr(runner, "run", None)) or not callable(
+            getattr(runner, "_workspace_path", None)
+        ):
+            raise TypeError("sandbox_runner_contract_required")
         if not isinstance(limits, SandboxLimits):
             raise TypeError("sandbox_limits_required")
         if not isinstance(workspace, (str, Path)) or not str(workspace):
