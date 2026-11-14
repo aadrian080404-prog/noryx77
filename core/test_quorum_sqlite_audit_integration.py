@@ -133,3 +133,32 @@ def test_sqlite_audit_recovers_after_partial_quorum_advance(tmp_path):
 
     reopened.close()
     close_all(authorities)
+
+
+
+def test_sqlite_audit_serializes_concurrent_independent_writers(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    path = str(tmp_path / "concurrent-audit.sqlite")
+    first = SQLiteAuditLog(path)
+    second = SQLiteAuditLog(path)
+
+    def write_batch(log, prefix):
+        for index in range(20):
+            log.record("concurrent_event", writer=prefix, index=index)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = (
+            pool.submit(write_batch, first, "first"),
+            pool.submit(write_batch, second, "second"),
+        )
+        for future in futures:
+            future.result(timeout=15)
+
+    assert len(first.snapshot()) == 40
+    assert first.verify_integrity()
+    assert second.verify_integrity()
+    assert first.digest() == second.digest()
+
+    first.close()
+    second.close()
