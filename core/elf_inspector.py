@@ -192,6 +192,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
     # Resolve DT_NEEDED entries without loading or executing the object.
     # Both the dynamic table and its linked string table remain size-bounded.
     dynamic_libraries: list[str] = []
+    dynamic_entry_count = 0
     dynamic_format = endian + ("qQ" if elf_class == 2 else "iI")
     dynamic_entry_size = struct.calcsize(dynamic_format)
     for _name, section_type, file_offset, size, link, entry_size in section_rows:
@@ -200,10 +201,13 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
         if (
             entry_size < dynamic_entry_size
             or size % entry_size != 0
-            or size // entry_size > MAX_DYNAMIC_ENTRIES
             or link >= shnum
         ):
             raise ValueError("elf_dynamic_table_invalid")
+        table_entries = size // entry_size
+        if dynamic_entry_count + table_entries > MAX_DYNAMIC_ENTRIES:
+            raise ValueError("elf_dynamic_table_count_limit")
+        dynamic_entry_count += table_entries
         string_section = section_rows[link]
         if string_section[1] != SHT_STRTAB:
             raise ValueError("elf_dynamic_string_table_invalid")
@@ -243,6 +247,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
     # never interpreted as code and every name is checked against its linked
     # bounded string table.
     dynamic_imports: list[str] = []
+    dynamic_symbol_entry_count = 0
     symbol_format = endian + ("IBBHQQ" if elf_class == 2 else "IIIBBH")
     minimum_symbol_size = struct.calcsize(symbol_format)
     for _name, section_type, file_offset, size, link, entry_size in section_rows:
@@ -251,10 +256,13 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
         if (
             entry_size < minimum_symbol_size
             or size % entry_size != 0
-            or size // entry_size > MAX_DYNAMIC_SYMBOLS
             or link >= shnum
         ):
             raise ValueError("elf_dynamic_symbol_table_invalid")
+        table_symbols = size // entry_size
+        if dynamic_symbol_entry_count + table_symbols > MAX_DYNAMIC_SYMBOLS:
+            raise ValueError("elf_dynamic_symbol_count_limit")
+        dynamic_symbol_entry_count += table_symbols
         string_section = section_rows[link]
         if string_section[1] != SHT_STRTAB:
             raise ValueError("elf_dynamic_symbol_string_table_invalid")
