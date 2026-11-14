@@ -31,6 +31,13 @@ def test_external_anchor_detects_restored_older_database(tmp_path):
     assert second_head.sequence == first_head.sequence + 1
     audit.close()
 
+    # Restore a complete SQLite snapshot, not just the main database file.
+    # A stale WAL/SHM sidecar from the newer database can otherwise be replayed
+    # over the restored file and make the fixture test the wrong failure mode.
+    for suffix in ("-wal", "-shm"):
+        sidecar = path + suffix
+        if os.path.exists(sidecar):
+            os.remove(sidecar)
     os.replace(old_copy, path)
     restored = SQLiteAuditLog(path)
     with pytest.raises(ValueError, match="audit_database_rollback_detected"):
