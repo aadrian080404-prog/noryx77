@@ -170,6 +170,29 @@ PS3/PS5/PSP hardware can be studied as constrained volunteer/edge compute only a
 
 Passing a gate means only that its stated tests passed. It is not a claim of global scale, production readiness, or formal verification unless those artifacts exist.
 
-## 14. Current implementation boundary
+## 14. Initial executable slices
 
-The companion `core/matrix_core.py` is a deterministic policy primitive for opt-in node contribution and local resource reservations. It is not a network protocol, consensus implementation, secure sandbox, storage engine, financial ledger, attestation system, or production orchestrator. These require separate implementations and independent verification.
+The current branch now contains several deliberately narrow reference components:
+
+- `core/matrix_core.py`: opt-in contribution grants, aggregate local resource ceilings, reserved capacity, thread-safe local reservations and monotonic revocation generations.
+- `core/matrix_membership.py`: admission/revocation state machine with per-node monotonic epochs and replay checks. Its attestation verifier is injected; proof binding, hardware attestation, durable storage and consensus are not implemented here.
+- `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. A proposal is advisory; local reservation confirmation is still required.
+- `core/matrix_data.py`: SHA-256 content manifest for chunked immutable objects and corruption/order detection. It is not encryption, erasure coding, replication, access control or a distributed object store.
+- `core/matrix_twin.py`: deterministic virtual-time event queue with stable same-time ordering, bounded execution and replayable event trace. It is not yet a network/consensus simulator or model checker.
+
+These are executable slices, not a production distributed system. Membership and reservation state are in-memory and process-local; they do not survive crashes and do not coordinate multiple processes. No module in this PR establishes global consensus, cryptographic device identity, a secure sandbox, financial custody, production storage, or planet-scale capacity. Those require durable protocols, independent security review and failure testing across real fault domains.
+
+## 15. Required next hardening
+
+1. Persist node epochs, grants, reservations and revocations using crash-safe atomic transactions.
+2. Bind every admission proof to node identity, owner, software measurement, nonce, epoch and verifier policy; use hardware-backed attestation where available.
+3. Enforce fencing tokens at the protected resource itself, atomically with each privileged write. A lease or coordinator-side check alone is insufficient.
+4. Add explicit energy, thermal, battery, user schedule, network egress and data-residency budgets to the scheduler.
+5. Replace advisory in-memory placement with reserve-confirm-commit, idempotent retries and reconciliation after lost acknowledgements.
+6. Add bounded membership storage, tombstone retention and safe identity re-enrollment procedures.
+7. Extend the Digital Twin with network partitions, clock drift, stale messages, crash/restart, Byzantine behaviors and deterministic seeded fault schedules.
+8. Add storage encryption, key separation, authenticated manifests, erasure coding, replication and rate-limited repair as independent tested layers.
+
+## 16. Current implementation boundary
+
+No component here should be described as production-ready or globally distributed. The code provides policy/state-machine foundations for further implementation and adversarial testing only.
