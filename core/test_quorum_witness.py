@@ -84,3 +84,28 @@ def test_quorum_anchor_requires_odd_three_or_more_witnesses(tmp_path):
         QuorumMonotonicAnchor({"witness-0": anchors[0], "witness-1": anchors[1]})
     for authority in authorities:
         authority.close()
+
+
+def test_quorum_rejects_distinct_ids_reusing_same_public_key(tmp_path):
+    key = Ed25519PrivateKey.generate()
+    public = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    anchors = []
+    authorities = []
+    for index in range(3):
+        authority = SQLiteWitnessAuthority(
+            str(tmp_path / f"shared-key-{index}.sqlite"),
+            witness_id=f"shared-key-{index}",
+            signing_key=key,
+        )
+        authorities.append(authority)
+        anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"shared-key-{index}",
+            trusted_public_key=public,
+        ))
+    with pytest.raises(ValueError, match="public_keys_must_be_distinct"):
+        QuorumMonotonicAnchor({
+            f"shared-key-{i}": anchor for i, anchor in enumerate(anchors)
+        })
+    for authority in authorities:
+        authority.close()
