@@ -276,7 +276,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                 name_offset, _info, _other, section_index, _value, _symbol_size = values
             else:
                 name_offset, _value, _symbol_size, _info, _other, section_index = values
-            if name_offset == 0 or section_index != 0:
+            if name_offset == 0:
                 continue
             if name_offset >= len(symbol_strings):
                 raise ValueError("elf_dynamic_symbol_name_offset_invalid")
@@ -286,9 +286,10 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             name = symbol_strings[name_offset:end].decode("utf-8", "replace")
             if not name:
                 raise ValueError("elf_dynamic_symbol_name_empty")
-            if len(dynamic_imports) >= MAX_DYNAMIC_SYMBOLS:
-                raise ValueError("elf_dynamic_symbol_count_limit")
-            dynamic_imports.append(name)
+            if section_index == 0:
+                if len(dynamic_imports) >= MAX_DYNAMIC_SYMBOLS:
+                    raise ValueError("elf_dynamic_symbol_count_limit")
+                dynamic_imports.append(name)
     if dynamic_imports:
         findings.append(ELFFinding(
             "ELF-007", "info",
