@@ -262,7 +262,14 @@ class DistributedMemoryStore:
             raise ValueError("invalid_peer_vector_clock")
         normalized: dict[str, int] = {}
         for actor, counter in peer_clock.items():
-            if not isinstance(actor, str) or not actor.strip() or isinstance(counter, bool) or not isinstance(counter, int) or counter < 0:
+            if (
+                not isinstance(actor, str)
+                or not actor.strip()
+                or len(actor.encode("utf-8")) > MAX_ACTOR_ID
+                or isinstance(counter, bool)
+                or not isinstance(counter, int)
+                or counter < 0
+            ):
                 raise ValueError("invalid_peer_vector_clock")
             normalized[actor] = counter
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_BATCH_EVENTS:
