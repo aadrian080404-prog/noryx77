@@ -5,9 +5,9 @@ metadata for authorized system review. It supports ELF32 and ELF64, both byte
 orders, validates program/section table bounds, rejects oversized tables and
 segments outside the supplied file, and reports selected structural signals:
 executable GNU stack, writable+executable load segments, interpreter presence,
-dynamic-linking sections, and debug/full-symbol metadata.
+dynamic-linking sections, debug/full-symbol metadata, and bounded `DT_NEEDED` dependency names from linked dynamic/string tables.
 
-The parser accepts bytes or a regular file opened without following symlinks.
+The parser accepts bytes or a regular file opened without following symlinks. Dynamic tables are limited to 4096 entries and 256 dependency names; malformed or unterminated tables and out-of-range string offsets are rejected. Dependency names are metadata only and are never loaded.
 It does not execute, load, map, disassemble, resolve imports, or determine
 whether a binary is malicious. Findings are triage leads; benign software can
 have the same properties. Unknown formats and malformed bounds fail closed.
