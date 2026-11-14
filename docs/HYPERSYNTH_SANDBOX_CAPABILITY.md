@@ -45,14 +45,21 @@ and unprivileged user namespaces enabled, run:
 NORYX7_RUN_BWRAP_E2E=1 pytest -q core/test_os_sandbox_e2e.py
 ```
 
-It verifies that a process can write through the supplied workspace and that
-an outbound connection attempt fails inside the network namespace. The test
-is skipped by default in generic CI because hosted runners may not permit user
-namespaces. A skipped test is not evidence that production isolation is
-working; deployments must run it on their target host.
+It verifies that a process can write through the supplied workspace, that an
+outbound connection attempt fails inside the network namespace, and that the
+configured CPU, address-space, file-size, descriptor, process-count and core
+limits are effective inside the sandbox. The dedicated
+`.github/workflows/bubblewrap-integration.yml` workflow installs Bubblewrap
+and runs this test on a Linux CI host. A successful hosted-runner test is
+evidence for that runner environment, not proof of the production host's
+kernel configuration; deployments must still run it on their target host.
 
-The runner also requires the Linux `prlimit` and `setpriv` utilities. It applies
-CPU, address-space, file-size, descriptor, process-count and core-dump limits
-through `prlimit`, and sets `no_new_privs` through `setpriv` before starting
-Bubblewrap. It deliberately avoids Python `preexec_fn` hooks, which are unsafe
-in multithreaded parent processes. Missing utilities fail closed.
+The runner also requires the Linux `prlimit` and `setpriv` utilities. CPU,
+address-space, file-size, descriptor and core-dump limits are applied before
+Bubblewrap. The process-count limit is deliberately applied by a second
+`prlimit` invocation inside the new namespaces: applying `RLIMIT_NPROC`
+before namespace creation can prevent Bubblewrap itself from creating the
+namespace when the host user already has more processes than the requested
+limit. `no_new_privs` is set through `setpriv` before starting Bubblewrap.
+The runner deliberately avoids Python `preexec_fn` hooks, which are unsafe in
+multithreaded parent processes. Missing utilities fail closed.
