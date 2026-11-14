@@ -206,11 +206,13 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             raise ValueError("elf_dynamic_string_table_invalid")
         _string_name, _string_type, string_offset, string_size, _string_link, _string_entsize = string_section
         strings = data[string_offset:string_offset + string_size]
+        terminated = False
         for index in range(size // entry_size):
             tag, value = struct.unpack_from(
                 dynamic_format, data, file_offset + index * entry_size
             )
             if tag == DT_NULL:
+                terminated = True
                 break
             if tag != DT_NEEDED:
                 continue
@@ -226,6 +228,8 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             if not library:
                 raise ValueError("elf_dynamic_library_name_empty")
             dynamic_libraries.append(library)
+        if not terminated:
+            raise ValueError("elf_dynamic_table_unterminated")
     if dynamic_libraries:
         findings.append(ELFFinding(
             "ELF-006", "info",
