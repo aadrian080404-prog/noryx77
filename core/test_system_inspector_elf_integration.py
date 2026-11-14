@@ -88,3 +88,35 @@ def test_inspector_validates_entry_budget():
     import pytest
     with pytest.raises(ValueError, match="max_entries"):
         PythonSystemInspector(max_entries=True)
+
+
+def test_inspector_stops_enumerating_directory_at_entry_budget(tmp_path, monkeypatch):
+    import os
+    import core.system_inspector as inspector_module
+
+    for index in range(20):
+        (tmp_path / f"irrelevant-{index:02}.bin").write_bytes(b"data")
+
+    real_scandir = os.scandir
+    yielded = {"count": 0}
+
+    class CountingScandir:
+        def __init__(self, path):
+            self._iterator = real_scandir(path)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            self._iterator.close()
+
+        def __iter__(self):
+            for entry in self._iterator:
+                yielded["count"] += 1
+                yield entry
+
+    monkeypatch.setattr(inspector_module.os, "scandir", CountingScandir)
+    report = PythonSystemInspector(max_entries=3).inspect(tmp_path)
+
+    assert yielded["count"] == 4
+    assert "entry_limit_reached" in report.parse_errors
