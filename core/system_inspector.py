@@ -154,9 +154,13 @@ class PythonSystemInspector:
 
                     path = Path(entry.path)
                     is_python = path.suffix == ".py"
-                    descriptor = os.open(
-                        path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    open_flags = (
+                        os.O_RDONLY
+                        | getattr(os, "O_NOFOLLOW", 0)
+                        | getattr(os, "O_NONBLOCK", 0)
+                        | getattr(os, "O_CLOEXEC", 0)
                     )
+                    descriptor = os.open(path, open_flags)
                     try:
                         metadata = os.fstat(descriptor)
                         if not stat.S_ISREG(metadata.st_mode):
@@ -180,8 +184,10 @@ class PythonSystemInspector:
                                     tuple(sorted(errors)), tuple(binary_reports),
                                 )
                             stream.seek(0)
-                            raw = stream.read(self.max_file_bytes + 1)
-                        if len(raw) > self.max_file_bytes:
+                            remaining_total = self.max_total_bytes - total_bytes
+                            read_limit = min(self.max_file_bytes, remaining_total)
+                            raw = stream.read(read_limit + 1)
+                        if len(raw) > read_limit:
                             errors.append(f"size_limit_skipped:{relative}")
                             continue
                     finally:
