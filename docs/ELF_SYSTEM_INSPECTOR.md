@@ -26,3 +26,11 @@ are returned in the same deterministic finding list; detailed ELF metadata is
 also available through InspectionReport.binary_reports. The same file-count,
 per-file byte and aggregate byte budgets apply. Other binary formats are
 skipped rather than guessed or executed.
+
+The tree walk consumes directory entries incrementally and applies a global
+entry budget, including irrelevant files and directories. Reaching that budget
+adds `entry_limit_reached`; the report must then be treated as partial, not as
+a complete inventory. File opens use no-follow, nonblocking and close-on-exec
+flags where supported, and the actual bytes read are bounded against both the
+per-file and remaining aggregate budgets. Metadata size is only an early
+rejection hint; it is not trusted as the sole byte-budget enforcement.
