@@ -174,9 +174,15 @@ class PythonSystemInspector:
                                 errors.append(f"size_limit_skipped:{relative}")
                             continue
                         with os.fdopen(descriptor, "rb", closefd=False) as stream:
-                            prefix = stream.read(4)
-                            if not is_python and prefix != ELF_MAGIC:
+                            remaining_total = self.max_total_bytes - total_bytes
+                            read_limit = min(self.max_file_bytes, remaining_total)
+                            if read_limit < (1 if is_python else len(ELF_MAGIC)):
+                                errors.append(f"size_limit_skipped:{relative}")
                                 continue
+                            if not is_python:
+                                prefix = stream.read(len(ELF_MAGIC))
+                                if prefix != ELF_MAGIC:
+                                    continue
                             if files_scanned >= self.max_files:
                                 errors.append("file_limit_reached")
                                 return InspectionReport(
@@ -184,8 +190,6 @@ class PythonSystemInspector:
                                     tuple(sorted(errors)), tuple(binary_reports),
                                 )
                             stream.seek(0)
-                            remaining_total = self.max_total_bytes - total_bytes
-                            read_limit = min(self.max_file_bytes, remaining_total)
                             raw = stream.read(read_limit + 1)
                         if len(raw) > read_limit:
                             errors.append(f"size_limit_skipped:{relative}")
