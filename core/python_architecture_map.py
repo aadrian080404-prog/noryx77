@@ -207,7 +207,7 @@ class PythonArchitectureMapper:
                     surface = RISK_SURFACES.get(top)
                     if surface:
                         surfaces.add(surface)
-                    if name in internal:
+                    if name in internal and name != module:
                         edges.add((module, name))
                     elif top in sys.stdlib_module_names:
                         stdlib.add(top)
