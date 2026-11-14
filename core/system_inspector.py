@@ -16,6 +16,7 @@ from .elf_inspector import ELFInspectionReport, ELF_MAGIC, inspect_elf_bytes
 MAX_FILES = 5000
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
+MAX_ENTRIES = 20000
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", "dist", "build"}
 
 
@@ -90,15 +91,18 @@ class PythonSystemInspector:
 
     def __init__(self, *, max_files: int = MAX_FILES,
                  max_file_bytes: int = MAX_FILE_BYTES,
-                 max_total_bytes: int = MAX_TOTAL_BYTES) -> None:
+                 max_total_bytes: int = MAX_TOTAL_BYTES,
+                 max_entries: int = MAX_ENTRIES) -> None:
         for name, value, maximum in (
             ("max_files", max_files, MAX_FILES),
             ("max_file_bytes", max_file_bytes, MAX_FILE_BYTES),
             ("max_total_bytes", max_total_bytes, MAX_TOTAL_BYTES),
+            ("max_entries", max_entries, MAX_ENTRIES),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
                 raise ValueError("invalid_inspector_limit:" + name)
         self.max_files, self.max_file_bytes, self.max_total_bytes = max_files, max_file_bytes, max_total_bytes
+        self.max_entries = max_entries
 
     def inspect(self, root: str | os.PathLike[str]) -> InspectionReport:
         root_path = Path(root)
@@ -110,13 +114,29 @@ class PythonSystemInspector:
         findings: list[InspectionFinding] = []
         errors: list[str] = []
         binary_reports: list[ELFInspectionReport] = []
-        files_scanned = total_bytes = 0
+        files_scanned = total_bytes = visited_entries = 0
         for current, dirs, filenames in os.walk(root_path, topdown=True, followlinks=False):
+            # Bound directory traversal as well as parsing. Non-ELF files and
+            # skipped directories still cost enumeration and must consume budget.
+            visited_entries += len(dirs)
+            if visited_entries > self.max_entries:
+                errors.append("entry_limit_reached")
+                return InspectionReport(
+                    files_scanned, total_bytes, tuple(sorted(findings)),
+                    tuple(sorted(errors)), tuple(binary_reports),
+                )
             dirs[:] = sorted(
                 name for name in dirs
                 if name not in SKIP_DIRS and not (Path(current) / name).is_symlink()
             )
             for filename in sorted(filenames):
+                visited_entries += 1
+                if visited_entries > self.max_entries:
+                    errors.append("entry_limit_reached")
+                    return InspectionReport(
+                        files_scanned, total_bytes, tuple(sorted(findings)),
+                        tuple(sorted(errors)), tuple(binary_reports),
+                    )
                 path = Path(current) / filename
                 if path.is_symlink():
                     continue
