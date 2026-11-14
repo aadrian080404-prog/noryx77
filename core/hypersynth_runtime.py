@@ -90,16 +90,23 @@ class HypersynthRuntime:
                     raise
                 stdout = getattr(result, "stdout", b"")
                 stderr = getattr(result, "stderr", b"")
-                self.audit.record(
-                    "sandbox_process_dispatch_completed",
-                    **audit_context,
-                    result_type=type(result).__name__,
-                    exit_code=getattr(result, "exit_code", None),
-                    timed_out=getattr(result, "timed_out", None),
-                    output_truncated=getattr(result, "output_truncated", None),
-                    stdout_sha256=hashlib.sha256(stdout).hexdigest() if isinstance(stdout, bytes) else None,
-                    stderr_sha256=hashlib.sha256(stderr).hexdigest() if isinstance(stderr, bytes) else None,
-                )
+                try:
+                    self.audit.record(
+                        "sandbox_process_dispatch_completed",
+                        **audit_context,
+                        result_type=type(result).__name__,
+                        exit_code=getattr(result, "exit_code", None),
+                        timed_out=getattr(result, "timed_out", None),
+                        output_truncated=getattr(result, "output_truncated", None),
+                        stdout_sha256=hashlib.sha256(stdout).hexdigest() if isinstance(stdout, bytes) else None,
+                        stderr_sha256=hashlib.sha256(stderr).hexdigest() if isinstance(stderr, bytes) else None,
+                    )
+                except Exception as exc:
+                    # The process may already have produced side effects. Do
+                    # not report ordinary execution failure or retry it: the
+                    # missing durable completion record makes the outcome
+                    # explicitly uncertain and requires operator reconciliation.
+                    raise RuntimeError("sandbox_process_audit_commit_uncertain") from exc
                 return result
             self.tool_executor.capabilities.register(
                 "sandboxed_process", execute_sandboxed_process, risk_class="high"
