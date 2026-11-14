@@ -54,3 +54,39 @@ def test_failed_agent_requires_explicit_reset():
     fabric, agents = make_fabric(); agent = agents[0][0]; agent._phase = AgentPhase.FAILED; agent._last_failure = "RuntimeError"
     with pytest.raises(RuntimeError, match="reset"): agent.run(AgentInput("hello"))
     agent.reset(); assert agent.phase is AgentPhase.IDLE and agent.last_failure is None
+
+
+def test_registry_serializes_dispatch_authorization_against_revocation():
+    import concurrent.futures
+    import threading
+
+    fabric, agents = make_fabric()
+    identities = fabric._identities
+    entered = threading.Event()
+    release = threading.Event()
+    original_authorizer = fabric._authorize_principal
+
+    def blocking_authorizer(principal, binding, request):
+        entered.set()
+        assert release.wait(timeout=5)
+        return original_authorizer(principal, binding, request)
+
+    fabric._authorize_principal = blocking_authorizer
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        dispatch = pool.submit(fabric.dispatch, "owner", AgentInput("hello"), "general")
+        assert entered.wait(timeout=5)
+        revoke = pool.submit(identities.revoke, "agent-1")
+        assert not revoke.done()
+        release.set()
+        assert dispatch.result(timeout=5).verified
+        revoke.result(timeout=5)
+
+    with pytest.raises(PermissionError, match="no_authorized_agent"):
+        fabric.dispatch("owner", AgentInput("again"), "general")
+
+
+def test_authorization_callback_exception_fails_closed():
+    fabric, _ = make_fabric()
+    fabric._authorize_principal = lambda *args: (_ for _ in ()).throw(RuntimeError("deny"))
+    with pytest.raises(PermissionError, match="no_authorized_agent"):
+        fabric.dispatch("owner", AgentInput("hello"), "general")
