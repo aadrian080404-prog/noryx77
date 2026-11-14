@@ -267,3 +267,130 @@ def test_independent_quorum_coordinators_cannot_both_commit_conflicting_updates(
     finally:
         for authority in authorities:
             authority.close()
+
+
+
+def _multiprocess_quorum_writer(database_paths, private_keys, ready, start, results, replacement_mac):
+    """Independent OS process with its own witness connections and coordinator."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from core.journal_integrity import AnchorSnapshot, ZERO_MAC
+    from core.quorum_witness import QuorumMonotonicAnchor
+    from core.remote_witness import RemoteMonotonicAnchor
+    from core.witness_authority import InProcessWitnessClient, SQLiteWitnessAuthority
+
+    authorities = []
+    try:
+        anchors = []
+        for index, (database_path, raw_key) in enumerate(zip(database_paths, private_keys)):
+            key = Ed25519PrivateKey.from_private_bytes(raw_key)
+            authority = SQLiteWitnessAuthority(
+                database_path, witness_id=f"witness-{index}", signing_key=key
+            )
+            authorities.append(authority)
+            anchors.append(RemoteMonotonicAnchor(
+                InProcessWitnessClient(authority),
+                witness_id=f"witness-{index}",
+                trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+                failure_domain=f"failure-domain-{index}",
+            ))
+        coordinator = QuorumMonotonicAnchor({
+            f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+        })
+        ready.put(True)
+        if not start.wait(15):
+            results.put(("timeout", False))
+            return
+        accepted = coordinator.compare_and_swap(
+            AnchorSnapshot(0, ZERO_MAC), AnchorSnapshot(1, replacement_mac)
+        )
+        results.put(("result", accepted))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__ + ":" + str(exc)))
+    finally:
+        for authority in authorities:
+            authority.close()
+
+
+def test_independent_process_quorum_coordinators_cannot_both_commit(tmp_path):
+    """Exercise witness CAS with two OS processes, not only two Python threads."""
+    import multiprocessing
+
+    context = multiprocessing.get_context("spawn")
+    database_paths = [str(tmp_path / f"process-witness-{index}.sqlite") for index in range(3)]
+    private_keys = []
+    initial_authorities = []
+    for index, database_path in enumerate(database_paths):
+        key = Ed25519PrivateKey.generate()
+        private_keys.append(key.private_bytes(
+            Encoding.Raw, PrivateFormat.Raw, NoEncryption()
+        ))
+        initial_authorities.append(SQLiteWitnessAuthority(
+            database_path, witness_id=f"witness-{index}", signing_key=key
+        ))
+    for authority in initial_authorities:
+        authority.close()
+
+    ready = context.Queue()
+    start = context.Event()
+    results = context.Queue()
+    replacements = ("e" * 64, "f" * 64)
+    workers = [
+        context.Process(
+            target=_multiprocess_quorum_writer,
+            args=(database_paths, private_keys, ready, start, results, replacement),
+        )
+        for replacement in replacements
+    ]
+    for worker in workers:
+        worker.start()
+    try:
+        assert ready.get(timeout=20) is True
+        assert ready.get(timeout=20) is True
+        start.set()
+        for worker in workers:
+            worker.join(timeout=25)
+        assert all(not worker.is_alive() for worker in workers), "quorum_process_timeout"
+        assert [worker.exitcode for worker in workers] == [0, 0]
+        outcomes = [results.get(timeout=5) for _ in workers]
+        assert all(kind == "result" for kind, _ in outcomes), outcomes
+        assert sum(bool(value) for _, value in outcomes) <= 1
+    finally:
+        start.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=5)
+        ready.close()
+        results.close()
+
+    final_authorities = []
+    final_anchors = []
+    for index, database_path in enumerate(database_paths):
+        key = Ed25519PrivateKey.from_private_bytes(private_keys[index])
+        authority = SQLiteWitnessAuthority(
+            database_path, witness_id=f"witness-{index}", signing_key=key
+        )
+        final_authorities.append(authority)
+        final_anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"witness-{index}",
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=f"failure-domain-{index}",
+        ))
+    try:
+        final = QuorumMonotonicAnchor({
+            f"witness-{index}": anchor for index, anchor in enumerate(final_anchors)
+        })
+        try:
+            observed = final.read()
+        except RuntimeError as exc:
+            assert str(exc) == "witness_quorum_unavailable_or_divergent"
+        else:
+            assert observed in (
+                AnchorSnapshot(0, ZERO_MAC),
+                AnchorSnapshot(1, replacements[0]),
+                AnchorSnapshot(1, replacements[1]),
+            )
+    finally:
+        for authority in final_authorities:
+            authority.close()
