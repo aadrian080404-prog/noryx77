@@ -34,3 +34,19 @@ runtime = HypersynthRuntime(sandboxed_process_adapter=adapter)
 Production deployment still needs OS-level verification of Bubblewrap,
 kernel namespaces, filesystem permissions, resource limits and the host's
 security policy. This PR does not add seccomp, Landlock, or cgroups.
+
+## Real Bubblewrap smoke test
+
+The opt-in integration test `core/test_os_sandbox_e2e.py` exercises the actual
+Bubblewrap runner rather than a fake adapter. On a Linux host with Bubblewrap
+and unprivileged user namespaces enabled, run:
+
+```sh
+NORYX7_RUN_BWRAP_E2E=1 pytest -q core/test_os_sandbox_e2e.py
+```
+
+It verifies that a process can write through the supplied workspace and that
+an outbound connection attempt fails inside the network namespace. The test
+is skipped by default in generic CI because hosted runners may not permit user
+namespaces. A skipped test is not evidence that production isolation is
+working; deployments must run it on their target host.
