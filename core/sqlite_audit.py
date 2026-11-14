@@ -241,13 +241,25 @@ class SQLiteAuditLog(AuditLog):
                 raise ValueError("audit_anchor_chain_mismatch")
             if anchored == local_head:
                 return local_head
-            if anchor.compare_and_swap(anchored, local_head):
-                return local_head
-            # A competing writer may have anchored this same verified head.
-            latest = anchor.read()
-            if latest == local_head:
-                return local_head
-            raise ValueError("audit_anchor_compare_and_swap_failed")
+
+            # The witness protocol deliberately advances one sequence at a
+            # time. A local database may contain several valid events written
+            # since the last checkpoint, so publish each authenticated prefix
+            # rather than attempting an invalid multi-sequence jump.
+            current = anchored
+            for sequence in range(anchored.sequence + 1, local_head.sequence + 1):
+                replacement = AnchorSnapshot(sequence, rows[sequence - 1][2])
+                if anchor.compare_and_swap(current, replacement):
+                    current = replacement
+                    continue
+
+                # A competing writer may have committed this exact prefix.
+                latest = anchor.read()
+                if latest == replacement:
+                    current = replacement
+                    continue
+                raise ValueError("audit_anchor_compare_and_swap_failed")
+            return local_head
 
     def close(self) -> None:
         with self._db_lock:
