@@ -24,3 +24,17 @@ rollback-resistant storage. Three processes on one host or three SQLite
 files on one disk are not three independent witnesses. It also does not
 replace TLS, certificate pinning, key rotation, monitoring, or disaster
 recovery procedures.
+
+## Declared failure domains
+
+Every witness admitted to a quorum must now declare a non-empty
+`failure_domain`. The quorum rejects duplicate domain labels in addition to
+duplicate public keys. This prevents accidental configurations that count
+multiple witness identities from the same declared administrative or
+infrastructure domain as separate quorum members.
+
+The label is an operator assertion, not remote proof of independence. It
+cannot establish separate ownership, cloud accounts, power/network paths,
+administrators, hardware roots, or anti-rollback guarantees. Deployment
+reviews must verify those properties out of band; distinct labels alone do
+not make a quorum Byzantine-fault tolerant.
