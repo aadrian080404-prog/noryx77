@@ -272,7 +272,7 @@ class DistributedMemoryStore:
                         "SELECT actor_id,MAX(counter) FROM memory_events GROUP BY actor_id"
                     ).fetchall()
                 }
-                pending: dict[str, list[int]] = {}
+                pending: dict[tuple[str, int], MemoryEvent] = {}
                 for event in validated:
                     existing = self._db.execute(
                         "SELECT event_id FROM memory_events WHERE actor_id=? AND counter=?",
@@ -282,14 +282,39 @@ class DistributedMemoryStore:
                         if existing[0] != _event_id(event):
                             raise ValueError("memory_actor_counter_equivocation")
                         continue
-                    pending.setdefault(event.actor_id, []).append(event.counter)
-                for actor, counters in pending.items():
-                    expected = maxima.get(actor, 0) + 1
-                    for counter in sorted(counters):
-                        if counter != expected:
+                    pending[(event.actor_id, event.counter)] = event
+
+                # Per-actor continuity is necessary but not sufficient: every
+                # cross-actor vector-clock dependency must also exist locally
+                # or be supplied earlier in this same atomic batch.
+                inserted = 0
+                while pending:
+                    ready = []
+                    for identity, event in pending.items():
+                        expected = maxima.get(event.actor_id, 0) + 1
+                        if event.counter != expected:
+                            continue
+                        dependencies_present = all(
+                            actor == event.actor_id
+                            or maxima.get(actor, 0) >= counter
+                            for actor, counter in event.clock
+                        )
+                        if dependencies_present:
+                            ready.append((identity, event))
+                    if not ready:
+                        actor_gaps = any(
+                            counter > maxima.get(actor, 0) + 1
+                            for actor, counter in pending
+                        )
+                        if actor_gaps:
                             raise ValueError("memory_actor_counter_gap")
-                        expected += 1
-                inserted = sum(1 for event in validated if self._insert_event(event))
+                        raise ValueError("memory_causal_dependency_missing")
+                    ready.sort(key=lambda item: (item[1].actor_id, item[1].counter))
+                    for identity, event in ready:
+                        if self._insert_event(event):
+                            inserted += 1
+                        maxima[event.actor_id] = event.counter
+                        pending.pop(identity)
                 self._db.execute("COMMIT")
                 return inserted
             except Exception:
