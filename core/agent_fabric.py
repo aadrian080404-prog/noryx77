@@ -49,9 +49,22 @@ class AgentFabric:
         for binding in candidates:
             if binding.agent.phase is AgentPhase.FAILED: continue
             if required_skill is not None and required_skill not in binding.skills: continue
-            if not self._identities.is_trusted(binding.identity): continue
-            try: authorized = bool(self._authorize_principal(principal_id, binding, bound_request))
-            except Exception: authorized = False
-            if not authorized: continue
+            # Linearize the authorization decision against identity revocation.
+            # The registry callback must remain short: it issues the dispatch
+            # decision only; agent code runs after the trust transaction ends.
+            try:
+                authorized = self._identities.with_trusted_identity(
+                    binding.identity.agent_id,
+                    lambda trusted: (
+                        trusted == binding.identity
+                        and bool(self._authorize_principal(principal_id, binding, bound_request))
+                    ),
+                )
+            except Exception:
+                authorized = False
+            if not authorized:
+                continue
+            # A dispatch authorized before a later revocation is an in-flight
+            # operation; revocation blocks subsequent authorization decisions.
             return binding.agent.run(bound_request)
         raise PermissionError("no_authorized_agent")
