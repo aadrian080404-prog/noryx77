@@ -69,16 +69,26 @@ class AgentCollaboration:
         return identity
 
     def _run_agent(self, agent: Any, task: TaskSpec) -> AgentResult:
-        # Agent inference may be slow, so do not hold the registry lock across
-        # user/model code. Pin the exact identity and agent ID for this turn;
-        # a different trusted identity is not an acceptable replacement.
+        # Never hold the registry lock across agent/model inference. Capture
+        # both the exact identity and its trust epoch, then revalidate them.
         agent_id_before = getattr(agent, "agent_id", None)
         identity_before = self._require_trusted(agent)
+        generation_before = (
+            self.identity_registry.generation(identity_before)
+            if self.identity_registry is not None and identity_before is not None
+            else None
+        )
         result = agent.run(task)
         identity_after = self._require_trusted(agent)
+        generation_after = (
+            self.identity_registry.generation(identity_after)
+            if self.identity_registry is not None and identity_after is not None
+            else None
+        )
         if (
             getattr(agent, "agent_id", None) != agent_id_before
             or identity_after != identity_before
+            or generation_after != generation_before
         ):
             raise PermissionError("collaboration_agent_identity_changed")
         if (
