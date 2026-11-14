@@ -23,6 +23,7 @@ class QuorumMonotonicAnchor:
         selected = dict(witnesses)
         if len(selected) < 3 or len(selected) % 2 == 0:
             raise ValueError("odd_witness_count_at_least_three_required")
+        fingerprints: set[str] = set()
         for witness_id, witness in selected.items():
             if not isinstance(witness_id, str) or not witness_id.strip():
                 raise ValueError("witness_id_required")
@@ -30,6 +31,10 @@ class QuorumMonotonicAnchor:
                 raise TypeError("remote_monotonic_anchor_required")
             if witness.witness_id != witness_id:
                 raise ValueError("witness_mapping_identity_mismatch")
+            fingerprint = witness.public_key_fingerprint
+            if fingerprint in fingerprints:
+                raise ValueError("witness_public_keys_must_be_distinct")
+            fingerprints.add(fingerprint)
         self._witnesses = dict(sorted(selected.items()))
         self.quorum = len(self._witnesses) // 2 + 1
 
