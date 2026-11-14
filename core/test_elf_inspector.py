@@ -371,3 +371,10 @@ def test_stripped_elf_rejects_gnu_hash_bucket_above_symbol_budget():
 def test_stripped_elf_rejects_non_power_of_two_gnu_bloom_size():
     with pytest.raises(ValueError, match="gnu_hash_header_invalid"):
         inspect_elf_bytes(elf64_stripped_with_gnu_hash(bloom_size=3))
+
+
+def test_stripped_elf_rejects_gnu_hash_chain_without_terminator():
+    # The fixture's only bucket starts at symbol 2. Clearing its low-bit
+    # terminator forces the parser to seek a further chain word beyond PT_LOAD.
+    with pytest.raises(ValueError, match="dynamic_gnu_hash_chain_unmapped"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(chain=0))
