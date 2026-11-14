@@ -1,5 +1,6 @@
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from core.journal_integrity import AnchorSnapshot, ZERO_MAC
 from core.quorum_witness import QuorumMonotonicAnchor
@@ -21,7 +22,7 @@ def make_witnesses(tmp_path):
         anchors.append(RemoteMonotonicAnchor(
             InProcessWitnessClient(authority),
             witness_id=f"witness-{index}",
-            trusted_public_key=key.public_key().public_bytes_raw(),
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
         ))
     return anchors, authorities
 
@@ -42,37 +43,40 @@ def test_quorum_anchor_requires_majority_and_advances_atomically(tmp_path):
 def test_quorum_anchor_fails_closed_without_majority(tmp_path):
     anchors, authorities = make_witnesses(tmp_path)
 
-    class Unavailable:
-        witness_id = "witness-2"
-        def read(self):
+    class FailingClient:
+        def read_anchor(self, nonce):
             raise OSError("offline")
-        def compare_and_swap(self, expected, replacement):
+        def compare_and_swap_anchor(self, expected, replacement, nonce):
             raise OSError("offline")
 
+    failing_key = Ed25519PrivateKey.generate()
+    unavailable = RemoteMonotonicAnchor(
+        FailingClient(),
+        witness_id="witness-offline",
+        trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+    )
     quorum = QuorumMonotonicAnchor({
         "witness-0": anchors[0],
         "witness-1": anchors[1],
-        "witness-2": Unavailable(),
+        "witness-offline": unavailable,
     })
     assert quorum.read() == AnchorSnapshot(0, ZERO_MAC)
-    for authority in authorities:
-        authority.close()
-
-    class AlsoUnavailable:
-        witness_id = "witness-1"
-        def read(self):
-            raise OSError("offline")
-        def compare_and_swap(self, expected, replacement):
-            raise OSError("offline")
 
     broken = QuorumMonotonicAnchor({
         "witness-0": anchors[0],
-        "witness-1": AlsoUnavailable(),
-        "witness-2": Unavailable(),
+        "witness-offline-1": RemoteMonotonicAnchor(
+            FailingClient(), witness_id="witness-offline-1",
+            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+        ),
+        "witness-offline-2": RemoteMonotonicAnchor(
+            FailingClient(), witness_id="witness-offline-2",
+            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+        ),
     })
     with pytest.raises(RuntimeError, match="quorum_unavailable"):
         broken.read()
-
+    for authority in authorities:
+        authority.close()
 
 def test_quorum_anchor_requires_odd_three_or_more_witnesses(tmp_path):
     anchors, authorities = make_witnesses(tmp_path)
