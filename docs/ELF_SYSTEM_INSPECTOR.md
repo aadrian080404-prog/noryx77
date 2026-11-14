@@ -20,9 +20,16 @@ of static inspection.
 The inspector also resolves bounded `DT_NEEDED` names through the linked dynamic string table. It now reads undefined dynamic symbol names from bounded `SHT_DYNSYM` tables as import metadata; malformed offsets, invalid links, and oversized tables are rejected. Neither dependencies nor symbols are loaded or executed.
 
 Dependency extraction first uses bounded `SHT_DYNAMIC` sections and
-falls back to `PT_DYNAMIC` plus a file-backed `PT_LOAD` mapping when section
-headers are absent. The fallback extracts `DT_NEEDED` names only; it does not
-reconstruct dynamic symbol tables or imports without `SHT_DYNSYM`. An empty
+falls back to `PT_DYNAMIC` plus an unambiguous file-backed `PT_LOAD` mapping
+when section headers are absent. For stripped objects, undefined imports are
+also recovered when the dynamic table supplies a bounded SysV `DT_HASH` or GNU
+`DT_GNU_HASH`, together with `DT_SYMTAB` and `DT_SYMENT`. GNU hash buckets and chains are structurally validated and traversed under a
+4096-symbol global budget. Because GNU hash starts at `symoffset`, symbols
+before that index (including undefined imports) are included when the total
+symbol count is recovered from the highest terminated bucket chain. The Bloom
+filter size and bucket ordering are validated. Dynamic relocation
+reconstruction and relocation target analysis remain unsupported. Ambiguous virtual-address mappings, malformed hash tables,
+oversized symbol counts, and invalid string offsets fail closed. An empty
 dependency/import list means 'not found by this parser', not proof that the
 ELF has none.
 

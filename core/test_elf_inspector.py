@@ -258,3 +258,116 @@ def test_stripped_elf_pt_dynamic_rejects_unmapped_string_table():
 def test_stripped_elf_pt_dynamic_rejects_invalid_needed_offset():
     with pytest.raises(ValueError, match="dynamic_string_offset_invalid"):
         inspect_elf_bytes(elf64_stripped_with_pt_dynamic(needed_offset=99))
+
+
+def elf64_stripped_with_pt_dynamic_import():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    phoff = 64
+    dynamic_offset = phoff + 2 * 56
+    dynamic_vaddr = 0x400000 + dynamic_offset
+    dynstr = b"\x00libc.so.6\x00puts\x00"
+    dynamic_size = 7 * 16
+    dynstr_offset = dynamic_offset + dynamic_size
+    dynsym_offset = dynstr_offset + len(dynstr)
+    hash_offset = dynsym_offset + 2 * 24
+    dynstr_vaddr = 0x400000 + dynstr_offset
+    dynsym_vaddr = 0x400000 + dynsym_offset
+    hash_vaddr = 0x400000 + hash_offset
+    entries = [
+        (1, 1), (5, dynstr_vaddr), (10, len(dynstr)),
+        (6, dynsym_vaddr), (11, 24), (4, hash_vaddr), (0, 0),
+    ]
+    dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    symbols = (
+        struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+    )
+    hash_table = struct.pack("<IIIII", 1, 2, 1, 0, 0)
+    total_size = hash_offset + len(hash_table)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, phoff, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size, total_size, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, dynamic_vaddr,
+        dynamic_vaddr, len(dynamic), len(dynamic), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + hash_table
+
+
+def test_stripped_elf_recovers_undefined_imports_from_pt_dynamic_sysv_hash():
+    report = inspect_elf_bytes(elf64_stripped_with_pt_dynamic_import())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert report.dynamic_imports == ("puts",)
+    assert any(f.rule_id == "ELF-007" for f in report.findings)
+
+
+def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
+    raw = bytearray(elf64_stripped_with_pt_dynamic_import())
+    struct.pack_into("<I", raw, len(raw) - 16, 5000)
+    with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
+        inspect_elf_bytes(bytes(raw))
+
+
+def elf64_stripped_with_gnu_hash(*, bucket=2, chain=1, bloom_size=1):
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    phoff = 64
+    dynamic_offset = phoff + 2 * 56
+    dynamic_vaddr = 0x400000 + dynamic_offset
+    dynstr = b"\x00libc.so.6\x00puts\x00exported\x00"
+    entries_count = 7
+    dynamic_size = entries_count * 16
+    dynstr_offset = dynamic_offset + dynamic_size
+    dynsym_offset = dynstr_offset + len(dynstr)
+    gnu_hash_offset = dynsym_offset + 3 * 24
+    dynstr_vaddr = 0x400000 + dynstr_offset
+    dynsym_vaddr = 0x400000 + dynsym_offset
+    gnu_hash_vaddr = 0x400000 + gnu_hash_offset
+    entries = [
+        (1, 1), (5, dynstr_vaddr), (10, len(dynstr)),
+        (6, dynsym_vaddr), (11, 24), (0x6FFFFEF5, gnu_hash_vaddr), (0, 0),
+    ]
+    dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    # The undefined import precedes symoffset; only the export is hashed.
+    symbols = (
+        struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 16, 0x12, 0, 1, 0, 0)
+    )
+    # GNU hash header, bloom word, one bucket and one terminating chain word.
+    gnu_hash = struct.pack("<IIIIQII", 1, 2, bloom_size, 5, 0, bucket, chain)
+    total_size = gnu_hash_offset + len(gnu_hash)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, phoff, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size, total_size, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, dynamic_vaddr,
+        dynamic_vaddr, len(dynamic), len(dynamic), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + gnu_hash
+
+def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
+    report = inspect_elf_bytes(elf64_stripped_with_gnu_hash())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert report.dynamic_imports == ("puts",)
+
+
+def test_stripped_elf_rejects_gnu_hash_bucket_above_symbol_budget():
+    with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=4096))
+
+
+def test_stripped_elf_rejects_non_power_of_two_gnu_bloom_size():
+    with pytest.raises(ValueError, match="gnu_hash_header_invalid"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bloom_size=3))
