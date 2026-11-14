@@ -198,3 +198,64 @@ def test_independent_processes_merge_concurrent_causal_events_atomically(tmp_pat
         assert {conflict.winner.actor_id, *(event.actor_id for event in conflict.concurrent)} == {"peer-a", "peer-b"}
     finally:
         reopened.close()
+
+
+def _write_local_memory_in_process(database_path, key, ready, start, results):
+    store = DistributedMemoryStore(database_path, actor_id="shared-local-actor")
+    try:
+        ready.put(True)
+        if not start.wait(15):
+            results.put(("timeout", None))
+            return
+        event = store.write(key, "value:" + key)
+        results.put(("ok", event.counter))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__ + ":" + str(exc)))
+    finally:
+        store.close()
+
+
+def test_independent_processes_serialize_local_actor_counters(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "same-actor-concurrent-memory.sqlite")
+    initial = DistributedMemoryStore(path, actor_id="shared-local-actor")
+    initial.close()
+    context = multiprocessing.get_context("spawn")
+    ready, start, results = context.Queue(), context.Event(), context.Queue()
+    keys = ("left", "right", "center", "edge")
+    workers = [
+        context.Process(
+            target=_write_local_memory_in_process,
+            args=(path, key, ready, start, results),
+        )
+        for key in keys
+    ]
+    for worker in workers:
+        worker.start()
+    try:
+        for _ in workers:
+            assert ready.get(timeout=20) is True
+        start.set()
+        for worker in workers:
+            worker.join(timeout=25)
+        assert all(not worker.is_alive() for worker in workers), "memory_local_writer_timeout"
+        assert [worker.exitcode for worker in workers] == [0] * len(workers)
+        outcomes = [results.get(timeout=5) for _ in workers]
+        assert all(kind == "ok" for kind, _counter in outcomes), outcomes
+        assert sorted(counter for _kind, counter in outcomes) == [1, 2, 3, 4]
+    finally:
+        start.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=5)
+        ready.close()
+        results.close()
+
+    reopened = DistributedMemoryStore(path, actor_id="shared-local-actor")
+    try:
+        assert reopened.vector_clock() == {"shared-local-actor": 4}
+        assert len(reopened.export_since({})) == 4
+    finally:
+        reopened.close()
