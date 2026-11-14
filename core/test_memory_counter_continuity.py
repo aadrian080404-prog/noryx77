@@ -364,3 +364,31 @@ def test_paginated_causal_replication_is_idempotent_across_retries(tmp_path):
     finally:
         source.close()
         target.close()
+
+
+def test_causal_replication_resumes_after_receiver_restart_between_pages(tmp_path):
+    source = DistributedMemoryStore(str(tmp_path / "restart-source.sqlite"), actor_id="source")
+    target_path = str(tmp_path / "restart-target.sqlite")
+    target = DistributedMemoryStore(target_path, actor_id="target")
+    dependency = MemoryEvent("peer-b", 1, "base", "ready", False, (("peer-b", 1),))
+    dependent = MemoryEvent(
+        "peer-a", 1, "derived", "complete", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    try:
+        assert source.merge((dependent, dependency)) == 2
+        first_page = source.export_since(target.vector_clock(), limit=1)
+        assert first_page == (dependency,)
+        assert target.merge(first_page) == 1
+        target.close()
+
+        target = DistributedMemoryStore(target_path, actor_id="target")
+        assert target.vector_clock() == {"peer-b": 1}
+        second_page = source.export_since(target.vector_clock(), limit=1)
+        assert second_page == (dependent,)
+        assert target.merge(second_page) == 1
+        assert target.read("derived") == dependent
+        assert source.export_since(target.vector_clock(), limit=1) == ()
+    finally:
+        source.close()
+        target.close()
