@@ -89,19 +89,21 @@ def test_canonical_runtime_keeps_high_risk_process_action_fail_closed_without_au
     runtime = NORYXRuntime(sandboxed_process_adapter=StubSandboxAdapter())
     action = ActionSpec(
         action_id="sandbox-action",
-        action_type="process",
+        action_type="sandboxed_process",
         target="workspace",
-        parameters={"argv": ["echo", "safe"]},
+        parameters={"action_id": "sandbox-action", "argv": ["/usr/bin/true"]},
         risk_class="high",
         requires_authorization=True,
         execution_id="exec-no-authority",
     )
-    decision = runtime.action_gate.authorize(
+    output, decision = runtime.tool_executor.execute(
         action,
         execution_id="exec-no-authority",
     )
-    assert not decision.allowed
-    assert decision.verification.reason == "authorization_required"
+    assert output is None
+    assert not decision.valid
+    assert decision.reason == "authorization_required"
+    assert adapter.actions == []
 
 def test_canonical_runtime_dispatches_authorized_sandbox_action_once(tmp_path):
     registry = IdentityRegistry()
