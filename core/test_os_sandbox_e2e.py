@@ -22,8 +22,13 @@ def test_bubblewrap_executes_in_workspace_without_network(tmp_path):
     runner = BubblewrapSandboxRunner()
     program = (
         "from pathlib import Path\n"
-        "import socket\n"
+        "import json, resource, socket\n"
+        "limits = {name: resource.getrlimit(kind)[0] for name, kind in {"
+        "'cpu': resource.RLIMIT_CPU, 'as': resource.RLIMIT_AS, "
+        "'fsize': resource.RLIMIT_FSIZE, 'nofile': resource.RLIMIT_NOFILE, "
+        "'nproc': resource.RLIMIT_NPROC, 'core': resource.RLIMIT_CORE}.items()}\n"
         "Path('/workspace/noryx7-e2e-marker').write_text('sandbox-ok')\n"
+        "Path('/workspace/noryx7-e2e-limits.json').write_text(json.dumps(limits))\n"
         "try:\n"
         "    socket.create_connection(('1.1.1.1', 53), timeout=1)\n"
         "except OSError:\n"
@@ -34,12 +39,30 @@ def test_bubblewrap_executes_in_workspace_without_network(tmp_path):
     result = runner.run(
         ("/usr/bin/python3", "-I", "-c", program),
         workspace=workspace,
-        limits=SandboxLimits(wall_seconds=10, output_bytes=4096),
+        limits=SandboxLimits(
+            cpu_seconds=3,
+            memory_bytes=64 * 1024 * 1024,
+            file_size_bytes=1234,
+            open_files=20,
+            processes=5,
+            wall_seconds=10,
+            output_bytes=4096,
+        ),
     )
     assert not result.timed_out
     assert result.exit_code == 0, result.stderr.decode("utf-8", "replace")
     assert result.stdout.strip() == b"network-denied"
     assert (workspace / "noryx7-e2e-marker").read_text() == "sandbox-ok"
+    import json
+    observed = json.loads((workspace / "noryx7-e2e-limits.json").read_text())
+    assert observed == {
+        "cpu": 3,
+        "as": 64 * 1024 * 1024,
+        "fsize": 1234,
+        "nofile": 20,
+        "nproc": 5,
+        "core": 0,
+    }
 
 def test_bubblewrap_command_sets_limits_without_preexec_hooks(tmp_path):
     runner = object.__new__(BubblewrapSandboxRunner)
