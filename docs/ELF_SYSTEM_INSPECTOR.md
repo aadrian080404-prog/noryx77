@@ -51,3 +51,7 @@ tables from `PT_DYNAMIC` when section headers are absent (for example, some
 stripped binaries); such files may still contain dynamic dependencies that
 this version does not report. Treat an empty dependency/import list as
 'information not found by this parser', not proof that the ELF has none.
+
+Dynamic table and dynamic-symbol entry budgets are aggregate across all
+matching sections, not merely per section: at most 4096 dynamic entries,
+4096 dynamic symbols, and 256 dependency names are processed per ELF.
