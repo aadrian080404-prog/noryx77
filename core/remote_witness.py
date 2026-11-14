@@ -45,6 +45,7 @@ class RemoteMonotonicAnchor:
         *,
         witness_id: str,
         trusted_public_key: bytes,
+        failure_domain: str | None = None,
     ) -> None:
         if not callable(getattr(client, "read_anchor", None)) or not callable(
             getattr(client, "compare_and_swap_anchor", None)
@@ -54,8 +55,15 @@ class RemoteMonotonicAnchor:
             raise ValueError("witness_id_required")
         if not isinstance(trusted_public_key, bytes) or len(trusted_public_key) != 32:
             raise ValueError("witness_ed25519_public_key_required")
+        if failure_domain is not None and (
+            not isinstance(failure_domain, str)
+            or not failure_domain.strip()
+            or len(failure_domain.encode("utf-8")) > 256
+        ):
+            raise ValueError("invalid_witness_failure_domain")
         self._client = client
         self.witness_id = witness_id
+        self.failure_domain = failure_domain
         self._public_key = Ed25519PublicKey.from_public_bytes(trusted_public_key)
         self._public_key_fingerprint = hashlib.sha256(trusted_public_key).hexdigest()
 
