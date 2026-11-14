@@ -62,15 +62,17 @@ def test_quorum_anchor_fails_closed_without_majority(tmp_path):
     })
     assert quorum.read() == AnchorSnapshot(0, ZERO_MAC)
 
+    offline_key_1 = Ed25519PrivateKey.generate()
+    offline_key_2 = Ed25519PrivateKey.generate()
     broken = QuorumMonotonicAnchor({
         "witness-0": anchors[0],
         "witness-offline-1": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-1",
-            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            trusted_public_key=offline_key_1.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
         ),
         "witness-offline-2": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-2",
-            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            trusted_public_key=offline_key_2.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
         ),
     })
     with pytest.raises(RuntimeError, match="quorum_unavailable"):
