@@ -309,6 +309,6 @@ def test_stripped_elf_recovers_undefined_imports_from_pt_dynamic_sysv_hash():
 
 def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
     raw = bytearray(elf64_stripped_with_pt_dynamic_import())
-    struct.pack_into("<I", raw, len(raw) - 12, 5000)
+    struct.pack_into("<I", raw, len(raw) - 16, 5000)
     with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
         inspect_elf_bytes(bytes(raw))
