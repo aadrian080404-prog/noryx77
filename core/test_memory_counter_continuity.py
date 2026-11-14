@@ -99,3 +99,11 @@ def test_startup_rejects_legacy_database_with_missing_causal_history(tmp_path):
 
     with pytest.raises(RuntimeError, match="causal_history_incomplete"):
         DistributedMemoryStore(path, actor_id="receiver")
+
+
+
+def test_export_rejects_oversized_peer_actor_identifier(tmp_path):
+    store = DistributedMemoryStore(str(tmp_path / "memory.sqlite"), actor_id="local")
+    with pytest.raises(ValueError, match="invalid_peer_vector_clock"):
+        store.export_since({"x" * 257: 0})
+    store.close()
