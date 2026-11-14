@@ -26,8 +26,10 @@ memory batch must name the exact agent pinned to that certificate. Certificate
 rotation therefore requires an intentional pin update and overlapping
 deployment procedure; do not use a broad CA trust list as an identity map.
 
-The HTTP listener caps concurrent worker threads and applies a per-accepted
-socket timeout to constrain slow or stalled clients. Configure a worker cap
+The HTTP listener caps concurrent worker threads and sets the accepted-socket timeout before completing the TLS handshake and
+keeps that inactivity timeout for subsequent request reads, constraining
+stalled handshakes and idle connections. It is an inactivity timeout, not a
+strict wall-clock deadline for the entire HTTP request. Configure a worker cap
 appropriate to available memory and CPU. These controls complement, but do
 not replace, an upstream connection-rate limit, network firewall, certificate
 revocation process, and operational monitoring.
