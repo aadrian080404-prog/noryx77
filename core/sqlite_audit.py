@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import hashes, hmac
 
 from .audit import AuditCheckpoint, AuditLog
 from .crypto import KeyProvider
+from .journal_integrity import AnchorSnapshot, MonotonicAnchor, ZERO_MAC
 
 
 class SQLiteAuditLog(AuditLog):
@@ -198,6 +199,87 @@ class SQLiteAuditLog(AuditLog):
                 return self.digest() == current_digest and self._verify_integrity_locked()
         except Exception:
             return False
+
+    def verify_and_advance_anchor(self, anchor: MonotonicAnchor) -> AnchorSnapshot:
+        """Verify the external head and advance it over any valid local tail.
+
+        A database older than the external anchor, or a chain that diverges at
+        the anchored sequence, is rejected. A crash after a local append but
+        before the external CAS is recoverable: the authenticated anchored
+        prefix is checked before advancing the anchor to the longer local tip.
+        """
+        if not callable(getattr(anchor, "read", None)) or not callable(
+            getattr(anchor, "compare_and_swap", None)
+        ):
+            raise TypeError("monotonic_audit_anchor_contract_required")
+        with self._db_lock:
+            if not self._verify_integrity_locked():
+                raise ValueError("audit_integrity_failed")
+            rows = self._rows()
+            local_head = AnchorSnapshot(
+                len(rows), rows[-1][2] if rows else ZERO_MAC
+            )
+            anchored = anchor.read()
+            if not isinstance(anchored, AnchorSnapshot):
+                raise ValueError("audit_anchor_snapshot_invalid")
+            if (
+                isinstance(anchored.sequence, bool)
+                or not isinstance(anchored.sequence, int)
+                or anchored.sequence < 0
+                or not isinstance(anchored.mac, str)
+                or len(anchored.mac) != 64
+            ):
+                raise ValueError("audit_anchor_snapshot_invalid")
+            try:
+                decoded_mac = bytes.fromhex(anchored.mac)
+            except ValueError as exc:
+                raise ValueError("audit_anchor_snapshot_invalid") from exc
+            if len(decoded_mac) != 32 or decoded_mac.hex() != anchored.mac:
+                raise ValueError("audit_anchor_snapshot_invalid")
+            if anchored.sequence > len(rows):
+                raise ValueError("audit_database_rollback_detected")
+            expected_mac = ZERO_MAC if anchored.sequence == 0 else rows[anchored.sequence - 1][2]
+            if anchored.mac != expected_mac:
+                raise ValueError("audit_anchor_chain_mismatch")
+            if anchored == local_head:
+                return local_head
+
+            # The witness protocol deliberately advances one sequence at a
+            # time. A local database may contain several valid events written
+            # since the last checkpoint, so publish each authenticated prefix
+            # rather than attempting an invalid multi-sequence jump.
+            current = anchored
+            for sequence in range(anchored.sequence + 1, local_head.sequence + 1):
+                replacement = AnchorSnapshot(sequence, rows[sequence - 1][2])
+                try:
+                    accepted = anchor.compare_and_swap(current, replacement)
+                except Exception as exc:
+                    # A remote witness may commit the CAS and lose its reply.
+                    # Resolve this uncertain outcome by reading the authenticated
+                    # anchor before deciding whether to retry or fail closed.
+                    try:
+                        latest = anchor.read()
+                    except Exception as read_exc:
+                        raise ValueError("audit_anchor_outcome_uncertain") from read_exc
+                    if latest == replacement:
+                        current = replacement
+                        continue
+                    raise ValueError("audit_anchor_outcome_uncertain") from exc
+                if accepted:
+                    current = replacement
+                    continue
+
+                # A competing writer may have committed this exact prefix.
+                # If the read-back also fails, the durable outcome is unknown.
+                try:
+                    latest = anchor.read()
+                except Exception as read_exc:
+                    raise ValueError("audit_anchor_outcome_uncertain") from read_exc
+                if latest == replacement:
+                    current = replacement
+                    continue
+                raise ValueError("audit_anchor_compare_and_swap_failed")
+            return local_head
 
     def close(self) -> None:
         with self._db_lock:
