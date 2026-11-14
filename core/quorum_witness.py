@@ -49,6 +49,18 @@ class QuorumMonotonicAnchor:
         # Cross-process/distributed consensus still requires a shared protocol.
         self._cas_lock = threading.Lock()
 
+    @staticmethod
+    def _valid_snapshot(snapshot: AnchorSnapshot) -> bool:
+        return (
+            isinstance(snapshot, AnchorSnapshot)
+            and not isinstance(snapshot.sequence, bool)
+            and isinstance(snapshot.sequence, int)
+            and snapshot.sequence >= 0
+            and isinstance(snapshot.mac, str)
+            and len(snapshot.mac) == 64
+            and all(char in "0123456789abcdef" for char in snapshot.mac)
+        )
+
     def read(self) -> AnchorSnapshot:
         observed: list[AnchorSnapshot] = []
         for witness in self._witnesses.values():
@@ -56,7 +68,7 @@ class QuorumMonotonicAnchor:
                 snapshot = witness.read()
             except Exception:
                 continue
-            if isinstance(snapshot, AnchorSnapshot):
+            if self._valid_snapshot(snapshot):
                 observed.append(snapshot)
         counts = Counter(observed)
         winners = [snapshot for snapshot, count in counts.items() if count >= self.quorum]
@@ -73,7 +85,7 @@ class QuorumMonotonicAnchor:
     def _compare_and_swap_locked(
         self, expected: AnchorSnapshot, replacement: AnchorSnapshot
     ) -> bool:
-        if not isinstance(expected, AnchorSnapshot) or not isinstance(replacement, AnchorSnapshot):
+        if not self._valid_snapshot(expected) or not self._valid_snapshot(replacement):
             return False
         if replacement.sequence != expected.sequence + 1:
             return False
@@ -92,7 +104,8 @@ class QuorumMonotonicAnchor:
                     continue
                 # A concurrent identical writer may have committed the same
                 # transition before this witness processed our CAS.
-                if witness.read() == replacement:
+                observed = witness.read()
+                if self._valid_snapshot(observed) and observed == replacement:
                     accepted += 1
             except Exception:
                 continue
