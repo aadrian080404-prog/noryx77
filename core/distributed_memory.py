@@ -289,6 +289,63 @@ class DistributedMemoryStore:
                         if counter != expected:
                             raise ValueError("memory_actor_counter_gap")
                         expected += 1
+
+                # A valid signature and contiguous actor counters do not prove
+                # that the causal history named by a vector clock is present.
+                # Resolve every referenced event from this batch or the local
+                # log, then prove its clock is strictly earlier and contained.
+                batch_by_id = {(event.actor_id, event.counter): event for event in validated}
+                dependency_cache: dict[tuple[str, int], MemoryEvent] = {}
+
+                def dependency(actor: str, counter: int) -> MemoryEvent:
+                    identity = (actor, counter)
+                    cached = dependency_cache.get(identity)
+                    if cached is not None:
+                        return cached
+                    candidate = batch_by_id.get(identity)
+                    if candidate is None:
+                        row = self._db.execute(
+                            "SELECT payload FROM memory_events WHERE actor_id=? AND counter=?",
+                            identity,
+                        ).fetchone()
+                        if row is None:
+                            raise ValueError("memory_causal_dependency_missing")
+                        candidate = self._decode(row[0])
+                    dependency_cache[identity] = candidate
+                    return candidate
+
+                checked_history: set[tuple[str, int]] = set()
+                validation_steps = 0
+                validation_references = 0
+                for root_event in validated:
+                    stack = [root_event]
+                    while stack:
+                        event = stack.pop()
+                        event_id = (event.actor_id, event.counter)
+                        if event_id in checked_history:
+                            continue
+                        checked_history.add(event_id)
+                        validation_steps += 1
+                        if validation_steps > 100000:
+                            raise ValueError("memory_causal_validation_limit")
+                        required = dict(event.clock)
+                        # An actor's own previous event is an implicit dependency;
+                        # the vector clock's self component names the current event.
+                        if event.counter > 1:
+                            required[event.actor_id] = event.counter - 1
+                        for actor, counter in required.items():
+                            validation_references += 1
+                            if validation_references > 250000:
+                                raise ValueError("memory_causal_validation_limit")
+                            if counter == 0 or (actor == event.actor_id and counter == event.counter):
+                                continue
+                            prior = dependency(actor, counter)
+                            prior_clock = dict(prior.clock)
+                            if prior_clock.get(event.actor_id, 0) >= event.counter:
+                                raise ValueError("memory_causal_dependency_not_prior")
+                            if any(value > required.get(name, 0) for name, value in prior_clock.items()):
+                                raise ValueError("memory_causal_dependency_clock_inconsistent")
+                            stack.append(prior)
                 inserted = sum(1 for event in validated if self._insert_event(event))
                 self._db.execute("COMMIT")
                 return inserted
