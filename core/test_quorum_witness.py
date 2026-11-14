@@ -23,6 +23,7 @@ def make_witnesses(tmp_path):
             InProcessWitnessClient(authority),
             witness_id=f"witness-{index}",
             trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=f"failure-domain-{index}",
         ))
     return anchors, authorities
 
@@ -54,6 +55,7 @@ def test_quorum_anchor_fails_closed_without_majority(tmp_path):
         FailingClient(),
         witness_id="witness-offline",
         trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+        failure_domain="failure-domain-offline",
     )
     quorum = QuorumMonotonicAnchor({
         "witness-0": anchors[0],
@@ -69,10 +71,12 @@ def test_quorum_anchor_fails_closed_without_majority(tmp_path):
         "witness-offline-1": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-1",
             trusted_public_key=offline_key_1.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain="failure-domain-offline-1",
         ),
         "witness-offline-2": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-2",
             trusted_public_key=offline_key_2.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain="failure-domain-offline-2",
         ),
     })
     with pytest.raises(RuntimeError, match="quorum_unavailable"):
@@ -104,6 +108,7 @@ def test_quorum_rejects_distinct_ids_reusing_same_public_key(tmp_path):
             InProcessWitnessClient(authority),
             witness_id=f"shared-key-{index}",
             trusted_public_key=public,
+            failure_domain=f"duplicate-domain-{index}",
         ))
     with pytest.raises(ValueError, match="public_keys_must_be_distinct"):
         QuorumMonotonicAnchor({
@@ -111,3 +116,45 @@ def test_quorum_rejects_distinct_ids_reusing_same_public_key(tmp_path):
         })
     for authority in authorities:
         authority.close()
+
+
+
+def test_quorum_rejects_missing_failure_domains(tmp_path):
+    class UnusedClient:
+        def read_anchor(self, nonce):
+            raise OSError("not used")
+        def compare_and_swap_anchor(self, expected, replacement, nonce):
+            raise OSError("not used")
+
+    witnesses = {}
+    for index in range(3):
+        key = Ed25519PrivateKey.generate()
+        witness_id = f"missing-domain-{index}"
+        witnesses[witness_id] = RemoteMonotonicAnchor(
+            UnusedClient(),
+            witness_id=witness_id,
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+        )
+    with pytest.raises(ValueError, match="failure_domain_required"):
+        QuorumMonotonicAnchor(witnesses)
+
+
+def test_quorum_rejects_duplicate_normalized_failure_domains(tmp_path):
+    class UnusedClient:
+        def read_anchor(self, nonce):
+            raise OSError("not used")
+        def compare_and_swap_anchor(self, expected, replacement, nonce):
+            raise OSError("not used")
+
+    witnesses = {}
+    for index, domain in enumerate(("prod-zone", " prod-zone ", "backup-zone")):
+        key = Ed25519PrivateKey.generate()
+        witness_id = f"domain-{index}"
+        witnesses[witness_id] = RemoteMonotonicAnchor(
+            UnusedClient(),
+            witness_id=witness_id,
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=domain,
+        )
+    with pytest.raises(ValueError, match="failure_domains_must_be_distinct"):
+        QuorumMonotonicAnchor(witnesses)
