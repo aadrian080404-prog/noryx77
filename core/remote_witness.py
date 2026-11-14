@@ -6,6 +6,7 @@ nonce-bound receipts and never stores witness credentials or private keys.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from typing import Protocol
 
@@ -56,6 +57,12 @@ class RemoteMonotonicAnchor:
         self._client = client
         self.witness_id = witness_id
         self._public_key = Ed25519PublicKey.from_public_bytes(trusted_public_key)
+        self._public_key_fingerprint = hashlib.sha256(trusted_public_key).hexdigest()
+
+    @property
+    def public_key_fingerprint(self) -> str:
+        """Stable fingerprint used to reject duplicate quorum credentials."""
+        return self._public_key_fingerprint
 
     @classmethod
     def _message(cls, receipt: SignedWitnessReceipt) -> bytes:
