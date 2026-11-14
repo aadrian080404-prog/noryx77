@@ -303,8 +303,9 @@ class DistributedMemoryStore:
                             ready.append((identity, event))
                     if not ready:
                         actor_gaps = any(
-                            counter > maxima.get(actor, 0) + 1
+                            (actor, maxima.get(actor, 0) + 1) not in pending
                             for actor, counter in pending
+                            if counter > maxima.get(actor, 0) + 1
                         )
                         if actor_gaps:
                             raise ValueError("memory_actor_counter_gap")
