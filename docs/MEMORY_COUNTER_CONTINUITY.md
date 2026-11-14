@@ -40,3 +40,9 @@ first even when the page limit is one. The receiver can advance its vector
 clock and request the next page without receiving an unmergeable partial
 causal history. The page limit remains a hard upper bound; a source history
 that cannot produce a ready event fails closed.
+
+
+Paged replication is also exercised across a receiver restart: after the first
+causally closed page is committed, the receiver is closed and reopened from
+SQLite. Its persisted vector clock must cause the next export to begin with the
+dependent event, with no loss or duplicate delivery.
