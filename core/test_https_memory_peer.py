@@ -4,7 +4,7 @@ import pytest
 from core.distributed_memory import DistributedMemoryStore
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from core.signed_memory_replication import sign_memory_batch
-from core.https_memory_peer import _batch_from_bytes, _batch_to_bytes, make_memory_peer_server
+from core.https_memory_peer import _authenticated_peer_agent_id, _batch_from_bytes, _batch_to_bytes, make_memory_peer_server
 
 
 def test_signed_batch_wire_round_trip(tmp_path):
@@ -37,4 +37,26 @@ def test_server_rejects_invalid_bind_and_dependencies(tmp_path):
     with pytest.raises(ValueError, match="port"):
         make_memory_peer_server(store, registry, host="127.0.0.1", port=0,
                                 cert_file="cert", key_file="key", client_ca_file="ca")
+    store.close()
+
+
+def test_tls_certificate_fingerprint_is_bound_to_exact_agent():
+    from hashlib import sha256
+    certificate = b"synthetic-test-certificate"
+    fingerprint = sha256(certificate).hexdigest()
+    assert _authenticated_peer_agent_id(certificate, {fingerprint: "peer-a"}) == "peer-a"
+    with pytest.raises(PermissionError, match="unmapped"):
+        _authenticated_peer_agent_id(certificate, {})
+    with pytest.raises(PermissionError, match="missing"):
+        _authenticated_peer_agent_id(b"", {fingerprint: "peer-a"})
+
+
+def test_server_requires_explicit_certificate_identity_mapping(tmp_path):
+    store = DistributedMemoryStore(str(tmp_path / "memory.sqlite"), actor_id="peer-b")
+    registry = IdentityRegistry()
+    with pytest.raises(ValueError, match="certificate_mapping"):
+        make_memory_peer_server(
+            store, registry, host="127.0.0.1", port=8788,
+            cert_file="cert", key_file="key", client_ca_file="ca",
+        )
     store.close()
