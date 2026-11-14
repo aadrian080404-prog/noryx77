@@ -1,4 +1,4 @@
-"""Majority-backed monotonic anchor over independent signed witnesses."""
+"""Majority-backed monotonic anchor over signed witnesses with distinct declared failure domains."""
 from __future__ import annotations
 
 from collections import Counter
@@ -9,12 +9,12 @@ from .remote_witness import RemoteMonotonicAnchor
 
 
 class QuorumMonotonicAnchor:
-    """Fail-closed majority anchor over an odd set of independent witnesses.
+    """Fail-closed majority anchor over signed witnesses with distinct labels.
 
-    Each child must independently verify nonce-bound Ed25519 receipts. An odd
-    witness count ensures that a partial write smaller than a majority leaves
-    a strict majority at the previous value. A split or unavailable quorum
-    causes failure rather than guessing which history is authoritative.
+    Each child verifies nonce-bound Ed25519 receipts. The quorum requires an
+    odd witness count, unique public keys and distinct declared failure-domain
+    labels. Labels are operator assertions, not proof of physical or
+    administrative independence. A split or unavailable quorum fails closed.
     """
 
     def __init__(self, witnesses: Mapping[str, RemoteMonotonicAnchor]) -> None:
