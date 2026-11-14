@@ -96,3 +96,32 @@ def test_external_anchor_rejects_noncanonical_sha256_encoding(tmp_path):
             audit.verify_and_advance_anchor(MalformedAnchor())
     finally:
         audit.close()
+
+
+def test_external_anchor_recovers_cas_commit_when_remote_reply_is_lost(tmp_path):
+    class CommitThenLoseReply:
+        def __init__(self):
+            self.inner = InMemoryMonotonicAnchor()
+            self.lose_once = True
+
+        def read(self):
+            return self.inner.read()
+
+        def compare_and_swap(self, expected, replacement):
+            accepted = self.inner.compare_and_swap(expected, replacement)
+            if accepted and self.lose_once:
+                self.lose_once = False
+                raise OSError("simulated_lost_remote_reply")
+            return accepted
+
+    audit = SQLiteAuditLog(str(tmp_path / "uncertain-anchor.sqlite"))
+    anchor = CommitThenLoseReply()
+    try:
+        audit.record("one")
+        audit.record("two")
+        head = audit.verify_and_advance_anchor(anchor)
+        assert head.sequence == 2
+        assert anchor.read() == head
+        assert audit.verify_integrity()
+    finally:
+        audit.close()
