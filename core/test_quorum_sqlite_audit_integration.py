@@ -30,6 +30,7 @@ def make_quorum(tmp_path):
             trusted_public_key=key.public_key().public_bytes(
                 Encoding.Raw, PublicFormat.Raw
             ),
+            failure_domain=f"failure-domain-{index}",
         ))
     return QuorumMonotonicAnchor({
         f"witness-{i}": anchor for i, anchor in enumerate(anchors)
