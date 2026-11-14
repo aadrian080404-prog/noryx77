@@ -143,6 +143,8 @@ class AuditLog:
             verifier = hmac.HMAC(key, hashes.SHA256())
             verifier.update(self._checkpoint_payload(checkpoint.digest))
             verifier.verify(checkpoint.mac)
-            return True
+            with self._lock:
+                latest_digest = self._digests[-1] if self._digests else self._GENESIS
+                return latest_digest == current_digest and self._verify_integrity_locked()
         except Exception:
             return False
