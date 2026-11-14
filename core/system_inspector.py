@@ -9,6 +9,7 @@ import ast
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import stat
 
 MAX_FILES = 5000
 MAX_FILE_BYTES = 2 * 1024 * 1024
@@ -119,11 +120,23 @@ class PythonSystemInspector:
                     errors.append("file_limit_reached")
                     return InspectionReport(files_scanned, total_bytes, tuple(sorted(findings)), tuple(errors))
                 try:
-                    size = path.stat(follow_symlinks=False).st_size
-                    if size > self.max_file_bytes or total_bytes + size > self.max_total_bytes:
-                        errors.append(f"size_limit_skipped:{path.relative_to(root_path).as_posix()}")
-                        continue
-                    raw = path.read_bytes()
+                    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    descriptor = os.open(path, flags)
+                    try:
+                        metadata = os.fstat(descriptor)
+                        if not stat.S_ISREG(metadata.st_mode):
+                            continue
+                        size = metadata.st_size
+                        if size > self.max_file_bytes or total_bytes + size > self.max_total_bytes:
+                            errors.append(f"size_limit_skipped:{path.relative_to(root_path).as_posix()}")
+                            continue
+                        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                            raw = stream.read(self.max_file_bytes + 1)
+                        if len(raw) > self.max_file_bytes:
+                            errors.append(f"size_limit_skipped:{path.relative_to(root_path).as_posix()}")
+                            continue
+                    finally:
+                        os.close(descriptor)
                     source = raw.decode("utf-8")
                     tree = ast.parse(source, filename=str(path))
                 except (OSError, UnicodeError, SyntaxError) as exc:
