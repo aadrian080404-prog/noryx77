@@ -18,7 +18,7 @@ from .journal_integrity import AnchorSnapshot, ZERO_MAC
 from .remote_witness import SignedWitnessReceipt
 
 
-_DOMAIN = b"NORYX7/REMOTE_MONOTONIC_WITNESS/v1\\x00"
+_DOMAIN = b"NORYX7/REMOTE_MONOTONIC_WITNESS/v1\x00"
 
 
 def _valid_mac(value: object) -> bool:
