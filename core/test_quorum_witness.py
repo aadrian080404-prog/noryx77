@@ -161,3 +161,25 @@ def test_quorum_rejects_shared_failure_domain_even_with_distinct_keys(tmp_path):
     second_authority.close()
     for authority in authorities:
         authority.close()
+
+
+
+def test_quorum_normalizes_failure_domain_whitespace_before_uniqueness(tmp_path):
+    class UnusedClient:
+        def read_anchor(self, nonce):
+            raise OSError("not used")
+        def compare_and_swap_anchor(self, expected, replacement, nonce):
+            raise OSError("not used")
+
+    witnesses = {}
+    for index, domain in enumerate(("production-zone", " production-zone ", "backup-zone")):
+        key = Ed25519PrivateKey.generate()
+        witness_id = f"normalized-domain-{index}"
+        witnesses[witness_id] = RemoteMonotonicAnchor(
+            UnusedClient(),
+            witness_id=witness_id,
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=domain,
+        )
+    with pytest.raises(ValueError, match="failure_domains_must_be_distinct"):
+        QuorumMonotonicAnchor(witnesses)
