@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import stat
 
+from .elf_inspector import ELFInspectionReport, ELF_MAGIC, inspect_elf_bytes
+
 MAX_FILES = 5000
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
@@ -32,6 +34,7 @@ class InspectionReport:
     bytes_scanned: int
     findings: tuple[InspectionFinding, ...]
     parse_errors: tuple[str, ...]
+    binary_reports: tuple[ELFInspectionReport, ...] = ()
 
 
 def _dotted_name(node: ast.AST) -> str | None:
@@ -106,6 +109,7 @@ class PythonSystemInspector:
             raise ValueError("inspection_root_must_be_directory")
         findings: list[InspectionFinding] = []
         errors: list[str] = []
+        binary_reports: list[ELFInspectionReport] = []
         files_scanned = total_bytes = 0
         for current, dirs, filenames in os.walk(root_path, topdown=True, followlinks=False):
             dirs[:] = sorted(
@@ -114,11 +118,10 @@ class PythonSystemInspector:
             )
             for filename in sorted(filenames):
                 path = Path(current) / filename
-                if path.suffix != ".py" or path.is_symlink():
+                if path.is_symlink():
                     continue
-                if files_scanned >= self.max_files:
-                    errors.append("file_limit_reached")
-                    return InspectionReport(files_scanned, total_bytes, tuple(sorted(findings)), tuple(errors))
+                is_python = path.suffix == ".py"
+                relative = path.relative_to(root_path).as_posix()
                 try:
                     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
                     descriptor = os.open(path, flags)
@@ -128,24 +131,49 @@ class PythonSystemInspector:
                             continue
                         size = metadata.st_size
                         if size > self.max_file_bytes or total_bytes + size > self.max_total_bytes:
-                            errors.append(f"size_limit_skipped:{path.relative_to(root_path).as_posix()}")
+                            if is_python:
+                                errors.append(f"size_limit_skipped:{relative}")
                             continue
                         with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                            prefix = stream.read(4)
+                            if not is_python and prefix != ELF_MAGIC:
+                                continue
+                            if files_scanned >= self.max_files:
+                                errors.append("file_limit_reached")
+                                return InspectionReport(
+                                    files_scanned, total_bytes, tuple(sorted(findings)),
+                                    tuple(sorted(errors)), tuple(binary_reports),
+                                )
+                            stream.seek(0)
                             raw = stream.read(self.max_file_bytes + 1)
                         if len(raw) > self.max_file_bytes:
-                            errors.append(f"size_limit_skipped:{path.relative_to(root_path).as_posix()}")
+                            errors.append(f"size_limit_skipped:{relative}")
                             continue
                     finally:
                         os.close(descriptor)
-                    source = raw.decode("utf-8")
-                    tree = ast.parse(source, filename=str(path))
-                except (OSError, UnicodeError, SyntaxError) as exc:
-                    errors.append(f"parse_error:{path.relative_to(root_path).as_posix()}:{type(exc).__name__}")
+
+                    if is_python:
+                        source = raw.decode("utf-8")
+                        tree = ast.parse(source, filename=str(path))
+                        visitor = _RuleVisitor(relative)
+                        visitor.visit(tree)
+                        findings.extend(visitor.findings)
+                    else:
+                        binary_report = inspect_elf_bytes(raw)
+                        binary_reports.append(binary_report)
+                        findings.extend(
+                            InspectionFinding(
+                                relative, 0, finding.rule_id, finding.severity,
+                                finding.evidence,
+                            )
+                            for finding in binary_report.findings
+                        )
+                except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
+                    errors.append(f"parse_error:{relative}:{type(exc).__name__}")
                     continue
                 files_scanned += 1
                 total_bytes += len(raw)
-                relative = path.relative_to(root_path).as_posix()
-                visitor = _RuleVisitor(relative)
-                visitor.visit(tree)
-                findings.extend(visitor.findings)
-        return InspectionReport(files_scanned, total_bytes, tuple(sorted(findings)), tuple(sorted(errors)))
+        return InspectionReport(
+            files_scanned, total_bytes, tuple(sorted(findings)),
+            tuple(sorted(errors)), tuple(binary_reports),
+        )
