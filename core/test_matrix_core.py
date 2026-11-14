@@ -111,3 +111,12 @@ def test_invalid_resource_values_and_reserve_are_rejected():
 def test_request_cannot_claim_more_than_owner_grant():
     node = make_node()
     assert not eligible(node, make_request(resources=ResourceVector(cpu_milli=2500)))
+
+
+
+def test_owner_quota_applies_to_aggregate_concurrent_workloads():
+    book = LocalReservationBook(make_node())
+    book.reserve(make_request(task_id="task-a", resources=ResourceVector(cpu_milli=1500)))
+    with pytest.raises(PermissionError, match="owner_contribution_quota_exceeded"):
+        book.reserve(make_request(task_id="task-b", resources=ResourceVector(cpu_milli=1000)))
+    assert book.node.envelope.committed.cpu_milli == 1500
