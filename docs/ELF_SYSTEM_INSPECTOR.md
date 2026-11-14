@@ -23,7 +23,7 @@ of static inspection.
 PythonSystemInspector.inspect(root) now recognizes ELF files by their magic
 header alongside .py sources. Python AST findings and ELF structural findings
 are returned in the same deterministic finding list; detailed ELF metadata is
-also available through InspectionReport.binary_reports. The same file-count,
+also available through InspectionReport.binary_reports, including bounded `DT_NEEDED` library names from each ELF report. The same file-count,
 per-file byte and aggregate byte budgets apply. Other binary formats are
 skipped rather than guessed or executed.
 
