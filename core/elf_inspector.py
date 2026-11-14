@@ -1,0 +1,174 @@
+"""Bounded, non-executing ELF metadata inspector for authorized review.
+
+This module parses headers and segment/section tables only. It never loads,
+maps, imports, or executes the inspected object. Findings are triage signals,
+not proof of exploitability or malicious intent.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+import os
+from pathlib import Path
+import stat
+import struct
+
+MAX_ELF_BYTES = 64 * 1024 * 1024
+MAX_TABLE_ENTRIES = 4096
+ELF_MAGIC = b"\x7fELF"
+PT_LOAD = 1
+PT_INTERP = 3
+PT_GNU_STACK = 0x6474E551
+PF_X = 1
+PF_W = 2
+
+
+@dataclass(frozen=True, order=True)
+class ELFFinding:
+    rule_id: str
+    severity: str
+    evidence: str
+
+
+@dataclass(frozen=True)
+class ELFInspectionReport:
+    sha256: str
+    size_bytes: int
+    elf_class: int
+    endianness: str
+    object_type: int
+    machine: int
+    entry_point: int
+    program_headers: int
+    section_headers: int
+    section_names: tuple[str, ...]
+    findings: tuple[ELFFinding, ...]
+
+
+def _bounded_table(data: bytes, offset: int, count: int, entry_size: int,
+                   minimum_entry_size: int, label: str) -> None:
+    if count > MAX_TABLE_ENTRIES:
+        raise ValueError("elf_" + label + "_count_limit")
+    if count == 0:
+        return
+    if entry_size < minimum_entry_size:
+        raise ValueError("elf_" + label + "_entry_size_invalid")
+    if offset < 0 or offset > len(data) or count * entry_size > len(data) - offset:
+        raise ValueError("elf_" + label + "_table_out_of_bounds")
+
+
+def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
+    if not isinstance(data, bytes):
+        raise TypeError("elf_bytes_required")
+    if len(data) < 16 or len(data) > MAX_ELF_BYTES:
+        raise ValueError("elf_size_invalid")
+    if data[:4] != ELF_MAGIC:
+        raise ValueError("elf_magic_invalid")
+    elf_class, encoding, ident_version = data[4], data[5], data[6]
+    if elf_class not in (1, 2) or encoding not in (1, 2) or ident_version != 1:
+        raise ValueError("elf_ident_invalid")
+    endian = "<" if encoding == 1 else ">"
+    endian_name = "little" if encoding == 1 else "big"
+    if elf_class == 2:
+        header_format = endian + "HHIQQQIHHHHHH"
+        header_size = 64
+        ph_min, sh_min = 56, 64
+        ph_format, sh_format = endian + "IIQQQQQQ", endian + "IIQQQQIIQQ"
+    else:
+        header_format = endian + "HHIIIIIHHHHHH"
+        header_size = 52
+        ph_min, sh_min = 32, 40
+        ph_format, sh_format = endian + "IIIIIIII", endian + "IIIIIIIIII"
+    if len(data) < header_size:
+        raise ValueError("elf_header_truncated")
+    fields = struct.unpack_from(header_format, data, 16)
+    (object_type, machine, version, entry, phoff, shoff, _flags, ehsize,
+     phentsize, phnum, shentsize, shnum, shstrndx) = fields
+    if version != 1 or ehsize < header_size or ehsize > len(data):
+        raise ValueError("elf_header_invalid")
+    _bounded_table(data, phoff, phnum, phentsize, ph_min, "program_header")
+    _bounded_table(data, shoff, shnum, shentsize, sh_min, "section_header")
+    findings: list[ELFFinding] = []
+    section_names: list[str] = []
+
+    for index in range(phnum):
+        offset = phoff + index * phentsize
+        values = struct.unpack_from(ph_format, data, offset)
+        if elf_class == 2:
+            p_type, p_flags, p_offset, _vaddr, _paddr, p_filesz, p_memsz, _align = values
+        else:
+            p_type, p_offset, _vaddr, _paddr, p_filesz, p_memsz, p_flags, _align = values
+        if p_filesz > p_memsz or p_offset > len(data) or p_filesz > len(data) - p_offset:
+            raise ValueError("elf_segment_out_of_bounds")
+        if p_type == PT_INTERP:
+            findings.append(ELFFinding("ELF-001", "info", "object declares an interpreter"))
+        if p_type == PT_GNU_STACK and p_flags & PF_X:
+            findings.append(ELFFinding("ELF-002", "high", "GNU stack segment is executable"))
+        if p_type == PT_LOAD and p_flags & PF_W and p_flags & PF_X:
+            findings.append(ELFFinding("ELF-003", "high", "loadable segment is writable and executable"))
+
+    section_rows = []
+    for index in range(shnum):
+        offset = shoff + index * shentsize
+        values = struct.unpack_from(sh_format, data, offset)
+        if elf_class == 2:
+            name_offset, section_type, _flags, _addr, file_offset, size, _link, _info, _align, _entsize = values
+        else:
+            name_offset, section_type, _flags, _addr, file_offset, size, _link, _info, _align, _entsize = values
+        if section_type != 8 and (file_offset > len(data) or size > len(data) - file_offset):
+            raise ValueError("elf_section_out_of_bounds")
+        section_rows.append((name_offset, section_type, file_offset, size))
+
+    if shnum:
+        if shstrndx >= shnum:
+            raise ValueError("elf_section_name_table_invalid")
+        _name_offset, name_type, name_start, name_size = section_rows[shstrndx]
+        if name_type == 8 or name_size > MAX_ELF_BYTES:
+            raise ValueError("elf_section_name_table_invalid")
+        names = data[name_start:name_start + name_size]
+        for name_offset, _kind, _start, _size in section_rows:
+            if name_offset >= len(names):
+                if name_offset != 0:
+                    raise ValueError("elf_section_name_offset_invalid")
+                section_names.append("")
+                continue
+            end = names.find(b"\x00", name_offset)
+            if end < 0:
+                raise ValueError("elf_section_name_unterminated")
+            try:
+                section_names.append(names[name_offset:end].decode("ascii"))
+            except UnicodeDecodeError:
+                section_names.append("<non-ascii-name>")
+        if ".dynamic" in section_names:
+            findings.append(ELFFinding("ELF-004", "info", "object contains a dynamic-linking section"))
+        if ".debug_info" in section_names or ".symtab" in section_names:
+            findings.append(ELFFinding("ELF-005", "info", "debug or full symbol metadata is present"))
+
+    return ELFInspectionReport(
+        hashlib.sha256(data).hexdigest(), len(data), 64 if elf_class == 2 else 32,
+        endian_name, object_type, machine, entry, phnum, shnum,
+        tuple(section_names), tuple(sorted(set(findings))),
+    )
+
+
+def inspect_elf_file(path: str | os.PathLike[str], *, max_bytes: int = MAX_ELF_BYTES) -> ELFInspectionReport:
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or not 1 <= max_bytes <= MAX_ELF_BYTES:
+        raise ValueError("elf_file_limit_invalid")
+    target = Path(path)
+    if target.is_symlink():
+        raise ValueError("elf_path_must_not_be_symlink")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(target, flags)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("elf_path_must_be_regular_file")
+        if metadata.st_size > max_bytes:
+            raise ValueError("elf_file_size_limit")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            raw = stream.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise ValueError("elf_file_size_limit")
+    finally:
+        os.close(descriptor)
+    return inspect_elf_bytes(raw)
