@@ -218,7 +218,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                 continue
             if len(dynamic_libraries) >= MAX_DYNAMIC_LIBRARIES or value >= len(strings):
                 raise ValueError("elf_dynamic_string_offset_invalid")
-            end = strings.find(b"\\x00", value)
+            end = strings.find(b"\x00", value)
             if end < 0:
                 raise ValueError("elf_dynamic_string_unterminated")
             try:
