@@ -21,7 +21,8 @@ authenticated vector-clock exchange, and a recovery/anti-rollback strategy.
 
 The server now requires an explicit `peer_certificate_agents` mapping from the
 lowercase SHA-256 fingerprint of each CA-validated client certificate to one
-AgentIdentity `agent_id`. The authenticated certificate fingerprint is checked
+AgentIdentity `agent_id`. Multiple fingerprints may map to the same agent during
+an overlap window for certificate rotation. The authenticated certificate fingerprint is checked
 against this mapping before a batch is accepted, and the signed batch identity
 must name the same agent. The normal AgentIdentity signature and trust-registry
 checks still run; mTLS does not replace them.
