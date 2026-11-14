@@ -27,8 +27,11 @@ SHT_DYNAMIC = 6
 SHT_DYNSYM = 11
 DT_NULL = 0
 DT_NEEDED = 1
+DT_HASH = 4
 DT_STRTAB = 5
+DT_SYMTAB = 6
 DT_STRSZ = 10
+DT_SYMENT = 11
 MAX_DYNAMIC_ENTRIES = 4096
 MAX_DYNAMIC_LIBRARIES = 256
 MAX_DYNAMIC_SYMBOLS = 4096
@@ -197,6 +200,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
     # Resolve DT_NEEDED entries without loading or executing the object.
     # Both the dynamic table and its linked string table remain size-bounded.
     dynamic_libraries: list[str] = []
+    pt_dynamic_imports: list[str] = []
     dynamic_entry_count = 0
     dynamic_format = endian + ("qQ" if elf_class == 2 else "iI")
     dynamic_entry_size = struct.calcsize(dynamic_format)
@@ -275,29 +279,38 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                     needed_offsets.append(value)
             if not terminated:
                 raise ValueError("elf_dynamic_table_unterminated")
-            if needed_offsets:
-                strtab_values = [value for tag, value in tags if tag == DT_STRTAB]
-                strsz_values = [value for tag, value in tags if tag == DT_STRSZ]
+            strtab_values = [value for tag, value in tags if tag == DT_STRTAB]
+            strsz_values = [value for tag, value in tags if tag == DT_STRSZ]
+            hash_values = [value for tag, value in tags if tag == DT_HASH]
+            symtab_values = [value for tag, value in tags if tag == DT_SYMTAB]
+            syment_values = [value for tag, value in tags if tag == DT_SYMENT]
+            if needed_offsets or hash_values or symtab_values or syment_values:
                 if len(strtab_values) != 1 or len(strsz_values) != 1:
                     raise ValueError("elf_dynamic_string_table_invalid")
                 string_vaddr, string_size = strtab_values[0], strsz_values[0]
                 if string_size > MAX_ELF_BYTES:
                     raise ValueError("elf_dynamic_string_table_limit")
-                string_file_offset = None
-                for kind, file_offset, virtual_address, file_size, _memory_size in program_segments:
-                    if kind != PT_LOAD or string_vaddr < virtual_address:
-                        continue
-                    delta = string_vaddr - virtual_address
-                    if delta <= file_size and string_size <= file_size - delta:
-                        string_file_offset = file_offset + delta
-                        break
-                if string_file_offset is None:
-                    raise ValueError("elf_dynamic_string_table_unmapped")
+
+                def map_load_address(address: int, size: int, error: str) -> int:
+                    matches = []
+                    for kind, file_offset, virtual_address, file_size, _memory_size in program_segments:
+                        if kind != PT_LOAD or address < virtual_address:
+                            continue
+                        delta = address - virtual_address
+                        if delta <= file_size and size <= file_size - delta:
+                            matches.append(file_offset + delta)
+                    if not matches or len(set(matches)) != 1:
+                        raise ValueError(error)
+                    return matches[0]
+
+                string_file_offset = map_load_address(
+                    string_vaddr, string_size, "elf_dynamic_string_table_unmapped"
+                )
                 strings = data[string_file_offset:string_file_offset + string_size]
                 for value in needed_offsets:
                     if value >= len(strings):
                         raise ValueError("elf_dynamic_string_offset_invalid")
-                    end = strings.find(b"\x00", value)
+                    end = strings.find(b"\\x00", value)
                     if end < 0:
                         raise ValueError("elf_dynamic_string_unterminated")
                     try:
@@ -308,6 +321,55 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                         raise ValueError("elf_dynamic_library_name_empty")
                     dynamic_libraries.append(library)
 
+                # SysV DT_HASH exposes a bounded symbol count for stripped ELF.
+                # GNU-hash-only symbol enumeration remains unsupported.
+                if hash_values or symtab_values or syment_values:
+                    if len(hash_values) != 1 or len(symtab_values) != 1 or len(syment_values) != 1:
+                        raise ValueError("elf_dynamic_symbol_metadata_invalid")
+                    symbol_format = endian + ("IBBHQQ" if elf_class == 2 else "IIIBBH")
+                    symbol_size = struct.calcsize(symbol_format)
+                    if syment_values[0] != symbol_size:
+                        raise ValueError("elf_dynamic_symbol_entry_size_invalid")
+                    hash_offset = map_load_address(
+                        hash_values[0], 8, "elf_dynamic_hash_table_unmapped"
+                    )
+                    bucket_count, symbol_count = struct.unpack_from(
+                        endian + "II", data, hash_offset
+                    )
+                    if bucket_count > MAX_DYNAMIC_SYMBOLS or symbol_count > MAX_DYNAMIC_SYMBOLS:
+                        raise ValueError("elf_dynamic_symbol_count_limit")
+                    hash_table_size = 8 + bucket_count * 4 + symbol_count * 4
+                    map_load_address(
+                        hash_values[0], hash_table_size, "elf_dynamic_hash_table_unmapped"
+                    )
+                    symbol_table_size = symbol_count * symbol_size
+                    symbol_offset = map_load_address(
+                        symtab_values[0], symbol_table_size,
+                        "elf_dynamic_symbol_table_unmapped",
+                    )
+                    if symbol_count > MAX_DYNAMIC_SYMBOLS:
+                        raise ValueError("elf_dynamic_symbol_count_limit")
+                    for index in range(symbol_count):
+                        values = struct.unpack_from(
+                            symbol_format, data, symbol_offset + index * symbol_size
+                        )
+                        if elf_class == 2:
+                            name_offset, _info, _other, section_index, _value, _size = values
+                        else:
+                            name_offset, _value, _size, _info, _other, section_index = values
+                        if name_offset == 0:
+                            continue
+                        if name_offset >= len(strings):
+                            raise ValueError("elf_dynamic_symbol_name_offset_invalid")
+                        end = strings.find(b"\\x00", name_offset)
+                        if end < 0:
+                            raise ValueError("elf_dynamic_symbol_name_unterminated")
+                        name = strings[name_offset:end].decode("utf-8", "replace")
+                        if not name:
+                            raise ValueError("elf_dynamic_symbol_name_empty")
+                        if section_index == 0:
+                            pt_dynamic_imports.append(name)
+
     if dynamic_libraries:
         findings.append(ELFFinding(
             "ELF-006", "info",
@@ -317,7 +379,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
     # Resolve undefined dynamic symbols as import metadata. Symbol tables are
     # never interpreted as code and every name is checked against its linked
     # bounded string table.
-    dynamic_imports: list[str] = []
+    dynamic_imports: list[str] = list(pt_dynamic_imports)
     dynamic_symbol_entry_count = 0
     symbol_format = endian + ("IBBHQQ" if elf_class == 2 else "IIIBBH")
     minimum_symbol_size = struct.calcsize(symbol_format)
