@@ -310,7 +310,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                 for value in needed_offsets:
                     if value >= len(strings):
                         raise ValueError("elf_dynamic_string_offset_invalid")
-                    end = strings.find(b"\\x00", value)
+                    end = strings.find(b"\x00", value)
                     if end < 0:
                         raise ValueError("elf_dynamic_string_unterminated")
                     try:
@@ -361,7 +361,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                             continue
                         if name_offset >= len(strings):
                             raise ValueError("elf_dynamic_symbol_name_offset_invalid")
-                        end = strings.find(b"\\x00", name_offset)
+                        end = strings.find(b"\x00", name_offset)
                         if end < 0:
                             raise ValueError("elf_dynamic_symbol_name_unterminated")
                         name = strings[name_offset:end].decode("utf-8", "replace")
