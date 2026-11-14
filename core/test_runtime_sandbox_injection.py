@@ -225,3 +225,98 @@ def test_canonical_runtime_rejects_concurrent_replay_before_second_dispatch(tmp_
         assert len(adapter.actions) == 1
     finally:
         replay_guard.close()
+
+
+def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, monkeypatch):
+    import os
+    import sys
+    import pytest
+
+    if os.environ.get("NORYX7_RUN_BWRAP_E2E") != "1" or sys.platform != "linux":
+        pytest.skip("requires the real Bubblewrap integration runner")
+
+    from core.os_sandbox import BubblewrapSandboxRunner, SandboxLimits
+    from core.sandboxed_execution import SandboxedProcessAdapter
+
+    workspace = tmp_path / "runtime-workspace"
+    workspace.mkdir()
+    runner = BubblewrapSandboxRunner()
+    adapter = SandboxedProcessAdapter(
+        runner,
+        workspace=workspace,
+        limits=SandboxLimits(
+            cpu_seconds=3,
+            memory_bytes=64 * 1024 * 1024,
+            file_size_bytes=4096,
+            open_files=20,
+            processes=5,
+            wall_seconds=10,
+            output_bytes=4096,
+        ),
+    )
+
+    registry = IdentityRegistry()
+    principal, _private_key = AgentIdentityAuthority.generate("bubblewrap-runtime-operator")
+    registry.register(principal)
+    replay_guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"r" * 32,
+        key_id="bubblewrap-runtime-e2e-key",
+        path=str(tmp_path / "bubblewrap-runtime-replay.sqlite3"),
+    )
+    authority = AuthorizationAuthority(
+        b"a" * 32,
+        identity_registry=registry,
+        replay_guard=replay_guard,
+        require_authenticated_replay=True,
+    )
+    runtime = NORYXRuntime(
+        identity_registry=registry,
+        authorization_authority=authority,
+        sandboxed_process_adapter=adapter,
+    )
+    action = ActionSpec(
+        action_id="bubblewrap-runtime-e2e",
+        action_type="sandboxed_process",
+        target="workspace",
+        parameters={
+            "action_id": "bubblewrap-runtime-e2e",
+            "argv": [
+                "/usr/bin/python3",
+                "-I",
+                "-c",
+                "from pathlib import Path; Path('/workspace/authorized-marker').write_text('authorized'); print('sandbox-dispatch-ok')",
+            ],
+        },
+        risk_class="high",
+        requires_authorization=True,
+        execution_id="exec-bubblewrap-runtime-e2e",
+    )
+    grant = authority.issue(
+        action,
+        "exec-bubblewrap-runtime-e2e",
+        principal=principal,
+    )
+    try:
+        output, decision = runtime.tool_executor.execute(
+            action,
+            execution_id="exec-bubblewrap-runtime-e2e",
+            grant=grant,
+            principal=principal,
+        )
+        assert decision.valid
+        assert output.exit_code == 0
+        assert output.stdout.strip() == b"sandbox-dispatch-ok"
+        assert (workspace / "authorized-marker").read_text() == "authorized"
+
+        replay_output, replay_decision = runtime.tool_executor.execute(
+            action,
+            execution_id="exec-bubblewrap-runtime-e2e",
+            grant=grant,
+            principal=principal,
+        )
+        assert replay_output is None
+        assert not replay_decision.valid
+        assert replay_decision.reason == "invalid_authorization_grant"
+        assert (workspace / "authorized-marker").read_text() == "authorized"
+    finally:
+        replay_guard.close()
