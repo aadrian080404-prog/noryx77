@@ -1,7 +1,6 @@
 import pytest
 
 from core.contracts import TaskSpec
-from core.crypto import InMemoryKeyProvider
 from core.runtime import NORYXRuntime
 from core.sqlite_audit import SQLiteAuditLog
 
