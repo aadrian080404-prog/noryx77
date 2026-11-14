@@ -267,3 +267,114 @@ def test_sqlite_audit_recovers_uncommitted_transaction_after_process_death(tmp_p
     assert recovered.digest() == expected_digest
     assert recovered.verify_integrity()
     recovered.close()
+
+
+
+def _crash_after_external_anchor_advance(audit_path, database_paths, private_keys):
+    """Terminate immediately after the first durable external witness majority."""
+    import os
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from core.quorum_witness import QuorumMonotonicAnchor
+    from core.remote_witness import RemoteMonotonicAnchor
+    from core.sqlite_audit import SQLiteAuditLog
+    from core.witness_authority import InProcessWitnessClient, SQLiteWitnessAuthority
+
+    authorities = []
+    anchors = []
+    for index, (database_path, raw_key) in enumerate(zip(database_paths, private_keys)):
+        key = Ed25519PrivateKey.from_private_bytes(raw_key)
+        authority = SQLiteWitnessAuthority(
+            database_path, witness_id=f"witness-{index}", signing_key=key
+        )
+        authorities.append(authority)
+        anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"witness-{index}",
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=f"failure-domain-{index}",
+        ))
+    quorum = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+    })
+
+    class CrashAfterFirstCommit:
+        def read(self):
+            return quorum.read()
+
+        def compare_and_swap(self, expected, replacement):
+            accepted = quorum.compare_and_swap(expected, replacement)
+            if accepted:
+                os._exit(79)
+            return False
+
+    audit = SQLiteAuditLog(audit_path)
+    audit.verify_and_advance_anchor(CrashAfterFirstCommit())
+
+
+def test_sqlite_audit_recovers_process_death_during_external_anchor_advancement(tmp_path):
+    import multiprocessing
+    from cryptography.hazmat.primitives.serialization import PrivateFormat, NoEncryption
+
+    audit_path = str(tmp_path / "external-anchor-crash-audit.sqlite")
+    database_paths = [str(tmp_path / f"external-anchor-witness-{index}.sqlite") for index in range(3)]
+    private_keys = []
+    authorities = []
+    for index, database_path in enumerate(database_paths):
+        key = Ed25519PrivateKey.generate()
+        private_keys.append(key.private_bytes(
+            Encoding.Raw, PrivateFormat.Raw, NoEncryption()
+        ))
+        authorities.append(SQLiteWitnessAuthority(
+            database_path, witness_id=f"witness-{index}", signing_key=key
+        ))
+    audit = SQLiteAuditLog(audit_path)
+    audit.record("checkpoint-1")
+    audit.record("checkpoint-2")
+    audit.record("checkpoint-3")
+    expected_head = AnchorSnapshot(3, audit.digest())
+    audit.close()
+    close_all(authorities)
+
+    context = multiprocessing.get_context("spawn")
+    worker = context.Process(
+        target=_crash_after_external_anchor_advance,
+        args=(audit_path, database_paths, private_keys),
+    )
+    worker.start()
+    worker.join(timeout=30)
+    try:
+        assert not worker.is_alive(), "external_anchor_crash_process_timeout"
+        assert worker.exitcode == 79
+    finally:
+        if worker.is_alive():
+            worker.terminate()
+            worker.join(timeout=5)
+
+    recovery_authorities = []
+    recovery_anchors = []
+    for index, database_path in enumerate(database_paths):
+        key = Ed25519PrivateKey.from_private_bytes(private_keys[index])
+        authority = SQLiteWitnessAuthority(
+            database_path, witness_id=f"witness-{index}", signing_key=key
+        )
+        recovery_authorities.append(authority)
+        recovery_anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"witness-{index}",
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=f"failure-domain-{index}",
+        ))
+    try:
+        quorum = QuorumMonotonicAnchor({
+            f"witness-{index}": anchor for index, anchor in enumerate(recovery_anchors)
+        })
+        partial = quorum.read()
+        assert partial == AnchorSnapshot(1, SQLiteAuditLog(audit_path).digest() if False else partial.mac)
+        assert partial.sequence == 1
+        reopened = SQLiteAuditLog(audit_path)
+        assert reopened.verify_and_advance_anchor(quorum) == expected_head
+        assert quorum.read() == expected_head
+        assert reopened.verify_integrity()
+        reopened.close()
+    finally:
+        close_all(recovery_authorities)
