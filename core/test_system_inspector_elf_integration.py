@@ -38,9 +38,9 @@ def test_unified_inspector_skips_non_elf_binary_files(tmp_path):
 
 
 def test_malformed_python_still_consumes_file_and_byte_budgets(tmp_path):
-    malformed = b"def broken(:\\n"
+    malformed = b"def broken(:\n"
     (tmp_path / "a.py").write_bytes(malformed)
-    (tmp_path / "b.py").write_text("x = 1\\n")
+    (tmp_path / "b.py").write_text("x = 1\n")
 
     report = PythonSystemInspector(max_files=1).inspect(tmp_path)
 
@@ -51,9 +51,9 @@ def test_malformed_python_still_consumes_file_and_byte_budgets(tmp_path):
 
 
 def test_malformed_elf_still_consumes_file_and_byte_budgets(tmp_path):
-    malformed = b"\\x7fELF" + bytes(12)
+    malformed = b"\x7fELF" + bytes(12)
     (tmp_path / "a.bin").write_bytes(malformed)
-    (tmp_path / "b.py").write_text("x = 1\\n")
+    (tmp_path / "b.py").write_text("x = 1\n")
 
     report = PythonSystemInspector(max_files=1).inspect(tmp_path)
 
@@ -66,7 +66,7 @@ def test_malformed_elf_still_consumes_file_and_byte_budgets(tmp_path):
 def test_malformed_source_cannot_bypass_total_byte_budget(tmp_path):
     malformed = b"not valid python"
     (tmp_path / "a.py").write_bytes(malformed)
-    (tmp_path / "b.py").write_text("x = 1\\n")
+    (tmp_path / "b.py").write_text("x = 1\n")
 
     report = PythonSystemInspector(max_total_bytes=len(malformed)).inspect(tmp_path)
 
