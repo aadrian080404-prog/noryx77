@@ -168,3 +168,60 @@ def test_canonical_runtime_dispatches_authorized_sandbox_action_once(tmp_path):
         assert len(adapter.actions) == 1
     finally:
         replay_guard.close()
+
+
+def test_canonical_runtime_rejects_concurrent_replay_before_second_dispatch(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    registry = IdentityRegistry()
+    principal, _private_key = AgentIdentityAuthority.generate("sandbox-concurrent-operator")
+    registry.register(principal)
+    replay_guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"r" * 32,
+        key_id="runtime-concurrent-replay-test-key",
+        path=str(tmp_path / "concurrent-dispatch-replay.sqlite3"),
+    )
+    authority = AuthorizationAuthority(
+        b"a" * 32,
+        identity_registry=registry,
+        replay_guard=replay_guard,
+        require_authenticated_replay=True,
+    )
+    adapter = StubSandboxAdapter()
+    runtime = NORYXRuntime(
+        identity_registry=registry,
+        authorization_authority=authority,
+        sandboxed_process_adapter=adapter,
+    )
+    action = ActionSpec(
+        action_id="sandbox-concurrent-once",
+        action_type="sandboxed_process",
+        target="workspace",
+        parameters={"action_id": "sandbox-concurrent-once", "argv": ["/usr/bin/true"]},
+        risk_class="high",
+        requires_authorization=True,
+        execution_id="exec-sandbox-concurrent-once",
+    )
+    grant = authority.issue(action, "exec-sandbox-concurrent-once", principal=principal)
+    barrier = Barrier(3)
+
+    def dispatch():
+        barrier.wait(timeout=10)
+        return runtime.tool_executor.execute(
+            action,
+            execution_id="exec-sandbox-concurrent-once",
+            grant=grant,
+            principal=principal,
+        )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(dispatch) for _ in range(2)]
+            barrier.wait(timeout=10)
+            results = [future.result(timeout=15) for future in futures]
+        assert sum(1 for output, decision in results if decision.valid and output == {"status": "executed"}) == 1
+        assert sum(1 for output, decision in results if not decision.valid) == 1
+        assert len(adapter.actions) == 1
+    finally:
+        replay_guard.close()
