@@ -139,7 +139,7 @@ def test_elf_file_inspector_does_not_block_on_non_regular_file(tmp_path):
     with pytest.raises(ValueError, match="regular_file"):
         inspect_elf_file(fifo)
 
-def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True, symbol_name_offset=11):
+def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True, symbol_name_offset=11, symbol_section_index=0):
     ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     dynamic = struct.pack("<qQ", 1, needed_offset)
     if include_terminator:
@@ -151,7 +151,7 @@ def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True, s
     shstr_offset = dynstr_offset + len(dynstr)
     symbol_offset = (shstr_offset + len(shstr) + 7) & ~7
     symbols = struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
-    symbols += struct.pack("<IBBHQQ", symbol_name_offset, 0x12, 0, 0, 0, 0)
+    symbols += struct.pack("<IBBHQQ", symbol_name_offset, 0x12, 0, symbol_section_index, 0, 0)
     section_offset = (symbol_offset + len(symbols) + 7) & ~7
     header = struct.pack(
         "<HHIQQQIHHHHHH",
@@ -207,3 +207,10 @@ def test_elf_dynamic_symbol_table_reports_undefined_imports():
 def test_elf_dynamic_symbol_table_rejects_invalid_name_offsets():
     with pytest.raises(ValueError, match="dynamic_symbol_name_offset_invalid"):
         inspect_elf_bytes(elf64_with_dynamic_dependency(symbol_name_offset=99))
+
+def test_elf_dynamic_symbol_table_validates_defined_symbol_name_offsets():
+    with pytest.raises(ValueError, match="dynamic_symbol_name_offset_invalid"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(
+            symbol_name_offset=99,
+            symbol_section_index=1,
+        ))
