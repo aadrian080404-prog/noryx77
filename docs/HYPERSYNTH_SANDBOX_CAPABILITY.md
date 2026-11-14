@@ -34,3 +34,13 @@ runtime = HypersynthRuntime(sandboxed_process_adapter=adapter)
 Production deployment still needs OS-level verification of Bubblewrap,
 kernel namespaces, filesystem permissions, resource limits and the host's
 security policy. This PR does not add seccomp, Landlock, or cgroups.
+
+
+## Canonical runtime injection
+
+`NORYXRuntime` and `OperationalNORYXRuntime` expose an explicit
+`sandboxed_process_adapter` injection point and pass it into
+`HypersynthRuntime`. This makes the opt-in capability configurable at the
+canonical runtime construction boundary. It remains disabled when no adapter
+is supplied; no automatic Bubblewrap runner or workspace is created, and this
+does not claim that unrelated legacy or external execution paths are sandboxed.
