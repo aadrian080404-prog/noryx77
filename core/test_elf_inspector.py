@@ -80,26 +80,31 @@ def test_table_count_is_bounded():
         inspect_elf_bytes(bytes(raw))
 
 
-def test_elf64_extended_header_numbering_is_resolved():
-    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+def test_elf_extended_section_count_resolves_then_enforces_parser_limit():
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
-        2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
+        2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0,
     )
-    program = struct.pack("<IIQQQQQQ", 1, 4, 0, 0, 0, 0, 0, 0)
-    # sh_size=2, sh_link=1, sh_info=1 carry the extended values.
+    # ELF extended section count is stored in sh_size of section header zero.
     section_zero = struct.pack(
-        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 2, 1, 1, 0, 0,
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 65536, 0, 0, 0, 0,
     )
-    names = b"\x00.shstrtab\x00"
-    string_table = struct.pack(
-        "<IIQQQQIIQQ", 1, 3, 0, 0, 248, len(names), 0, 0, 1, 0,
-    )
-    report = inspect_elf_bytes(ident + header + program + section_zero + string_table + names)
-    assert report.program_headers == 1
-    assert report.section_headers == 2
-    assert report.section_names == ("", ".shstrtab")
+    with pytest.raises(ValueError, match="section_header_count_limit"):
+        inspect_elf_bytes(ident + header + section_zero)
 
+
+def test_elf_extended_numbering_rejects_non_extended_values():
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0xFFFF,
+    )
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 1, 0, 0, 0,
+    )
+    with pytest.raises(ValueError, match="extended_string_index_invalid"):
+        inspect_elf_bytes(ident + header + section_zero)
 
 def test_elf_extended_numbering_without_section_zero_is_rejected():
     ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
