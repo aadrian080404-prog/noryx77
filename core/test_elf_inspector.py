@@ -139,20 +139,23 @@ def test_elf_file_inspector_does_not_block_on_non_regular_file(tmp_path):
     with pytest.raises(ValueError, match="regular_file"):
         inspect_elf_file(fifo)
 
-def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True):
-    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True, symbol_name_offset=11):
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     dynamic = struct.pack("<qQ", 1, needed_offset)
     if include_terminator:
         dynamic += struct.pack("<qQ", 0, 0)
-    dynstr = b"\x00libc.so.6\x00"
-    shstr = b"\x00.dynamic\x00.dynstr\x00.shstrtab\x00"
+    dynstr = b"\\x00libc.so.6\\x00puts\\x00"
+    shstr = b"\\x00.dynamic\\x00.dynstr\\x00.shstrtab\\x00.dynsym\\x00"
     dynamic_offset = 64
     dynstr_offset = dynamic_offset + len(dynamic)
     shstr_offset = dynstr_offset + len(dynstr)
-    section_offset = (shstr_offset + len(shstr) + 7) & ~7
+    symbol_offset = (shstr_offset + len(shstr) + 7) & ~7
+    symbols = struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+    symbols += struct.pack("<IBBHQQ", symbol_name_offset, 0x12, 0, 0, 0, 0)
+    section_offset = (symbol_offset + len(symbols) + 7) & ~7
     header = struct.pack(
         "<HHIQQQIHHHHHH",
-        3, 62, 1, 0, 0, section_offset, 0, 64, 56, 0, 64, 4, 3,
+        3, 62, 1, 0, 0, section_offset, 0, 64, 56, 0, 64, 5, 3,
     )
     section_zero = bytes(64)
     dynamic_section = struct.pack(
@@ -167,9 +170,15 @@ def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True):
         "<IIQQQQIIQQ",
         18, 3, 0, 0, shstr_offset, len(shstr), 0, 0, 1, 0,
     )
+    dynsym_section = struct.pack(
+        "<IIQQQQIIQQ",
+        28, 11, 0, 0, symbol_offset, len(symbols), 2, 0, 8, 24,
+    )
     payload = ident + header + dynamic + dynstr + shstr
+    payload += bytes(symbol_offset - len(payload))
+    payload += symbols
     payload += bytes(section_offset - len(payload))
-    payload += section_zero + dynamic_section + dynstr_section + shstr_section
+    payload += section_zero + dynamic_section + dynstr_section + shstr_section + dynsym_section
     return payload
 
 
@@ -187,3 +196,14 @@ def test_elf_dynamic_table_rejects_out_of_range_string_offsets():
 def test_elf_dynamic_table_requires_terminator():
     with pytest.raises(ValueError, match="dynamic_table_unterminated"):
         inspect_elf_bytes(elf64_with_dynamic_dependency(include_terminator=False))
+
+
+def test_elf_dynamic_symbol_table_reports_undefined_imports():
+    report = inspect_elf_bytes(elf64_with_dynamic_dependency())
+    assert report.dynamic_imports == ("puts",)
+    assert any(f.rule_id == "ELF-007" for f in report.findings)
+
+
+def test_elf_dynamic_symbol_table_rejects_invalid_name_offsets():
+    with pytest.raises(ValueError, match="dynamic_symbol_name_offset_invalid"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(symbol_name_offset=99))
