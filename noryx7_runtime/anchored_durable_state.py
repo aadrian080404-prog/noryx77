@@ -5,6 +5,7 @@ in-memory anchor is not suitable for production deployment.
 """
 from __future__ import annotations
 
+import hmac
 from core.journal_integrity import AnchorSnapshot, MonotonicAnchor, ZERO_MAC
 
 from .durable_state import DurableStateJournal
