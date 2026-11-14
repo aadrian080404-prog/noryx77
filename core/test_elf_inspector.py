@@ -337,7 +337,7 @@ def elf64_stripped_with_gnu_hash(*, bucket=2, chain=1, bloom_size=1):
     symbols = (
         struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
         + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
-        + struct.pack("<IBBHQQ", 15, 0x12, 0, 1, 0, 0)
+        + struct.pack("<IBBHQQ", 16, 0x12, 0, 1, 0, 0)
     )
     # GNU hash header, bloom word, one bucket and one terminating chain word.
     gnu_hash = struct.pack("<IIIIQII", 1, 2, bloom_size, 5, 0, bucket, chain)
