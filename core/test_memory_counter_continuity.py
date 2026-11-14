@@ -392,3 +392,17 @@ def test_causal_replication_resumes_after_receiver_restart_between_pages(tmp_pat
     finally:
         source.close()
         target.close()
+
+
+def test_merge_rejects_equivocating_duplicate_actor_counter_atomically(tmp_path):
+    target = DistributedMemoryStore(str(tmp_path / "equivocation.sqlite"), actor_id="receiver")
+    first = MemoryEvent("peer", 1, "key-a", "value-a", False, (("peer", 1),))
+    conflicting = MemoryEvent("peer", 1, "key-b", "value-b", False, (("peer", 1),))
+
+    with pytest.raises(ValueError, match="memory_batch_equivocation"):
+        target.merge((first, conflicting))
+
+    assert target.vector_clock() == {}
+    assert target.read("key-a") is None
+    assert target.read("key-b") is None
+    target.close()
