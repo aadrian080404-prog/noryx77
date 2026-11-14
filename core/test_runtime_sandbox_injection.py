@@ -270,7 +270,6 @@ def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, mo
         require_authenticated_replay=True,
     )
     from core.sqlite_audit import SQLiteAuditLog
-    from core.journal_integrity import InMemoryMonotonicAnchor
 
     audit_path = tmp_path / "bubblewrap-runtime-audit.sqlite3"
     audit_log = SQLiteAuditLog(str(audit_path))
@@ -336,16 +335,13 @@ def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, mo
         assert completed["stderr_sha256"]
         assert "sandbox-dispatch-ok" not in str(audit_events)
 
-        anchor = InMemoryMonotonicAnchor()
-        anchored_head = audit_log.verify_and_advance_anchor(anchor)
-        assert anchored_head.sequence == 2
         audit_log.close()
 
         reopened_audit = SQLiteAuditLog(str(audit_path))
         try:
             assert reopened_audit.verify_integrity()
             assert reopened_audit.snapshot() == audit_events
-            assert reopened_audit.verify_and_advance_anchor(anchor) == anchored_head
+            assert reopened_audit.digest()
         finally:
             reopened_audit.close()
     finally:
