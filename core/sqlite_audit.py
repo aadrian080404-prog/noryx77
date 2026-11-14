@@ -251,7 +251,21 @@ class SQLiteAuditLog(AuditLog):
             current = anchored
             for sequence in range(anchored.sequence + 1, local_head.sequence + 1):
                 replacement = AnchorSnapshot(sequence, rows[sequence - 1][2])
-                if anchor.compare_and_swap(current, replacement):
+                try:
+                    accepted = anchor.compare_and_swap(current, replacement)
+                except Exception as exc:
+                    # A remote witness may commit the CAS and lose its reply.
+                    # Resolve this uncertain outcome by reading the authenticated
+                    # anchor before deciding whether to retry or fail closed.
+                    try:
+                        latest = anchor.read()
+                    except Exception as read_exc:
+                        raise ValueError("audit_anchor_outcome_uncertain") from read_exc
+                    if latest == replacement:
+                        current = replacement
+                        continue
+                    raise ValueError("audit_anchor_outcome_uncertain") from exc
+                if accepted:
                     current = replacement
                     continue
 
