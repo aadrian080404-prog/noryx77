@@ -378,3 +378,29 @@ def test_sandbox_dispatch_surfaces_uncertain_outcome_if_completion_audit_fails()
     assert [event["event"] for event in audit.snapshot()] == [
         "sandbox_process_dispatch_started",
     ]
+
+
+def test_sandbox_dispatch_does_not_execute_when_start_audit_cannot_commit():
+    import pytest
+    from core.audit import AuditLog
+
+    class StartFailingAudit(AuditLog):
+        def record(self, event, **data):
+            if event == "sandbox_process_dispatch_started":
+                raise OSError("simulated_start_audit_failure")
+            return super().record(event, **data)
+
+    adapter = StubSandboxAdapter()
+    runtime = NORYXRuntime(
+        audit_log=StartFailingAudit(),
+        sandboxed_process_adapter=adapter,
+    )
+    dispatch = runtime.capability_registry.resolve("sandboxed_process")
+
+    with pytest.raises(OSError, match="simulated_start_audit_failure"):
+        dispatch(
+            "workspace",
+            {"action_id": "audit-start-failure", "argv": ["/usr/bin/true"]},
+        )
+
+    assert adapter.actions == []
