@@ -23,8 +23,11 @@ Dependency extraction first uses bounded `SHT_DYNAMIC` sections and
 falls back to `PT_DYNAMIC` plus an unambiguous file-backed `PT_LOAD` mapping
 when section headers are absent. For stripped objects, undefined imports are
 also recovered when the dynamic table supplies a bounded SysV `DT_HASH` or GNU
-`DT_GNU_HASH`, together with `DT_SYMTAB` and `DT_SYMENT`. GNU hash buckets
-and chains are traversed under the 4096-symbol bound. Dynamic relocation
+`DT_GNU_HASH`, together with `DT_SYMTAB` and `DT_SYMENT`. GNU hash buckets and chains are structurally validated and traversed under a
+4096-symbol global budget. Because GNU hash starts at `symoffset`, symbols
+before that index (including undefined imports) are included when the total
+symbol count is recovered from the highest terminated bucket chain. The Bloom
+filter size and bucket ordering are validated. Dynamic relocation
 reconstruction and relocation target analysis remain unsupported. Ambiguous virtual-address mappings, malformed hash tables,
 oversized symbol counts, and invalid string offsets fail closed. An empty
 dependency/import list means 'not found by this parser', not proof that the
