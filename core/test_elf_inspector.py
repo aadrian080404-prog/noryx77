@@ -101,10 +101,24 @@ def test_elf_extended_numbering_rejects_non_extended_values():
         2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0xFFFF,
     )
     section_zero = struct.pack(
-        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 1, 0, 0, 0,
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 65536, 1, 0, 0, 0,
     )
     with pytest.raises(ValueError, match="extended_string_index_invalid"):
         inspect_elf_bytes(ident + header + section_zero)
+
+
+def test_elf_extended_program_count_enforces_parser_limit():
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 1, 0,
+    )
+    program_zero = struct.pack("<IIQQQQQQ", 0, 0, 0, 0, 0, 0, 0, 0)
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 0, 65535, 0, 0,
+    )
+    with pytest.raises(ValueError, match="program_header_count_limit"):
+        inspect_elf_bytes(ident + header + program_zero + section_zero)
 
 def test_elf_extended_numbering_without_section_zero_is_rejected():
     ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
