@@ -79,17 +79,22 @@ def test_bubblewrap_command_sets_limits_without_preexec_hooks(tmp_path):
 
     command = runner._command(("/usr/bin/true",), str(tmp_path), limits)
 
-    assert command[:10] == [
+    assert command[:9] == [
         "/usr/bin/prlimit",
         "--cpu=3:4",
         "--as=67108864:67108864",
         "--fsize=1234:1234",
         "--nofile=20:20",
         "--core=0:0",
-        "--nproc=5:5",
         "--",
         "/usr/bin/setpriv",
         "--no-new-privs",
     ]
-    assert command[10] == "--"
-    assert command[11] == "/usr/bin/bwrap"
+    assert command[9] == "--"
+    assert command[10] == "/usr/bin/bwrap"
+    assert command[-4:] == [
+        "/usr/bin/prlimit",
+        "--nproc=5:5",
+        "--",
+        "/usr/bin/true",
+    ]
