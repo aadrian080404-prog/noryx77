@@ -4,8 +4,8 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from core.journal_integrity import AnchorSnapshot, ZERO_MAC
 from core.quorum_witness import QuorumMonotonicAnchor
-from core.remote_witness import InProcessWitnessClient, RemoteMonotonicAnchor
-from core.witness_authority import SQLiteWitnessAuthority
+from core.remote_witness import RemoteMonotonicAnchor
+from core.witness_authority import InProcessWitnessClient, SQLiteWitnessAuthority
 
 
 def make_witnesses(tmp_path):
