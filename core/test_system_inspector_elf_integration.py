@@ -141,3 +141,46 @@ def test_inspector_enforces_actual_read_budget_when_file_grows_after_stat(tmp_pa
     assert report.files_scanned == 0
     assert report.bytes_scanned == 0
     assert any(error.startswith("size_limit_skipped:growing.py") for error in report.parse_errors)
+
+
+def test_inspector_opens_child_files_relative_to_pinned_directory_fd(tmp_path, monkeypatch):
+    import os
+    import core.system_inspector as inspector_module
+
+    (tmp_path / "probe.py").write_text("value = 1\\n")
+    real_open = os.open
+    relative_opens = []
+
+    def tracked_open(path, flags, mode=0o777, *, dir_fd=None):
+        if dir_fd is not None:
+            relative_opens.append(path)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        return real_open(path, flags, mode)
+
+    monkeypatch.setattr(inspector_module.os, "open", tracked_open)
+    report = PythonSystemInspector().inspect(tmp_path)
+
+    assert report.files_scanned == 1
+    assert "probe.py" in relative_opens
+
+
+def test_inspector_does_not_follow_symlinked_directory_or_file(tmp_path):
+    import os
+    import pytest
+
+    outside = tmp_path.parent / (tmp_path.name + "-outside")
+    outside.mkdir()
+    (outside / "secret.py").write_text("import os\\nos.system('must-not-be-scanned')\\n")
+    (tmp_path / "inside.py").write_text("safe = True\\n")
+    try:
+        (tmp_path / "linked-dir").symlink_to(outside, target_is_directory=True)
+        (tmp_path / "linked-file.py").symlink_to(outside / "secret.py")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+
+    report = PythonSystemInspector().inspect(tmp_path)
+
+    assert report.files_scanned == 1
+    assert not any(f.path.startswith("linked-dir/") for f in report.findings)
+    assert not any(f.path == "linked-file.py" for f in report.findings)
+    assert not any(f.rule_id == "PROC-001" for f in report.findings)
