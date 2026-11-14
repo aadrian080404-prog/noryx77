@@ -184,3 +184,20 @@ def test_inspector_does_not_follow_symlinked_directory_or_file(tmp_path):
     assert not any(f.path.startswith("linked-dir/") for f in report.findings)
     assert not any(f.path == "linked-file.py" for f in report.findings)
     assert not any(f.rule_id == "PROC-001" for f in report.findings)
+
+
+def test_inspector_rejects_symlinked_ancestor_of_root(tmp_path):
+    import pytest
+
+    real_parent = tmp_path / "real-parent"
+    real_root = real_parent / "tree"
+    real_root.mkdir(parents=True)
+    (real_root / "safe.py").write_text("safe = True\\n")
+    alias = tmp_path / "alias-parent"
+    try:
+        alias.symlink_to(real_parent, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation unavailable")
+
+    with pytest.raises(OSError):
+        PythonSystemInspector().inspect(alias / "tree")
