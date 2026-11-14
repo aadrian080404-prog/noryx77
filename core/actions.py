@@ -230,13 +230,7 @@ class AuthorizationAuthority:
             return self._replay_guard.consume(self._replay_token(grant), expires_at=grant.expires_at, now=self._clock())
 
     def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
-        """Consume under the trust lock, then dispatch without holding registry locks.
-
-        Revocation is linearized against the durable one-shot consume. Once the
-        grant is consumed, a later revocation does not retroactively cancel the
-        already-authorized dispatch. External code must never run under the
-        identity-registry lock.
-        """
+        """Linearize grant consumption and dispatch against identity revocation."""
         if not callable(executor) or self._identity_registry is None or not self._replay_guard.durable:
             return False, None
         if not self._verify_unconsumed(action, execution_id, grant, principal):
@@ -247,9 +241,10 @@ class AuthorizationAuthority:
                     return False, None
                 if not self._replay_guard.consume(self._replay_token(grant), expires_at=grant.expires_at, now=self._clock()):
                     return False, None
-        # The durable capability is consumed before dispatch; executor failure
-        # is an execution failure, never a reason to restore the grant.
-        return True, executor()
+                # The durable capability is consumed before dispatch; executor failure is an
+                # execution failure, never a reason to restore the grant.
+                return True, executor()
+
 
 
 class ActionGate:
