@@ -52,3 +52,25 @@ the public canonical constructor, even when an adapter is supplied. This PR
 only proves registration and routing configuration; it does not make
 production process execution operational. A follow-up must add a durable,
 identity-registry-bound authorization authority before enabling that route.
+
+## Real Bubblewrap smoke test
+
+The opt-in integration test `core/test_os_sandbox_e2e.py` exercises the actual
+Bubblewrap runner rather than a fake adapter. On a Linux host with Bubblewrap
+and unprivileged user namespaces enabled, run:
+
+```sh
+NORYX7_RUN_BWRAP_E2E=1 pytest -q core/test_os_sandbox_e2e.py
+```
+
+It verifies that a process can write through the supplied workspace and that
+an outbound connection attempt fails inside the network namespace. The test
+is skipped by default in generic CI because hosted runners may not permit user
+namespaces. A skipped test is not evidence that production isolation is
+working; deployments must run it on their target host.
+
+The runner also requires the Linux `prlimit` and `setpriv` utilities. It applies
+CPU, address-space, file-size, descriptor, process-count and core-dump limits
+through `prlimit`, and sets `no_new_privs` through `setpriv` before starting
+Bubblewrap. It deliberately avoids Python `preexec_fn` hooks, which are unsafe
+in multithreaded parent processes. Missing utilities fail closed.
