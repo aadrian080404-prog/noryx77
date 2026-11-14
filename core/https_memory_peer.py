@@ -161,8 +161,6 @@ def make_memory_peer_server(store: DistributedMemoryStore, registry: IdentityReg
                 or any(char not in "0123456789abcdef" for char in fingerprint)
                 or not isinstance(agent_id, str) or not agent_id.strip()):
             raise ValueError("memory_peer_certificate_mapping_invalid")
-    if len(set(certificate_agents.values())) != len(certificate_agents):
-        raise ValueError("memory_peer_certificate_agent_duplicate")
     if isinstance(request_timeout, bool) or not isinstance(request_timeout, (int, float)) or not 0.1 <= request_timeout <= 30:
         raise ValueError("memory_peer_request_timeout_invalid")
     if isinstance(max_concurrent_requests, bool) or not isinstance(max_concurrent_requests, int) or not 1 <= max_concurrent_requests <= 128:
