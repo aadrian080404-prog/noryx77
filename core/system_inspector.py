@@ -111,122 +111,141 @@ class PythonSystemInspector:
         root_path = root_path.resolve(strict=True)
         if not root_path.is_dir():
             raise ValueError("inspection_root_must_be_directory")
+        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+            raise RuntimeError("descriptor_relative_traversal_unsupported")
 
         findings: list[InspectionFinding] = []
         errors: list[str] = []
         binary_reports: list[ELFInspectionReport] = []
         files_scanned = total_bytes = visited_entries = 0
-        pending_dirs = [root_path]
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+        root_fd = os.open(root_path, directory_flags)
+        if not stat.S_ISDIR(os.fstat(root_fd).st_mode):
+            os.close(root_fd)
+            raise ValueError("inspection_root_must_be_directory")
+
+        # Keep directory descriptors, not path strings, in the traversal
+        # queue. Child opens are relative to the already-open parent, so a
+        # concurrent rename/replacement cannot redirect a later path lookup.
+        pending_dirs: list[tuple[int, Path]] = [(root_fd, Path("."))]
         entry_limit_reached = False
-
-        # scandir is consumed incrementally. At most max_entries DirEntry
-        # objects are retained for one directory, unlike os.walk which first
-        # materializes every name in a potentially enormous directory.
-        while pending_dirs:
-            current = pending_dirs.pop()
-            entries = []
-            try:
-                with os.scandir(current) as iterator:
-                    for entry in iterator:
-                        if visited_entries >= self.max_entries:
-                            entry_limit_reached = True
-                            break
-                        visited_entries += 1
-                        entries.append(entry)
-            except OSError as exc:
-                errors.append(
-                    f"directory_error:{current.relative_to(root_path).as_posix()}:{type(exc).__name__}"
-                )
-                continue
-
-            child_dirs = []
-            for entry in sorted(entries, key=lambda item: item.name):
-                relative = Path(entry.path).relative_to(root_path).as_posix()
+        try:
+            while pending_dirs:
+                current_fd, relative_dir = pending_dirs.pop()
                 try:
-                    if entry.is_symlink():
-                        continue
-                    if entry.is_dir(follow_symlinks=False):
-                        if entry.name not in SKIP_DIRS:
-                            child_dirs.append(Path(entry.path))
-                        continue
-                    if not entry.is_file(follow_symlinks=False):
-                        continue
-
-                    path = Path(entry.path)
-                    is_python = path.suffix == ".py"
-                    open_flags = (
-                        os.O_RDONLY
-                        | getattr(os, "O_NOFOLLOW", 0)
-                        | getattr(os, "O_NONBLOCK", 0)
-                        | getattr(os, "O_CLOEXEC", 0)
-                    )
-                    descriptor = os.open(path, open_flags)
+                    scan_fd = os.dup(current_fd)
+                    entries = []
                     try:
-                        metadata = os.fstat(descriptor)
-                        if not stat.S_ISREG(metadata.st_mode):
-                            continue
-                        size = metadata.st_size
-                        if (
-                            size > self.max_file_bytes
-                            or total_bytes + size > self.max_total_bytes
-                        ):
-                            if is_python:
-                                errors.append(f"size_limit_skipped:{relative}")
-                            continue
-                        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-                            remaining_total = self.max_total_bytes - total_bytes
-                            read_limit = min(self.max_file_bytes, remaining_total)
-                            if read_limit < (1 if is_python else len(ELF_MAGIC)):
-                                errors.append(f"size_limit_skipped:{relative}")
-                                continue
-                            if not is_python:
-                                prefix = stream.read(len(ELF_MAGIC))
-                                if prefix != ELF_MAGIC:
-                                    continue
-                            if files_scanned >= self.max_files:
-                                errors.append("file_limit_reached")
-                                return InspectionReport(
-                                    files_scanned, total_bytes, tuple(sorted(findings)),
-                                    tuple(sorted(errors)), tuple(binary_reports),
-                                )
-                            stream.seek(0)
-                            raw = stream.read(read_limit + 1)
-                        if len(raw) > read_limit:
-                            errors.append(f"size_limit_skipped:{relative}")
-                            continue
+                        with os.scandir(scan_fd) as iterator:
+                            for entry in iterator:
+                                if visited_entries >= self.max_entries:
+                                    entry_limit_reached = True
+                                    break
+                                visited_entries += 1
+                                entries.append(entry)
                     finally:
-                        os.close(descriptor)
+                        os.close(scan_fd)
 
-                    # Account before parsing: malformed inputs still consume
-                    # I/O, CPU and aggregate budgets.
-                    files_scanned += 1
-                    total_bytes += len(raw)
-                    if is_python:
-                        source = raw.decode("utf-8")
-                        tree = ast.parse(source, filename=str(path))
-                        visitor = _RuleVisitor(relative)
-                        visitor.visit(tree)
-                        findings.extend(visitor.findings)
-                    else:
-                        binary_report = inspect_elf_bytes(raw)
-                        binary_reports.append(binary_report)
-                        findings.extend(
-                            InspectionFinding(
-                                relative, 0, finding.rule_id, finding.severity,
-                                finding.evidence,
-                            )
-                            for finding in binary_report.findings
-                        )
-                except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
-                    errors.append(f"parse_error:{relative}:{type(exc).__name__}")
-                    continue
+                    child_dirs: list[tuple[int, Path]] = []
+                    for entry in sorted(entries, key=lambda item: item.name):
+                        relative_path = relative_dir / entry.name
+                        relative = relative_path.as_posix()
+                        try:
+                            if entry.is_symlink():
+                                continue
+                            if entry.is_dir(follow_symlinks=False):
+                                if entry.name not in SKIP_DIRS:
+                                    child_fd = os.open(
+                                        entry.name, directory_flags, dir_fd=current_fd
+                                    )
+                                    if stat.S_ISDIR(os.fstat(child_fd).st_mode):
+                                        child_dirs.append((child_fd, relative_path))
+                                    else:
+                                        os.close(child_fd)
+                                continue
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
 
-            # Reverse before extending a LIFO stack to visit child directories
-            # in lexical order while retaining bounded memory.
-            pending_dirs.extend(reversed(child_dirs))
-            if entry_limit_reached:
-                errors.append("entry_limit_reached")
-                break
+                            path = Path(entry.name)
+                            is_python = path.suffix == ".py"
+                            descriptor = os.open(entry.name, file_flags, dir_fd=current_fd)
+                            try:
+                                metadata = os.fstat(descriptor)
+                                if not stat.S_ISREG(metadata.st_mode):
+                                    continue
+                                size = metadata.st_size
+                                if (
+                                    size > self.max_file_bytes
+                                    or total_bytes + size > self.max_total_bytes
+                                ):
+                                    if is_python:
+                                        errors.append(f"size_limit_skipped:{relative}")
+                                    continue
+                                with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                                    remaining_total = self.max_total_bytes - total_bytes
+                                    read_limit = min(self.max_file_bytes, remaining_total)
+                                    if read_limit < (1 if is_python else len(ELF_MAGIC)):
+                                        errors.append(f"size_limit_skipped:{relative}")
+                                        continue
+                                    if not is_python:
+                                        prefix = stream.read(len(ELF_MAGIC))
+                                        if prefix != ELF_MAGIC:
+                                            continue
+                                    if files_scanned >= self.max_files:
+                                        errors.append("file_limit_reached")
+                                        for child_fd, _child_path in child_dirs:
+                                            os.close(child_fd)
+                                        return InspectionReport(
+                                            files_scanned, total_bytes, tuple(sorted(findings)),
+                                            tuple(sorted(errors)), tuple(binary_reports),
+                                        )
+                                    stream.seek(0)
+                                    raw = stream.read(read_limit + 1)
+                                if len(raw) > read_limit:
+                                    errors.append(f"size_limit_skipped:{relative}")
+                                    continue
+                            finally:
+                                os.close(descriptor)
+
+                            # Account before parsing: malformed inputs still
+                            # consume I/O, CPU and aggregate byte budgets.
+                            files_scanned += 1
+                            total_bytes += len(raw)
+                            if is_python:
+                                source = raw.decode("utf-8")
+                                tree = ast.parse(source, filename=relative)
+                                visitor = _RuleVisitor(relative)
+                                visitor.visit(tree)
+                                findings.extend(visitor.findings)
+                            else:
+                                binary_report = inspect_elf_bytes(raw)
+                                binary_reports.append(binary_report)
+                                findings.extend(
+                                    InspectionFinding(
+                                        relative, 0, finding.rule_id, finding.severity,
+                                        finding.evidence,
+                                    )
+                                    for finding in binary_report.findings
+                                )
+                        except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
+                            errors.append(f"parse_error:{relative}:{type(exc).__name__}")
+                            continue
+
+                    # Reverse before extending a LIFO stack to preserve lexical
+                    # directory order. Each queued descriptor is already pinned.
+                    pending_dirs.extend(reversed(child_dirs))
+                    if entry_limit_reached:
+                        errors.append("entry_limit_reached")
+                        break
+                finally:
+                    os.close(current_fd)
+        finally:
+            for pending_fd, _pending_path in pending_dirs:
+                try:
+                    os.close(pending_fd)
+                except OSError:
+                    pass
 
         return InspectionReport(
             files_scanned, total_bytes, tuple(sorted(findings)),
