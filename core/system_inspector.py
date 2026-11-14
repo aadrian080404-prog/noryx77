@@ -111,46 +111,61 @@ class PythonSystemInspector:
         root_path = root_path.resolve(strict=True)
         if not root_path.is_dir():
             raise ValueError("inspection_root_must_be_directory")
+
         findings: list[InspectionFinding] = []
         errors: list[str] = []
         binary_reports: list[ELFInspectionReport] = []
         files_scanned = total_bytes = visited_entries = 0
-        for current, dirs, filenames in os.walk(root_path, topdown=True, followlinks=False):
-            # Bound directory traversal as well as parsing. Non-ELF files and
-            # skipped directories still cost enumeration and must consume budget.
-            visited_entries += len(dirs)
-            if visited_entries > self.max_entries:
-                errors.append("entry_limit_reached")
-                return InspectionReport(
-                    files_scanned, total_bytes, tuple(sorted(findings)),
-                    tuple(sorted(errors)), tuple(binary_reports),
+        pending_dirs = [root_path]
+        entry_limit_reached = False
+
+        # scandir is consumed incrementally. At most max_entries DirEntry
+        # objects are retained for one directory, unlike os.walk which first
+        # materializes every name in a potentially enormous directory.
+        while pending_dirs:
+            current = pending_dirs.pop()
+            entries = []
+            try:
+                with os.scandir(current) as iterator:
+                    for entry in iterator:
+                        if visited_entries >= self.max_entries:
+                            entry_limit_reached = True
+                            break
+                        visited_entries += 1
+                        entries.append(entry)
+            except OSError as exc:
+                errors.append(
+                    f"directory_error:{current.relative_to(root_path).as_posix()}:{type(exc).__name__}"
                 )
-            dirs[:] = sorted(
-                name for name in dirs
-                if name not in SKIP_DIRS and not (Path(current) / name).is_symlink()
-            )
-            for filename in sorted(filenames):
-                visited_entries += 1
-                if visited_entries > self.max_entries:
-                    errors.append("entry_limit_reached")
-                    return InspectionReport(
-                        files_scanned, total_bytes, tuple(sorted(findings)),
-                        tuple(sorted(errors)), tuple(binary_reports),
-                    )
-                path = Path(current) / filename
-                if path.is_symlink():
-                    continue
-                is_python = path.suffix == ".py"
-                relative = path.relative_to(root_path).as_posix()
+                continue
+
+            child_dirs = []
+            for entry in sorted(entries, key=lambda item: item.name):
                 try:
-                    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                    descriptor = os.open(path, flags)
+                    if entry.is_symlink():
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name not in SKIP_DIRS:
+                            child_dirs.append(Path(entry.path))
+                        continue
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+
+                    path = Path(entry.path)
+                    is_python = path.suffix == ".py"
+                    relative = path.relative_to(root_path).as_posix()
+                    descriptor = os.open(
+                        path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                    )
                     try:
                         metadata = os.fstat(descriptor)
                         if not stat.S_ISREG(metadata.st_mode):
                             continue
                         size = metadata.st_size
-                        if size > self.max_file_bytes or total_bytes + size > self.max_total_bytes:
+                        if (
+                            size > self.max_file_bytes
+                            or total_bytes + size > self.max_total_bytes
+                        ):
                             if is_python:
                                 errors.append(f"size_limit_skipped:{relative}")
                             continue
@@ -172,8 +187,8 @@ class PythonSystemInspector:
                     finally:
                         os.close(descriptor)
 
-                    # Account for every candidate before parsing. Malformed files
-                    # still consume CPU and I/O and must not bypass either budget.
+                    # Account before parsing: malformed inputs still consume
+                    # I/O, CPU and aggregate budgets.
                     files_scanned += 1
                     total_bytes += len(raw)
                     if is_python:
@@ -195,6 +210,14 @@ class PythonSystemInspector:
                 except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
                     errors.append(f"parse_error:{relative}:{type(exc).__name__}")
                     continue
+
+            # Reverse before extending a LIFO stack to visit child directories
+            # in lexical order while retaining bounded memory.
+            pending_dirs.extend(reversed(child_dirs))
+            if entry_limit_reached:
+                errors.append("entry_limit_reached")
+                break
+
         return InspectionReport(
             files_scanned, total_bytes, tuple(sorted(findings)),
             tuple(sorted(errors)), tuple(binary_reports),
