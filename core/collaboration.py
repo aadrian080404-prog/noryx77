@@ -54,21 +54,38 @@ class AgentCollaboration:
         self.verifier = verifier
         self.identity_registry = identity_registry
 
-    def _require_trusted(self, agent: Any) -> None:
+    def _require_trusted(self, agent: Any) -> AgentIdentity | None:
         if self.identity_registry is None:
-            return
+            return None
         identity = getattr(agent, "identity", None)
-        if not isinstance(identity, AgentIdentity) or not self.identity_registry.is_trusted(identity):
+        agent_id = getattr(agent, "agent_id", None)
+        if (
+            not isinstance(identity, AgentIdentity)
+            or not isinstance(agent_id, str)
+            or identity.agent_id != agent_id
+            or not self.identity_registry.is_trusted(identity)
+        ):
             raise PermissionError("collaboration_agent_identity_untrusted")
+        return identity
 
     def _run_agent(self, agent: Any, task: TaskSpec) -> AgentResult:
         # Agent inference may be slow, so do not hold the registry lock across
-        # user/model code. Revalidate after the call and discard output if the
-        # identity was revoked or replaced while the agent was running.
-        self._require_trusted(agent)
+        # user/model code. Pin the exact identity and agent ID for this turn;
+        # a different trusted identity is not an acceptable replacement.
+        agent_id_before = getattr(agent, "agent_id", None)
+        identity_before = self._require_trusted(agent)
         result = agent.run(task)
-        self._require_trusted(agent)
-        if not isinstance(result, AgentResult) or result.agent_id != getattr(agent, "agent_id", None):
+        identity_after = self._require_trusted(agent)
+        if (
+            getattr(agent, "agent_id", None) != agent_id_before
+            or identity_after != identity_before
+        ):
+            raise PermissionError("collaboration_agent_identity_changed")
+        if (
+            not isinstance(result, AgentResult)
+            or result.agent_id != agent_id_before
+            or (identity_before is not None and result.agent_id != identity_before.agent_id)
+        ):
             raise RuntimeError("collaboration_agent_result_identity_mismatch")
         return result
 
