@@ -24,3 +24,12 @@ rollback-resistant storage. Three processes on one host or three SQLite
 files on one disk are not three independent witnesses. It also does not
 replace TLS, certificate pinning, key rotation, monitoring, or disaster
 recovery procedures.
+
+## Declared failure domains
+
+Every witness admitted to a quorum must declare a non-empty, normalized
+`failure_domain` distinct from all other witnesses. This is an operator
+assertion used to catch accidental duplicate administrative or infrastructure
+labels. It is not cryptographic proof of independent ownership, accounts,
+administrators, network/power paths, hardware roots or anti-rollback controls.
+Those properties require deployment-time verification.
