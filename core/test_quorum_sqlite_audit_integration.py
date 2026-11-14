@@ -369,8 +369,10 @@ def test_sqlite_audit_recovers_process_death_during_external_anchor_advancement(
             f"witness-{index}": anchor for index, anchor in enumerate(recovery_anchors)
         })
         partial = quorum.read()
-        assert partial == AnchorSnapshot(1, SQLiteAuditLog(audit_path).digest() if False else partial.mac)
-        assert partial.sequence == 1
+        prefix = SQLiteAuditLog(audit_path)
+        first_prefix = prefix._rows()[0][2]
+        prefix.close()
+        assert partial == AnchorSnapshot(1, first_prefix)
         reopened = SQLiteAuditLog(audit_path)
         assert reopened.verify_and_advance_anchor(quorum) == expected_head
         assert quorum.read() == expected_head
