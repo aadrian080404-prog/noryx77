@@ -49,8 +49,9 @@ def test_sqlite_audit_advances_and_recovers_through_quorum(tmp_path):
     first = audit.verify_and_advance_anchor(quorum)
     assert first.sequence == 1
     audit.record("second")
+    audit.record("third")
     second = audit.verify_and_advance_anchor(quorum)
-    assert second.sequence == 2
+    assert second.sequence == 3
     assert quorum.read() == second
     audit.close()
 
