@@ -179,6 +179,7 @@ The current branch now contains several deliberately narrow reference components
 - `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. A proposal is advisory; local reservation confirmation is still required.
 - `core/matrix_data.py`: SHA-256 content manifest for chunked immutable objects and corruption/order detection. It is not encryption, erasure coding, replication, access control or a distributed object store.
 - `core/matrix_twin.py`: deterministic virtual-time event queue with stable same-time ordering, bounded execution and replayable event trace. It is not yet a network/consensus simulator or model checker.
+- `core/matrix_fencing.py`: single-resource reference primitive that activates a strictly increasing epoch at the protected resource, rejects stale/unactivated writes and deduplicates operation IDs. Its state is in-memory; a production resource must persist the epoch and operation record atomically, and operation IDs must be namespaced by tenant/domain.
 
 These are executable slices, not a production distributed system. Membership and reservation state are in-memory and process-local; they do not survive crashes and do not coordinate multiple processes. No module in this PR establishes global consensus, cryptographic device identity, a secure sandbox, financial custody, production storage, or planet-scale capacity. Those require durable protocols, independent security review and failure testing across real fault domains.
 
