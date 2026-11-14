@@ -115,16 +115,14 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
 
     def get_request(self):
         request, client_address = super().get_request()
+        # Set the handshake deadline, but do not perform the handshake in the
+        # accept loop: a slow peer must not block acceptance of other clients.
         request.settimeout(self._request_timeout)
-        try:
-            # Defer TLS handshake until after the accepted socket timeout is set.
-            request.do_handshake()
-        except Exception:
-            request.close()
-            raise
         return request, client_address
 
     def process_request(self, request, client_address):
+        # Reserve capacity before starting TLS negotiation. Excess connections
+        # are closed without consuming a worker or blocking the accept loop.
         if not self._worker_slots.acquire(blocking=False):
             self.shutdown_request(request)
             return
@@ -136,6 +134,14 @@ class _BoundedThreadingHTTPServer(ThreadingHTTPServer):
 
     def process_request_thread(self, request, client_address):
         try:
+            try:
+                # TLS negotiation now runs inside a bounded worker and remains
+                # protected by the accepted-socket timeout.
+                request.do_handshake()
+            except Exception:
+                self.shutdown_request(request)
+                self.handle_error(request, client_address)
+                return
             super().process_request_thread(request, client_address)
         finally:
             self._worker_slots.release()
