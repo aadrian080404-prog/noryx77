@@ -332,3 +332,35 @@ def test_export_since_limit_preserves_cross_actor_causal_dependencies(tmp_path):
             target.close()
     finally:
         source.close()
+
+
+def test_paginated_causal_replication_is_idempotent_across_retries(tmp_path):
+    source = DistributedMemoryStore(str(tmp_path / "source-retry-pages.sqlite"), actor_id="source")
+    target = DistributedMemoryStore(str(tmp_path / "target-retry-pages.sqlite"), actor_id="target")
+    dependency = MemoryEvent("peer-b", 1, "b", "base", False, (("peer-b", 1),))
+    dependent = MemoryEvent(
+        "peer-a", 1, "a", "derived", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    transitive = MemoryEvent(
+        "peer-c", 1, "c", "transitive", False,
+        (("peer-a", 1), ("peer-b", 1), ("peer-c", 1)),
+    )
+    try:
+        assert source.merge((transitive, dependent, dependency)) == 3
+        delivered = []
+        for expected in (dependency, dependent, transitive):
+            page = source.export_since(target.vector_clock(), limit=1)
+            assert page == (expected,)
+            assert target.merge(page) == 1
+            delivered.extend(page)
+            # A retry of the last successfully delivered page must be harmless.
+            assert target.merge(page) == 0
+        assert source.export_since(target.vector_clock(), limit=1) == ()
+        assert target.vector_clock() == {
+            "peer-a": 1, "peer-b": 1, "peer-c": 1,
+        }
+        assert target.read("c") == transitive
+    finally:
+        source.close()
+        target.close()
