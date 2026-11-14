@@ -314,17 +314,17 @@ def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
         inspect_elf_bytes(bytes(raw))
 
 
-def elf64_stripped_with_gnu_hash(*, bucket=1, chain=1):
+def elf64_stripped_with_gnu_hash(*, bucket=2, chain=1, bloom_size=1):
     ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     phoff = 64
     dynamic_offset = phoff + 2 * 56
     dynamic_vaddr = 0x400000 + dynamic_offset
-    dynstr = b"\x00libc.so.6\x00puts\x00"
+    dynstr = b"\x00libc.so.6\x00puts\x00exported\x00"
     entries_count = 7
     dynamic_size = entries_count * 16
     dynstr_offset = dynamic_offset + dynamic_size
     dynsym_offset = dynstr_offset + len(dynstr)
-    gnu_hash_offset = dynsym_offset + 2 * 24
+    gnu_hash_offset = dynsym_offset + 3 * 24
     dynstr_vaddr = 0x400000 + dynstr_offset
     dynsym_vaddr = 0x400000 + dynsym_offset
     gnu_hash_vaddr = 0x400000 + gnu_hash_offset
@@ -333,12 +333,14 @@ def elf64_stripped_with_gnu_hash(*, bucket=1, chain=1):
         (6, dynsym_vaddr), (11, 24), (0x6FFFFEF5, gnu_hash_vaddr), (0, 0),
     ]
     dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    # The undefined import precedes symoffset; only the export is hashed.
     symbols = (
         struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
         + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 15, 0x12, 0, 1, 0, 0)
     )
-    # GNU hash header, one 64-bit bloom word, one bucket and one chain word.
-    gnu_hash = struct.pack("<IIIIQII", 1, 1, 1, 5, 0, bucket, chain)
+    # GNU hash header, bloom word, one bucket and one terminating chain word.
+    gnu_hash = struct.pack("<IIIIQII", 1, 2, bloom_size, 5, 0, bucket, chain)
     total_size = gnu_hash_offset + len(gnu_hash)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
@@ -354,7 +356,6 @@ def elf64_stripped_with_gnu_hash(*, bucket=1, chain=1):
     )
     return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + gnu_hash
 
-
 def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
     report = inspect_elf_bytes(elf64_stripped_with_gnu_hash())
     assert report.section_headers == 0
@@ -365,3 +366,8 @@ def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
 def test_stripped_elf_rejects_gnu_hash_bucket_above_symbol_budget():
     with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
         inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=4096))
+
+
+def test_stripped_elf_rejects_non_power_of_two_gnu_bloom_size():
+    with pytest.raises(ValueError, match="gnu_hash_header_invalid"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bloom_size=3))
