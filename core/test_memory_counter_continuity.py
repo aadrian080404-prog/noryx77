@@ -133,3 +133,68 @@ def test_startup_rejects_cyclic_cross_actor_causal_history(tmp_path):
 
     with pytest.raises(RuntimeError, match="causal_history_incomplete"):
         DistributedMemoryStore(path, actor_id="receiver")
+
+
+def _merge_memory_event_in_process(database_path, event, ready, start, results):
+    store = DistributedMemoryStore(database_path, actor_id="receiver")
+    try:
+        ready.put(True)
+        if not start.wait(15):
+            results.put(("timeout", None))
+            return
+        inserted = store.merge((event,))
+        results.put(("ok", inserted))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__ + ":" + str(exc)))
+    finally:
+        store.close()
+
+
+def test_independent_processes_merge_concurrent_causal_events_atomically(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "concurrent-memory.sqlite")
+    initial = DistributedMemoryStore(path, actor_id="receiver")
+    initial.close()
+    events = (
+        MemoryEvent("peer-a", 1, "shared-key", "from-a", False, (("peer-a", 1),)),
+        MemoryEvent("peer-b", 1, "shared-key", "from-b", False, (("peer-b", 1),)),
+    )
+    context = multiprocessing.get_context("spawn")
+    ready, start, results = context.Queue(), context.Event(), context.Queue()
+    workers = [
+        context.Process(
+            target=_merge_memory_event_in_process,
+            args=(path, event, ready, start, results),
+        )
+        for event in events
+    ]
+    for worker in workers:
+        worker.start()
+    try:
+        assert ready.get(timeout=20) is True
+        assert ready.get(timeout=20) is True
+        start.set()
+        for worker in workers:
+            worker.join(timeout=25)
+        assert all(not worker.is_alive() for worker in workers), "memory_merge_process_timeout"
+        assert [worker.exitcode for worker in workers] == [0, 0]
+        outcomes = [results.get(timeout=5) for _ in workers]
+        assert all(kind == "ok" and count == 1 for kind, count in outcomes), outcomes
+    finally:
+        start.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=5)
+        ready.close()
+        results.close()
+
+    reopened = DistributedMemoryStore(path, actor_id="receiver")
+    try:
+        assert reopened.vector_clock() == {"peer-a": 1, "peer-b": 1}
+        conflict = reopened.conflicts("shared-key")
+        assert conflict is not None
+        assert {conflict.winner.actor_id, *(event.actor_id for event in conflict.concurrent)} == {"peer-a", "peer-b"}
+    finally:
+        reopened.close()
