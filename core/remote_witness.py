@@ -55,12 +55,12 @@ class RemoteMonotonicAnchor:
             raise ValueError("witness_id_required")
         if not isinstance(trusted_public_key, bytes) or len(trusted_public_key) != 32:
             raise ValueError("witness_ed25519_public_key_required")
-        if failure_domain is not None and (
-            not isinstance(failure_domain, str)
-            or not failure_domain.strip()
-            or len(failure_domain.encode("utf-8")) > 256
-        ):
-            raise ValueError("invalid_witness_failure_domain")
+        if failure_domain is not None:
+            if not isinstance(failure_domain, str):
+                raise ValueError("invalid_witness_failure_domain")
+            failure_domain = failure_domain.strip()
+            if not failure_domain or len(failure_domain.encode("utf-8")) > 256:
+                raise ValueError("invalid_witness_failure_domain")
         self._client = client
         self.witness_id = witness_id
         self.failure_domain = failure_domain
