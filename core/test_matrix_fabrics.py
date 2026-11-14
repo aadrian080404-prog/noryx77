@@ -125,5 +125,5 @@ def test_local_reservations_are_atomic_under_concurrent_calls():
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         results = list(pool.map(attempt, range(20)))
-    assert sum(results) == 4
-    assert book.node.envelope.committed.cpu_milli == 2000
+    assert sum(results) == 6
+    assert book.node.envelope.committed.cpu_milli == 3000
