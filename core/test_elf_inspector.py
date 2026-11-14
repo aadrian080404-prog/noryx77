@@ -312,3 +312,56 @@ def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
     struct.pack_into("<I", raw, len(raw) - 16, 5000)
     with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
         inspect_elf_bytes(bytes(raw))
+
+
+def elf64_stripped_with_gnu_hash(*, bucket=1, chain=1):
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    phoff = 64
+    dynamic_offset = phoff + 2 * 56
+    dynamic_vaddr = 0x400000 + dynamic_offset
+    dynstr = b"\\x00libc.so.6\\x00puts\\x00"
+    entries_count = 7
+    dynamic_size = entries_count * 16
+    dynstr_offset = dynamic_offset + dynamic_size
+    dynsym_offset = dynstr_offset + len(dynstr)
+    gnu_hash_offset = dynsym_offset + 2 * 24
+    dynstr_vaddr = 0x400000 + dynstr_offset
+    dynsym_vaddr = 0x400000 + dynsym_offset
+    gnu_hash_vaddr = 0x400000 + gnu_hash_offset
+    entries = [
+        (1, 1), (5, dynstr_vaddr), (10, len(dynstr)),
+        (6, dynsym_vaddr), (11, 24), (0x6FFFFEF5, gnu_hash_vaddr), (0, 0),
+    ]
+    dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    symbols = (
+        struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+    )
+    # GNU hash header, one 64-bit bloom word, one bucket and one chain word.
+    gnu_hash = struct.pack("<IIIIQII", 1, 1, 1, 5, 0, bucket, chain)
+    total_size = gnu_hash_offset + len(gnu_hash)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, phoff, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size, total_size, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, dynamic_vaddr,
+        dynamic_vaddr, len(dynamic), len(dynamic), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + gnu_hash
+
+
+def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
+    report = inspect_elf_bytes(elf64_stripped_with_gnu_hash())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert report.dynamic_imports == ("puts",)
+
+
+def test_stripped_elf_rejects_gnu_hash_bucket_below_symbol_offset():
+    with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=0))
