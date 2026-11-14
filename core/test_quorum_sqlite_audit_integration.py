@@ -229,3 +229,41 @@ def test_sqlite_audit_rejects_noncanonical_external_anchor_mac(tmp_path):
             audit.verify_and_advance_anchor(MalformedAnchor())
     finally:
         audit.close()
+
+def _crash_during_uncommitted_audit_append(database_path):
+    connection = sqlite3.connect(database_path, isolation_level=None)
+    connection.execute("BEGIN IMMEDIATE")
+    connection.execute(
+        "INSERT INTO audit_events(event_json, digest) VALUES (?, ?)",
+        ('{"event":"uncommitted-crash-probe"}', "0" * 64),
+    )
+    # Simulate abrupt process death: no Python finally block and no ROLLBACK.
+    os._exit(73)
+
+
+def test_sqlite_audit_recovers_uncommitted_transaction_after_process_death(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "crash-recovery.sqlite")
+    audit = SQLiteAuditLog(path)
+    audit.record("durable-before-crash", marker="preserved")
+    expected_digest = audit.digest()
+    audit.close()
+
+    context = multiprocessing.get_context("spawn")
+    worker = context.Process(target=_crash_during_uncommitted_audit_append, args=(path,))
+    worker.start()
+    worker.join(timeout=20)
+    try:
+        assert not worker.is_alive(), "crash_probe_process_timeout"
+        assert worker.exitcode == 73
+    finally:
+        if worker.is_alive():
+            worker.terminate()
+            worker.join(timeout=5)
+
+    recovered = SQLiteAuditLog(path)
+    assert recovered.snapshot() == ({"event": "durable-before-crash", "marker": "preserved"},)
+    assert recovered.digest() == expected_digest
+    assert recovered.verify_integrity()
+    recovered.close()
