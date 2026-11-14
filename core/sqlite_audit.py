@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 
 from .audit import AuditCheckpoint, AuditLog
@@ -35,7 +35,7 @@ class SQLiteAuditLog(AuditLog):
         self._db_lock = RLock()
         super().__init__()
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS audit_events (
@@ -48,6 +48,14 @@ class SQLiteAuditLog(AuditLog):
                 "CREATE INDEX IF NOT EXISTS audit_events_digest_idx ON audit_events(digest)"
             )
         self._reload_cache()
+
+    @contextmanager
+    def _connection(self):
+        connection = self._connect()
+        try:
+            yield connection
+        finally:
+            connection.close()
 
     def _connect(self):
         if self._closed:
@@ -73,7 +81,7 @@ class SQLiteAuditLog(AuditLog):
     def _reload_cache(self) -> None:
         rows = self.snapshot()
         digests = []
-        with self._connect() as connection:
+        with self._connection() as connection:
             digests = [row[0] for row in connection.execute(
                 "SELECT digest FROM audit_events ORDER BY sequence"
             )]
@@ -188,7 +196,7 @@ class SQLiteAuditLog(AuditLog):
             verifier.verify(checkpoint.mac)
             with self._db_lock:
                 return self.digest() == current_digest and self._verify_integrity_locked()
-        except (Exception, InvalidSignature):
+        except Exception:
             return False
 
     def close(self) -> None:
