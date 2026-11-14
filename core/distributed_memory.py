@@ -139,7 +139,7 @@ class DistributedMemoryStore:
             ).fetchone()[0]
             if stored_actor != actor_id:
                 raise ValueError("memory_database_actor_mismatch")
-            self._load_events()
+            self._validate_causal_history(self._load_events())
         except Exception:
             self._db.close()
             self._closed = True
@@ -169,6 +169,33 @@ class DistributedMemoryStore:
                 raise RuntimeError("memory_event_integrity_failure")
             events.append(event)
         return tuple(events)
+
+    @staticmethod
+    def _validate_causal_history(events: Sequence[MemoryEvent]) -> None:
+        """Reject legacy databases whose stored events are not causally closed.
+
+        Earlier store versions enforced actor-counter continuity but did not
+        verify cross-actor vector dependencies. Validate the complete history
+        once at startup before allowing new writes or replication.
+        """
+        pending = {(event.actor_id, event.counter): event for event in events}
+        maxima: dict[str, int] = {}
+        while pending:
+            ready = []
+            for identity, event in pending.items():
+                if event.counter != maxima.get(event.actor_id, 0) + 1:
+                    continue
+                if all(
+                    actor == event.actor_id or maxima.get(actor, 0) >= counter
+                    for actor, counter in event.clock
+                ):
+                    ready.append((identity, event))
+            if not ready:
+                raise RuntimeError("memory_causal_history_incomplete")
+            ready.sort(key=lambda item: (item[1].actor_id, item[1].counter))
+            for identity, event in ready:
+                maxima[event.actor_id] = event.counter
+                pending.pop(identity)
 
     def _all_events(self) -> tuple[MemoryEvent, ...]:
         return self._load_events()
