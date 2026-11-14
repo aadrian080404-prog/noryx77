@@ -183,3 +183,28 @@ def test_quorum_normalizes_failure_domain_whitespace_before_uniqueness(tmp_path)
         )
     with pytest.raises(ValueError, match="failure_domains_must_be_distinct"):
         QuorumMonotonicAnchor(witnesses)
+
+
+def test_concurrent_conflicting_quorum_writers_cannot_both_commit(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    anchors, authorities = make_witnesses(tmp_path)
+    quorum = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+    })
+    initial = AnchorSnapshot(0, ZERO_MAC)
+    replacements = (
+        AnchorSnapshot(1, "a" * 64),
+        AnchorSnapshot(1, "b" * 64),
+    )
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda replacement: quorum.compare_and_swap(initial, replacement),
+                replacements,
+            ))
+        assert sum(results) == 1
+        assert quorum.read() in replacements
+    finally:
+        for authority in authorities:
+            authority.close()
