@@ -16,3 +16,11 @@ InMemoryMonotonicAnchor is test-only. Production should supply an independently
 operated RemoteMonotonicAnchor or QuorumMonotonicAnchor with separately
 protected keys, hosts and storage. This method does not itself provision a
 remote service or guarantee witness independence.
+
+
+If a compare-and-swap call raises after a remote witness may have committed the
+replacement, the client reads the witness back. An exact replacement confirms
+the transition; an unavailable or divergent read-back returns
+audit_anchor_outcome_uncertain and never assumes success. A rejected CAS whose
+read-back is unavailable is also treated as uncertain. Callers must reconcile
+that state before retrying a side effect.
