@@ -161,12 +161,14 @@ class DistributedMemoryStore:
         return event
 
     def _load_events(self) -> tuple[MemoryEvent, ...]:
-        rows = self._db.execute("SELECT payload FROM memory_events ORDER BY actor_id,counter").fetchall()
-        events = tuple(self._decode(row[0]) for row in rows)
-        for event in events:
-            if _event_id(event) is None:
+        rows = self._db.execute("SELECT event_id,payload FROM memory_events ORDER BY actor_id,counter").fetchall()
+        events = []
+        for stored_id, payload in rows:
+            event = self._decode(payload)
+            if _event_id(event) != stored_id:
                 raise RuntimeError("memory_event_integrity_failure")
-        return events
+            events.append(event)
+        return tuple(events)
 
     def _all_events(self) -> tuple[MemoryEvent, ...]:
         return self._load_events()
@@ -300,7 +302,7 @@ class DistributedMemoryStore:
             if len(maximal) < 2:
                 return None
             winner = max(maximal, key=_event_order)
-            return MemoryConflict(key, winner, tuple(sorted((e for e in maximal if e != winner), key=_event_order))
+            return MemoryConflict(key, winner, tuple(sorted((e for e in maximal if e != winner), key=_event_order)))
 
     def close(self) -> None:
         with self._lock:
