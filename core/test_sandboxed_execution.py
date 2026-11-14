@@ -70,5 +70,5 @@ def test_adapter_rejects_shell_host_target_and_extra_capabilities(tmp_path, acti
 def test_adapter_requires_real_bubblewrap_runner(tmp_path):
     workspace = tmp_path / "work"
     workspace.mkdir()
-    with pytest.raises(TypeError, match="bubblewrap"):
+    with pytest.raises(TypeError, match="sandbox_runner_contract"):
         SandboxedProcessAdapter(object(), workspace=workspace)
