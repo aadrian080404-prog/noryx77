@@ -92,3 +92,43 @@ def test_sqlite_audit_rejects_rollback_against_quorum(tmp_path):
         restored.verify_and_advance_anchor(quorum)
     restored.close()
     close_all(authorities)
+
+
+def test_sqlite_audit_recovers_after_partial_quorum_advance(tmp_path):
+    quorum, authorities = make_quorum(tmp_path)
+    path = str(tmp_path / "partial-audit.sqlite")
+    audit = SQLiteAuditLog(path)
+    audit.record("event-1")
+    audit.record("event-2")
+    audit.record("event-3")
+
+    class InterruptAfterFirstAdvance:
+        def __init__(self, wrapped):
+            self.wrapped = wrapped
+            self.advances = 0
+
+        def read(self):
+            return self.wrapped.read()
+
+        def compare_and_swap(self, expected, replacement):
+            self.advances += 1
+            if self.advances == 2:
+                return False
+            return self.wrapped.compare_and_swap(expected, replacement)
+
+    interrupted = InterruptAfterFirstAdvance(quorum)
+    with pytest.raises(ValueError, match="audit_anchor_compare_and_swap_failed"):
+        audit.verify_and_advance_anchor(interrupted)
+
+    partial = quorum.read()
+    assert partial.sequence == 1
+    audit.close()
+
+    reopened = SQLiteAuditLog(path)
+    recovered = reopened.verify_and_advance_anchor(quorum)
+    assert recovered.sequence == 3
+    assert quorum.read() == recovered
+    assert reopened.verify_integrity()
+
+    reopened.close()
+    close_all(authorities)
