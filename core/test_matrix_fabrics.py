@@ -99,3 +99,32 @@ def test_twin_enforces_event_budget_and_rejects_time_travel():
     assert twin.pending == 1
     with pytest.raises(ValueError):
         twin.schedule(0, "past")
+
+
+def test_membership_rejects_reused_nonce_even_with_newer_epoch():
+    registry = MembershipRegistry()
+    first = AdmissionEvidence("n1", "owner", "rack-a", "m", 1, "same", frozenset())
+    registry.admit(first, b"proof", lambda *_: True)
+    replay = AdmissionEvidence("n1", "owner", "rack-a", "m", 2, "same", frozenset())
+    with pytest.raises(PermissionError, match="admission_nonce_replayed"):
+        registry.admit(replay, b"proof", lambda *_: True)
+
+
+def test_local_reservations_are_atomic_under_concurrent_calls():
+    from concurrent.futures import ThreadPoolExecutor
+
+    book = __import__("core.matrix_core", fromlist=["LocalReservationBook"]).LocalReservationBook(node("shared", "rack-x"))
+    def attempt(i):
+        from .matrix_core import WorkloadRequest, ResourceVector
+        try:
+            book.reserve(WorkloadRequest(
+                f"parallel-{i}", "verification", ResourceVector(cpu_milli=500), 1
+            ))
+            return True
+        except PermissionError:
+            return False
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(attempt, range(20)))
+    assert sum(results) == 4
+    assert book.node.envelope.committed.cpu_milli == 2000
