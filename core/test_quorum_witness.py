@@ -432,3 +432,22 @@ def test_quorum_fails_closed_when_independent_writers_leave_no_majority(tmp_path
     finally:
         for authority in authorities:
             authority.close()
+
+
+def test_quorum_does_not_count_malformed_signed_witness_snapshots(tmp_path):
+    anchors, authorities = make_witnesses(tmp_path)
+    quorum = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+    })
+    anchors[0].read = lambda: AnchorSnapshot(-1, "z" * 64)
+    anchors[1].read = lambda: AnchorSnapshot(0, "A" * 64)
+    try:
+        with pytest.raises(RuntimeError, match="quorum_unavailable_or_divergent"):
+            quorum.read()
+        assert not quorum.compare_and_swap(
+            AnchorSnapshot(-1, ZERO_MAC),
+            AnchorSnapshot(0, "a" * 64),
+        )
+    finally:
+        for authority in authorities:
+            authority.close()
