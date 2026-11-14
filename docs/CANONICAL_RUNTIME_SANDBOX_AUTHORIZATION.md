@@ -45,10 +45,13 @@ nested dispatch, same-thread revocation and failure recovery.
   runtime, actual Bubblewrap process, workspace marker, and replay rejection.
   It verifies that a second use of the same grant does not launch another
   process.
-- The runtime's current `AuditLog` remains an in-memory audit component.
-  The real Bubblewrap test does not yet commit process evidence to the
-  `SQLiteAuditLog` / external quorum anchor chain; that integration is
-  still required before claiming end-to-end durable process auditing.
+- The sandbox capability now records dispatch start, completion or failure in
+  the injected audit backend. The real Bubblewrap test injects `SQLiteAuditLog`,
+  records only parameter/output digests and execution metadata (not stdout or
+  stderr contents), advances an external monotonic anchor, reopens the database,
+  and verifies both the audit chain and anchored head. The test uses an
+  in-memory anchor implementation; production must still use an independently
+  durable quorum-backed witness.
 - Production deployment still requires target-host validation, durable key
   provisioning, external anti-rollback protection, and an explicit policy for
   revocation and uncertain process outcomes.
