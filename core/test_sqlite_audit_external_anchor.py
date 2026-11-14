@@ -80,3 +80,19 @@ def test_external_anchor_rejects_same_sequence_divergent_chain(tmp_path):
     with pytest.raises(ValueError, match="audit_integrity_failed"):
         tampered.verify_and_advance_anchor(anchor)
     tampered.close()
+
+def test_external_anchor_rejects_noncanonical_sha256_encoding(tmp_path):
+    audit = SQLiteAuditLog(str(tmp_path / "malformed-anchor.sqlite"))
+
+    class MalformedAnchor:
+        def read(self):
+            return AnchorSnapshot(0, "aa" * 31 + "  ")
+
+        def compare_and_swap(self, expected, replacement):
+            raise AssertionError("unexpected_compare_and_swap")
+
+    try:
+        with pytest.raises(ValueError, match="audit_anchor_snapshot_invalid"):
+            audit.verify_and_advance_anchor(MalformedAnchor())
+    finally:
+        audit.close()
