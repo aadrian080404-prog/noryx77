@@ -316,6 +316,7 @@ class DistributedMemoryStore:
 
                 checked_history: set[tuple[str, int]] = set()
                 validation_steps = 0
+                validation_references = 0
                 for root_event in validated:
                     stack = [root_event]
                     while stack:
@@ -333,6 +334,9 @@ class DistributedMemoryStore:
                         if event.counter > 1:
                             required[event.actor_id] = event.counter - 1
                         for actor, counter in required.items():
+                            validation_references += 1
+                            if validation_references > 250000:
+                                raise ValueError("memory_causal_validation_limit")
                             if counter == 0 or (actor == event.actor_id and counter == event.counter):
                                 continue
                             prior = dependency(actor, counter)
