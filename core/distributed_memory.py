@@ -314,21 +314,34 @@ class DistributedMemoryStore:
                     dependency_cache[identity] = candidate
                     return candidate
 
-                for event in validated:
-                    required = dict(event.clock)
-                    # An actor's own previous event is an implicit dependency;
-                    # the vector clock's self component names the current event.
-                    if event.counter > 1:
-                        required[event.actor_id] = event.counter - 1
-                    for actor, counter in required.items():
-                        if counter == 0 or (actor == event.actor_id and counter == event.counter):
+                checked_history: set[tuple[str, int]] = set()
+                validation_steps = 0
+                for root_event in validated:
+                    stack = [root_event]
+                    while stack:
+                        event = stack.pop()
+                        event_id = (event.actor_id, event.counter)
+                        if event_id in checked_history:
                             continue
-                        prior = dependency(actor, counter)
-                        prior_clock = dict(prior.clock)
-                        if prior_clock.get(event.actor_id, 0) >= event.counter:
-                            raise ValueError("memory_causal_dependency_not_prior")
-                        if any(value > required.get(name, 0) for name, value in prior_clock.items()):
-                            raise ValueError("memory_causal_dependency_clock_inconsistent")
+                        checked_history.add(event_id)
+                        validation_steps += 1
+                        if validation_steps > 100000:
+                            raise ValueError("memory_causal_validation_limit")
+                        required = dict(event.clock)
+                        # An actor's own previous event is an implicit dependency;
+                        # the vector clock's self component names the current event.
+                        if event.counter > 1:
+                            required[event.actor_id] = event.counter - 1
+                        for actor, counter in required.items():
+                            if counter == 0 or (actor == event.actor_id and counter == event.counter):
+                                continue
+                            prior = dependency(actor, counter)
+                            prior_clock = dict(prior.clock)
+                            if prior_clock.get(event.actor_id, 0) >= event.counter:
+                                raise ValueError("memory_causal_dependency_not_prior")
+                            if any(value > required.get(name, 0) for name, value in prior_clock.items()):
+                                raise ValueError("memory_causal_dependency_clock_inconsistent")
+                            stack.append(prior)
                 inserted = sum(1 for event in validated if self._insert_event(event))
                 self._db.execute("COMMIT")
                 return inserted
