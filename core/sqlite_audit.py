@@ -231,9 +231,11 @@ class SQLiteAuditLog(AuditLog):
             ):
                 raise ValueError("audit_anchor_snapshot_invalid")
             try:
-                bytes.fromhex(anchored.mac)
+                decoded_mac = bytes.fromhex(anchored.mac)
             except ValueError as exc:
                 raise ValueError("audit_anchor_snapshot_invalid") from exc
+            if len(decoded_mac) != 32 or decoded_mac.hex() != anchored.mac:
+                raise ValueError("audit_anchor_snapshot_invalid")
             if anchored.sequence > len(rows):
                 raise ValueError("audit_database_rollback_detected")
             expected_mac = ZERO_MAC if anchored.sequence == 0 else rows[anchored.sequence - 1][2]
