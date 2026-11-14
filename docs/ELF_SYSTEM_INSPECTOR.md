@@ -16,3 +16,5 @@ Default maximum input is 64 MiB and program/section tables are capped at 4096
 entries. For dynamic analysis, use a separately provisioned, disposable
 sandbox with kernel-enforced isolation; never execute unknown binaries as part
 of static inspection.
+
+The inspector also resolves bounded `DT_NEEDED` names through the linked dynamic string table. It now reads undefined dynamic symbol names from bounded `SHT_DYNSYM` tables as import metadata; malformed offsets, invalid links, and oversized tables are rejected. Neither dependencies nor symbols are loaded or executed.
