@@ -1,5 +1,6 @@
 from core.actions import AuthorizationAuthority
 from core.authorization_replay import AuthenticatedAuthorizationReplayGuard
+from core.contracts import ActionSpec
 from core.identity import IdentityRegistry
 from core.runtime import NORYXRuntime
 
@@ -81,3 +82,23 @@ def test_canonical_runtime_rejects_authority_bound_to_another_registry(tmp_path)
     with pytest.raises(ValueError, match="invalid_runtime_authorization_authority"):
         NORYXRuntime(identity_registry=registry, authorization_authority=authority)
     replay_guard.close()
+
+
+
+def test_canonical_runtime_keeps_high_risk_process_action_fail_closed_without_authority():
+    runtime = NORYXRuntime(sandboxed_process_adapter=StubSandboxAdapter())
+    action = ActionSpec(
+        action_id="sandbox-action",
+        action_type="process",
+        target="workspace",
+        parameters={"argv": ["echo", "safe"]},
+        risk_class="high",
+        requires_authorization=True,
+        execution_id="exec-no-authority",
+    )
+    decision = runtime.action_gate.authorize(
+        action,
+        execution_id="exec-no-authority",
+    )
+    assert not decision.allowed
+    assert decision.verification.reason == "authorization_required"
