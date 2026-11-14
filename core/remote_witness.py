@@ -58,7 +58,7 @@ class RemoteMonotonicAnchor:
         if failure_domain is not None:
             if not isinstance(failure_domain, str):
                 raise ValueError("invalid_witness_failure_domain")
-            failure_domain = failure_domain.strip()
+            failure_domain = failure_domain.strip().casefold()
             if not failure_domain or len(failure_domain.encode("utf-8")) > 256:
                 raise ValueError("invalid_witness_failure_domain")
         self._client = client
