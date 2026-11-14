@@ -214,3 +214,47 @@ def test_elf_dynamic_symbol_table_validates_defined_symbol_name_offsets():
             symbol_name_offset=99,
             symbol_section_index=1,
         ))
+
+
+
+def elf64_stripped_with_pt_dynamic(*, needed_offset=1, include_load=True):
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    dynamic_offset = 64 + 2 * 56
+    dynamic_entries = (
+        struct.pack("<qQ", 1, needed_offset)
+        + struct.pack("<qQ", 5, 0x400000 + dynamic_offset + 4 * 16)
+        + struct.pack("<qQ", 10, len(b"\\x00libc.so.6\\x00"))
+        + struct.pack("<qQ", 0, 0)
+    )
+    dynstr = b"\\x00libc.so.6\\x00"
+    total_size = dynamic_offset + len(dynamic_entries) + len(dynstr)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size if include_load else 0, total_size if include_load else 0, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, 0x400000 + dynamic_offset,
+        0x400000 + dynamic_offset, len(dynamic_entries), len(dynamic_entries), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic_entries + dynstr
+
+
+def test_stripped_elf_recovers_needed_libraries_from_pt_dynamic():
+    report = inspect_elf_bytes(elf64_stripped_with_pt_dynamic())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert any(f.rule_id == "ELF-006" for f in report.findings)
+
+
+def test_stripped_elf_pt_dynamic_rejects_unmapped_string_table():
+    with pytest.raises(ValueError, match="dynamic_string_table_unmapped"):
+        inspect_elf_bytes(elf64_stripped_with_pt_dynamic(include_load=False))
+
+
+def test_stripped_elf_pt_dynamic_rejects_invalid_needed_offset():
+    with pytest.raises(ValueError, match="dynamic_string_offset_invalid"):
+        inspect_elf_bytes(elf64_stripped_with_pt_dynamic(needed_offset=99))
