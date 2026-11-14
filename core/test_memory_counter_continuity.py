@@ -259,3 +259,50 @@ def test_independent_processes_serialize_local_actor_counters(tmp_path):
         assert len(reopened.export_since({})) == 4
     finally:
         reopened.close()
+
+
+def _crash_during_uncommitted_memory_append(database_path):
+    import os
+
+    store = DistributedMemoryStore(database_path, actor_id="crash-actor")
+    store._db.execute("BEGIN IMMEDIATE")
+    event = MemoryEvent(
+        "crash-actor", 1, "uncommitted", "must-not-survive", False,
+        (("crash-actor", 1),),
+    )
+    store._insert_event(event)
+    # Simulate abrupt process death without rollback or close.
+    os._exit(74)
+
+
+def test_memory_recovers_uncommitted_append_after_process_death(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "memory-process-crash.sqlite")
+    initial = DistributedMemoryStore(path, actor_id="crash-actor")
+    initial.close()
+
+    context = multiprocessing.get_context("spawn")
+    worker = context.Process(
+        target=_crash_during_uncommitted_memory_append,
+        args=(path,),
+    )
+    worker.start()
+    worker.join(timeout=20)
+    try:
+        assert not worker.is_alive(), "memory_crash_probe_timeout"
+        assert worker.exitcode == 74
+    finally:
+        if worker.is_alive():
+            worker.terminate()
+            worker.join(timeout=5)
+
+    recovered = DistributedMemoryStore(path, actor_id="crash-actor")
+    try:
+        assert recovered.vector_clock() == {}
+        assert recovered.read("uncommitted") is None
+        committed = recovered.write("after-recovery", "committed")
+        assert committed.counter == 1
+        assert recovered.vector_clock() == {"crash-actor": 1}
+    finally:
+        recovered.close()
