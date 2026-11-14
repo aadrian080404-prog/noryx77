@@ -172,7 +172,7 @@ def test_quorum_normalizes_failure_domain_whitespace_before_uniqueness(tmp_path)
             raise OSError("not used")
 
     witnesses = {}
-    for index, domain in enumerate(("production-zone", " production-zone ", "backup-zone")):
+    for index, domain in enumerate(("Production-Zone", " production-zone ", "backup-zone")):
         key = Ed25519PrivateKey.generate()
         witness_id = f"normalized-domain-{index}"
         witnesses[witness_id] = RemoteMonotonicAnchor(
