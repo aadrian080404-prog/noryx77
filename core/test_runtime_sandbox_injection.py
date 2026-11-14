@@ -20,3 +20,8 @@ def test_canonical_runtime_exposes_explicit_sandbox_adapter():
 def test_canonical_runtime_keeps_process_capability_disabled_by_default():
     runtime = NORYXRuntime()
     assert runtime.capability_registry.resolve("sandboxed_process") is None
+
+
+def test_canonical_runtime_binds_collaboration_to_identity_registry():
+    runtime = NORYXRuntime()
+    assert runtime.hypersynth.collaboration.identity_registry is runtime.identity_registry
