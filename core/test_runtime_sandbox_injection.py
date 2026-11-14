@@ -20,3 +20,17 @@ def test_canonical_runtime_exposes_explicit_sandbox_adapter():
 def test_canonical_runtime_keeps_process_capability_disabled_by_default():
     runtime = NORYXRuntime()
     assert runtime.capability_registry.resolve("sandboxed_process") is None
+
+
+class MisroutedAdapter:
+    environment = "host_process"
+
+    def execute(self, action):
+        return {"status": "executed"}
+
+
+def test_canonical_runtime_rejects_adapter_outside_sandbox_environment():
+    import pytest
+
+    with pytest.raises(ValueError, match="invalid_sandboxed_process_environment"):
+        NORYXRuntime(sandboxed_process_adapter=MisroutedAdapter())
