@@ -47,8 +47,11 @@ class HypersynthRuntime:
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.sandboxed_process_adapter = sandboxed_process_adapter
         if sandboxed_process_adapter is not None:
-            if not callable(getattr(sandboxed_process_adapter, "execute", None)) or not isinstance(getattr(sandboxed_process_adapter, "environment", None), str):
+            environment = getattr(sandboxed_process_adapter, "environment", None)
+            if not callable(getattr(sandboxed_process_adapter, "execute", None)):
                 raise TypeError("invalid_sandboxed_process_adapter")
+            if environment != "sandboxed_process":
+                raise ValueError("invalid_sandboxed_process_environment")
             def execute_sandboxed_process(target, parameters):
                 action_id = str(parameters.get("action_id", "")).strip()
                 if not action_id:
