@@ -105,25 +105,30 @@ class PythonSystemInspector:
         self.max_entries = max_entries
 
     def inspect(self, root: str | os.PathLike[str]) -> InspectionReport:
-        root_path = Path(root)
-        if root_path.is_symlink():
-            raise ValueError("inspection_root_must_not_be_symlink")
-        root_path = root_path.resolve(strict=True)
-        if not root_path.is_dir():
-            raise ValueError("inspection_root_must_be_directory")
         if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
             raise RuntimeError("descriptor_relative_traversal_unsupported")
+        # Open every path component from the filesystem root without following
+        # symlinks. Resolving the path first would silently accept symlinked
+        # ancestors and reintroduce a root-selection race.
+        root_path = Path(os.path.abspath(os.fspath(root)))
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+        root_fd = os.open(os.path.sep, directory_flags)
+        try:
+            for component in root_path.parts[1:]:
+                next_fd = os.open(component, directory_flags, dir_fd=root_fd)
+                os.close(root_fd)
+                root_fd = next_fd
+            if not stat.S_ISDIR(os.fstat(root_fd).st_mode):
+                raise ValueError("inspection_root_must_be_directory")
+        except Exception:
+            os.close(root_fd)
+            raise
 
         findings: list[InspectionFinding] = []
         errors: list[str] = []
         binary_reports: list[ELFInspectionReport] = []
         files_scanned = total_bytes = visited_entries = 0
-        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-        file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
-        root_fd = os.open(root_path, directory_flags)
-        if not stat.S_ISDIR(os.fstat(root_fd).st_mode):
-            os.close(root_fd)
-            raise ValueError("inspection_root_must_be_directory")
 
         # Keep directory descriptors, not path strings, in the traversal
         # queue. Child opens are relative to the already-open parent, so a
