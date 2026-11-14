@@ -235,3 +235,35 @@ def test_remote_witness_rejects_noncanonical_32_byte_anchor_mac():
     )
     with pytest.raises(RuntimeError, match="remote_witness_snapshot_invalid"):
         anchor.read()
+
+def test_independent_quorum_coordinators_cannot_both_commit_conflicting_updates(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    anchors, authorities = make_witnesses(tmp_path)
+    first = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+    })
+    second = QuorumMonotonicAnchor({
+        f"witness-{index}": anchor for index, anchor in enumerate(anchors)
+    })
+    initial = AnchorSnapshot(0, ZERO_MAC)
+    replacements = (
+        AnchorSnapshot(1, "c" * 64),
+        AnchorSnapshot(1, "d" * 64),
+    )
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda item: item[0].compare_and_swap(initial, item[1]),
+                ((first, replacements[0]), (second, replacements[1])),
+            ))
+        assert sum(results) <= 1
+        try:
+            observed = first.read()
+        except RuntimeError as exc:
+            assert str(exc) == "witness_quorum_unavailable_or_divergent"
+        else:
+            assert observed in replacements or observed == initial
+    finally:
+        for authority in authorities:
+            authority.close()
