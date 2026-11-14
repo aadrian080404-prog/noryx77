@@ -107,3 +107,29 @@ def test_export_rejects_oversized_peer_actor_identifier(tmp_path):
     with pytest.raises(ValueError, match="invalid_peer_vector_clock"):
         store.export_since({"x" * 257: 0})
     store.close()
+
+
+def test_startup_rejects_cyclic_cross_actor_causal_history(tmp_path):
+    path = str(tmp_path / "cyclic-memory.sqlite")
+    store = DistributedMemoryStore(path, actor_id="receiver")
+    actor_a = MemoryEvent(
+        "peer-a", 1, "a", "from-a", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    actor_b = MemoryEvent(
+        "peer-b", 1, "b", "from-b", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    store._db.execute("BEGIN IMMEDIATE")
+    try:
+        store._insert_event(actor_a)
+        store._insert_event(actor_b)
+        store._db.execute("COMMIT")
+    except Exception:
+        if store._db.in_transaction:
+            store._db.execute("ROLLBACK")
+        raise
+    store.close()
+
+    with pytest.raises(RuntimeError, match="causal_history_incomplete"):
+        DistributedMemoryStore(path, actor_id="receiver")
