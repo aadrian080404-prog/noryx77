@@ -68,6 +68,11 @@ class AuthorizationAuthority:
         self._lock = threading.Lock()
 
     @property
+    def identity_registry(self) -> IdentityRegistry | None:
+        """Expose the exact trust registry this authority is cryptographically bound to."""
+        return self._identity_registry
+
+    @property
     def durable(self) -> bool:
         return self._replay_guard.durable
 
