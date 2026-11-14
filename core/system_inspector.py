@@ -141,6 +141,7 @@ class PythonSystemInspector:
 
             child_dirs = []
             for entry in sorted(entries, key=lambda item: item.name):
+                relative = Path(entry.path).relative_to(root_path).as_posix()
                 try:
                     if entry.is_symlink():
                         continue
@@ -153,7 +154,6 @@ class PythonSystemInspector:
 
                     path = Path(entry.path)
                     is_python = path.suffix == ".py"
-                    relative = path.relative_to(root_path).as_posix()
                     descriptor = os.open(
                         path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
                     )
