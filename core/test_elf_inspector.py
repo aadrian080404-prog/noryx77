@@ -1,8 +1,9 @@
+import os
 import struct
 
 import pytest
 
-from core.elf_inspector import inspect_elf_bytes
+from core.elf_inspector import inspect_elf_bytes, inspect_elf_file
 
 
 def elf64(*, program_type=1, flags=3, endian="<"):
@@ -128,3 +129,12 @@ def test_elf_extended_numbering_without_section_zero_is_rejected():
     )
     with pytest.raises(ValueError, match="extended_numbering"):
         inspect_elf_bytes(ident + header + bytes(56))
+
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO creation is unavailable")
+def test_elf_file_inspector_does_not_block_on_non_regular_file(tmp_path):
+    fifo = tmp_path / "named-pipe"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="regular_file"):
+        inspect_elf_file(fifo)
