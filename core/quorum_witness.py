@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import threading
 from typing import Mapping
 
 from .journal_integrity import AnchorSnapshot, MonotonicAnchor, ZERO_MAC
@@ -44,6 +45,9 @@ class QuorumMonotonicAnchor:
             failure_domains.add(domain)
         self._witnesses = dict(sorted(selected.items()))
         self.quorum = len(self._witnesses) // 2 + 1
+        # Serializes calls made through this coordinator instance only.
+        # Cross-process/distributed consensus still requires a shared protocol.
+        self._cas_lock = threading.Lock()
 
     def read(self) -> AnchorSnapshot:
         observed: list[AnchorSnapshot] = []
@@ -61,6 +65,12 @@ class QuorumMonotonicAnchor:
         return winners[0]
 
     def compare_and_swap(
+        self, expected: AnchorSnapshot, replacement: AnchorSnapshot
+    ) -> bool:
+        with self._cas_lock:
+            return self._compare_and_swap_locked(expected, replacement)
+
+    def _compare_and_swap_locked(
         self, expected: AnchorSnapshot, replacement: AnchorSnapshot
     ) -> bool:
         if not isinstance(expected, AnchorSnapshot) or not isinstance(replacement, AnchorSnapshot):
