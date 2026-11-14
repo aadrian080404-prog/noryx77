@@ -34,3 +34,11 @@ a complete inventory. File opens use no-follow, nonblocking and close-on-exec
 flags where supported, and the actual bytes read are bounded against both the
 per-file and remaining aggregate budgets. Metadata size is only an early
 rejection hint; it is not trusted as the sole byte-budget enforcement.
+
+The path walk is intended for a trusted or immutable inspection workspace.
+No-follow file opens protect the final file component, but this implementation
+does not provide an `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS)`-style
+guarantee against a hostile process concurrently replacing parent directories.
+For adversarial live filesystems, inspect a read-only snapshot or add a
+platform-specific directory-descriptor traversal before treating path
+containment as a security boundary.
