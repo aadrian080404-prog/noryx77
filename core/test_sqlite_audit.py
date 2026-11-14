@@ -5,6 +5,7 @@ import pytest
 
 from core.audit import AuditLog
 from core.sqlite_audit import SQLiteAuditLog
+from core.crypto import InMemoryKeyProvider
 
 
 def test_sqlite_audit_log_is_a_drop_in_auditlog_and_survives_restart(tmp_path):
@@ -14,6 +15,8 @@ def test_sqlite_audit_log_is_a_drop_in_auditlog_and_survives_restart(tmp_path):
     audit.record("task.started", task_id="t-1")
     audit.record("task.completed", task_id="t-1", result_digest="a" * 64)
     expected_digest = audit.digest()
+    provider = InMemoryKeyProvider({"audit-key": b"k" * 32})
+    checkpoint = audit.checkpoint(provider, key_id="audit-key")
     assert audit.verify_integrity()
     audit.close()
 
@@ -23,6 +26,7 @@ def test_sqlite_audit_log_is_a_drop_in_auditlog_and_survives_restart(tmp_path):
     ]
     assert reopened.digest() == expected_digest
     assert reopened.verify_integrity()
+    assert reopened.verify_checkpoint(checkpoint, provider)
     reopened.close()
 
 
@@ -58,8 +62,9 @@ def test_sqlite_audit_log_rejects_non_json_and_detects_tampering(tmp_path):
         )
     reopened = SQLiteAuditLog(path)
     assert not reopened.verify_integrity()
+    provider = InMemoryKeyProvider({"audit-key": b"k" * 32})
     with pytest.raises(ValueError, match="integrity"):
-        reopened.checkpoint(object(), key_id="k")
+        reopened.checkpoint(provider, key_id="audit-key")
     reopened.close()
 
 
