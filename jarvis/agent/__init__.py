@@ -1,1 +1,0 @@
-"""JARVIS agent-facing contracts."""

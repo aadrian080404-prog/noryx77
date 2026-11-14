@@ -1,6 +1,0 @@
-fastapi
-uvicorn[standard]
-pydantic
-cryptography==46.0.7
-python-chess
-httpx2
