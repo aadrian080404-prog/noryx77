@@ -152,6 +152,10 @@ class PythonSystemInspector:
                     finally:
                         os.close(descriptor)
 
+                    # Account for every candidate before parsing. Malformed files
+                    # still consume CPU and I/O and must not bypass either budget.
+                    files_scanned += 1
+                    total_bytes += len(raw)
                     if is_python:
                         source = raw.decode("utf-8")
                         tree = ast.parse(source, filename=str(path))
@@ -171,8 +175,6 @@ class PythonSystemInspector:
                 except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
                     errors.append(f"parse_error:{relative}:{type(exc).__name__}")
                     continue
-                files_scanned += 1
-                total_bytes += len(raw)
         return InspectionReport(
             files_scanned, total_bytes, tuple(sorted(findings)),
             tuple(sorted(errors)), tuple(binary_reports),
