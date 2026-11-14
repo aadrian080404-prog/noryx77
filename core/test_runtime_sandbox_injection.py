@@ -269,7 +269,13 @@ def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, mo
         replay_guard=replay_guard,
         require_authenticated_replay=True,
     )
+    from core.sqlite_audit import SQLiteAuditLog
+    from core.journal_integrity import InMemoryMonotonicAnchor
+
+    audit_path = tmp_path / "bubblewrap-runtime-audit.sqlite3"
+    audit_log = SQLiteAuditLog(str(audit_path))
     runtime = NORYXRuntime(
+        audit_log=audit_log,
         identity_registry=registry,
         authorization_authority=authority,
         sandboxed_process_adapter=adapter,
@@ -318,5 +324,31 @@ def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, mo
         assert not replay_decision.valid
         assert replay_decision.reason == "invalid_authorization_grant"
         assert (workspace / "authorized-marker").read_text() == "authorized"
+
+        audit_events = audit_log.snapshot()
+        assert [event["event"] for event in audit_events] == [
+            "sandbox_process_dispatch_started",
+            "sandbox_process_dispatch_completed",
+        ]
+        completed = audit_events[-1]
+        assert completed["exit_code"] == 0
+        assert completed["stdout_sha256"]
+        assert completed["stderr_sha256"]
+        assert "sandbox-dispatch-ok" not in str(audit_events)
+
+        anchor = InMemoryMonotonicAnchor()
+        anchored_head = audit_log.verify_and_advance_anchor(anchor)
+        assert anchored_head.sequence == 2
+        audit_log.close()
+
+        reopened_audit = SQLiteAuditLog(str(audit_path))
+        try:
+            assert reopened_audit.verify_integrity()
+            assert reopened_audit.snapshot() == audit_events
+            assert reopened_audit.verify_and_advance_anchor(anchor) == anchored_head
+        finally:
+            reopened_audit.close()
     finally:
+        if not audit_log._closed:
+            audit_log.close()
         replay_guard.close()
