@@ -81,7 +81,7 @@ def test_table_count_is_bounded():
 
 
 def test_elf64_extended_header_numbering_is_resolved():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
@@ -98,7 +98,7 @@ def test_elf64_extended_header_numbering_is_resolved():
 
 
 def test_elf_extended_numbering_without_section_zero_is_rejected():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 64, 0, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
