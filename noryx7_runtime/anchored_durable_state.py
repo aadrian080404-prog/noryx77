@@ -16,7 +16,8 @@ class AnchoredDurableStateJournal(DurableStateJournal):
 
     A single committed local event ahead of the witness is treated as the known
     SQLite-commit-before-anchor-CAS crash window. Larger or inconsistent
-    divergence fails closed.
+    divergence fails closed. This implementation assumes a single writer per
+    journal path; concurrent independent writers are not production-qualified.
     """
 
     def __init__(self, path: str, *, anchor: MonotonicAnchor, **kwargs) -> None:
