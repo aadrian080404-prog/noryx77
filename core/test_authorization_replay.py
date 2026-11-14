@@ -220,3 +220,79 @@ def test_authority_does_not_claim_authenticated_integrity_in_legacy_mode():
     authority = AuthorizationAuthority(b"a" * 32)
     assert authority.requires_authenticated_replay is False
     assert authority.integrity_protected is False
+
+
+def _consume_authenticated_token_in_process(database_path, token_value, ready, start, results):
+    guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"m" * 32,
+        key_id="multiprocess-replay-key",
+        path=database_path,
+        max_tokens=16,
+    )
+    try:
+        ready.put(True)
+        if not start.wait(15):
+            results.put(("timeout", False))
+            return
+        results.put(("result", guard.consume(token_value, expires_at=500, now=100)))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__ + ":" + str(exc)))
+    finally:
+        guard.close()
+
+
+def test_authenticated_replay_guard_allows_only_one_independent_process(tmp_path):
+    import multiprocessing
+
+    path = str(tmp_path / "multiprocess-authenticated-replay.sqlite3")
+    initialized = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"m" * 32,
+        key_id="multiprocess-replay-key",
+        path=path,
+        max_tokens=16,
+    )
+    initialized.close()
+
+    context = multiprocessing.get_context("spawn")
+    ready, start, results = context.Queue(), context.Event(), context.Queue()
+    shared_token = token(991)
+    workers = [
+        context.Process(
+            target=_consume_authenticated_token_in_process,
+            args=(path, shared_token, ready, start, results),
+        )
+        for _ in range(4)
+    ]
+    for worker in workers:
+        worker.start()
+    try:
+        for _ in workers:
+            assert ready.get(timeout=20) is True
+        start.set()
+        for worker in workers:
+            worker.join(timeout=25)
+        assert all(not worker.is_alive() for worker in workers), "replay_process_timeout"
+        assert [worker.exitcode for worker in workers] == [0] * len(workers)
+        outcomes = [results.get(timeout=5) for _ in workers]
+        assert all(kind == "result" for kind, _ in outcomes), outcomes
+        assert sum(bool(value) for _kind, value in outcomes) == 1
+    finally:
+        start.set()
+        for worker in workers:
+            if worker.is_alive():
+                worker.terminate()
+                worker.join(timeout=5)
+        ready.close()
+        results.close()
+
+    reopened = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"m" * 32,
+        key_id="multiprocess-replay-key",
+        path=path,
+        max_tokens=16,
+    )
+    try:
+        assert reopened.contains(shared_token, now=100)
+        assert reopened.consumed_count == 1
+    finally:
+        reopened.close()
