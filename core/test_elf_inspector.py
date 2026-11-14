@@ -81,20 +81,24 @@ def test_table_count_is_bounded():
 
 
 def test_elf64_extended_header_numbering_is_resolved():
-    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
         2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
     )
     program = struct.pack("<IIQQQQQQ", 1, 4, 0, 0, 0, 0, 0, 0)
-    # sh_size=1, sh_link=0, sh_info=1 carry the extended values.
+    # sh_size=2, sh_link=1, sh_info=1 carry the extended values.
     section_zero = struct.pack(
-        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 0, 1, 0, 0,
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 2, 1, 1, 0, 0,
     )
-    report = inspect_elf_bytes(ident + header + program + section_zero)
+    names = b"\\x00.shstrtab\\x00"
+    string_table = struct.pack(
+        "<IIQQQQIIQQ", 1, 3, 0, 0, 248, len(names), 0, 0, 1, 0,
+    )
+    report = inspect_elf_bytes(ident + header + program + section_zero + string_table + names)
     assert report.program_headers == 1
-    assert report.section_headers == 1
-    assert report.section_names == ("",)
+    assert report.section_headers == 2
+    assert report.section_names == ("", ".shstrtab")
 
 
 def test_elf_extended_numbering_without_section_zero_is_rejected():
