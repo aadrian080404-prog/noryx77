@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from threading import RLock
 
 
 class ResourceKind(str, Enum):
@@ -173,41 +174,45 @@ class LocalReservationBook:
     def __init__(self, node: NodeProfile) -> None:
         self._node = node
         self._reservations: dict[str, ResourceVector] = {}
+        self._lock = RLock()
 
     @property
     def node(self) -> NodeProfile:
-        return self._node
+        with self._lock:
+            return self._node
 
     def reserve(self, request: WorkloadRequest) -> NodeProfile:
-        if request.task_id in self._reservations:
-            raise ValueError("task_already_reserved")
-        if not eligible(self._node, request):
-            raise PermissionError("node_not_eligible_for_workload")
-        # The owner's grant is an aggregate ceiling across concurrent tasks,
-        # not a per-task ceiling. Check it before consuming node capacity.
-        active = ResourceVector()
-        for reserved in self._reservations.values():
-            active = active + reserved
-        if not (active + request.resources).fits_within(self._node.grant.max_resources):
-            raise PermissionError("owner_contribution_quota_exceeded")
-        envelope = self._node.envelope.reserve_work(request.resources)
-        self._node = NodeProfile(
-            self._node.node_id, self._node.failure_domain, self._node.attested,
-            self._node.sandbox_ready, envelope, self._node.grant,
-        )
-        self._reservations[request.task_id] = request.resources
-        return self._node
+        with self._lock:
+            if request.task_id in self._reservations:
+                raise ValueError("task_already_reserved")
+            if not eligible(self._node, request):
+                raise PermissionError("node_not_eligible_for_workload")
+            # The owner's grant is an aggregate ceiling across concurrent tasks,
+            # not a per-task ceiling. Check it before consuming node capacity.
+            active = ResourceVector()
+            for reserved in self._reservations.values():
+                active = active + reserved
+            if not (active + request.resources).fits_within(self._node.grant.max_resources):
+                raise PermissionError("owner_contribution_quota_exceeded")
+            envelope = self._node.envelope.reserve_work(request.resources)
+            self._node = NodeProfile(
+                self._node.node_id, self._node.failure_domain, self._node.attested,
+                self._node.sandbox_ready, envelope, self._node.grant,
+            )
+            self._reservations[request.task_id] = request.resources
+            return self._node
 
     def release(self, task_id: str) -> NodeProfile:
-        resources = self._reservations.pop(task_id, None)
-        if resources is None:
-            raise KeyError("unknown_reservation")
-        envelope = self._node.envelope.release_work(resources)
-        self._node = NodeProfile(
-            self._node.node_id, self._node.failure_domain, self._node.attested,
-            self._node.sandbox_ready, envelope, self._node.grant,
-        )
-        return self._node
+        with self._lock:
+            resources = self._reservations.pop(task_id, None)
+            if resources is None:
+                raise KeyError("unknown_reservation")
+            envelope = self._node.envelope.release_work(resources)
+            self._node = NodeProfile(
+                self._node.node_id, self._node.failure_domain, self._node.attested,
+                self._node.sandbox_ready, envelope, self._node.grant,
+            )
+            return self._node
 
     def revoke(self, new_grant: ContributionGrant) -> tuple[str, ...]:
         """Apply a newer grant generation; old reservations are reported for drain.
@@ -215,18 +220,19 @@ class LocalReservationBook:
         A production supervisor must terminate or safely drain these tasks. This
         primitive deliberately does not pretend to kill external processes.
         """
-        if new_grant.grant_id != self._node.grant.grant_id:
-            raise ValueError("grant_identity_mismatch")
-        if new_grant.generation <= self._node.grant.generation:
-            raise ValueError("grant_generation_must_increase")
-        cancelled = tuple(sorted(self._reservations))
-        # Release every local reservation before switching the generation.
-        released = self._node.envelope
-        for resources in self._reservations.values():
-            released = released.release_work(resources)
-        self._reservations.clear()
-        self._node = NodeProfile(
-            self._node.node_id, self._node.failure_domain, self._node.attested,
-            self._node.sandbox_ready, released, new_grant,
-        )
-        return cancelled
+        with self._lock:
+            if new_grant.grant_id != self._node.grant.grant_id:
+                raise ValueError("grant_identity_mismatch")
+            if new_grant.generation <= self._node.grant.generation:
+                raise ValueError("grant_generation_must_increase")
+            cancelled = tuple(sorted(self._reservations))
+            # Release every local reservation before switching the generation.
+            released = self._node.envelope
+            for resources in self._reservations.values():
+                released = released.release_work(resources)
+            self._reservations.clear()
+            self._node = NodeProfile(
+                self._node.node_id, self._node.failure_domain, self._node.attested,
+                self._node.sandbox_ready, released, new_grant,
+            )
+            return cancelled
