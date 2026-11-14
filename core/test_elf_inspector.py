@@ -1,0 +1,373 @@
+import os
+import struct
+
+import pytest
+
+from core.elf_inspector import inspect_elf_bytes, inspect_elf_file
+
+
+def elf64(*, program_type=1, flags=3, endian="<"):
+    ident = b"\x7fELF" + bytes((2, 1 if endian == "<" else 2, 1)) + bytes(9)
+    header = struct.pack(
+        endian + "HHIQQQIHHHHHH",
+        2, 62, 1, 0x401000, 64, 0, 0, 64, 56, 1, 64, 0, 0,
+    )
+    program = struct.pack(
+        endian + "IIQQQQQQ",
+        program_type, flags, 120, 0x401000, 0x401000, 4, 8, 0,
+    )
+    return ident + header + program + b"DATA"
+
+
+def elf32():
+    ident = b"\x7fELF" + bytes((1, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIIIIIHHHHHH",
+        2, 3, 1, 0x8048000, 52, 0, 0, 52, 32, 0, 40, 0, 0,
+    )
+    return ident + header
+
+
+def test_elf64_reports_metadata_and_writable_executable_segment():
+    report = inspect_elf_bytes(elf64())
+    assert report.elf_class == 64
+    assert report.endianness == "little"
+    assert report.machine == 62
+    assert report.entry_point == 0x401000
+    assert any(f.rule_id == "ELF-003" and f.severity == "high" for f in report.findings)
+
+
+def test_elf32_header_is_supported():
+    report = inspect_elf_bytes(elf32())
+    assert report.elf_class == 32
+    assert report.machine == 3
+    assert report.program_headers == 0
+
+
+def test_big_endian_elf_is_parsed():
+    report = inspect_elf_bytes(elf64(program_type=1, flags=0, endian=">"))
+    assert report.endianness == "big"
+
+
+def test_executable_gnu_stack_is_reported():
+    report = inspect_elf_bytes(elf64(program_type=0x6474E551, flags=1))
+    assert any(f.rule_id == "ELF-002" for f in report.findings)
+
+
+@pytest.mark.parametrize("raw", [b"", b"not-elf", b"\x7fELF" + bytes(12)])
+def test_invalid_or_truncated_elf_is_rejected(raw):
+    with pytest.raises(ValueError):
+        inspect_elf_bytes(raw)
+
+
+def test_program_header_out_of_bounds_is_rejected():
+    raw = bytearray(elf64())
+    struct.pack_into("<Q", raw, 32, 0xFFFFFFF0)
+    with pytest.raises(ValueError, match="table_out_of_bounds"):
+        inspect_elf_bytes(bytes(raw))
+
+
+def test_segment_payload_out_of_bounds_is_rejected():
+    raw = bytearray(elf64())
+    struct.pack_into("<Q", raw, 64 + 8, 0xFFFFFFF0)
+    with pytest.raises(ValueError, match="segment_out_of_bounds"):
+        inspect_elf_bytes(bytes(raw))
+
+
+def test_table_count_is_bounded():
+    raw = bytearray(elf64())
+    struct.pack_into("<H", raw, 56, 4097)
+    with pytest.raises(ValueError, match="count_limit"):
+        inspect_elf_bytes(bytes(raw))
+
+
+def test_elf_extended_section_count_resolves_then_enforces_parser_limit():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0,
+    )
+    # ELF extended section count is stored in sh_size of section header zero.
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 65536, 0, 0, 0, 0,
+    )
+    with pytest.raises(ValueError, match="section_header_count_limit"):
+        inspect_elf_bytes(ident + header + section_zero)
+
+
+def test_elf_extended_numbering_rejects_non_extended_values():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 0, 64, 0, 64, 56, 0, 64, 0, 0xFFFF,
+    )
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 65536, 1, 0, 0, 0,
+    )
+    with pytest.raises(ValueError, match="extended_string_index_invalid"):
+        inspect_elf_bytes(ident + header + section_zero)
+
+
+def test_elf_extended_program_count_enforces_parser_limit():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 1, 0,
+    )
+    program_zero = struct.pack("<IIQQQQQQ", 0, 0, 0, 0, 0, 0, 0, 0)
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 0, 65535, 0, 0,
+    )
+    with pytest.raises(ValueError, match="program_header_count_limit"):
+        inspect_elf_bytes(ident + header + program_zero + section_zero)
+
+def test_elf_extended_numbering_without_section_zero_is_rejected():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 64, 0, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
+    )
+    with pytest.raises(ValueError, match="extended_numbering"):
+        inspect_elf_bytes(ident + header + bytes(56))
+
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO creation is unavailable")
+def test_elf_file_inspector_does_not_block_on_non_regular_file(tmp_path):
+    fifo = tmp_path / "named-pipe"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="regular_file"):
+        inspect_elf_file(fifo)
+
+def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True, symbol_name_offset=11, symbol_section_index=0):
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    dynamic = struct.pack("<qQ", 1, needed_offset)
+    if include_terminator:
+        dynamic += struct.pack("<qQ", 0, 0)
+    dynstr = b"\x00libc.so.6\x00puts\x00"
+    shstr = b"\x00.dynamic\x00.dynstr\x00.shstrtab\x00.dynsym\x00"
+    dynamic_offset = 64
+    dynstr_offset = dynamic_offset + len(dynamic)
+    shstr_offset = dynstr_offset + len(dynstr)
+    symbol_offset = (shstr_offset + len(shstr) + 7) & ~7
+    symbols = struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+    symbols += struct.pack("<IBBHQQ", symbol_name_offset, 0x12, 0, symbol_section_index, 0, 0)
+    section_offset = (symbol_offset + len(symbols) + 7) & ~7
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, 0, section_offset, 0, 64, 56, 0, 64, 5, 3,
+    )
+    section_zero = bytes(64)
+    dynamic_section = struct.pack(
+        "<IIQQQQIIQQ",
+        1, 6, 0, 0, dynamic_offset, len(dynamic), 2, 0, 8, 16,
+    )
+    dynstr_section = struct.pack(
+        "<IIQQQQIIQQ",
+        10, 3, 0, 0, dynstr_offset, len(dynstr), 0, 0, 1, 0,
+    )
+    shstr_section = struct.pack(
+        "<IIQQQQIIQQ",
+        18, 3, 0, 0, shstr_offset, len(shstr), 0, 0, 1, 0,
+    )
+    dynsym_section = struct.pack(
+        "<IIQQQQIIQQ",
+        28, 11, 0, 0, symbol_offset, len(symbols), 2, 0, 8, 24,
+    )
+    payload = ident + header + dynamic + dynstr + shstr
+    payload += bytes(symbol_offset - len(payload))
+    payload += symbols
+    payload += bytes(section_offset - len(payload))
+    payload += section_zero + dynamic_section + dynstr_section + shstr_section + dynsym_section
+    return payload
+
+
+def test_elf_dynamic_table_reports_needed_libraries_without_execution():
+    report = inspect_elf_bytes(elf64_with_dynamic_dependency())
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert any(f.rule_id == "ELF-006" for f in report.findings)
+
+
+def test_elf_dynamic_table_rejects_out_of_range_string_offsets():
+    with pytest.raises(ValueError, match="dynamic_string_offset_invalid"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(needed_offset=99))
+
+
+def test_elf_dynamic_table_requires_terminator():
+    with pytest.raises(ValueError, match="dynamic_table_unterminated"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(include_terminator=False))
+
+
+def test_elf_dynamic_symbol_table_reports_undefined_imports():
+    report = inspect_elf_bytes(elf64_with_dynamic_dependency())
+    assert report.dynamic_imports == ("puts",)
+    assert any(f.rule_id == "ELF-007" for f in report.findings)
+
+
+def test_elf_dynamic_symbol_table_rejects_invalid_name_offsets():
+    with pytest.raises(ValueError, match="dynamic_symbol_name_offset_invalid"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(symbol_name_offset=99))
+
+def test_elf_dynamic_symbol_table_validates_defined_symbol_name_offsets():
+    with pytest.raises(ValueError, match="dynamic_symbol_name_offset_invalid"):
+        inspect_elf_bytes(elf64_with_dynamic_dependency(
+            symbol_name_offset=99,
+            symbol_section_index=1,
+        ))
+
+
+
+def elf64_stripped_with_pt_dynamic(*, needed_offset=1, include_load=True):
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    dynamic_offset = 64 + 2 * 56
+    dynamic_entries = (
+        struct.pack("<qQ", 1, needed_offset)
+        + struct.pack("<qQ", 5, 0x400000 + dynamic_offset + 4 * 16)
+        + struct.pack("<qQ", 10, len(b"\x00libc.so.6\x00"))
+        + struct.pack("<qQ", 0, 0)
+    )
+    dynstr = b"\x00libc.so.6\x00"
+    total_size = dynamic_offset + len(dynamic_entries) + len(dynstr)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size if include_load else 0, total_size if include_load else 0, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, 0x400000 + dynamic_offset,
+        0x400000 + dynamic_offset, len(dynamic_entries), len(dynamic_entries), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic_entries + dynstr
+
+
+def test_stripped_elf_recovers_needed_libraries_from_pt_dynamic():
+    report = inspect_elf_bytes(elf64_stripped_with_pt_dynamic())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert any(f.rule_id == "ELF-006" for f in report.findings)
+
+
+def test_stripped_elf_pt_dynamic_rejects_unmapped_string_table():
+    with pytest.raises(ValueError, match="dynamic_string_table_unmapped"):
+        inspect_elf_bytes(elf64_stripped_with_pt_dynamic(include_load=False))
+
+
+def test_stripped_elf_pt_dynamic_rejects_invalid_needed_offset():
+    with pytest.raises(ValueError, match="dynamic_string_offset_invalid"):
+        inspect_elf_bytes(elf64_stripped_with_pt_dynamic(needed_offset=99))
+
+
+def elf64_stripped_with_pt_dynamic_import():
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    phoff = 64
+    dynamic_offset = phoff + 2 * 56
+    dynamic_vaddr = 0x400000 + dynamic_offset
+    dynstr = b"\x00libc.so.6\x00puts\x00"
+    dynamic_size = 7 * 16
+    dynstr_offset = dynamic_offset + dynamic_size
+    dynsym_offset = dynstr_offset + len(dynstr)
+    hash_offset = dynsym_offset + 2 * 24
+    dynstr_vaddr = 0x400000 + dynstr_offset
+    dynsym_vaddr = 0x400000 + dynsym_offset
+    hash_vaddr = 0x400000 + hash_offset
+    entries = [
+        (1, 1), (5, dynstr_vaddr), (10, len(dynstr)),
+        (6, dynsym_vaddr), (11, 24), (4, hash_vaddr), (0, 0),
+    ]
+    dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    symbols = (
+        struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+    )
+    hash_table = struct.pack("<IIIII", 1, 2, 1, 0, 0)
+    total_size = hash_offset + len(hash_table)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, phoff, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size, total_size, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, dynamic_vaddr,
+        dynamic_vaddr, len(dynamic), len(dynamic), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + hash_table
+
+
+def test_stripped_elf_recovers_undefined_imports_from_pt_dynamic_sysv_hash():
+    report = inspect_elf_bytes(elf64_stripped_with_pt_dynamic_import())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert report.dynamic_imports == ("puts",)
+    assert any(f.rule_id == "ELF-007" for f in report.findings)
+
+
+def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
+    raw = bytearray(elf64_stripped_with_pt_dynamic_import())
+    struct.pack_into("<I", raw, len(raw) - 16, 5000)
+    with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
+        inspect_elf_bytes(bytes(raw))
+
+
+def elf64_stripped_with_gnu_hash(*, bucket=2, chain=1, bloom_size=1):
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    phoff = 64
+    dynamic_offset = phoff + 2 * 56
+    dynamic_vaddr = 0x400000 + dynamic_offset
+    dynstr = b"\x00libc.so.6\x00puts\x00exported\x00"
+    entries_count = 7
+    dynamic_size = entries_count * 16
+    dynstr_offset = dynamic_offset + dynamic_size
+    dynsym_offset = dynstr_offset + len(dynstr)
+    gnu_hash_offset = dynsym_offset + 3 * 24
+    dynstr_vaddr = 0x400000 + dynstr_offset
+    dynsym_vaddr = 0x400000 + dynsym_offset
+    gnu_hash_vaddr = 0x400000 + gnu_hash_offset
+    entries = [
+        (1, 1), (5, dynstr_vaddr), (10, len(dynstr)),
+        (6, dynsym_vaddr), (11, 24), (0x6FFFFEF5, gnu_hash_vaddr), (0, 0),
+    ]
+    dynamic = b"".join(struct.pack("<qQ", tag, value) for tag, value in entries)
+    # The undefined import precedes symoffset; only the export is hashed.
+    symbols = (
+        struct.pack("<IBBHQQ", 0, 0, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 11, 0x12, 0, 0, 0, 0)
+        + struct.pack("<IBBHQQ", 16, 0x12, 0, 1, 0, 0)
+    )
+    # GNU hash header, bloom word, one bucket and one terminating chain word.
+    gnu_hash = struct.pack("<IIIIQII", 1, 2, bloom_size, 5, 0, bucket, chain)
+    total_size = gnu_hash_offset + len(gnu_hash)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        3, 62, 1, 0, phoff, 0, 0, 64, 56, 2, 64, 0, 0,
+    )
+    load = struct.pack(
+        "<IIQQQQQQ", 1, 4, 0, 0x400000, 0x400000,
+        total_size, total_size, 0x1000,
+    )
+    dynamic_segment = struct.pack(
+        "<IIQQQQQQ", 2, 4, dynamic_offset, dynamic_vaddr,
+        dynamic_vaddr, len(dynamic), len(dynamic), 8,
+    )
+    return ident + header + load + dynamic_segment + dynamic + dynstr + symbols + gnu_hash
+
+def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
+    report = inspect_elf_bytes(elf64_stripped_with_gnu_hash())
+    assert report.section_headers == 0
+    assert report.dynamic_libraries == ("libc.so.6",)
+    assert report.dynamic_imports == ("puts",)
+
+
+def test_stripped_elf_rejects_gnu_hash_bucket_above_symbol_budget():
+    with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=4096))
+
+
+def test_stripped_elf_rejects_non_power_of_two_gnu_bloom_size():
+    with pytest.raises(ValueError, match="gnu_hash_header_invalid"):
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bloom_size=3))
