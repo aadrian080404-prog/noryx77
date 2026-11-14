@@ -1,12 +1,17 @@
 """Killable process-backed adapter for trusted, importable execution handlers.
 
-This is process isolation and timeout enforcement, NOT an OS security sandbox.
-Handlers run with the same user privileges as the parent and must be trusted.
+This is process-tree termination and timeout enforcement, NOT an OS security
+sandbox. Handlers run with the same user privileges as the parent and must be
+trusted. On POSIX, the worker owns a process group so timeout cleanup can also
+terminate subprocess descendants.
 """
 from __future__ import annotations
 
 import json
 import multiprocessing
+import os
+import signal
+import time
 from multiprocessing.connection import Connection
 from typing import Any, Callable
 
@@ -21,8 +26,16 @@ class ProcessExecutionTimeout(TimeoutError):
     pass
 
 
-def _process_worker(send_conn: Connection, handler: Callable[[ActionEnvelope], Any], envelope: ActionEnvelope) -> None:
+def _process_worker(
+    send_conn: Connection,
+    control_conn: Connection,
+    handler: Callable[[ActionEnvelope], Any],
+    envelope: ActionEnvelope,
+) -> None:
     try:
+        if os.name == "posix":
+            os.setsid()
+        control_conn.send_bytes(b"ready")
         result = handler(envelope)
         try:
             payload = json.dumps(
@@ -32,8 +45,17 @@ def _process_worker(send_conn: Connection, handler: Callable[[ActionEnvelope], A
         except (TypeError, ValueError, OverflowError):
             payload = b'{"error":"result_not_json_serializable","ok":false}'
         send_conn.send_bytes(payload)
+        # Keep the process-group leader alive until the parent has received the
+        # result and can terminate any subprocesses left behind by the handler.
+        try:
+            control_conn.recv_bytes()
+        except (EOFError, OSError):
+            pass
     except BaseException as exc:
-        # Do not serialize exception messages, tracebacks, or arbitrary objects.
+        try:
+            control_conn.send_bytes(b"error")
+        except (BrokenPipeError, OSError):
+            pass
         payload = json.dumps(
             {"ok": False, "error": type(exc).__name__},
             sort_keys=True, separators=(",", ":"),
@@ -44,6 +66,7 @@ def _process_worker(send_conn: Connection, handler: Callable[[ActionEnvelope], A
             pass
     finally:
         send_conn.close()
+        control_conn.close()
 
 
 class ProcessExecutionAdapter:
@@ -82,17 +105,33 @@ class ProcessExecutionAdapter:
             raise TypeError("envelope_must_be_ActionEnvelope")
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0:
             raise ValueError("timeout_seconds_must_be_positive")
+        deadline = time.monotonic() + float(timeout_seconds)
         context = multiprocessing.get_context("spawn")
         receive_conn, send_conn = context.Pipe(duplex=False)
+        control_parent, control_child = context.Pipe(duplex=True)
         process = context.Process(
             target=_process_worker,
-            args=(send_conn, self._handler, envelope),
+            args=(send_conn, control_child, self._handler, envelope),
             daemon=True,
         )
         try:
             process.start()
             send_conn.close()
-            if not receive_conn.poll(float(timeout_seconds)):
+            control_child.close()
+            remaining = max(0.0, deadline - time.monotonic())
+            if not control_parent.poll(remaining):
+                self._stop(process)
+                raise ProcessExecutionTimeout("executor_deadline_exceeded")
+            try:
+                ready = control_parent.recv_bytes()
+            except (EOFError, OSError) as exc:
+                self._stop(process)
+                raise ProcessExecutionError("executor_process_lost") from exc
+            if ready not in (b"ready", b"error"):
+                self._stop(process)
+                raise ProcessExecutionError("executor_startup_handshake_invalid")
+            remaining = max(0.0, deadline - time.monotonic())
+            if not receive_conn.poll(remaining):
                 self._stop(process)
                 raise ProcessExecutionTimeout("executor_deadline_exceeded")
             try:
@@ -100,10 +139,9 @@ class ProcessExecutionAdapter:
             except (EOFError, OSError) as exc:
                 self._stop(process)
                 raise ProcessExecutionError("executor_process_lost") from exc
-            process.join(self.terminate_grace_seconds)
-            if process.is_alive():
-                self._stop(process)
-                raise ProcessExecutionError("executor_did_not_exit_after_result")
+            # The worker deliberately remains alive after sending its response.
+            # Killing its process group here also removes subprocess descendants.
+            self._stop(process)
             try:
                 response = json.loads(raw.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -121,12 +159,39 @@ class ProcessExecutionAdapter:
         finally:
             receive_conn.close()
             send_conn.close()
+            control_parent.close()
+            control_child.close()
             if process.pid is not None and process.is_alive():
                 self._stop(process)
             if process.pid is not None:
                 process.close()
 
     def _stop(self, process: multiprocessing.Process) -> None:
+        pid = process.pid
+        if pid is None:
+            return
+        if os.name == "posix":
+            try:
+                os.killpg(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                # The timeout may race the worker's setsid() handshake. In
+                # that window no private process group exists yet.
+                if process.is_alive():
+                    process.terminate()
+            except PermissionError:
+                if process.is_alive():
+                    process.terminate()
+            process.join(self.terminate_grace_seconds)
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                if process.is_alive():
+                    process.kill()
+            except PermissionError:
+                if process.is_alive():
+                    process.kill()
+            process.join(self.terminate_grace_seconds)
+            return
         if process.is_alive():
             process.terminate()
             process.join(self.terminate_grace_seconds)

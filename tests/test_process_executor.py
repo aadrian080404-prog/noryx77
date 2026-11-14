@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import time
 
 import pytest
@@ -26,14 +29,25 @@ def bad_handler(envelope):
     raise ValueError("private exception details must not cross process boundary")
 
 
-def make_envelope():
+def spawn_descendant_handler(envelope):
+    marker = envelope.parameters["marker"]
+    code = (
+        "import pathlib,time; time.sleep(3.5); "
+        "pathlib.Path(" + repr(marker) + ").write_text('survived')"
+    )
+    subprocess.Popen([sys.executable, "-c", code], close_fds=True)
+    time.sleep(5)
+    return {"spawned": True}
+
+
+def make_envelope(parameters=None):
     return ActionEnvelope(
         execution_id="exec-1",
         principal_id="principal-1",
         step_id="step-1",
         action_type="test",
         target="local",
-        parameters={},
+        parameters=parameters or {},
         nonce="nonce-1",
     )
 
@@ -64,6 +78,20 @@ def test_process_executor_rejects_non_picklable_or_invalid_configuration():
     with pytest.raises(ValueError, match="timeout_seconds"):
         ProcessExecutionAdapter(echo_handler, agent_id="worker", timeout_seconds=0)
 
+
+@pytest.mark.skipif(os.name != "posix", reason="process-group containment is POSIX-specific")
+def test_process_executor_kills_subprocess_descendants_on_timeout(tmp_path):
+    marker = tmp_path / "descendant-survived.txt"
+    adapter = ProcessExecutionAdapter(
+        spawn_descendant_handler,
+        agent_id="isolated-worker",
+        timeout_seconds=2.5,
+        terminate_grace_seconds=0.1,
+    )
+    with pytest.raises(ProcessExecutionTimeout, match="deadline_exceeded"):
+        adapter.execute(make_envelope({"marker": str(marker)}))
+    time.sleep(3.7)
+    assert not marker.exists()
 
 
 def test_runtime_deadline_overrides_longer_adapter_timeout():
