@@ -1,5 +1,6 @@
 import hashlib
 import inspect
+import json
 import time
 
 from .actions import ActionGate, AuthorizationAuthority
@@ -57,13 +58,49 @@ class HypersynthRuntime:
                 if not action_id:
                     raise ValueError("sandbox_action_id_required")
                 forwarded = {key: value for key, value in parameters.items() if key != "action_id"}
-                return sandboxed_process_adapter.execute(ProposedAction(
-                    environment=sandboxed_process_adapter.environment,
-                    action_id=action_id,
-                    action_type="process",
-                    target=target,
-                    parameters=forwarded,
-                ))
+                try:
+                    canonical_parameters = json.dumps(
+                        forwarded, sort_keys=True, separators=(",", ":"),
+                        ensure_ascii=False, allow_nan=False,
+                    ).encode("utf-8")
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("sandbox_action_parameters_not_canonical") from exc
+                parameters_digest = hashlib.sha256(canonical_parameters).hexdigest()
+                audit_context = {
+                    "action_id": action_id,
+                    "target": target,
+                    "parameters_sha256": parameters_digest,
+                    "environment": sandboxed_process_adapter.environment,
+                }
+                self.audit.record("sandbox_process_dispatch_started", **audit_context)
+                try:
+                    result = sandboxed_process_adapter.execute(ProposedAction(
+                        environment=sandboxed_process_adapter.environment,
+                        action_id=action_id,
+                        action_type="process",
+                        target=target,
+                        parameters=forwarded,
+                    ))
+                except Exception as exc:
+                    self.audit.record(
+                        "sandbox_process_dispatch_failed",
+                        **audit_context,
+                        error_type=type(exc).__name__,
+                    )
+                    raise
+                stdout = getattr(result, "stdout", b"")
+                stderr = getattr(result, "stderr", b"")
+                self.audit.record(
+                    "sandbox_process_dispatch_completed",
+                    **audit_context,
+                    result_type=type(result).__name__,
+                    exit_code=getattr(result, "exit_code", None),
+                    timed_out=getattr(result, "timed_out", None),
+                    output_truncated=getattr(result, "output_truncated", None),
+                    stdout_sha256=hashlib.sha256(stdout).hexdigest() if isinstance(stdout, bytes) else None,
+                    stderr_sha256=hashlib.sha256(stderr).hexdigest() if isinstance(stderr, bytes) else None,
+                )
+                return result
             self.tool_executor.capabilities.register(
                 "sandboxed_process", execute_sandboxed_process, risk_class="high"
             )
