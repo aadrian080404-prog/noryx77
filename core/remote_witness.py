@@ -112,8 +112,11 @@ class RemoteMonotonicAnchor:
             raise RuntimeError("remote_witness_snapshot_invalid")
         try:
             decoded_mac = bytes.fromhex(snapshot.mac)
-            if len(decoded_mac) != 32 or decoded_mac.hex() != snapshot.mac:
-                raise ValueError("remote_witness_mac_not_canonical_sha256")
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("remote_witness_snapshot_invalid") from exc
+        if len(decoded_mac) != 32 or decoded_mac.hex() != snapshot.mac:
+            raise RuntimeError("remote_witness_snapshot_invalid")
+        try:
             self._public_key.verify(receipt.signature, self._message(receipt))
         except (InvalidSignature, ValueError, TypeError) as exc:
             raise RuntimeError("remote_witness_signature_verification_failed") from exc
