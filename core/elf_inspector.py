@@ -358,8 +358,10 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                         )
                         if (not 1 <= bucket_count <= MAX_DYNAMIC_SYMBOLS
                                 or not 1 <= bloom_size <= MAX_DYNAMIC_SYMBOLS
-                                or symbol_offset_base > MAX_DYNAMIC_SYMBOLS):
-                            raise ValueError("elf_dynamic_symbol_count_limit")
+                                or bloom_size & (bloom_size - 1)
+                                or not 1 <= symbol_offset_base <= MAX_DYNAMIC_SYMBOLS
+                                or _bloom_shift >= 32):
+                            raise ValueError("elf_dynamic_gnu_hash_header_invalid")
                         word_size = 8 if elf_class == 2 else 4
                         buckets_address = gnu_hash_values[0] + 16 + bloom_size * word_size
                         buckets_bytes = bucket_count * 4
@@ -372,13 +374,23 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                         )
                         chain_address = buckets_address + buckets_bytes
                         highest_symbol = symbol_offset_base - 1
+                        visited_symbols: set[int] = set()
+                        chain_steps = 0
+                        previous_bucket_end = symbol_offset_base - 1
                         for bucket in buckets:
                             if bucket == 0:
                                 continue
-                            if bucket < symbol_offset_base or bucket >= MAX_DYNAMIC_SYMBOLS:
-                                raise ValueError("elf_dynamic_symbol_count_limit")
+                            if (bucket < symbol_offset_base or bucket >= MAX_DYNAMIC_SYMBOLS
+                                    or bucket <= previous_bucket_end):
+                                raise ValueError("elf_dynamic_gnu_hash_bucket_invalid")
                             symbol_index = bucket
                             while True:
+                                if symbol_index in visited_symbols:
+                                    raise ValueError("elf_dynamic_gnu_hash_chain_overlap")
+                                visited_symbols.add(symbol_index)
+                                chain_steps += 1
+                                if chain_steps > MAX_DYNAMIC_SYMBOLS:
+                                    raise ValueError("elf_dynamic_symbol_count_limit")
                                 chain_index = symbol_index - symbol_offset_base
                                 chain_offset = map_load_address(
                                     chain_address + chain_index * 4, 4,
@@ -387,6 +399,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                                 chain_value = struct.unpack_from(endian + "I", data, chain_offset)[0]
                                 highest_symbol = max(highest_symbol, symbol_index)
                                 if chain_value & 1:
+                                    previous_bucket_end = symbol_index
                                     break
                                 symbol_index += 1
                                 if symbol_index >= MAX_DYNAMIC_SYMBOLS:
