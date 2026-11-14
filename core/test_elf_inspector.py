@@ -218,15 +218,15 @@ def test_elf_dynamic_symbol_table_validates_defined_symbol_name_offsets():
 
 
 def elf64_stripped_with_pt_dynamic(*, needed_offset=1, include_load=True):
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     dynamic_offset = 64 + 2 * 56
     dynamic_entries = (
         struct.pack("<qQ", 1, needed_offset)
         + struct.pack("<qQ", 5, 0x400000 + dynamic_offset + 4 * 16)
-        + struct.pack("<qQ", 10, len(b"\\x00libc.so.6\\x00"))
+        + struct.pack("<qQ", 10, len(b"\x00libc.so.6\x00"))
         + struct.pack("<qQ", 0, 0)
     )
-    dynstr = b"\\x00libc.so.6\\x00"
+    dynstr = b"\x00libc.so.6\x00"
     total_size = dynamic_offset + len(dynamic_entries) + len(dynstr)
     header = struct.pack(
         "<HHIQQQIHHHHHH",
