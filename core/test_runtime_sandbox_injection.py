@@ -352,3 +352,33 @@ def test_authorized_runtime_dispatches_through_real_bubblewrap_once(tmp_path, mo
         if not audit_log._closed:
             audit_log.close()
         replay_guard.close()
+
+
+def test_sandbox_dispatch_surfaces_uncertain_outcome_if_completion_audit_fails():
+    import pytest
+    from core.audit import AuditLog
+
+    class CompletionFailingAudit(AuditLog):
+        def record(self, event, **data):
+            if event == "sandbox_process_dispatch_completed":
+                raise OSError("simulated_durable_audit_failure")
+            return super().record(event, **data)
+
+    adapter = StubSandboxAdapter()
+    audit = CompletionFailingAudit()
+    runtime = NORYXRuntime(
+        audit_log=audit,
+        sandboxed_process_adapter=adapter,
+    )
+    dispatch = runtime.capability_registry.resolve("sandboxed_process")
+
+    with pytest.raises(RuntimeError, match="sandbox_process_audit_commit_uncertain"):
+        dispatch(
+            "workspace",
+            {"action_id": "audit-uncertain-action", "argv": ["/usr/bin/true"]},
+        )
+
+    assert len(adapter.actions) == 1
+    assert [event["event"] for event in audit.snapshot()] == [
+        "sandbox_process_dispatch_started",
+    ]
