@@ -315,11 +315,11 @@ def test_stripped_elf_rejects_unbounded_sysv_hash_symbol_count():
 
 
 def elf64_stripped_with_gnu_hash(*, bucket=1, chain=1):
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     phoff = 64
     dynamic_offset = phoff + 2 * 56
     dynamic_vaddr = 0x400000 + dynamic_offset
-    dynstr = b"\\x00libc.so.6\\x00puts\\x00"
+    dynstr = b"\x00libc.so.6\x00puts\x00"
     entries_count = 7
     dynamic_size = entries_count * 16
     dynstr_offset = dynamic_offset + dynamic_size
