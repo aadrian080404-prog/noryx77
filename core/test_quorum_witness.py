@@ -62,15 +62,17 @@ def test_quorum_anchor_fails_closed_without_majority(tmp_path):
     })
     assert quorum.read() == AnchorSnapshot(0, ZERO_MAC)
 
+    offline_key_1 = Ed25519PrivateKey.generate()
+    offline_key_2 = Ed25519PrivateKey.generate()
     broken = QuorumMonotonicAnchor({
         "witness-0": anchors[0],
         "witness-offline-1": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-1",
-            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            trusted_public_key=offline_key_1.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
         ),
         "witness-offline-2": RemoteMonotonicAnchor(
             FailingClient(), witness_id="witness-offline-2",
-            trusted_public_key=failing_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            trusted_public_key=offline_key_2.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
         ),
     })
     with pytest.raises(RuntimeError, match="quorum_unavailable"):
@@ -82,5 +84,28 @@ def test_quorum_anchor_requires_odd_three_or_more_witnesses(tmp_path):
     anchors, authorities = make_witnesses(tmp_path)
     with pytest.raises(ValueError, match="odd_witness_count"):
         QuorumMonotonicAnchor({"witness-0": anchors[0], "witness-1": anchors[1]})
+    for authority in authorities:
+        authority.close()
+
+
+def test_quorum_rejects_different_ids_with_same_public_key(tmp_path):
+    key = Ed25519PrivateKey.generate()
+    public = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    anchors = []
+    authorities = []
+    for index in range(3):
+        authority = SQLiteWitnessAuthority(
+            str(tmp_path / f"duplicate-key-{index}.sqlite"),
+            witness_id=f"duplicate-key-{index}",
+            signing_key=key,
+        )
+        authorities.append(authority)
+        anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"duplicate-key-{index}",
+            trusted_public_key=public,
+        ))
+    with pytest.raises(ValueError, match="public_keys_must_be_distinct"):
+        QuorumMonotonicAnchor({f"duplicate-key-{i}": a for i, a in enumerate(anchors)})
     for authority in authorities:
         authority.close()
