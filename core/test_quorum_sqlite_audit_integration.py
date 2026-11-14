@@ -213,3 +213,19 @@ def test_sqlite_audit_serializes_independent_process_writers(tmp_path):
         counts[event["writer"]] = counts.get(event["writer"], 0) + 1
     assert counts == {"writer-0": 12, "writer-1": 12, "writer-2": 12}
     audit.close()
+
+def test_sqlite_audit_rejects_noncanonical_external_anchor_mac(tmp_path):
+    audit = SQLiteAuditLog(str(tmp_path / "malformed-anchor.sqlite"))
+
+    class MalformedAnchor:
+        def read(self):
+            return AnchorSnapshot(0, "aa" * 31 + "  ")
+
+        def compare_and_swap(self, expected, replacement):
+            raise AssertionError("unexpected_compare_and_swap")
+
+    try:
+        with pytest.raises(ValueError, match="audit_anchor_snapshot_invalid"):
+            audit.verify_and_advance_anchor(MalformedAnchor())
+    finally:
+        audit.close()
