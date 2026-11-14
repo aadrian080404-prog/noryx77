@@ -380,8 +380,9 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
                         for bucket in buckets:
                             if bucket == 0:
                                 continue
-                            if (bucket < symbol_offset_base or bucket >= MAX_DYNAMIC_SYMBOLS
-                                    or bucket <= previous_bucket_end):
+                            if bucket >= MAX_DYNAMIC_SYMBOLS:
+                                raise ValueError("elf_dynamic_symbol_count_limit")
+                            if bucket < symbol_offset_base or bucket <= previous_bucket_end:
                                 raise ValueError("elf_dynamic_gnu_hash_bucket_invalid")
                             symbol_index = bucket
                             while True:
