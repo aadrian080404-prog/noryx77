@@ -33,3 +33,53 @@ def test_merge_rejects_missing_middle_event_after_existing_prefix(tmp_path):
         target.merge((third,))
     assert target.vector_clock() == {"peer": 1}
     target.close()
+
+
+def test_merge_rejects_missing_cross_actor_vector_dependency_atomically(tmp_path):
+    target = DistributedMemoryStore(str(tmp_path / "target.sqlite"), actor_id="receiver")
+    dependent = MemoryEvent(
+        "peer-a", 1, "derived", "depends on peer-b/1", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    with pytest.raises(ValueError, match="causal_dependency_missing"):
+        target.merge((dependent,))
+    assert target.vector_clock() == {}
+    assert target.read("derived") is None
+    target.close()
+
+
+def test_merge_resolves_cross_actor_dependencies_inside_batch(tmp_path):
+    target = DistributedMemoryStore(str(tmp_path / "target.sqlite"), actor_id="receiver")
+    dependency = MemoryEvent("peer-b", 1, "source", "base", False, (("peer-b", 1),))
+    dependent = MemoryEvent(
+        "peer-a", 1, "derived", "computed", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    assert target.merge((dependent, dependency)) == 2
+    assert target.vector_clock() == {"peer-a": 1, "peer-b": 1}
+    assert target.read("derived") == dependent
+    target.close()
+
+
+def test_merge_rejects_missing_middle_cross_actor_dependency(tmp_path):
+    target = DistributedMemoryStore(str(tmp_path / "target.sqlite"), actor_id="receiver")
+    first = MemoryEvent("peer-b", 1, "b1", "one", False, (("peer-b", 1),))
+    second = MemoryEvent("peer-b", 2, "b2", "two", False, (("peer-b", 2),))
+    dependent = MemoryEvent(
+        "peer-a", 1, "derived", "computed", False,
+        (("peer-a", 1), ("peer-b", 2)),
+    )
+    with pytest.raises(ValueError, match="causal_dependency_missing"):
+        target.merge((first, dependent))
+    assert target.vector_clock() == {}
+    assert target.read("b1") is None
+    target.close()
+
+
+def test_merge_preserves_actor_gap_error_for_missing_counter(tmp_path):
+    target = DistributedMemoryStore(str(tmp_path / "target.sqlite"), actor_id="receiver")
+    third = MemoryEvent("peer", 3, "c", "three", False, (("peer", 3),))
+    with pytest.raises(ValueError, match="counter_gap"):
+        target.merge((third,))
+    assert target.vector_clock() == {}
+    target.close()
