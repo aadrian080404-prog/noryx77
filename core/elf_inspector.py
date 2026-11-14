@@ -17,6 +17,7 @@ MAX_ELF_BYTES = 64 * 1024 * 1024
 MAX_TABLE_ENTRIES = 4096
 ELF_MAGIC = b"\x7fELF"
 PT_LOAD = 1
+PT_DYNAMIC = 2
 PT_INTERP = 3
 PT_GNU_STACK = 0x6474E551
 PF_X = 1
@@ -26,6 +27,8 @@ SHT_DYNAMIC = 6
 SHT_DYNSYM = 11
 DT_NULL = 0
 DT_NEEDED = 1
+DT_STRTAB = 5
+DT_STRSZ = 10
 MAX_DYNAMIC_ENTRIES = 4096
 MAX_DYNAMIC_LIBRARIES = 256
 MAX_DYNAMIC_SYMBOLS = 4096
@@ -136,6 +139,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
     findings: list[ELFFinding] = []
     section_names: list[str] = []
 
+    program_segments = []
     for index in range(phnum):
         offset = phoff + index * phentsize
         values = struct.unpack_from(ph_format, data, offset)
@@ -145,6 +149,7 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             p_type, p_offset, _vaddr, _paddr, p_filesz, p_memsz, p_flags, _align = values
         if p_filesz > p_memsz or p_offset > len(data) or p_filesz > len(data) - p_offset:
             raise ValueError("elf_segment_out_of_bounds")
+        program_segments.append((p_type, p_offset, _vaddr, p_filesz, p_memsz))
         if p_type == PT_INTERP:
             findings.append(ELFFinding("ELF-001", "info", "object declares an interpreter"))
         if p_type == PT_GNU_STACK and p_flags & PF_X:
@@ -237,6 +242,72 @@ def inspect_elf_bytes(data: bytes) -> ELFInspectionReport:
             dynamic_libraries.append(library)
         if not terminated:
             raise ValueError("elf_dynamic_table_unterminated")
+
+    # Stripped ELF files may have no section headers. In that case, recover
+    # DT_NEEDED from the PT_DYNAMIC segment and map DT_STRTAB through a
+    # file-backed PT_LOAD range. This path intentionally does not infer
+    # dynamic-symbol counts or imports.
+    if not any(row[1] == SHT_DYNAMIC for row in section_rows):
+        dynamic_segments = [row for row in program_segments if row[0] == PT_DYNAMIC]
+        if len(dynamic_segments) > 1:
+            raise ValueError("elf_multiple_dynamic_segments")
+        if dynamic_segments:
+            _kind, dynamic_offset, _dynamic_vaddr, dynamic_size, _dynamic_memsz = dynamic_segments[0]
+            if dynamic_size % dynamic_entry_size != 0:
+                raise ValueError("elf_dynamic_segment_size_invalid")
+            segment_entries = dynamic_size // dynamic_entry_size
+            if segment_entries > MAX_DYNAMIC_ENTRIES:
+                raise ValueError("elf_dynamic_table_count_limit")
+            tags = []
+            needed_offsets = []
+            terminated = False
+            for index in range(segment_entries):
+                tag, value = struct.unpack_from(
+                    dynamic_format, data, dynamic_offset + index * dynamic_entry_size
+                )
+                if tag == DT_NULL:
+                    terminated = True
+                    break
+                tags.append((tag, value))
+                if tag == DT_NEEDED:
+                    if len(needed_offsets) >= MAX_DYNAMIC_LIBRARIES:
+                        raise ValueError("elf_dynamic_string_offset_invalid")
+                    needed_offsets.append(value)
+            if not terminated:
+                raise ValueError("elf_dynamic_table_unterminated")
+            if needed_offsets:
+                strtab_values = [value for tag, value in tags if tag == DT_STRTAB]
+                strsz_values = [value for tag, value in tags if tag == DT_STRSZ]
+                if len(strtab_values) != 1 or len(strsz_values) != 1:
+                    raise ValueError("elf_dynamic_string_table_invalid")
+                string_vaddr, string_size = strtab_values[0], strsz_values[0]
+                if string_size > MAX_ELF_BYTES:
+                    raise ValueError("elf_dynamic_string_table_limit")
+                string_file_offset = None
+                for kind, file_offset, virtual_address, file_size, _memory_size in program_segments:
+                    if kind != PT_LOAD or string_vaddr < virtual_address:
+                        continue
+                    delta = string_vaddr - virtual_address
+                    if delta <= file_size and string_size <= file_size - delta:
+                        string_file_offset = file_offset + delta
+                        break
+                if string_file_offset is None:
+                    raise ValueError("elf_dynamic_string_table_unmapped")
+                strings = data[string_file_offset:string_file_offset + string_size]
+                for value in needed_offsets:
+                    if value >= len(strings):
+                        raise ValueError("elf_dynamic_string_offset_invalid")
+                    end = strings.find(b"\\x00", value)
+                    if end < 0:
+                        raise ValueError("elf_dynamic_string_unterminated")
+                    try:
+                        library = strings[value:end].decode("utf-8")
+                    except UnicodeDecodeError as exc:
+                        raise ValueError("elf_dynamic_string_encoding_invalid") from exc
+                    if not library:
+                        raise ValueError("elf_dynamic_library_name_empty")
+                    dynamic_libraries.append(library)
+
     if dynamic_libraries:
         findings.append(ELFFinding(
             "ELF-006", "info",
