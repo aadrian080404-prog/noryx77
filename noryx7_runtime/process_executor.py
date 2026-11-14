@@ -174,7 +174,10 @@ class ProcessExecutionAdapter:
             try:
                 os.killpg(pid, signal.SIGTERM)
             except ProcessLookupError:
-                pass
+                # The timeout may race the worker's setsid() handshake. In
+                # that window no private process group exists yet.
+                if process.is_alive():
+                    process.terminate()
             except PermissionError:
                 if process.is_alive():
                     process.terminate()
@@ -182,7 +185,8 @@ class ProcessExecutionAdapter:
             try:
                 os.killpg(pid, signal.SIGKILL)
             except ProcessLookupError:
-                pass
+                if process.is_alive():
+                    process.kill()
             except PermissionError:
                 if process.is_alive():
                     process.kill()
