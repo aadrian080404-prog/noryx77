@@ -120,3 +120,24 @@ def test_inspector_stops_enumerating_directory_at_entry_budget(tmp_path, monkeyp
 
     assert yielded["count"] == 4
     assert "entry_limit_reached" in report.parse_errors
+
+
+
+def test_inspector_enforces_actual_read_budget_when_file_grows_after_stat(tmp_path, monkeypatch):
+    import os
+    from types import SimpleNamespace
+    import core.system_inspector as inspector_module
+
+    (tmp_path / "growing.py").write_bytes(b"x = 123456789\\n")
+    real_fstat = os.fstat
+
+    def understated_fstat(descriptor):
+        metadata = real_fstat(descriptor)
+        return SimpleNamespace(st_mode=metadata.st_mode, st_size=1)
+
+    monkeypatch.setattr(inspector_module.os, "fstat", understated_fstat)
+    report = PythonSystemInspector(max_file_bytes=32, max_total_bytes=4).inspect(tmp_path)
+
+    assert report.files_scanned == 0
+    assert report.bytes_scanned == 0
+    assert any(error.startswith("size_limit_skipped:growing.py") for error in report.parse_errors)
