@@ -29,3 +29,14 @@ This prevents an event from advancing the receiver's causal frontier while
 silently omitting history it claims to depend on. It is still not global
 consensus, authenticated peer identity, or anti-rollback protection; those
 remain separate layers.
+
+
+## Causally closed paginated exports
+
+`export_since` now selects a contiguous, causally closed page instead
+of slicing a lexicographically sorted event list. If an earlier-sorting actor
+has an event that depends on another actor's event, the dependency is emitted
+first even when the page limit is one. The receiver can advance its vector
+clock and request the next page without receiving an unmergeable partial
+causal history. The page limit remains a hard upper bound; a source history
+that cannot produce a ready event fails closed.
