@@ -32,7 +32,7 @@ def bad_handler(envelope):
 def spawn_descendant_handler(envelope):
     marker = envelope.parameters["marker"]
     code = (
-        "import pathlib,time; time.sleep(1.0); "
+        "import pathlib,time; time.sleep(3.5); "
         "pathlib.Path(" + repr(marker) + ").write_text('survived')"
     )
     subprocess.Popen([sys.executable, "-c", code], close_fds=True)
@@ -85,12 +85,12 @@ def test_process_executor_kills_subprocess_descendants_on_timeout(tmp_path):
     adapter = ProcessExecutionAdapter(
         spawn_descendant_handler,
         agent_id="isolated-worker",
-        timeout_seconds=0.8,
+        timeout_seconds=2.5,
         terminate_grace_seconds=0.1,
     )
     with pytest.raises(ProcessExecutionTimeout, match="deadline_exceeded"):
         adapter.execute(make_envelope({"marker": str(marker)}))
-    time.sleep(1.2)
+    time.sleep(3.7)
     assert not marker.exists()
 
 
