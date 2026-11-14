@@ -1,7 +1,7 @@
 from core.actions import AuthorizationAuthority
 from core.authorization_replay import AuthenticatedAuthorizationReplayGuard
 from core.contracts import ActionSpec
-from core.identity import IdentityRegistry
+from core.identity import AgentIdentityAuthority, IdentityRegistry
 from core.runtime import NORYXRuntime
 
 
@@ -102,3 +102,62 @@ def test_canonical_runtime_keeps_high_risk_process_action_fail_closed_without_au
     )
     assert not decision.allowed
     assert decision.verification.reason == "authorization_required"
+
+def test_canonical_runtime_dispatches_authorized_sandbox_action_once(tmp_path):
+    registry = IdentityRegistry()
+    principal, _private_key = AgentIdentityAuthority.generate("sandbox-operator")
+    registry.register(principal)
+    replay_guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"r" * 32,
+        key_id="runtime-dispatch-test-key",
+        path=str(tmp_path / "dispatch-replay.sqlite3"),
+    )
+    authority = AuthorizationAuthority(
+        b"a" * 32,
+        identity_registry=registry,
+        replay_guard=replay_guard,
+        require_authenticated_replay=True,
+    )
+    adapter = StubSandboxAdapter()
+    runtime = NORYXRuntime(
+        identity_registry=registry,
+        authorization_authority=authority,
+        sandboxed_process_adapter=adapter,
+    )
+    action = ActionSpec(
+        action_id="sandbox-authorized-once",
+        action_type="sandboxed_process",
+        target="workspace",
+        parameters={"action_id": "sandbox-authorized-once", "argv": ["/usr/bin/true"]},
+        risk_class="high",
+        requires_authorization=True,
+        execution_id="exec-sandbox-authorized-once",
+    )
+    grant = authority.issue(
+        action,
+        "exec-sandbox-authorized-once",
+        principal=principal,
+    )
+    try:
+        output, check = runtime.tool_executor.execute(
+            action,
+            execution_id="exec-sandbox-authorized-once",
+            grant=grant,
+            principal=principal,
+        )
+        assert check.valid
+        assert output == {"status": "executed"}
+        assert len(adapter.actions) == 1
+
+        replay_output, replay_check = runtime.tool_executor.execute(
+            action,
+            execution_id="exec-sandbox-authorized-once",
+            grant=grant,
+            principal=principal,
+        )
+        assert replay_output is None
+        assert not replay_check.valid
+        assert replay_check.reason == "invalid_authorization_grant"
+        assert len(adapter.actions) == 1
+    finally:
+        replay_guard.close()
