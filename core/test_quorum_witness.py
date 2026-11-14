@@ -314,6 +314,7 @@ def _multiprocess_quorum_writer(database_paths, private_keys, ready, start, resu
 def test_independent_process_quorum_coordinators_cannot_both_commit(tmp_path):
     """Exercise witness CAS with two OS processes, not only two Python threads."""
     import multiprocessing
+    from cryptography.hazmat.primitives.serialization import PrivateFormat, NoEncryption
 
     context = multiprocessing.get_context("spawn")
     database_paths = [str(tmp_path / f"process-witness-{index}.sqlite") for index in range(3)]
