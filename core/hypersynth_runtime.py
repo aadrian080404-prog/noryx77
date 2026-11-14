@@ -35,7 +35,7 @@ class HypersynthRuntime:
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
-        self.collaboration = AgentCollaboration(self.verifier)
+        self.collaboration = AgentCollaboration(self.verifier, identity_registry=self.identity_registry)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
         self.kernel = Hypersynth(
