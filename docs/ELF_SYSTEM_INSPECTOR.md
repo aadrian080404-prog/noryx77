@@ -19,12 +19,12 @@ of static inspection.
 
 The inspector also resolves bounded `DT_NEEDED` names through the linked dynamic string table. It now reads undefined dynamic symbol names from bounded `SHT_DYNSYM` tables as import metadata; malformed offsets, invalid links, and oversized tables are rejected. Neither dependencies nor symbols are loaded or executed.
 
-The current dependency and dynamic-import extraction uses bounded section
-headers (`SHT_DYNAMIC` and `SHT_DYNSYM`). It does not yet reconstruct these
-tables from `PT_DYNAMIC` when section headers are absent (for example, some
-stripped binaries); such files may still contain dynamic dependencies that
-this version does not report. Treat an empty dependency/import list as
-'information not found by this parser', not proof that the ELF has none.
+Dependency extraction first uses bounded `SHT_DYNAMIC` sections and
+falls back to `PT_DYNAMIC` plus a file-backed `PT_LOAD` mapping when section
+headers are absent. The fallback extracts `DT_NEEDED` names only; it does not
+reconstruct dynamic symbol tables or imports without `SHT_DYNSYM`. An empty
+dependency/import list means 'not found by this parser', not proof that the
+ELF has none.
 
 Dynamic table and dynamic-symbol entry budgets are aggregate across all
 matching sections, not merely per section: at most 4096 dynamic entries,
