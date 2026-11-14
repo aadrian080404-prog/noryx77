@@ -261,11 +261,11 @@ def test_stripped_elf_pt_dynamic_rejects_invalid_needed_offset():
 
 
 def elf64_stripped_with_pt_dynamic_import():
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     phoff = 64
     dynamic_offset = phoff + 2 * 56
     dynamic_vaddr = 0x400000 + dynamic_offset
-    dynstr = b"\\x00libc.so.6\\x00puts\\x00"
+    dynstr = b"\x00libc.so.6\x00puts\x00"
     dynamic_size = 7 * 16
     dynstr_offset = dynamic_offset + dynamic_size
     dynsym_offset = dynstr_offset + len(dynstr)
