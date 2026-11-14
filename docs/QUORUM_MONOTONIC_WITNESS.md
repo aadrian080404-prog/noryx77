@@ -51,3 +51,11 @@ odd clusters). Reads then fail closed until operators reconcile the witness
 set. Production deployments that require continued availability under
 concurrent writers need a shared consensus/lease protocol or a single fenced
 writer, not merely this quorum wrapper.
+
+
+The coordinator validates every witness snapshot before counting it toward a
+majority: sequence values must be non-negative integers (not booleans), and
+MACs must be canonical lowercase 32-byte hexadecimal strings. Malformed
+snapshots do not contribute to quorum, including read-backs after a competing
+compare-and-swap. This is defense in depth at the quorum boundary; each remote
+witness must still authenticate its own signed receipt.
