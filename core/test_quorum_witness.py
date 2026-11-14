@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from core.journal_integrity import AnchorSnapshot, ZERO_MAC
 from core.quorum_witness import QuorumMonotonicAnchor
-from core.remote_witness import RemoteMonotonicAnchor
+from core.remote_witness import RemoteMonotonicAnchor, SignedWitnessReceipt
 from core.witness_authority import InProcessWitnessClient, SQLiteWitnessAuthority
 
 
@@ -208,3 +208,30 @@ def test_concurrent_conflicting_quorum_writers_cannot_both_commit(tmp_path):
     finally:
         for authority in authorities:
             authority.close()
+
+def test_remote_witness_rejects_noncanonical_32_byte_anchor_mac():
+    key = Ed25519PrivateKey.generate()
+
+    class MalformedMacClient:
+        def read_anchor(self, nonce):
+            unsigned = SignedWitnessReceipt(
+                "malformed-mac", "read", nonce,
+                AnchorSnapshot(0, "aa" * 31 + "  "), True, b"",
+            )
+            return SignedWitnessReceipt(
+                unsigned.witness_id, unsigned.operation, unsigned.nonce,
+                unsigned.snapshot, unsigned.accepted,
+                key.sign(RemoteMonotonicAnchor._message(unsigned)),
+            )
+
+        def compare_and_swap_anchor(self, expected, replacement, nonce):
+            raise AssertionError("unexpected_compare_and_swap")
+
+    public_key = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    anchor = RemoteMonotonicAnchor(
+        MalformedMacClient(),
+        witness_id="malformed-mac",
+        trusted_public_key=public_key,
+    )
+    with pytest.raises(RuntimeError, match="remote_witness_snapshot_invalid"):
+        anchor.read()
