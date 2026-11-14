@@ -69,3 +69,33 @@ def test_tls_server_rejects_missing_certificate_pin_configuration(tmp_path):
             certificate_identity_pins={},
         )
     store.close()
+
+
+def test_accepted_tls_socket_defers_handshake_out_of_accept_loop(monkeypatch):
+    from socketserver import TCPServer
+    from core.https_memory_peer import _BoundedThreadingHTTPServer
+
+    class FakeSocket:
+        timeout = None
+        handshaken = False
+
+        def settimeout(self, value):
+            self.timeout = value
+
+        def do_handshake(self):
+            self.handshaken = True
+
+        def close(self):
+            pass
+
+    fake = FakeSocket()
+    monkeypatch.setattr(TCPServer, "get_request", lambda self: (fake, ("127.0.0.1", 1)))
+    server = object.__new__(_BoundedThreadingHTTPServer)
+    server._request_timeout = 1.25
+
+    request, address = server.get_request()
+
+    assert request is fake
+    assert address == ("127.0.0.1", 1)
+    assert fake.timeout == 1.25
+    assert fake.handshaken is False
