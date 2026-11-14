@@ -171,7 +171,7 @@ class AgentIdentityAuthority:
         return registry is None or registry.is_trusted(identity)
 
 
-class SQLiteIdentityRegistry:
+class SQLiteIdentityRegistry(IdentityRegistry):
     """Durable trust-anchor registry with cross-process revocation ordering.
 
     Public keys only are stored here. Private signing keys remain in an
@@ -189,6 +189,7 @@ class SQLiteIdentityRegistry:
 
         if not isinstance(path, str) or not path.strip():
             raise ValueError("identity_registry_database_path_required")
+        super().__init__()
         self._lock = threading.RLock()
         self._closed = False
         self._db = sqlite3.connect(

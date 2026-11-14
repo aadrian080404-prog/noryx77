@@ -87,3 +87,40 @@ def test_unknown_or_revoked_identity_cannot_enter_critical_section(tmp_path):
     with pytest.raises(PermissionError, match="not_trusted"):
         registry.with_trusted_identity("agent-1", lambda item: True)
     registry.close()
+
+
+def test_durable_registry_is_compatible_with_agent_fabric(tmp_path):
+    from core.agent_core import AgentCore, AgentInput, AgentPlan, AgentResponse
+    from core.agent_fabric import AgentBinding, AgentFabric
+    from core.agent_skills import AgentSkill, AgentSkillRegistry
+
+    class Brain:
+        def understand(self, request):
+            return type("Context", (), {
+                "objective": request.content, "input": request, "facts": {}
+            })()
+        def plan(self, context):
+            return AgentPlan(("answer",))
+        def act(self, step, context):
+            return "ok"
+        def verify(self, step, result, context):
+            return True
+        def reflect(self, context, results):
+            return "verified"
+        def respond(self, context, reflection, results):
+            return AgentResponse("ok", context.input.mode, verified=True)
+
+    registry = SQLiteIdentityRegistry(str(tmp_path / "identity.sqlite"))
+    identity, _ = AgentIdentityAuthority.generate("fabric-agent")
+    registry.register(identity)
+    skills = AgentSkillRegistry()
+    skills.register(AgentSkill("general", "general capability"))
+    agent = AgentCore("fabric-agent", Brain())
+    fabric = AgentFabric(skills, registry, lambda principal, binding, request: principal == "owner")
+    fabric.register(AgentBinding(agent, identity, ("general",)))
+
+    assert fabric.dispatch("owner", AgentInput("hello"), "general").verified
+    registry.revoke("fabric-agent")
+    with pytest.raises(PermissionError, match="no_authorized_agent"):
+        fabric.dispatch("owner", AgentInput("hello"), "general")
+    registry.close()
