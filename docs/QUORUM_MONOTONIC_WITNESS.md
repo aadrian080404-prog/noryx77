@@ -27,12 +27,17 @@ recovery procedures.
 
 ## Declared failure domains
 
-Every witness admitted to a quorum must declare a non-empty, normalized
-`failure_domain` distinct from all other witnesses. This is an operator
-assertion used to catch accidental duplicate administrative or infrastructure
-labels. It is not cryptographic proof of independent ownership, accounts,
-administrators, network/power paths, hardware roots or anti-rollback controls.
-Those properties require deployment-time verification.
+Every witness admitted to a quorum must now declare a non-empty
+`failure_domain`. The quorum rejects duplicate domain labels in addition to
+duplicate public keys. This prevents accidental configurations that count
+multiple witness identities from the same declared administrative or
+infrastructure domain as separate quorum members.
+
+The label is an operator assertion, not remote proof of independence. It
+cannot establish separate ownership, cloud accounts, power/network paths,
+administrators, hardware roots, or anti-rollback guarantees. Deployment
+reviews must verify those properties out of band; distinct labels alone do
+not make a quorum Byzantine-fault tolerant.
 
 ## Concurrent coordinator limitation
 

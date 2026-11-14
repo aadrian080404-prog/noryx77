@@ -69,7 +69,6 @@ class RemoteMonotonicAnchor:
 
     @property
     def public_key_fingerprint(self) -> str:
-        """Stable fingerprint used to reject duplicate quorum credentials."""
         return self._public_key_fingerprint
 
     @classmethod
