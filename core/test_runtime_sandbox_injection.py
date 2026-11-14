@@ -8,7 +8,11 @@ from core.runtime import NORYXRuntime
 class StubSandboxAdapter:
     environment = "sandboxed_process"
 
+    def __init__(self):
+        self.actions = []
+
     def execute(self, action):
+        self.actions.append(action)
         return {"status": "executed"}
 
 
@@ -86,7 +90,8 @@ def test_canonical_runtime_rejects_authority_bound_to_another_registry(tmp_path)
 
 
 def test_canonical_runtime_keeps_high_risk_process_action_fail_closed_without_authority():
-    runtime = NORYXRuntime(sandboxed_process_adapter=StubSandboxAdapter())
+    adapter = StubSandboxAdapter()
+    runtime = NORYXRuntime(sandboxed_process_adapter=adapter)
     action = ActionSpec(
         action_id="sandbox-action",
         action_type="sandboxed_process",
