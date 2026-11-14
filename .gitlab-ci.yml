@@ -1,0 +1,31 @@
+stages:
+  - static
+  - unit
+  - integration
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+python_static:
+  stage: static
+  image: python:3.12-slim
+  script:
+    - python --version
+    - python -m compileall -q core ecosystem jarvis noryx7_runtime devtools
+
+tests:
+  stage: unit
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --disable-pip-version-check -r requirements-test.txt
+  script:
+    - python -m devtools.test_lab.runner --suite compile pytest
+
+closure:
+  stage: integration
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --disable-pip-version-check -r requirements-test.txt
+  script:
+    - python -m devtools.test_lab.runner --suite closure completeness

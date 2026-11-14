@@ -1,0 +1,39 @@
+name: NORYX7 Runner Smoke
+
+on:
+  push:
+    branches: ["architecture-freeze-2026-09-06"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Runner smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Runner identity
+        run: |
+          set -euo pipefail
+          echo "runner=${RUNNER_NAME}"
+          echo "os=${RUNNER_OS}"
+          echo "arch=${RUNNER_ARCH}"
+          python --version
+          git --version
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Minimal executable assertion
+        run: |
+          set -euo pipefail
+          test -f README.md
+          python - <<'PY'
+          import pathlib
+          p = pathlib.Path("README.md")
+          assert p.stat().st_size >= 0
+          print("RUNNER_SMOKE_OK")
+          PY

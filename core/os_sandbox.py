@@ -119,9 +119,17 @@ class BubblewrapSandboxRunner:
             "--unshare-uts",
             "--ro-bind", "/usr", "/usr",
         ]
-        for source in ("/bin", "/sbin", "/lib", "/lib64"):
-            if os.path.exists(source) and not os.path.islink(source):
-                command.extend(("--ro-bind", source, source))
+        for source, target in (("/bin", "/bin"), ("/sbin", "/sbin"),
+                               ("/lib", "/lib"), ("/lib64", "/lib64")):
+            if not os.path.exists(source):
+                continue
+            if os.path.islink(source):
+                link_target = os.readlink(source)
+                if link_target.startswith("/"):
+                    link_target = link_target.lstrip("/")
+                command.extend(("--symlink", link_target, target))
+            else:
+                command.extend(("--ro-bind", source, target))
         for source in ("/etc/ld.so.cache", "/etc/ssl/certs"):
             if os.path.exists(source):
                 command.extend(("--ro-bind", source, source))

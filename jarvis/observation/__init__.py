@@ -1,0 +1,1 @@
+"""Explicitly authorized observation primitives."""

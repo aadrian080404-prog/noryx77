@@ -1,0 +1,161 @@
+import hashlib
+import json
+import time
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from core.authorization_replay import AuthorizationReplayGuard
+from core.multiauth import SignedApprovalAuthority, SignedAuthorizationProof, sign_approval
+
+from .contracts import ExecutionStatus, Intent, PlanStep
+from .engine import RuntimeEngine
+
+
+def _authority_and_proof_provider():
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes_raw()
+    authority = SignedApprovalAuthority(required_threshold=1, trusted_keys={"owner": public})
+
+    def provider(envelope, digest):
+        expires_at = int(time.time()) + 60
+        approval = sign_approval(
+            "owner", private,
+            action_id=envelope.execution_id,
+            epoch=7,
+            action_statement=digest,
+            expires_at=expires_at,
+        )
+        return SignedAuthorizationProof(
+            envelope.execution_id, 7, digest, (approval,), 1, expires_at
+        )
+
+    return authority, provider
+
+
+def _authorization_replay_token(envelope):
+    statement = {
+        "execution_id": envelope.execution_id,
+        "principal_id": envelope.principal_id,
+        "step_id": envelope.step_id,
+        "action_type": envelope.action_type,
+        "target": envelope.target,
+        "parameters": dict(envelope.parameters),
+        "risk_class": envelope.risk_class,
+        "plan_digest": envelope.plan_digest,
+    }
+    encoded = json.dumps(
+        statement,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return bytes.fromhex(hashlib.sha256(encoded).hexdigest())
+
+
+def test_runtime_rejects_reuse_of_the_same_high_risk_authorization(tmp_path):
+    authority, provider = _authority_and_proof_provider()
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-replay-1.sqlite3"))
+    calls = []
+    engine = RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=provider,
+        high_risk_action_types={"delete"},
+        authorization_epoch=7,
+        replay_guard=guard,
+    )
+    intent = Intent(text="delete", principal_id="principal-1")
+    steps = [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})]
+
+    first = engine.execute(intent, steps, executor=lambda e: calls.append(e) or "ok", verifier=lambda e, o: True, execution_id="exec-1")
+    second = engine.execute(intent, steps, executor=lambda e: calls.append(e) or "ok", verifier=lambda e, o: True, execution_id="exec-1")
+
+    assert first.status is ExecutionStatus.SUCCEEDED
+    assert second.status is ExecutionStatus.FAILED
+    assert second.error == "PermissionError"
+    assert len(calls) == 1
+    assert guard.consumed_count == 1
+
+
+def test_replay_guard_tracks_the_signed_action_statement_not_attempt_nonce(tmp_path):
+    authority, provider = _authority_and_proof_provider()
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-replay-2.sqlite3"))
+    calls = []
+    engine = RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=provider,
+        high_risk_action_types={"delete"},
+        authorization_epoch=7,
+        replay_guard=guard,
+    )
+    intent = Intent(text="delete", principal_id="principal-1")
+    steps = [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})]
+    original = engine.execute(
+        intent,
+        steps,
+        executor=lambda envelope: calls.append(envelope) or "ok",
+        verifier=lambda e, o: True,
+        execution_id="exec-2",
+    )
+
+    assert original.status is ExecutionStatus.SUCCEEDED
+    token = _authorization_replay_token(calls[0])
+    assert guard.contains(token, now=time.time())
+    assert guard.consume(token, expires_at=int(time.time()) + 60, now=time.time()) is False
+    assert token != bytes.fromhex(original.attestations[0].action_digest)
+
+
+from core.authorization_replay import AuthenticatedAuthorizationReplayGuard
+
+
+def test_runtime_can_require_authenticated_replay_storage(tmp_path):
+    authority, provider = _authority_and_proof_provider()
+    guard = AuthenticatedAuthorizationReplayGuard(
+        integrity_key=b"r" * 32,
+        key_id="runtime-replay-key",
+        path=str(tmp_path / "runtime-authenticated-replay.sqlite3"),
+    )
+    engine = RuntimeEngine(
+        multi_auth_authority=authority,
+        authorization_provider=provider,
+        high_risk_action_types={"delete"},
+        authorization_epoch=7,
+        replay_guard=guard,
+        require_authenticated_replay_guard=True,
+    )
+    result = engine.execute(
+        Intent(text="delete", principal_id="principal-1"),
+        [PlanStep(step_id="s1", action_type="delete", target="x", parameters={})],
+        executor=lambda envelope: "ok",
+        verifier=lambda envelope, output: True,
+        execution_id="exec-authenticated",
+    )
+    assert result.status is ExecutionStatus.SUCCEEDED
+    assert guard.integrity_protected is True
+    assert guard.consumed_count == 1
+    guard.close()
+
+
+def test_runtime_rejects_plain_durable_guard_when_authenticated_mode_is_required(tmp_path):
+    guard = AuthorizationReplayGuard(path=str(tmp_path / "runtime-unkeyed.sqlite3"))
+    try:
+        try:
+            RuntimeEngine(
+                replay_guard=guard,
+                require_authenticated_replay_guard=True,
+            )
+        except ValueError as exc:
+            assert "authenticated_replay_guard" in str(exc)
+        else:
+            raise AssertionError("unkeyed replay guard accepted in authenticated mode")
+    finally:
+        guard.close()
+
+
+def test_runtime_authenticated_replay_mode_requires_a_guard():
+    try:
+        RuntimeEngine(require_authenticated_replay_guard=True)
+    except ValueError as exc:
+        assert "authenticated_replay_guard" in str(exc)
+    else:
+        raise AssertionError("missing replay guard accepted")

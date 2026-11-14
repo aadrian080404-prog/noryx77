@@ -1,0 +1,3 @@
+# NORYX7 proprietary source: require owner review for every tracked path.
+# This is effective only when GitHub branch/ruleset protection requires CODEOWNERS review.
+* @adrianatlas03-coder

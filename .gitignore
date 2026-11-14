@@ -1,0 +1,32 @@
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+secrets.json
+service-account*.json
+
+# Local/build artifacts
+.gradle/
+build/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# IDE/local state
+.idea/
+.vscode/
+.DS_Store
+
+# Local deployment/configuration
+.local/
+.deploy/
+production-secrets/

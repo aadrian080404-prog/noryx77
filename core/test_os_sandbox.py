@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 import subprocess
 
 import pytest
@@ -54,7 +52,7 @@ def test_command_disables_network_and_mounts_only_workspace(tmp_path):
     assert "--bind" in command
     assert str(work) in command
     assert "--" in command
-    assert command[-2:] == ["-V"] or command[-1] == "-V"
+    assert command[-1] == "-V"
 
 
 def test_run_uses_no_shell_and_returns_bounded_output(tmp_path, monkeypatch):
@@ -68,7 +66,7 @@ def test_run_uses_no_shell_and_returns_bounded_output(tmp_path, monkeypatch):
 
     def fake_popen(command, **kwargs):
         assert isinstance(command, list)
-        assert kwargs["shell"] if "shell" in kwargs else True
+        assert "shell" not in kwargs
         kwargs["stdout"].write(b"hello")
         kwargs["stderr"].write(b"")
         return FakeProcess()
