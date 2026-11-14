@@ -121,7 +121,6 @@ class BubblewrapSandboxRunner:
             f"--fsize={limits.file_size_bytes}:{limits.file_size_bytes}",
             f"--nofile={limits.open_files}:{limits.open_files}",
             "--core=0:0",
-            f"--nproc={limits.processes}:{limits.processes}",
             "--",
             self._setpriv,
             "--no-new-privs",
@@ -161,6 +160,9 @@ class BubblewrapSandboxRunner:
             "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
             "--setenv", "HOME", "/nonexistent",
             "--setenv", "LANG", "C.UTF-8",
+            "--",
+            self._prlimit,
+            f"--nproc={limits.processes}:{limits.processes}",
             "--",
             *argv,
         ))
