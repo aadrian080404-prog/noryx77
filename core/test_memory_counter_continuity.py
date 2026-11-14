@@ -83,3 +83,19 @@ def test_merge_preserves_actor_gap_error_for_missing_counter(tmp_path):
         target.merge((third,))
     assert target.vector_clock() == {}
     target.close()
+
+
+def test_startup_rejects_legacy_database_with_missing_causal_history(tmp_path):
+    path = str(tmp_path / "legacy-memory.sqlite")
+    store = DistributedMemoryStore(path, actor_id="receiver")
+    legacy_event = MemoryEvent(
+        "peer-a", 1, "derived", "depends on missing peer-b/1", False,
+        (("peer-a", 1), ("peer-b", 1)),
+    )
+    store._db.execute("BEGIN IMMEDIATE")
+    store._insert_event(legacy_event)
+    store._db.execute("COMMIT")
+    store.close()
+
+    with pytest.raises(RuntimeError, match="causal_history_incomplete"):
+        DistributedMemoryStore(path, actor_id="receiver")
