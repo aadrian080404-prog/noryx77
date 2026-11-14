@@ -2,7 +2,7 @@ import hashlib
 import inspect
 import time
 
-from .actions import ActionGate
+from .actions import ActionGate, AuthorizationAuthority
 from .audit import AuditLog
 from .collaboration import AgentCollaboration
 from .contracts import TaskSpec, VerificationResult
@@ -22,7 +22,7 @@ from .frontier_capabilities import install_frontier_capabilities
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, sandboxed_process_adapter=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, sandboxed_process_adapter=None, authorization_authority=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -32,8 +32,17 @@ class HypersynthRuntime:
         self.recovery = recovery or RecoveryController()
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
         self.identity_registry = getattr(self.router, "identity_registry", None)
+        if authorization_authority is not None and (
+            not isinstance(authorization_authority, AuthorizationAuthority)
+            or self.identity_registry is None
+            or authorization_authority.identity_registry is not self.identity_registry
+            or not authorization_authority.durable
+            or not authorization_authority.integrity_protected
+            or not authorization_authority.requires_authenticated_replay
+        ):
+            raise ValueError("invalid_runtime_authorization_authority")
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
-        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.action_gate = ActionGate(self.policy, self.security, self.limits, authorization=authorization_authority)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.sandboxed_process_adapter = sandboxed_process_adapter
