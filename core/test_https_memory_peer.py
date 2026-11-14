@@ -99,3 +99,30 @@ def test_accepted_tls_socket_defers_handshake_out_of_accept_loop(monkeypatch):
     assert address == ("127.0.0.1", 1)
     assert fake.timeout == 1.25
     assert fake.handshaken is False
+
+
+def test_tls_handshake_failure_releases_bounded_worker_slot():
+    from core.https_memory_peer import _BoundedThreadingHTTPServer
+
+    class Slots:
+        released = 0
+        def release(self):
+            self.released += 1
+
+    class BrokenSocket:
+        def do_handshake(self):
+            raise TimeoutError("handshake deadline exceeded")
+
+    server = object.__new__(_BoundedThreadingHTTPServer)
+    server._worker_slots = Slots()
+    closed = []
+    errors = []
+    server.shutdown_request = lambda request: closed.append(request)
+    server.handle_error = lambda request, address: errors.append(address)
+    request = BrokenSocket()
+
+    server.process_request_thread(request, ("127.0.0.1", 1234))
+
+    assert server._worker_slots.released == 1
+    assert closed == [request]
+    assert errors == [("127.0.0.1", 1234)]
