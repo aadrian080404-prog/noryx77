@@ -140,12 +140,12 @@ def test_elf_file_inspector_does_not_block_on_non_regular_file(tmp_path):
         inspect_elf_file(fifo)
 
 def elf64_with_dynamic_dependency(*, needed_offset=1, include_terminator=True):
-    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    ident = b"\x7fELF" + bytes((2, 1, 1)) + bytes(9)
     dynamic = struct.pack("<qQ", 1, needed_offset)
     if include_terminator:
         dynamic += struct.pack("<qQ", 0, 0)
-    dynstr = b"\\x00libc.so.6\\x00"
-    shstr = b"\\x00.dynamic\\x00.dynstr\\x00.shstrtab\\x00"
+    dynstr = b"\x00libc.so.6\x00"
+    shstr = b"\x00.dynamic\x00.dynstr\x00.shstrtab\x00"
     dynamic_offset = 64
     dynstr_offset = dynamic_offset + len(dynamic)
     shstr_offset = dynstr_offset + len(dynstr)
