@@ -362,6 +362,6 @@ def test_stripped_elf_recovers_undefined_imports_from_gnu_hash():
     assert report.dynamic_imports == ("puts",)
 
 
-def test_stripped_elf_rejects_gnu_hash_bucket_below_symbol_offset():
+def test_stripped_elf_rejects_gnu_hash_bucket_above_symbol_budget():
     with pytest.raises(ValueError, match="dynamic_symbol_count_limit"):
-        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=0))
+        inspect_elf_bytes(elf64_stripped_with_gnu_hash(bucket=4096))
