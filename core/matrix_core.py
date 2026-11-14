@@ -183,6 +183,13 @@ class LocalReservationBook:
             raise ValueError("task_already_reserved")
         if not eligible(self._node, request):
             raise PermissionError("node_not_eligible_for_workload")
+        # The owner's grant is an aggregate ceiling across concurrent tasks,
+        # not a per-task ceiling. Check it before consuming node capacity.
+        active = ResourceVector()
+        for reserved in self._reservations.values():
+            active = active + reserved
+        if not (active + request.resources).fits_within(self._node.grant.max_resources):
+            raise PermissionError("owner_contribution_quota_exceeded")
         envelope = self._node.envelope.reserve_work(request.resources)
         self._node = NodeProfile(
             self._node.node_id, self._node.failure_domain, self._node.attested,
