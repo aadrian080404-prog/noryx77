@@ -70,3 +70,20 @@ def test_untrusted_secondary_is_rejected_before_critique_call():
                           primary, secondary)
     assert primary.calls == 1
     assert secondary.calls == 0
+
+
+def test_revoke_and_reregister_same_identity_during_inference_is_rejected():
+    registry = IdentityRegistry()
+    def revoke_and_reregister(agent, task):
+        registry.revoke(agent.agent_id)
+        registry.register(agent.identity)
+    primary, secondary = make_agents(registry, revoke_and_reregister)
+    collaboration = AgentCollaboration(VerificationEngine(), identity_registry=registry)
+    with pytest.raises(PermissionError, match="identity_changed"):
+        collaboration.run(
+            TaskSpec("task-epoch", "compute", "objective", "input", execution_id="exec-epoch"),
+            primary,
+            secondary,
+        )
+    assert primary.calls == 1
+    assert secondary.calls == 0
