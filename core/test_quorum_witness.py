@@ -395,3 +395,40 @@ def test_independent_process_quorum_coordinators_cannot_both_commit(tmp_path):
     finally:
         for authority in final_authorities:
             authority.close()
+
+
+def test_quorum_fails_closed_when_independent_writers_leave_no_majority(tmp_path):
+    anchors = []
+    authorities = []
+    for index in range(5):
+        key = Ed25519PrivateKey.generate()
+        authority = SQLiteWitnessAuthority(
+            str(tmp_path / f"split-witness-{index}.sqlite"),
+            witness_id=f"split-witness-{index}",
+            signing_key=key,
+        )
+        authorities.append(authority)
+        anchors.append(RemoteMonotonicAnchor(
+            InProcessWitnessClient(authority),
+            witness_id=f"split-witness-{index}",
+            trusted_public_key=key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw),
+            failure_domain=f"split-domain-{index}",
+        ))
+    quorum = QuorumMonotonicAnchor({
+        f"split-witness-{index}": anchor
+        for index, anchor in enumerate(anchors)
+    })
+    initial = AnchorSnapshot(0, ZERO_MAC)
+    update_a = AnchorSnapshot(1, "a" * 64)
+    update_b = AnchorSnapshot(1, "b" * 64)
+    try:
+        # Model a cross-coordinator interleaving: two witnesses accepted A,
+        # two accepted B, and one remains at the old value. No value has 3/5.
+        assert all(anchor.compare_and_swap(initial, update_a) for anchor in anchors[:2])
+        assert all(anchor.compare_and_swap(initial, update_b) for anchor in anchors[2:4])
+        with pytest.raises(RuntimeError, match="quorum_unavailable_or_divergent"):
+            quorum.read()
+        assert not quorum.compare_and_swap(initial, AnchorSnapshot(1, "c" * 64))
+    finally:
+        for authority in authorities:
+            authority.close()
