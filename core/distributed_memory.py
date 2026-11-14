@@ -263,6 +263,32 @@ class DistributedMemoryStore:
             self._ensure_open()
             self._db.execute("BEGIN IMMEDIATE")
             try:
+                # A signed peer may still omit an earlier actor event. Enforce
+                # contiguous per-actor counters so later events cannot make a
+                # missing history segment look complete.
+                maxima = {
+                    actor: int(counter)
+                    for actor, counter in self._db.execute(
+                        "SELECT actor_id,MAX(counter) FROM memory_events GROUP BY actor_id"
+                    ).fetchall()
+                }
+                pending: dict[str, list[int]] = {}
+                for event in validated:
+                    existing = self._db.execute(
+                        "SELECT event_id FROM memory_events WHERE actor_id=? AND counter=?",
+                        (event.actor_id, event.counter),
+                    ).fetchone()
+                    if existing is not None:
+                        if existing[0] != _event_id(event):
+                            raise ValueError("memory_actor_counter_equivocation")
+                        continue
+                    pending.setdefault(event.actor_id, []).append(event.counter)
+                for actor, counters in pending.items():
+                    expected = maxima.get(actor, 0) + 1
+                    for counter in sorted(counters):
+                        if counter != expected:
+                            raise ValueError("memory_actor_counter_gap")
+                        expected += 1
                 inserted = sum(1 for event in validated if self._insert_event(event))
                 self._db.execute("COMMIT")
                 return inserted
