@@ -80,3 +80,68 @@ def test_external_anchor_rejects_same_sequence_divergent_chain(tmp_path):
     with pytest.raises(ValueError, match="audit_integrity_failed"):
         tampered.verify_and_advance_anchor(anchor)
     tampered.close()
+
+def test_external_anchor_rejects_noncanonical_sha256_encoding(tmp_path):
+    audit = SQLiteAuditLog(str(tmp_path / "malformed-anchor.sqlite"))
+
+    class MalformedAnchor:
+        def read(self):
+            return AnchorSnapshot(0, "aa" * 31 + "  ")
+
+        def compare_and_swap(self, expected, replacement):
+            raise AssertionError("unexpected_compare_and_swap")
+
+    try:
+        with pytest.raises(ValueError, match="audit_anchor_snapshot_invalid"):
+            audit.verify_and_advance_anchor(MalformedAnchor())
+    finally:
+        audit.close()
+
+
+def test_external_anchor_recovers_cas_commit_when_remote_reply_is_lost(tmp_path):
+    class CommitThenLoseReply:
+        def __init__(self):
+            self.inner = InMemoryMonotonicAnchor()
+            self.lose_once = True
+
+        def read(self):
+            return self.inner.read()
+
+        def compare_and_swap(self, expected, replacement):
+            accepted = self.inner.compare_and_swap(expected, replacement)
+            if accepted and self.lose_once:
+                self.lose_once = False
+                raise OSError("simulated_lost_remote_reply")
+            return accepted
+
+    audit = SQLiteAuditLog(str(tmp_path / "uncertain-anchor.sqlite"))
+    anchor = CommitThenLoseReply()
+    try:
+        audit.record("one")
+        audit.record("two")
+        head = audit.verify_and_advance_anchor(anchor)
+        assert head.sequence == 2
+        assert anchor.read() == head
+        assert audit.verify_integrity()
+    finally:
+        audit.close()
+
+
+def test_external_anchor_fails_closed_when_cas_readback_is_unavailable(tmp_path):
+    class UncertainAnchor:
+        def read(self):
+            if getattr(self, "fail_read", False):
+                raise OSError("simulated_witness_read_failure")
+            return AnchorSnapshot(0, ZERO_MAC)
+
+        def compare_and_swap(self, expected, replacement):
+            self.fail_read = True
+            return False
+
+    audit = SQLiteAuditLog(str(tmp_path / "unresolved-anchor.sqlite"))
+    audit.record("event")
+    try:
+        with pytest.raises(ValueError, match="audit_anchor_outcome_uncertain"):
+            audit.verify_and_advance_anchor(UncertainAnchor())
+    finally:
+        audit.close()
