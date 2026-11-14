@@ -5,7 +5,7 @@ from .matrix_scheduler import propose_placement
 from .matrix_data import ObjectManifest
 from .matrix_twin import DeterministicTwin
 from .matrix_core import (
-    ContributionGrant, NodeProfile, ResourceEnvelope, ResourceVector, WorkloadRequest
+    ContributionGrant, LocalReservationBook, NodeProfile, ResourceEnvelope, ResourceVector, WorkloadRequest
 )
 
 
@@ -113,9 +113,8 @@ def test_membership_rejects_reused_nonce_even_with_newer_epoch():
 def test_local_reservations_are_atomic_under_concurrent_calls():
     from concurrent.futures import ThreadPoolExecutor
 
-    book = __import__("core.matrix_core", fromlist=["LocalReservationBook"]).LocalReservationBook(node("shared", "rack-x"))
+    book = LocalReservationBook(node("shared", "rack-x"))
     def attempt(i):
-        from .matrix_core import WorkloadRequest, ResourceVector
         try:
             book.reserve(WorkloadRequest(
                 f"parallel-{i}", "verification", ResourceVector(cpu_milli=500), 1
