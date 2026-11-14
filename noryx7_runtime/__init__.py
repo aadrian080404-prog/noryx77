@@ -4,6 +4,7 @@ from .contracts import ActionEnvelope, Attestation, ExecutionContext, Intent, Pl
 from .engine import RuntimeEngine
 from .lifecycle import ExecutionLifecycle, LifecycleError
 from .durable_state import DurableStateJournal
+from .anchored_durable_state import AnchoredDurableStateJournal
 
 __all__ = [
     "ActionEnvelope",
@@ -11,6 +12,7 @@ __all__ = [
     "ExecutionContext",
     "ExecutionLifecycle",
     "DurableStateJournal",
+    "AnchoredDurableStateJournal",
     "Intent",
     "LifecycleError",
     "PlanStep",
