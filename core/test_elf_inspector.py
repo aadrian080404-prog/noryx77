@@ -78,3 +78,30 @@ def test_table_count_is_bounded():
     struct.pack_into("<H", raw, 56, 4097)
     with pytest.raises(ValueError, match="count_limit"):
         inspect_elf_bytes(bytes(raw))
+
+
+def test_elf64_extended_header_numbering_is_resolved():
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 64, 120, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
+    )
+    program = struct.pack("<IIQQQQQQ", 1, 4, 0, 0, 0, 0, 0, 0)
+    # sh_size=1, sh_link=0, sh_info=1 carry the extended values.
+    section_zero = struct.pack(
+        "<IIQQQQIIQQ", 0, 0, 0, 0, 0, 1, 0, 1, 0, 0,
+    )
+    report = inspect_elf_bytes(ident + header + program + section_zero)
+    assert report.program_headers == 1
+    assert report.section_headers == 1
+    assert report.section_names == ("",)
+
+
+def test_elf_extended_numbering_without_section_zero_is_rejected():
+    ident = b"\\x7fELF" + bytes((2, 1, 1)) + bytes(9)
+    header = struct.pack(
+        "<HHIQQQIHHHHHH",
+        2, 62, 1, 0, 64, 0, 0, 64, 56, 0xFFFF, 64, 0, 0xFFFF,
+    )
+    with pytest.raises(ValueError, match="extended_numbering"):
+        inspect_elf_bytes(ident + header + bytes(56))
