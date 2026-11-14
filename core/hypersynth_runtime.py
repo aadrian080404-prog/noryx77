@@ -16,12 +16,13 @@ from .router import ResourceRouter
 from .security import SecurityBoundary
 from .verification import VerificationEngine
 from .tools import ToolExecutor
+from .execution_fabric import ProposedAction
 from .frontier_capabilities import install_frontier_capabilities
 
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, sandboxed_process_adapter=None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -35,6 +36,25 @@ class HypersynthRuntime:
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
+        self.sandboxed_process_adapter = sandboxed_process_adapter
+        if sandboxed_process_adapter is not None:
+            if not callable(getattr(sandboxed_process_adapter, "execute", None)) or not isinstance(getattr(sandboxed_process_adapter, "environment", None), str):
+                raise TypeError("invalid_sandboxed_process_adapter")
+            def execute_sandboxed_process(target, parameters):
+                action_id = str(parameters.get("action_id", "")).strip()
+                if not action_id:
+                    raise ValueError("sandbox_action_id_required")
+                forwarded = {key: value for key, value in parameters.items() if key != "action_id"}
+                return sandboxed_process_adapter.execute(ProposedAction(
+                    environment=sandboxed_process_adapter.environment,
+                    action_id=action_id,
+                    action_type="process",
+                    target=target,
+                    parameters=forwarded,
+                ))
+            self.tool_executor.capabilities.register(
+                "sandboxed_process", execute_sandboxed_process, risk_class="high"
+            )
         self.collaboration = AgentCollaboration(self.verifier)
         self.tool_executor.capabilities.register("agent_collaboration", self._execute_agent_collaboration, risk_class="normal")
         self.memory = memory or MemoryStore(max_items=self.limits.max_memory_items)
