@@ -51,12 +51,13 @@ def test_external_anchor_recovers_valid_unanchored_tail_after_crash(tmp_path):
     audit = SQLiteAuditLog(path)
     audit.record("anchored")
     first = audit.verify_and_advance_anchor(anchor)
-    audit.record("local-append-before-crash")
+    audit.record("local-append-before-crash-1")
+    audit.record("local-append-before-crash-2")
     audit.close()
 
     reopened = SQLiteAuditLog(path)
     recovered = reopened.verify_and_advance_anchor(anchor)
-    assert recovered.sequence == first.sequence + 1
+    assert recovered.sequence == first.sequence + 2
     assert anchor.read() == recovered
     assert reopened.verify_integrity()
     reopened.close()
