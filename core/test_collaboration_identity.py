@@ -70,3 +70,48 @@ def test_untrusted_secondary_is_rejected_before_critique_call():
                           primary, secondary)
     assert primary.calls == 1
     assert secondary.calls == 0
+
+
+def test_agent_id_must_match_registered_identity_before_inference():
+    registry = IdentityRegistry()
+    mismatched_identity, _ = AgentIdentityAuthority.generate("registered-primary")
+    secondary_identity, _ = AgentIdentityAuthority.generate("secondary")
+    registry.register(mismatched_identity)
+    registry.register(secondary_identity)
+    primary = CollaboratingAgent(
+        "primary", mismatched_identity, ["proposal", "reconciled answer"]
+    )
+    secondary = CollaboratingAgent(
+        "secondary", secondary_identity, ["APPROVE\\nEvidence supports the proposal"]
+    )
+
+    collaboration = AgentCollaboration(VerificationEngine(), identity_registry=registry)
+    with pytest.raises(PermissionError, match="identity_untrusted"):
+        collaboration.run(
+            TaskSpec("task-4", "compute", "objective", "input", execution_id="exec-4"),
+            primary,
+            secondary,
+        )
+    assert primary.calls == 0
+
+
+def test_replacing_agent_with_another_trusted_identity_discards_result():
+    registry = IdentityRegistry()
+    replacement_identity, _ = AgentIdentityAuthority.generate("replacement")
+    registry.register(replacement_identity)
+
+    def replace_during_call(agent, task):
+        agent.identity = replacement_identity
+        agent.agent_id = replacement_identity.agent_id
+
+    primary, secondary = make_agents(registry, replace_during_call)
+    collaboration = AgentCollaboration(VerificationEngine(), identity_registry=registry)
+
+    with pytest.raises(PermissionError, match="identity_changed"):
+        collaboration.run(
+            TaskSpec("task-5", "compute", "objective", "input", execution_id="exec-5"),
+            primary,
+            secondary,
+        )
+    assert primary.calls == 1
+    assert secondary.calls == 0
