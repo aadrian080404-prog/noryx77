@@ -134,3 +134,31 @@ class AuthenticatedCipher:
             )
         except InvalidTag as exc:
             raise ValueError("ciphertext_authentication_failed") from exc
+
+
+class LifecycleBoundKeyProvider(KeyProvider):
+    """Gate external KMS/HSM key retrieval on durable lifecycle metadata.
+
+    The lifecycle record is checked before and after the external key fetch.
+    A rotation/revocation observed during retrieval rejects the result. A key
+    returned before a later revocation is an in-flight operation; callers must
+    bound its lifetime and discard it after the protected operation.
+    """
+
+    def __init__(self, lifecycle, external_provider) -> None:
+        if not callable(getattr(lifecycle, "require_active", None)):
+            raise TypeError("key_lifecycle_contract_required")
+        if not callable(getattr(external_provider, "get_key", None)):
+            raise TypeError("external_key_boundary_required")
+        self._lifecycle = lifecycle
+        self._external = external_provider
+
+    def get_key(self, key_id: str) -> bytes:
+        record = self._lifecycle.require_active(key_id)
+        key = self._external.get_key(key_id, record.version)
+        if not isinstance(key, bytes) or len(key) != KEY_SIZE:
+            raise ValueError("aes256_key_required")
+        current = self._lifecycle.require_active(key_id)
+        if current != record:
+            raise PermissionError("key_lifecycle_changed_during_key_fetch")
+        return bytes(key)
