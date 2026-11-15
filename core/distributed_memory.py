@@ -23,6 +23,13 @@ MAX_BATCH_EVENTS = 10000
 _DOMAIN = b"NORYX7/DISTRIBUTED_MEMORY_EVENT/v1\x00"
 
 
+def _utf8_within(value: str, maximum: int) -> bool:
+    try:
+        return len(value.encode("utf-8")) <= maximum
+    except UnicodeEncodeError:
+        return False
+
+
 @dataclass(frozen=True)
 class MemoryEvent:
     actor_id: str
@@ -33,24 +40,24 @@ class MemoryEvent:
     clock: tuple[tuple[str, int], ...]
 
     def validate(self) -> None:
-        if not isinstance(self.actor_id, str) or not self.actor_id.strip() or len(self.actor_id.encode()) > MAX_ACTOR_ID:
+        if not isinstance(self.actor_id, str) or not self.actor_id.strip() or not _utf8_within(self.actor_id, MAX_ACTOR_ID):
             raise ValueError("invalid_memory_actor")
         if isinstance(self.counter, bool) or not isinstance(self.counter, int) or self.counter < 1:
             raise ValueError("invalid_memory_counter")
-        if not isinstance(self.key, str) or not self.key or len(self.key.encode()) > MAX_MEMORY_KEY:
+        if not isinstance(self.key, str) or not self.key or not _utf8_within(self.key, MAX_MEMORY_KEY):
             raise ValueError("invalid_memory_key")
         if not isinstance(self.deleted, bool):
             raise ValueError("invalid_memory_tombstone")
         if self.deleted:
             if self.value is not None:
                 raise ValueError("deleted_memory_event_must_not_have_value")
-        elif not isinstance(self.value, str) or len(self.value.encode()) > MAX_MEMORY_VALUE:
+        elif not isinstance(self.value, str) or not _utf8_within(self.value, MAX_MEMORY_VALUE):
             raise ValueError("invalid_memory_value")
         if not isinstance(self.clock, tuple) or len(self.clock) > MAX_CLOCK_ACTORS:
             raise ValueError("invalid_memory_vector_clock")
         seen: set[str] = set()
         for actor, count in self.clock:
-            if not isinstance(actor, str) or not actor.strip() or len(actor.encode()) > MAX_ACTOR_ID or actor in seen:
+            if not isinstance(actor, str) or not actor.strip() or not _utf8_within(actor, MAX_ACTOR_ID) or actor in seen:
                 raise ValueError("invalid_memory_vector_clock_actor")
             if isinstance(count, bool) or not isinstance(count, int) or count < 0:
                 raise ValueError("invalid_memory_vector_clock_counter")
@@ -107,7 +114,7 @@ class DistributedMemoryStore:
     """
 
     def __init__(self, database_path: str, *, actor_id: str) -> None:
-        if not isinstance(actor_id, str) or not actor_id.strip() or len(actor_id.encode()) > MAX_ACTOR_ID:
+        if not isinstance(actor_id, str) or not actor_id.strip() or not _utf8_within(actor_id, MAX_ACTOR_ID):
             raise ValueError("invalid_memory_actor")
         if not isinstance(database_path, str) or not database_path.strip():
             raise ValueError("memory_database_path_required")
@@ -265,7 +272,7 @@ class DistributedMemoryStore:
             if (
                 not isinstance(actor, str)
                 or not actor.strip()
-                or len(actor.encode("utf-8")) > MAX_ACTOR_ID
+                or not _utf8_within(actor, MAX_ACTOR_ID)
                 or isinstance(counter, bool)
                 or not isinstance(counter, int)
                 or counter < 0
