@@ -130,6 +130,10 @@ class DurableInbox:
                     key = self.trusted_key_resolver(key_id, sender_id)
                 elif self.key_resolver is not None:
                     key = self.key_resolver(key_id)
+            except PermissionError:
+                # Preserve explicit policy denials (for example key_revoked);
+                # only unexpected provider failures are normalized below.
+                raise
             except Exception as exc:
                 raise PermissionError("message_key_resolution_failed") from exc
         if not isinstance(key, bytes) or len(key) < 32:
