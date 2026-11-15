@@ -224,3 +224,22 @@ No component here should be described as production-ready or globally distribute
 - `core/test_matrix_data_integrity.py` covers tampering, invalid tags, reordered/missing chunks and invalid manifest types.
 
 **Boundary:** transfer coordination is a local protocol journal, not a payment rail, custody service, distributed transaction manager or legal settlement. Participants need their own durable idempotency and atomic state transitions; coordinator/participant network partitions can leave transfers `IN_DOUBT` and require recovery. Data authentication is HMAC-based integrity/authenticity with externally managed keys; it is not encryption, key distribution, replica repair, erasure coding or proof of storage availability.
+
+
+## 18. Durable resource-side fencing increment
+
+- `core/matrix_fencing_durable.py` adds a SQLite-backed protected-resource reference. Epoch activation is strictly monotonic; each new operation checks the active token and records its idempotency result/version in the same `BEGIN IMMEDIATE` transaction.
+- Operation IDs are scoped to a resource and bound to a SHA-256 payload digest. Repeated identical operations return the original receipt without repeating the state change; reusing an ID with different bytes is rejected.
+- State survives process restart. Concurrent local writers serialize through SQLite and receive unique monotonic versions.
+- `core/test_matrix_fencing_durable.py` covers restart, stale generations, replay/conflict behavior, resource isolation, concurrent writers and invalid timeout values.
+
+**Boundary:** SQLite serializes writers on one database host. This is not a cross-region consensus service, hardware-backed monotonic counter, OS-level process fence, payment execution adapter or proof against a compromised host. The executor must still call the protected resource's enforcement point; coordinator-side checks alone cannot close a time-of-check/time-of-use race.
+
+## 19. Authenticated durable network inbox increment
+
+- `core/matrix_inbox.py` adds a local SQLite inbox with HMAC-SHA-256 authenticated envelopes, explicit sender/recipient/message/key identifiers, expiry, bounded payload size, durable pending/delivered/expired states and recipient-scoped message deduplication.
+- The caller injects trusted key IDs and key material. The signature binds sender, recipient, message ID, key ID, expiry and payload bytes. Replayed identical messages return their original receipt; conflicting reuse of a message ID is rejected.
+- Delivery acknowledgement is a durable state transition; expired pending messages cannot be acknowledged as delivered.
+- `core/test_matrix_inbox.py` covers authentication tampering, untrusted key IDs, recipient binding, expiry, replay conflicts, restart, delivery idempotency and payload limits.
+
+**Boundary:** This is an inbox persistence/authentication slice, not a network socket, transport encryption, public-key identity system, distributed replay cache, key rotation protocol, guaranteed delivery or consensus layer. HMAC requires shared secret distribution and rotation to be designed separately. No message is delivered to an application until its caller explicitly consumes/acknowledges it.
