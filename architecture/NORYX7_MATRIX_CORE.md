@@ -179,7 +179,7 @@ The current branch now contains several deliberately narrow reference components
 - `core/matrix_membership_durable.py`: SQLite-backed per-node membership epochs, nonce replay checks, owner-binding and revocation tombstones across process restarts. The verifier is injected; hardware attestation and multi-node consensus remain external.
 - `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. `propose_placement_with_device_policy` also filters on owner-defined battery, thermal, power, network, energy and schedule policy. These inputs are advisory snapshots; the target supervisor must refresh sensors and reserve locally before dispatch.
 - `core/matrix_data.py`: SHA-256 content manifest for chunked immutable objects and corruption/order detection. It is not encryption, erasure coding, replication, access control or a distributed object store.
-- `core/matrix_twin.py`: deterministic virtual-time event queue with stable same-time ordering, bounded execution and replayable event trace. It is not yet a network/consensus simulator or model checker.
+- `core/matrix_twin.py`: deterministic virtual-time event queue plus a test network model for latency, reordering, link partitions and delivery-time drops. It is not a consensus simulator, clock-drift model, model checker or production network stack.
 - `core/matrix_fencing.py`: in-memory single-resource fencing reference.
 - `core/matrix_durable.py`: SQLite WAL/FULL local persistence adapter that atomically stores a resource epoch, version and tenant-scoped idempotency records across process restarts. It is still one local database, not distributed consensus or a replicated authority.
 - `core/matrix_budget.py`: owner-controlled contribution guard for opt-in state, battery, temperature, power, network-use ceiling, weekly schedule and estimated energy. It is a policy helper, not sensor measurement or OS-level enforcement, and is not yet wired into the scheduler.
@@ -195,7 +195,7 @@ These are executable slices, not a production distributed system. Reservation st
 4. Connect the device-budget-aware placement proposal to target-side fresh sensor checks, local atomic reservations and real OS/sensor enforcement; add network egress and data-residency controls.
 5. Replace advisory in-memory placement with reserve-confirm-commit, idempotent retries and reconciliation after lost acknowledgements.
 6. Add bounded membership storage, tombstone retention and safe identity re-enrollment procedures.
-7. Extend the Digital Twin with network partitions, clock drift, stale messages, crash/restart, Byzantine behaviors and deterministic seeded fault schedules.
+7. Extend the Digital Twin with clock drift, stale/duplicated messages, Byzantine behaviors, disk faults, correlated failures and deterministic seeded fault schedules. A first deterministic latency/partition/drop transport model is now present.
 8. Add authenticated-manifest tests, storage encryption, key separation, erasure coding, replication and rate-limited repair as independent layers.
 9. Extend the local ledger with account policy, append-only external audit anchoring, reconciliation and a separately specified cross-partition transfer protocol; never expose it as real-money settlement.
 
