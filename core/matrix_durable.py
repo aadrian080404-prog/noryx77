@@ -7,6 +7,7 @@ match the deployment's threat and failure model.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import hashlib
 import sqlite3
 from contextlib import closing
@@ -28,7 +29,7 @@ class DurableFencedResource:
     def __init__(self, database: str | Path, resource_id: str, timeout: float = 5.0) -> None:
         if not isinstance(resource_id, str) or not resource_id.strip():
             raise ValueError("resource_id_required")
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("positive_database_timeout_required")
         self.database = str(database)
         self.resource_id = resource_id
