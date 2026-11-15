@@ -222,3 +222,45 @@ def test_fabric_result_shape_is_not_mutable_into_a_valid_cross_request_replay():
     other_request = ModelRequest("different", min_models=2, max_models=2, runtime_id="runtime-a")
     forged = replace(result, request_digest=fabric.request_digest(other_request))
     assert fabric.verify_result(other_request, forged) is False
+
+
+def test_unkeyed_result_is_explicitly_not_authenticated():
+    fabric = ModelFabric([FakeModel("a", frozenset({"text"}))])
+    request = ModelRequest("answer")
+    result = fabric.execute(request)
+    assert fabric.verify_result(request, result) is True
+    assert fabric.authenticated_results is False
+    assert result.authenticated is False
+    assert fabric.verify_authenticated_result(request, result) is False
+
+
+def test_authenticated_result_requires_a_key_and_marks_hmac_proof():
+    model = FakeModel("a", frozenset({"text"}))
+    with pytest.raises(ValueError, match="authenticated_results_require_binding_key"):
+        ModelFabric([model], runtime_id="runtime-a", require_authenticated_results=True)
+
+    fabric = ModelFabric(
+        [model],
+        runtime_id="runtime-a",
+        binding_key=b"k" * 32,
+        require_authenticated_results=True,
+    )
+    request = ModelRequest("answer", runtime_id="runtime-a")
+    result = fabric.execute(request)
+    assert result.authenticated is True
+    assert fabric.authenticated_results is True
+    assert fabric.verify_authenticated_result(request, result) is True
+
+
+def test_authentication_flag_cannot_be_forged_or_downgraded():
+    model = FakeModel("a", frozenset({"text"}))
+    unkeyed = ModelFabric([model])
+    request = ModelRequest("answer")
+    result = unkeyed.execute(request)
+    assert unkeyed.verify_result(request, replace(result, authenticated=True)) is False
+
+    keyed = ModelFabric([model], runtime_id="runtime-a", binding_key=b"k" * 32)
+    bound_request = ModelRequest("answer", runtime_id="runtime-a")
+    bound_result = keyed.execute(bound_request)
+    assert keyed.verify_result(bound_request, replace(bound_result, authenticated=False)) is False
+    assert keyed.verify_authenticated_result(bound_request, replace(bound_result, authenticated=False)) is False
