@@ -1,0 +1,118 @@
+import pytest
+
+from .matrix_transfer import DurableTransferCoordinator, TransferRequest
+
+
+class FakeParticipant:
+    def __init__(self, participant_id, fail_commit=False):
+        self.participant_id = participant_id
+        self.fail_commit = fail_commit
+        self.prepared = {}
+        self.committed = set()
+        self.aborted = set()
+
+    def prepare(self, transfer_id, asset_id, amount_minor, request_digest):
+        previous = self.prepared.get(transfer_id)
+        record = (asset_id, amount_minor, request_digest)
+        if previous is not None and previous != record:
+            raise PermissionError("participant_prepare_conflict")
+        self.prepared[transfer_id] = record
+
+    def commit(self, transfer_id, request_digest):
+        if self.fail_commit:
+            raise RuntimeError("participant_commit_unavailable")
+        if transfer_id not in self.prepared or self.prepared[transfer_id][2] != request_digest:
+            raise PermissionError("participant_not_prepared")
+        self.committed.add(transfer_id)
+
+    def abort(self, transfer_id, request_digest):
+        if transfer_id in self.committed:
+            raise PermissionError("cannot_abort_committed_transfer")
+        self.aborted.add(transfer_id)
+
+
+def _request():
+    return TransferRequest("tx-1", "wallet-a", "wallet-b", "EUR-cent", 1250)
+
+
+def _participants(fail_destination=False):
+    return FakeParticipant("wallet-a"), FakeParticipant("wallet-b", fail_commit=fail_destination)
+
+
+def test_two_participant_transfer_commits_only_after_both_confirm(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants()
+    status = coordinator.execute(_request(), source, destination)
+    assert status.state == "COMMITTED"
+    assert status.source_prepared and status.destination_prepared
+    assert status.source_committed and status.destination_committed
+
+
+def test_transfer_retries_are_idempotent_and_conflicts_rejected(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants()
+    first = coordinator.execute(_request(), source, destination)
+    replay = coordinator.execute(_request(), source, destination)
+    assert first == replay
+    conflicting = TransferRequest("tx-1", "wallet-a", "wallet-b", "EUR-cent", 1251)
+    with pytest.raises(PermissionError, match="transfer_idempotency_conflict"):
+        coordinator.execute(conflicting, source, destination)
+
+
+def test_partial_commit_enters_in_doubt_and_resume_finishes_without_redebit(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants(fail_destination=True)
+    with pytest.raises(RuntimeError, match="participant_commit_unavailable"):
+        coordinator.execute(_request(), source, destination)
+    status = coordinator.status("tx-1")
+    assert status.state == "IN_DOUBT"
+    assert status.source_committed
+    assert not status.destination_committed
+    destination.fail_commit = False
+    recovered = coordinator.resume("tx-1", source, destination)
+    assert recovered.state == "COMMITTED"
+    assert source.committed == {"tx-1"}
+    assert destination.committed == {"tx-1"}
+
+
+def test_resume_rejects_wrong_participant_binding(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants()
+    coordinator.execute(_request(), source, destination)
+    wrong_source = FakeParticipant("wallet-other")
+    with pytest.raises(PermissionError, match="transfer_participant_binding_mismatch"):
+        coordinator.resume("tx-1", wrong_source, destination)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), True])
+def test_transfer_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
+    with pytest.raises(ValueError, match="positive_database_timeout_required"):
+        DurableTransferCoordinator(tmp_path / "bad.db", timeout=timeout)
+
+def test_transfer_state_cannot_be_downgraded_after_commit(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants()
+    committed = coordinator.execute(_request(), source, destination)
+    assert committed.state == "COMMITTED"
+
+    # Simulate a delayed worker reporting an obsolete failure/phase.
+    coordinator._set_state("tx-1", "IN_DOUBT")
+    coordinator._set_state("tx-1", "PREPARING")
+    coordinator._set_state("tx-1", "PREPARED")
+    assert coordinator.status("tx-1").state == "COMMITTED"
+
+
+def test_transfer_cannot_claim_commit_without_both_durable_confirmations(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    coordinator._ensure_intent(_request(), coordinator._digest(_request()))
+    with pytest.raises(PermissionError, match="transfer_prepare_confirmation_incomplete"):
+        coordinator._set_state("tx-1", "COMMITTING")
+    with pytest.raises(PermissionError, match="transfer_commit_confirmation_incomplete"):
+        coordinator._set_state("tx-1", "COMMITTED")
+    assert coordinator.status("tx-1").state == "PREPARING"
+
+
+def test_transfer_rejects_unknown_state_target(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    with pytest.raises(ValueError, match="invalid_transfer_state"):
+        coordinator._set_state("missing", "NOT_A_STATE")
