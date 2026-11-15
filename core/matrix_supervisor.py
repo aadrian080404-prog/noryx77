@@ -157,3 +157,21 @@ class MatrixSupervisor:
                 else:
                     self._active.pop(task_id, None)
             return RevocationResult(revoked.grant.generation, cancelled, tuple(failures))
+
+    def retry_pending_stops(self) -> tuple[str, ...]:
+        """Retry target drains left pending by a previous failed stop request.
+
+        Executor.stop must be idempotent for a task/generation pair. A successful
+        retry removes the task from the local pending set; failures remain
+        visible and are never reported as completed termination.
+        """
+        with self._lock:
+            failures: list[str] = []
+            for task_id, generation in tuple(sorted(self._active.items())):
+                try:
+                    self.executor.stop(task_id, generation)
+                except Exception as exc:
+                    failures.append(task_id + ":" + type(exc).__name__)
+                else:
+                    self._active.pop(task_id, None)
+            return tuple(failures)
