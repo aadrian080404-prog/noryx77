@@ -52,3 +52,9 @@ def test_membership_owner_cannot_change_silently(tmp_path):
     registry.admit(evidence(), b"valid-proof", verify)
     with pytest.raises(PermissionError, match="node_owner_change_requires_reenrollment"):
         registry.admit(evidence(epoch=2, nonce="n-2", owner_id="owner-2"), b"valid-proof", verify)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), True])
+def test_membership_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
+    with pytest.raises(ValueError, match="positive_database_timeout_required"):
+        DurableMembershipRegistry(tmp_path / "bad.db", timeout=timeout)
