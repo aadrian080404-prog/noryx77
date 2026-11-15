@@ -6,6 +6,7 @@ cross-node scheduler, OS sandbox, or distributed consensus protocol.
 from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
+import math
 import sqlite3
 from pathlib import Path
 from .matrix_core import NodeProfile, ResourceVector, WorkloadRequest, eligible
@@ -22,7 +23,7 @@ class DurableReservation:
 
 class DurableReservationBook:
     def __init__(self, database: str | Path, node: NodeProfile, timeout: float = 5.0) -> None:
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("positive_database_timeout_required")
         self.database = str(database)
         self.timeout = float(timeout)
