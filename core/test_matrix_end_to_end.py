@@ -14,6 +14,7 @@ from .matrix_core import (
 from .matrix_fencing_durable import SQLiteFencedResource
 from .matrix_grants import DurableGrantRegistry
 from .matrix_inbox import DurableInbox, sign_message
+from .matrix_key_policy import DurableKeyPolicyRegistry
 from .matrix_membership_durable import AdmissionEvidence, DurableMembershipRegistry
 from .matrix_reservations import DurableReservationBook
 from .matrix_supervisor import MatrixSupervisor
@@ -102,9 +103,22 @@ def test_end_to_end_local_admission_message_transfer_and_revocation(tmp_path):
 
     # Authenticated network handoff: accept, read, acknowledge, then replay.
     network_key = b"N" * 32
+    key_policy = DurableKeyPolicyRegistry(
+        str(tmp_path / "key-policy.db"),
+        authorize=lambda action, owner, purpose, key_id, generation: (
+            owner == "owner-1" and purpose == "NETWORK_HMAC"
+        ),
+        key_resolver=lambda key_id: network_key if key_id == "network-key-1" else b"",
+    )
+    key_policy.register("network-key-1", "owner-1", "NETWORK_HMAC", 1)
     inbox = DurableInbox(
-        str(tmp_path / "inbox.db"), "node-1", {"network-key-1": network_key},
+        str(tmp_path / "inbox.db"), "node-1", {},
         trusted_senders={"network-key-1": "coordinator-1"},
+        trusted_key_resolver=lambda key_id, sender_id: key_policy.resolve(
+            key_id, "owner-1", "NETWORK_HMAC"
+        ) if sender_id == "coordinator-1" else (_ for _ in ()).throw(
+            PermissionError("message_sender_key_binding_mismatch")
+        ),
     )
     payload = b'{"task_id":"task-1","action":"prepare-transfer"}'
     signature = sign_message(
@@ -124,6 +138,21 @@ def test_end_to_end_local_admission_message_transfer_and_revocation(tmp_path):
         500, payload, signature, now=103,
     )
     assert replay.state == "DELIVERED"
+
+    # A second message accepted under the same key becomes unreadable after
+    # durable key revocation; inbox revalidates policy at payload release.
+    revoked_payload = b'{"task_id":"task-1","action":"sensitive-follow-up"}'
+    revoked_signature = sign_message(
+        "coordinator-1", "node-1", "message-2", "network-key-1",
+        500, revoked_payload, network_key,
+    )
+    inbox.accept(
+        "coordinator-1", "node-1", "message-2", "network-key-1",
+        500, revoked_payload, revoked_signature, now=104,
+    )
+    key_policy.revoke("network-key-1", "owner-1", generation=2)
+    with pytest.raises(PermissionError, match="key_revoked"):
+        inbox.read_pending("message-2", now=105)
 
     # Financial protocol journal reaches COMMITTED only after both participants.
     source, destination = Participant("wallet-A"), Participant("wallet-B")
