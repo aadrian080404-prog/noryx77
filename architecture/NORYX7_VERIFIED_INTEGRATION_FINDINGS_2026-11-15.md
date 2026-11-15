@@ -321,3 +321,35 @@ On this head, tests, Core Verification, Runner Smoke and Source Secrecy succeede
 - Principal namespace isolation is not authentication. A future integration must accept principal IDs only from the verified identity/session context, not request payloads.
 - The process-local principal store does not provide durable deletion, cryptographic erasure, per-principal encryption keys, or cross-device consistency.
 - The latest changes remain on draft branches. No merge to `main`, no modification of the frozen architecture branch, and no production deployment occurred.
+
+
+## 15. Latest concurrent verification and Matrix ambiguity hardening — 2026-11-16
+
+### CI snapshot (exact heads queried)
+| PR | Head | Observed checks | Disposition |
+|---|---|---|---|
+| #75 architecture blueprint/register | `e7c4531e2305d4b9ed1c4d8190c144ae8e30a564` | 6/6 success | Documentation branch CI only |
+| #78 MemoryHierarchy | `abb27513725abf6e7f94da04ac460375cf08e222` | 6/6 success | Local/process-local memory component; no distributed guarantee |
+| #84 Principal memory | `61dfae16182e334a4b86a155402b48f3f193f245` | 5/5 success | Process-local namespace isolation only; identity binding remains open |
+| #83 Matrix durable stop intents | `a25b4f962c64d4716dd754a967871db8a823e4eb` | Source Secrecy and Runner Smoke success; tests and Core in progress; Foundation pending | New ambiguous-revocation regression is committed but not yet CI-verified |
+
+### PR #83 — ambiguous grant revocation response
+A second review found a safety-critical ambiguity: the grant authority may commit a revocation and then lose its response. Reopening admission merely because the caller received an exception could permit new reservations after the authoritative grant was already revoked.
+
+The latest PR #83 source therefore retains the durable admission fence and prepared stop intents when the revoke call raises. It does not assume that an exception means rollback. Startup reconciliation must compare the durable intent with authoritative grant generation and enabled state before deciding whether to cancel the prepared intent or promote it to a pending stop.
+
+New tests cover:
+- failure before the grant authority commits: admission remains fenced until an authoritative read confirms the old grant is still enabled, then recovery can reopen it;
+- commit followed by lost response: restart recovery promotes the prepared intent to pending and does not reopen admission.
+
+Latest source/test commits are `0cdc6ab36d2645dea32b446065f107af2d96a100` and `a25b4f962c64d4716dd754a967871db8a823e4eb`. The exact head's CI is still running; no green claim is made yet. The executor must still enforce task/generation fencing and idempotent stop semantics.
+
+### Remaining cross-domain integration work
+1. Bind `PrincipalMemoryHierarchy` only to a principal derived from a successfully verified gateway session; never accept a caller-selected principal ID as authority.
+2. Add an end-to-end gateway → canonical runtime → agent/model → TaskGraph → memory → authorization → audit → Matrix test using real repository adapters and explicit lifecycle cleanup.
+3. Wire authenticated ModelFabric mode to a managed key provider; do not create or embed production secrets in source or CI.
+4. Replace process-local session revocation with a shared, consistency-defined store before multi-instance deployment.
+5. Verify SURF evidence ingestion, static parsing, sandbox isolation and reproducible finding reports against explicit authorized targets.
+6. Continue crash/partition/restart campaigns for Matrix and distributed memory; SQLite node-local durability is not distributed consensus.
+
+No PR was merged, no production deployment was performed, and no changes were made to `main` or the frozen architecture branch.
