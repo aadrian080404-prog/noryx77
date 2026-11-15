@@ -63,3 +63,17 @@ class ObjectManifest:
             return False
         payload = (str(sum(map(len, chunks))) + ":" + ":".join(self.chunk_hashes)).encode("ascii")
         return sum(map(len, chunks)) == self.size_bytes and sha256_hex(payload) == self.object_id
+
+
+def verify_authenticated_object(
+    manifest: ObjectManifest,
+    chunks: tuple[bytes, ...],
+    key: bytes,
+    authentication_tag: str,
+) -> bool:
+    """Accept an object only when both manifest authentication and all chunks verify."""
+    if not isinstance(manifest, ObjectManifest):
+        return False
+    if not manifest.verify_authentication(key, authentication_tag):
+        return False
+    return manifest.verify_chunks(chunks)
