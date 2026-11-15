@@ -190,9 +190,9 @@ class DurableTransferCoordinator:
             if current in phase and state in phase and phase[state] < phase[current]:
                 db.commit()
                 return
-            if state not in transitions[current]:
-                db.rollback()
-                raise PermissionError("invalid_transfer_state_transition")
+            # Report the violated safety invariant before the generic graph
+            # error, so callers can distinguish missing durable evidence from
+            # an otherwise unsupported transition.
             if state in {"PREPARED", "COMMITTING"} and not (
                 source_prepared and destination_prepared
             ):
@@ -203,6 +203,9 @@ class DurableTransferCoordinator:
             ):
                 db.rollback()
                 raise PermissionError("transfer_commit_confirmation_incomplete")
+            if state not in transitions[current]:
+                db.rollback()
+                raise PermissionError("invalid_transfer_state_transition")
             db.execute("UPDATE matrix_transfers SET state=? WHERE transfer_id=?",
                        (state, transfer_id))
             db.commit()
