@@ -469,3 +469,20 @@ A comparison of the durable identity branch (PR #46) with the sandbox/collaborat
 This is an integration requirement, not a reason to merge PR #46 and PR #71 mechanically. Their overlapping identity changes must be reconciled on a dedicated integration branch after their individual tests are green.
 
 The malformed-UTF-8 hardening committed to PR #71 head `d663da76bd7eb80515a83871dfb92c8ae61b4f34` addresses input validation only; it does not solve durable key continuity or registry epoch persistence.
+
+
+## 20. Durable trust epochs added to the SQLite identity registry — 2026-11-16
+
+The identity compatibility gap identified in section 19 has been narrowed by a source-level update on PR #46:
+
+- The in-memory `IdentityRegistry` and `SQLiteIdentityRegistry` now expose the same `generation(identity)` contract for an exactly trusted identity.
+- SQLite stores a monotonic `generation` beside each public-key trust record. Revoking an active identity advances the epoch; re-registering a revoked ID advances it again, including when the same public key is restored.
+- Unknown revocation is a no-op in both registry implementations, so it does not consume a trust epoch.
+- Existing SQLite tables are migrated by adding a `generation` column with initial value 1; persisted rows are validated before use.
+- Tests cover restart persistence, revoke/re-register epoch advancement, legacy schema migration, malformed UTF-8 identifiers, and matching unknown-revocation semantics.
+
+Latest PR #46 source/test head: `f9889851ee3bc52dec956b5a81587e992a78f153`. No workflow result for this exact head had appeared at the time of this update; the changes are **committed but not yet CI-verified**.
+
+The same unknown-revocation epoch semantics have been aligned in PR #71, whose latest source/test head is `3d9fcea8b7542cd0e52bcc81d1b28a5587de71db`; its CI must be re-run for this new head.
+
+**Still unresolved:** canonical runtime startup continues to generate ephemeral built-in agent keys. A durable registry alone cannot restore the corresponding private signing keys. Runtime integration still requires an external key provider, stable built-in agent identities, startup verification against the persisted public-key records, and fail-closed behavior on key/registry mismatch. PR #46 and PR #71 must be integrated only after their exact latest heads pass CI and their overlapping identity changes are reconciled.
