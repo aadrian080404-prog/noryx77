@@ -175,8 +175,9 @@ Passing a gate means only that its stated tests passed. It is not a claim of glo
 The current branch now contains several deliberately narrow reference components:
 
 - `core/matrix_core.py`: opt-in contribution grants, aggregate local resource ceilings, reserved capacity, thread-safe local reservations and monotonic revocation generations.
-- `core/matrix_membership.py`: admission/revocation state machine with per-node monotonic epochs and replay checks. Its attestation verifier is injected; proof binding, hardware attestation, durable storage and consensus are not implemented here.
-- `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. A proposal is advisory; local reservation confirmation is still required.
+- `core/matrix_membership.py`: in-memory admission/revocation state machine with per-node monotonic epochs and replay checks.
+- `core/matrix_membership_durable.py`: SQLite-backed per-node membership epochs, nonce replay checks, owner-binding and revocation tombstones across process restarts. The verifier is injected; hardware attestation and multi-node consensus remain external.
+- `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. `propose_placement_with_device_policy` also filters on owner-defined battery, thermal, power, network, energy and schedule policy. These inputs are advisory snapshots; the target supervisor must refresh sensors and reserve locally before dispatch.
 - `core/matrix_data.py`: SHA-256 content manifest for chunked immutable objects and corruption/order detection. It is not encryption, erasure coding, replication, access control or a distributed object store.
 - `core/matrix_twin.py`: deterministic virtual-time event queue with stable same-time ordering, bounded execution and replayable event trace. It is not yet a network/consensus simulator or model checker.
 - `core/matrix_fencing.py`: in-memory single-resource fencing reference.
@@ -184,14 +185,14 @@ The current branch now contains several deliberately narrow reference components
 - `core/matrix_budget.py`: owner-controlled contribution guard for opt-in state, battery, temperature, power, network-use ceiling, weekly schedule and estimated energy. It is a policy helper, not sensor measurement or OS-level enforcement, and is not yet wired into the scheduler.
 - `core/matrix_ledger.py`: local SQLite double-entry journal using integer minor units, atomic balanced postings, tenant-scoped idempotency and an injected authorization verifier. It is not a payment rail, custody system, cross-domain transfer protocol or compliance implementation.
 
-These are executable slices, not a production distributed system. Membership and reservation state remain in-memory and process-local. The durable fencing adapter and journal survive ordinary process restarts when the local SQLite storage honors its durability contract, but they do not coordinate multiple machines or establish global consensus. No module in this PR establishes cryptographic device identity, a secure sandbox, financial custody, production distributed storage, or planet-scale capacity.
+These are executable slices, not a production distributed system. Reservation state remains in-memory and process-local. Durable membership, fencing and journal adapters survive ordinary process restarts when local SQLite storage honors its durability contract, but they do not coordinate multiple machines or establish global consensus. Device-budget scheduling is a policy filter over supplied telemetry, not trusted sensor enforcement. No module in this PR establishes cryptographic device identity, a secure sandbox, financial custody, production distributed storage, or planet-scale capacity.
 
 ## 15. Required next hardening
 
-1. Extend durable persistence to membership, grants, reservations and revocations; define backup, corruption recovery and schema migration.
+1. Extend durable persistence to grants and reservations; define backup, corruption recovery and schema migration. Durable membership epochs and revocation tombstones now have a local SQLite reference implementation.
 2. Bind every admission proof to node identity, owner, software measurement, nonce, epoch and verifier policy; use hardware-backed attestation where available.
 3. Enforce fencing tokens at the protected resource itself, atomically with each privileged write. A lease or coordinator-side check alone is insufficient.
-4. Integrate `matrix_budget.py` with scheduler admission and real OS/sensor enforcement; add network egress and data-residency controls.
+4. Connect the device-budget-aware placement proposal to target-side fresh sensor checks, local atomic reservations and real OS/sensor enforcement; add network egress and data-residency controls.
 5. Replace advisory in-memory placement with reserve-confirm-commit, idempotent retries and reconciliation after lost acknowledgements.
 6. Add bounded membership storage, tombstone retention and safe identity re-enrollment procedures.
 7. Extend the Digital Twin with network partitions, clock drift, stale messages, crash/restart, Byzantine behaviors and deterministic seeded fault schedules.
