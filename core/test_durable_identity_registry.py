@@ -124,3 +124,64 @@ def test_durable_registry_is_compatible_with_agent_fabric(tmp_path):
     with pytest.raises(PermissionError, match="no_authorized_agent"):
         fabric.dispatch("owner", AgentInput("hello"), "general")
     registry.close()
+
+
+
+def test_trust_generation_survives_restart_and_advances_on_reregistration(tmp_path):
+    path = str(tmp_path / "identity-epochs.sqlite")
+    identity, _ = AgentIdentityAuthority.generate("agent-epoch")
+    first = SQLiteIdentityRegistry(path)
+    first.register(identity)
+    assert first.generation(identity) == 1
+    first.close()
+
+    second = SQLiteIdentityRegistry(path)
+    assert second.generation(identity) == 1
+    second.revoke("agent-epoch")
+    assert second.generation(identity) is None
+    second.register(identity)
+    assert second.generation(identity) == 3
+    second.close()
+
+    restored = SQLiteIdentityRegistry(path)
+    assert restored.is_trusted(identity)
+    assert restored.generation(identity) == 3
+    restored.close()
+
+
+def test_legacy_registry_schema_migrates_to_initial_trust_generation(tmp_path):
+    import sqlite3
+
+    path = str(tmp_path / "legacy-identity.sqlite")
+    identity, _ = AgentIdentityAuthority.generate("legacy-agent")
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "CREATE TABLE agent_identity_trust ("
+            "agent_id TEXT PRIMARY KEY, public_key BLOB NOT NULL, "
+            "version INTEGER NOT NULL, state TEXT NOT NULL "
+            "CHECK(state IN ('active','revoked')))"
+        )
+        db.execute(
+            "INSERT INTO agent_identity_trust(agent_id,public_key,version,state) "
+            "VALUES(?,?,?,'active')",
+            (identity.agent_id, identity.public_key, identity.version),
+        )
+
+    registry = SQLiteIdentityRegistry(path)
+    assert registry.is_trusted(identity)
+    assert registry.generation(identity) == 1
+    registry.close()
+
+
+def test_durable_registry_rejects_malformed_utf8_agent_identifiers(tmp_path):
+    registry = SQLiteIdentityRegistry(str(tmp_path / "identity-unicode.sqlite"))
+    malformed, _ = AgentIdentityAuthority.generate("valid-agent")
+    malformed = type(malformed)("\ud800", malformed.public_key)
+    assert not malformed.is_well_formed()
+    with pytest.raises(ValueError, match="invalid_agent_identity"):
+        registry.register(malformed)
+    with pytest.raises(ValueError, match="invalid_agent_id"):
+        registry.revoke("\ud800")
+    with pytest.raises(ValueError, match="invalid_agent_id"):
+        registry.with_trusted_identity("\ud800", lambda _identity: None)
+    registry.close()
