@@ -144,7 +144,10 @@ class MatrixSupervisor:
             try:
                 revoked = self.grants.revoke(self.node.grant.grant_id, expected_generation)
             except Exception:
-                self.reservations.cancel_prepared_stop_intents()
+                # The grant authority may have committed before a transport or
+                # acknowledgement error was raised. Keep the durable admission
+                # fence and prepared intents; startup reconciliation must query
+                # authoritative grant state before reopening admission.
                 raise
             next_node = NodeProfile(
                 self.node.node_id, self.node.failure_domain, self.node.attested,
