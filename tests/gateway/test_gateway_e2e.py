@@ -179,9 +179,9 @@ def test_session_authority_rotation_invalidates_existing_tokens():
     authority.rotate_signing_secret("n" * 32)
     with pytest.raises(SessionError):
         authority.verify(token)
+    authority.rotate_bootstrap_token("r" * 32)
     with pytest.raises(SessionError, match="bootstrap_auth_failed"):
         authority.issue("b" * 32, "client-b")
-    authority.rotate_bootstrap_token("r" * 32)
     assert authority.issue("r" * 32, "client-b")
 
 
