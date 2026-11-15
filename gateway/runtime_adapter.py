@@ -7,7 +7,11 @@ from core.operational_runtime import OperationalNORYXRuntime
 
 
 class RuntimeAdapter:
-    """Translate an authenticated browser request into the canonical operational runtime."""
+    """Translate a bootstrap-authenticated client label into a bounded runtime task.
+
+    The client label is diagnostic metadata only. It is not a user, device,
+    tenant, ownership, or authorization principal.
+    """
 
     def __init__(self, runtime: OperationalNORYXRuntime | None = None):
         self.runtime = runtime or OperationalNORYXRuntime()
@@ -15,12 +19,14 @@ class RuntimeAdapter:
     def execute(
         self,
         *,
-        client_id: str,
+        client_label: str,
         text: str,
         execution_id: str | None = None,
     ) -> dict:
-        if not isinstance(client_id, str) or not client_id.strip():
-            raise PermissionError("client_identity_required")
+        if not isinstance(client_label, str) or not client_label.strip():
+            raise PermissionError("client_label_required")
+        if len(client_label.encode("utf-8")) > 256:
+            raise ValueError("client_label_too_large")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("browser_input_required")
         if len(text.encode("utf-8")) > 8192:
@@ -34,7 +40,8 @@ class RuntimeAdapter:
             input=text,
             constraints={
                 "_noryx7_origin": "noryx-browser",
-                "_noryx7_client_id": client_id,
+                "_noryx7_client_label": client_label,
+                "_noryx7_identity_assurance": "bootstrap_bearer_only",
             },
             verification_requirements=("runtime_result",),
             risk_class="normal",
