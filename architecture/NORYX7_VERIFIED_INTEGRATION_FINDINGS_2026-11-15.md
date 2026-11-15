@@ -424,3 +424,25 @@ Regression tests cover a valid complete response, an oversized declared response
 | #75 architecture register | `9152cdec82d8e9695323c6b659a63150c0859f14` | Five checks success; Foundation in progress | Documentation-only branch; no implementation guarantee |
 
 No candidate was merged or deployed. Distributed-memory replication remains distinct from verified principal identity, durable key lifecycle, global anti-rollback, and distributed consensus. The mTLS peer transport still requires managed certificate issuance/rotation/revocation, operational rate limits, and peer discovery.
+
+
+## 18. Identity-input hardening and completed Matrix CI — 2026-11-16
+
+### PR #71 — malformed UTF-8 agent identifiers
+
+The canonical identity branch had the same malformed-Unicode boundary previously found in memory: `AgentIdentity.is_well_formed()`, identity generation and registry lookup/revocation could call UTF-8 encoding directly on an unpaired surrogate. The branch now centralizes bounded identifier validation, rejects malformed UTF-8 as a stable invalid-identity result, and applies the same bound to registry revocation and trusted-identity lookup.
+
+Regression coverage includes identity well-formedness, verification, generation, revocation and trusted-identity lookup. Latest head: `d663da76bd7eb80515a83871dfb92c8ae61b4f34`. At the latest poll Runner Smoke and Source Secrecy were in progress; Tests, Foundation and the dedicated Bubblewrap integration were pending. This change is committed but is not yet CI-verified.
+
+### CI completion update
+
+- **PR #83 Matrix durable stop intents:** all five configured workflows completed successfully on exact head `26904351fa45d983b19c69ca124d83fbf8f78e9e`, including the new durable-admission-fence rowcount regression. This is candidate-branch CI success; PR #83 remains draft and depends on PR #73.
+- **PR #70 causal memory:** Tests, Core, Runner Smoke, Source Secrecy and Generated Scenario Verification succeeded on `c2043a4fbc6cb1b303969d3c5ade596a1af74b82`; Foundation remained in progress.
+- **PR #67 mTLS memory peer:** Tests, Core, Runner Smoke, Source Secrecy and Generated Scenario Verification succeeded on `e0fdad033737529a00c8cc432168ef4594206cd2`; Foundation remained pending.
+- **PR #75 register:** the latest register commit `bc591ac1cbde67f7476246af188c8eac79312156` had five workflows successful and Foundation pending. It is documentation-only.
+
+### Identity assurance boundary remains unchanged
+
+The PR #71 change hardens agent-to-agent identity checks inside the runtime; it does not solve the separate gateway end-user/device identity gap recorded in section 16. The gateway's shared bootstrap bearer still proves possession of a shared secret only. Do not map its caller-selected client label to an authenticated principal or use it to select principal memory.
+
+No PR was merged, no production deployment was performed, and no change was made to `main` or the frozen architecture branch.
