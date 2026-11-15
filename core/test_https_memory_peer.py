@@ -174,7 +174,7 @@ def _peer_client_for_response_test(monkeypatch, response):
 
 
 def test_memory_peer_client_accepts_complete_bounded_response(monkeypatch):
-    client, response = _peer_client_for_response_test(monkeypatch, (b'{"inserted":2}', "14"))
+    client, response = _peer_client_for_response_test(monkeypatch, (b'{"inserted":2}', "13"))
     assert client.merge(object()) == 2
     assert response.read_sizes == [1025]
 
@@ -183,7 +183,7 @@ def test_memory_peer_client_rejects_declared_oversized_response_before_read(monk
     from core.https_memory_peer import HTTPSMemoryPeerClient
 
     client, response = _peer_client_for_response_test(
-        monkeypatch, (b'{"inserted":0}' + b" " * 1200, "1214")
+        monkeypatch, (b'{"inserted":0}' + b" " * 1200, "1213")
     )
     with pytest.raises(RuntimeError, match="response_size_invalid"):
         client.merge(object())
