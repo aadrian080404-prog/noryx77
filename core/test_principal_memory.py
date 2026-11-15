@@ -33,6 +33,16 @@ def test_principal_memory_bounds_principal_count_and_validates_identity():
         memory.get("", "k")
 
 
+def test_principal_memory_rejects_malformed_unicode_identifier():
+    memory = PrincipalMemoryHierarchy()
+    malformed = "\ud800"
+    with pytest.raises(ValueError, match="invalid_memory_principal"):
+        memory.get(malformed, "k")
+    with pytest.raises(ValueError, match="invalid_memory_principal"):
+        memory.delete_principal(malformed)
+    assert memory.principal_count() == 0
+
+
 def test_delete_principal_removes_all_scoped_records():
     memory = PrincipalMemoryHierarchy()
     memory.put("tenant-a", MemoryRecord("a", "1", MemoryLevel.L0))
