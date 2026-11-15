@@ -45,3 +45,15 @@ def test_ledger_rejects_same_account(tmp_path):
     ledger = LocalDoubleEntryLedger(tmp_path / "ledger.db")
     with pytest.raises(ValueError, match="debit_and_credit_accounts_must_differ"):
         ledger.post(req(credit_account="wallet-a"), b"authorized", allow)
+
+
+def test_ledger_journal_rows_are_append_only(tmp_path):
+    import sqlite3
+    path = tmp_path / "ledger.db"
+    ledger = LocalDoubleEntryLedger(path)
+    posted = ledger.post(req(), b"authorized", allow)
+    with sqlite3.connect(path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="journal_is_append_only"):
+            db.execute("UPDATE matrix_journal SET amount_minor=1 WHERE journal_id=?", (posted.journal_id,))
+        with pytest.raises(sqlite3.IntegrityError, match="postings_are_append_only"):
+            db.execute("DELETE FROM matrix_postings WHERE journal_id=?", (posted.journal_id,))
