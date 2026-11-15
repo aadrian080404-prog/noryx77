@@ -232,6 +232,7 @@ No component here should be described as production-ready or globally distribute
 - Operation IDs are scoped to a resource and bound to a SHA-256 payload digest. Repeated identical operations return the original receipt without repeating the state change; reusing an ID with different bytes is rejected.
 - State survives process restart. Concurrent local writers serialize through SQLite and receive unique monotonic versions.
 - `core/test_matrix_fencing_durable.py` covers restart, stale generations, replay/conflict behavior, resource isolation, concurrent writers and invalid timeout values.
+- Idempotent retries are accepted only while their fencing generation is still current; a revoked generation cannot obtain a stale success receipt by replaying an earlier operation ID.
 
 **Boundary:** SQLite serializes writers on one database host. This is not a cross-region consensus service, hardware-backed monotonic counter, OS-level process fence, payment execution adapter or proof against a compromised host. The executor must still call the protected resource's enforcement point; coordinator-side checks alone cannot close a time-of-check/time-of-use race.
 
@@ -300,6 +301,7 @@ No component here should be described as production-ready or globally distribute
 - DurableInbox can now resolve key material dynamically through an injected policy-backed resolver instead of retaining a static key snapshot.
 - Sender-to-key binding is checked before resolution; the resolver can enforce owner, purpose, generation, authorization and revocation on every message acceptance.
 - A regression test accepts a message, revokes its NETWORK_HMAC key in the durable policy registry, then proves the same inbox instance rejects a subsequent message.
+- Dynamic key policy is rechecked when a pending payload is released, so a message accepted before key revocation is no longer readable afterward. This is a fresh policy check, not an atomic cross-database revocation transaction; deployment must define the policy registry as the key authority and bound the remaining check/use window.
 - Existing static-key configuration remains supported for isolated tests and deployments that deliberately manage rotation outside the registry.
 
 **Boundary:** the resolver callback and its owner/sender mapping remain trust boundaries. This change does not distribute revocation across machines or replace KMS/HSM custody.
