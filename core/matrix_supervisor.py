@@ -70,7 +70,11 @@ class MatrixSupervisor:
         self.reservations = reservations
         self.device_policy = device_policy
         self.executor = executor
-        self._active: dict[str, int] = {}
+        # Rehydrate pending workloads from the durable reservation authority so
+        # a supervisor restart does not forget which tasks require fencing/drain.
+        self._active: dict[str, int] = {
+            item.task_id: item.grant_generation for item in reservations.list()
+        }
         self._lock = RLock()
 
     def _current_authority(self, request: WorkloadRequest):
