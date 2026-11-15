@@ -204,3 +204,13 @@ These are executable slices, not a production distributed system. The original `
 ## 16. Current implementation boundary
 
 No component here should be described as production-ready or globally distributed. The code provides policy/state-machine foundations for further implementation and adversarial testing only.
+
+## 16. Local supervisor integration slice
+
+- `core/matrix_supervisor.py` composes durable membership, owner grants, device-budget policy and node-local durable reservations into one fail-closed admission/dispatch/revocation path.
+- Dispatch rejects inactive membership, owner/node binding mismatches, stale local grant snapshots, disabled or stale grant generations, and device telemetry that is stale or from the future.
+- A successful policy decision is followed by a durable local reservation before the executor adapter is invoked. If executor startup fails, the reservation is released.
+- Revocation is persisted first, then local reservations are reconciled and cleared, and finally the executor is asked to stop the affected task IDs. Stop failures are returned explicitly; they are not reported as successful process termination.
+- `core/test_matrix_supervisor.py` exercises the complete local path, stale/future telemetry rejection, startup rollback, revoked membership, owner revocation and failed-stop reporting.
+
+**Boundary:** this is a local orchestration contract, not a production process supervisor. The executor must implement target-side generation fencing and sandboxing atomically. The current adapter is an interface/fake-test contract; no OS process kill, cgroup/job-object enforcement, hardware attestation, distributed consensus, or cross-machine revocation propagation is claimed. Telemetry freshness uses a caller-supplied monotonic clock domain.
