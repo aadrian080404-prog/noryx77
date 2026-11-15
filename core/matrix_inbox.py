@@ -43,17 +43,24 @@ def sign_message(sender_id: str, recipient_id: str, message_id: str,
 
 
 class DurableInbox:
-    def __init__(self, database: str, recipient_id: str, trusted_keys: dict[str, bytes],
-                 *, trusted_senders: dict[str, str], trusted_key_resolver: Callable[[str, str], bytes] | None = None, max_payload_bytes: int = 1_048_576, timeout: float = 5.0) -> None:
+    def __init__(self, database: str, recipient_id: str, trusted_keys: dict[str, bytes] | None = None,
+                 *, trusted_senders: dict[str, str], trusted_key_resolver: Callable[[str, str], bytes] | None = None,
+                 key_resolver: Callable[[str], bytes] | None = None, max_payload_bytes: int = 1_048_576, timeout: float = 5.0) -> None:
         if not isinstance(database, str) or not database:
             raise ValueError("database_path_required")
         if not isinstance(recipient_id, str) or not recipient_id.strip():
             raise ValueError("recipient_id_required")
-        if not isinstance(trusted_keys, dict) or (not trusted_keys and trusted_key_resolver is None):
+        if trusted_keys is None:
+            trusted_keys = {}
+        if not isinstance(trusted_keys, dict) or (not trusted_keys and trusted_key_resolver is None and key_resolver is None):
             raise ValueError("trusted_keys_or_resolver_required")
+        if trusted_key_resolver is not None and key_resolver is not None:
+            raise ValueError("configure_only_one_key_resolver")
         if trusted_key_resolver is not None and not callable(trusted_key_resolver):
             raise ValueError("trusted_key_resolver_must_be_callable")
-        if not isinstance(trusted_senders, dict) or not trusted_senders or (trusted_key_resolver is None and set(trusted_senders) != set(trusted_keys)) or (trusted_key_resolver is not None and not set(trusted_keys).issubset(trusted_senders)):
+        if key_resolver is not None and not callable(key_resolver):
+            raise ValueError("key_resolver_must_be_callable")
+        if not isinstance(trusted_senders, dict) or not trusted_senders or (trusted_key_resolver is None and key_resolver is None and set(trusted_senders) != set(trusted_keys)) or ((trusted_key_resolver is not None or key_resolver is not None) and not set(trusted_keys).issubset(trusted_senders)):
             raise ValueError("trusted_sender_binding_required")
         for key_id, sender_id in trusted_senders.items():
             if not isinstance(sender_id, str) or not sender_id.strip():
@@ -117,10 +124,16 @@ class DurableInbox:
         if self.trusted_senders.get(key_id) != sender_id:
             raise PermissionError("message_sender_key_binding_mismatch")
         key = self.trusted_keys.get(key_id)
-        if key is None and self.trusted_key_resolver is not None:
-            key = self.trusted_key_resolver(key_id, sender_id)
+        if key is None:
+            try:
+                if self.trusted_key_resolver is not None:
+                    key = self.trusted_key_resolver(key_id, sender_id)
+                elif self.key_resolver is not None:
+                    key = self.key_resolver(key_id)
+            except Exception as exc:
+                raise PermissionError("message_key_resolution_failed") from exc
         if not isinstance(key, bytes) or len(key) < 32:
-            raise PermissionError("trusted_key_resolution_failed")
+            raise PermissionError("message_key_resolution_failed")
         expected = sign_message(sender_id, recipient_id, message_id, key_id, expires_at, payload, key)
         if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
             raise PermissionError("message_authentication_failed")
