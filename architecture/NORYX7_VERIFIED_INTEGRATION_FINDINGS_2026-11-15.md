@@ -353,3 +353,44 @@ Latest source/test commits are `0cdc6ab36d2645dea32b446065f107af2d96a100` and `a
 6. Continue crash/partition/restart campaigns for Matrix and distributed memory; SQLite node-local durability is not distributed consensus.
 
 No PR was merged, no production deployment was performed, and no changes were made to `main` or the frozen architecture branch.
+
+
+## 16. Gateway identity semantics and Matrix admission-fence failure handling — 2026-11-16
+
+### Gateway: a session-authenticated client label is not a verified principal
+
+**Status: CONFIRMED / identity integration blocker**
+
+A read-only trace of the current PR #82 gateway session code and PR #76 runtime adapter shows:
+
+1. `POST /v1/session` accepts `client_id` directly from the request body.
+2. `SessionAuthority.issue()` checks possession of the shared bootstrap bearer, then signs the caller-supplied `client_id` into the session token.
+3. `SessionAuthority.verify()` proves the token was issued by this gateway and remains active; it does not prove the real-world, device, organization, or user identity represented by `client_id`.
+4. `NoryxGateway.execute()` passes that value to `RuntimeAdapter.execute()`, which stores it in task constraints as `_noryx7_client_id`.
+
+This is a client label bound to a valid bootstrap-authenticated session, not a verified principal. The current source does not wire `PrincipalMemoryHierarchy` into the gateway, so no principal-memory authorization is claimed.
+
+**Required integration contract:**
+- Rename or explicitly classify this value as an untrusted `client_label` in the gateway/runtime contract; do not use it for tenant ownership, resource ownership, authorization, or principal-memory selection.
+- Introduce a separate `principal_id` only from an injected verifier that validates a cryptographic device/user/org credential and binds it to the session.
+- If no verifier is configured, principal-scoped memory and privileged cross-device operations must fail closed.
+- Keep the bootstrap bearer described as shared-secret possession, not identity proof.
+
+**Acceptance tests:**
+- arbitrary client labels cannot select another principal's memory namespace;
+- session tokens carry distinct assurance metadata and never silently promote a client label to a principal;
+- absent/failed identity verifier blocks principal-only operations;
+- verified principal is bound to session nonce and issuer/audience, and revocation invalidates the binding.
+
+### Matrix: durable admission fence must be confirmed, not assumed
+
+PR #83 received a further source-level hardening: `prepare_stop_intents()` now checks that the SQLite update disabling admission affected exactly one row for the expected node and grant generation. If the durable row is missing or stale, it raises `durable_admission_fence_failed` before creating stop intents or attempting grant revocation. A regression test corrupts the stored generation and proves the operation fails closed without creating an intent.
+
+This change is committed on PR #83 head `26904351fa45d983b19c69ca124d83fbf8f78e9e`. The GitHub PR head reflects this commit; no workflow run was returned for this exact SHA at the time of this register update, so the new regression is **committed but not CI-verified**. Earlier successful checks do not cover this new commit.
+
+### Current limits and disposition
+
+- Gateway identity proof, principal-memory wiring, shared multi-instance session revocation, and production identity-provider integration remain open.
+- Matrix durable intents remain node-local SQLite records. They do not provide distributed consensus or prove target-process termination.
+- PR #83 remains draft and depends on PR #73. PR #75 remains documentation-only.
+- No merge, deployment, change to `main`, or change to the frozen architecture branch is claimed.
