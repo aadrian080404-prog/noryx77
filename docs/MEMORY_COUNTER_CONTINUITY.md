@@ -13,3 +13,36 @@ later event from that actor.
 This protects per-actor log continuity; it is not a proof that every vector
 clock dependency from every other actor is present, and it does not provide
 global consensus or database snapshot anti-rollback.
+
+
+## Cross-actor causal dependency completeness
+
+Contiguous counters per actor do not alone prove that a replicated event's
+vector-clock dependencies are present. Merge now accepts an event only when
+its own actor counter is the next contiguous value and every referenced
+counter from other actors is already stored or has been applied earlier in
+the same atomic batch. The receiver resolves batches in deterministic causal
+order; unresolved dependencies fail the entire transaction. A missing actor
+sequence remains a distinct counter-gap error.
+
+This prevents an event from advancing the receiver's causal frontier while
+silently omitting history it claims to depend on. It is still not global
+consensus, authenticated peer identity, or anti-rollback protection; those
+remain separate layers.
+
+
+## Causally closed paginated exports
+
+`export_since` now selects a contiguous, causally closed page instead
+of slicing a lexicographically sorted event list. If an earlier-sorting actor
+has an event that depends on another actor's event, the dependency is emitted
+first even when the page limit is one. The receiver can advance its vector
+clock and request the next page without receiving an unmergeable partial
+causal history. The page limit remains a hard upper bound; a source history
+that cannot produce a ready event fails closed.
+
+
+Paged replication is also exercised across a receiver restart: after the first
+causally closed page is committed, the receiver is closed and reopened from
+SQLite. Its persisted vector clock must cause the next export to begin with the
+dependent event, with no loss or duplicate delivery.
