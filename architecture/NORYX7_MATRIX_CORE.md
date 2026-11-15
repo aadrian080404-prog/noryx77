@@ -320,3 +320,8 @@ The key registry stores metadata only. Secret bytes are supplied by an injected 
 ## 28. Critical-command safety gate integration
 
 The local end-to-end test also exercises the durable critical-command gate: a proposed command requires two distinct authorized operators, a live local interlock, a resource/command/expiry-bound one-time permit, and successful single consumption. The gate remains a permit issuer, not an actuator. A real adapter must atomically validate the permit at the target boundary and preserve the certified local safety controller as the final authority.
+
+
+## 29. Financial transfer state monotonicity
+
+The local two-participant transfer journal now enforces a permitted phase graph under a SQLite write transaction. Delayed workers cannot move a transfer backward, terminal COMMITTED/ABORTED states cannot be overwritten, PREPARED/COMMITTING require both durable prepare confirmations, and COMMITTED requires both durable commit confirmations. This protects the coordinator journal against stale state updates; participant-side idempotency and durable prepare/commit remain mandatory. It does not provide a distributed transaction consensus protocol, external payment settlement, liquidity guarantees, or regulatory compliance.
