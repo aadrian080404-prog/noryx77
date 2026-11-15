@@ -285,3 +285,11 @@ No component here should be described as production-ready or globally distribute
 - `core/test_matrix_safety_gate.py` covers insufficient/duplicate approvals, proposer self-approval, authorization revocation, interlock denial, command/resource binding, expiry and one-time consumption.
 
 **Boundary:** this gate issues/consumes authorization permits only; it never executes commands. It is not a certified safety controller, physical interlock or replacement for local protection. The actuator adapter must atomically validate the permit and enforce its own safety state at the actual actuation boundary. Operator identity must come from a trusted external authentication system.
+
+
+## 25. Cross-component local end-to-end verification
+
+- `core/test_matrix_end_to_end.py` composes durable membership admission, owner grant, device budget, durable reservation and supervisor dispatch with a resource-side SQLite fencing adapter.
+- The same scenario exercises authenticated inbox acceptance, pending payload handoff, durable acknowledgement and duplicate-message receipt; it then completes a two-participant transfer through the durable transfer journal.
+- Finally, owner revocation clears the local reservation and the test target advances its resource fence, proving that a late write carrying the old generation is rejected after revocation.
+- The test is intentionally local and deterministic. The executor double models the target-side fence contract; it does not prove remote propagation, process termination, distributed consensus, real payment settlement or network availability.
