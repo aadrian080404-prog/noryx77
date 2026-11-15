@@ -78,5 +78,7 @@ def test_partial_commit_enters_in_doubt_and_resume_finishes_without_redebit(tmp_
 def test_resume_rejects_wrong_participant_binding(tmp_path):
     coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
     source, destination = _participants()
+    coordinator.execute(_request(), source, destination)
+    wrong_source = FakeParticipant("wallet-other")
     with pytest.raises(PermissionError, match="transfer_participant_binding_mismatch"):
-        coordinator.resume("missing", source, destination)
+        coordinator.resume("tx-1", wrong_source, destination)
