@@ -75,7 +75,7 @@ class DurableReservationBook:
                     "INSERT INTO matrix_reservation_state VALUES (" + ",".join("?" for _ in snapshot) + ")",
                     snapshot,
                 )
-            elif tuple(existing) != snapshot:
+            elif tuple(existing) not in (snapshot, snapshot[:-1] + (0,)):
                 raise PermissionError("reservation_state_mismatch_requires_explicit_reconciliation")
             db.commit()
 
