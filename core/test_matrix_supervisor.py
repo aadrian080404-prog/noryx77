@@ -169,3 +169,21 @@ def test_pending_stop_can_be_retried_after_transient_executor_failure(tmp_path):
     assert supervisor.retry_pending_stops() == ()
     assert executor.stopped == [("task-1", 1)]
     assert supervisor.retry_pending_stops() == ()
+
+
+def test_supervisor_restart_rehydrates_active_tasks_for_revocation(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted_executor = FakeExecutor()
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), restarted_executor,
+    )
+    result = restarted.revoke(expected_generation=1)
+    assert result.cancelled_task_ids == ("task-1",)
+    assert result.stop_failures == ()
+    assert reopened.list() == ()
+    assert restarted_executor.stopped == [("task-1", 1)]
+    assert executor.stopped == []
