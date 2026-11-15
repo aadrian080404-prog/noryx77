@@ -266,3 +266,22 @@ No component here should be described as production-ready or globally distribute
 
 - The local transfer coordinator now rejects non-finite database timeouts and closes SQLite connections deterministically, including exceptional paths.
 - Its participant protocol remains at-least-once: prepare/commit adapters must be durable and idempotent. Concurrent coordinator instances can retry participant calls, so participant-side idempotency is mandatory.
+
+
+## 23. Owner-scoped key policy registry
+
+- `core/matrix_key_policy.py` stores durable key metadata only: key ID, owner, permitted purpose, monotonic generation and ACTIVE/REVOKED state.
+- Secret bytes are never written to this registry. Key resolution calls an injected external provider only after owner/purpose/state and authorization checks.
+- Key IDs cannot be rebound; generations increase per owner and purpose; revocation persists across restart and blocks later resolution.
+- `core/test_matrix_key_policy.py` covers ownership/purpose isolation, monotonic rotation, revocation, authorization failure and invalid external key material.
+
+**Boundary:** this is not a KMS, HSM, PKI, key backup service or cryptographic key-generation system. The external resolver must provide secure custody, rotation, backup and destruction. Authorization callbacks and key provider are trust boundaries.
+
+## 24. Critical command two-person permit gate
+
+- `core/matrix_safety_gate.py` persists proposals and distinct operator approvals for a narrowly scoped command digest and resource.
+- The proposer cannot approve their own proposal. At least two distinct authorized operators are required; their authorization is rechecked when a permit is issued and consumed.
+- The local safety interlock is checked both before issuing a one-time permit and again at the consumption boundary. Permits are resource/command/expiry-bound and cannot be consumed twice.
+- `core/test_matrix_safety_gate.py` covers insufficient/duplicate approvals, proposer self-approval, authorization revocation, interlock denial, command/resource binding, expiry and one-time consumption.
+
+**Boundary:** this gate issues/consumes authorization permits only; it never executes commands. It is not a certified safety controller, physical interlock or replacement for local protection. The actuator adapter must atomically validate the permit and enforce its own safety state at the actual actuation boundary. Operator identity must come from a trusted external authentication system.
