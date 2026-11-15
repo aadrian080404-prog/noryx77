@@ -184,8 +184,8 @@ The current branch now contains several deliberately narrow reference components
 - `core/matrix_twin.py`: deterministic virtual-time event queue plus a test network model for latency, reordering, link partitions and delivery-time drops. It is not a consensus simulator, clock-drift model, model checker or production network stack.
 - `core/matrix_fencing.py`: in-memory single-resource fencing reference.
 - `core/matrix_durable.py`: SQLite WAL/FULL local persistence adapter that atomically stores a resource epoch, version and tenant-scoped idempotency records across process restarts. It is still one local database, not distributed consensus or a replicated authority.
-- `core/matrix_budget.py`: owner-controlled contribution guard for opt-in state, battery, temperature, power, network-use ceiling, weekly schedule and estimated energy. It is a policy helper, not sensor measurement or OS-level enforcement, and is not yet wired into the scheduler.
-- `core/matrix_ledger.py`: local SQLite double-entry journal using integer minor units, atomic balanced postings, tenant-scoped idempotency and an injected authorization verifier. It is not a payment rail, custody system, cross-domain transfer protocol or compliance implementation.
+- `core/matrix_budget.py`: owner-controlled contribution guard for opt-in state, battery, temperature, power, network-use ceiling, weekly schedule and estimated energy. It is consumed by the device-budget-aware placement proposal, but remains advisory until the target supervisor rechecks live sensors and enforces OS-level limits.
+- `core/matrix_ledger.py`: local SQLite double-entry journal using integer minor units, atomic balanced postings, tenant-scoped idempotency, an injected authorization verifier and a read-only integrity audit that detects extra/missing/mismatched postings. It is not a payment rail, custody system, cross-domain transfer protocol or compliance implementation.
 
 These are executable slices, not a production distributed system. The original `LocalReservationBook` remains in-memory; `DurableReservationBook` adds node-local SQLite reservation recovery and multi-process serialization for one local database. Durable membership, grant, reservation, fencing and journal adapters survive ordinary process restarts when local SQLite storage honors its durability contract, but they do not coordinate multiple machines or establish global consensus. Device-budget scheduling is a policy filter over supplied telemetry, not trusted sensor enforcement. No module in this PR establishes cryptographic device identity, a secure sandbox, financial custody, production distributed storage, or planet-scale capacity.
 
@@ -199,7 +199,7 @@ These are executable slices, not a production distributed system. The original `
 6. Add bounded membership storage, tombstone retention and safe identity re-enrollment procedures.
 7. Extend the Digital Twin with clock drift, stale/duplicated messages, Byzantine behaviors, disk faults, correlated failures and deterministic seeded fault schedules. A first deterministic latency/partition/drop transport model is now present.
 8. Add authenticated-manifest tests, storage encryption, key separation, erasure coding, replication and rate-limited repair as independent layers.
-9. Extend the local ledger with account policy, append-only external audit anchoring, reconciliation and a separately specified cross-partition transfer protocol; never expose it as real-money settlement.
+9. Extend the local ledger with account policy, append-only external audit anchoring, reconciliation, hash-chained audit proofs and a separately specified cross-partition transfer protocol; never expose it as real-money settlement.
 
 ## 16. Current implementation boundary
 
