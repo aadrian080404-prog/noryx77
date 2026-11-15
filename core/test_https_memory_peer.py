@@ -126,3 +126,74 @@ def test_tls_handshake_failure_releases_bounded_worker_slot():
     assert server._worker_slots.released == 1
     assert closed == [request]
     assert errors == [("127.0.0.1", 1234)]
+
+
+
+def _peer_client_for_response_test(monkeypatch, response):
+    import core.https_memory_peer as peer
+
+    class Headers:
+        def __init__(self, length=None):
+            self._length = length
+
+        def get_content_type(self):
+            return "application/json"
+
+        def get(self, key, default=None):
+            return self._length if key == "Content-Length" else default
+
+    class Response:
+        status = 200
+
+        def __init__(self, body, length=None):
+            self.body = body
+            self.headers = Headers(length)
+            self.read_sizes = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, size=-1):
+            self.read_sizes.append(size)
+            if size < 0:
+                return self.body
+            result, self.body = self.body[:size], self.body[size:]
+            return result
+
+    fake = Response(*response)
+    monkeypatch.setattr(peer, "_batch_to_bytes", lambda _batch: b"{}")
+    monkeypatch.setattr(peer, "urlopen", lambda *_args, **_kwargs: fake)
+    client = object.__new__(peer.HTTPSMemoryPeerClient)
+    client._url = "https://peer.example/v1/memory/merge"
+    client._timeout = 1.0
+    client._tls = object()
+    return client, fake
+
+
+def test_memory_peer_client_accepts_complete_bounded_response(monkeypatch):
+    client, response = _peer_client_for_response_test(monkeypatch, (b'{"inserted":2}', "14"))
+    assert client.merge(object()) == 2
+    assert response.read_sizes == [1025]
+
+
+def test_memory_peer_client_rejects_declared_oversized_response_before_read(monkeypatch):
+    from core.https_memory_peer import HTTPSMemoryPeerClient
+
+    client, response = _peer_client_for_response_test(
+        monkeypatch, (b'{"inserted":0}' + b" " * 1200, "1214")
+    )
+    with pytest.raises(RuntimeError, match="response_size_invalid"):
+        client.merge(object())
+    assert response.read_sizes == []
+
+
+def test_memory_peer_client_rejects_oversized_response_without_content_length(monkeypatch):
+    client, response = _peer_client_for_response_test(
+        monkeypatch, (b'{"inserted":0}' + b" " * 1200, None)
+    )
+    with pytest.raises(RuntimeError, match="response_size_invalid"):
+        client.merge(object())
+    assert response.read_sizes == [1025]
