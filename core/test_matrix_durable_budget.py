@@ -84,3 +84,15 @@ def test_durable_fencing_rejects_non_monotonic_activation(tmp_path):
     resource.activate(2)
     with pytest.raises(PermissionError, match="fencing_token_not_monotonic"):
         resource.activate(2)
+
+
+def test_durable_fencing_serializes_concurrent_writers(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    db = tmp_path / "concurrent.db"
+    DurableFencedResource(db, "resource").activate(9)
+    def write(index):
+        resource = DurableFencedResource(db, "resource")
+        return resource.apply(9, "tenant", f"op-{index}", str(index).encode()).version
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        versions = list(pool.map(write, range(16)))
+    assert sorted(versions) == list(range(1, 17))
