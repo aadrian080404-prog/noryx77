@@ -97,3 +97,9 @@ def test_durable_fencing_serializes_concurrent_writers(tmp_path):
     with ThreadPoolExecutor(max_workers=8) as pool:
         versions = list(pool.map(write, range(16)))
     assert sorted(versions) == list(range(1, 17))
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), True])
+def test_durable_fencing_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
+    with pytest.raises(ValueError, match="positive_database_timeout_required"):
+        DurableFencedResource(tmp_path / "bad.db", "resource", timeout=timeout)
