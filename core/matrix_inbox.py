@@ -224,6 +224,22 @@ class DurableInbox:
                 db.commit()
                 return None
             db.commit()
+        # Re-check dynamic key policy at payload-release time. A message
+        # authenticated before revocation must not remain readable afterward.
+        if row[1] not in self.trusted_senders or self.trusted_senders[row[1]] != row[0]:
+            raise PermissionError("message_sender_key_binding_mismatch")
+        if self.trusted_key_resolver is not None or self.key_resolver is not None:
+            try:
+                if self.trusted_key_resolver is not None:
+                    key = self.trusted_key_resolver(row[1], row[0])
+                else:
+                    key = self.key_resolver(row[1])
+            except PermissionError:
+                raise
+            except Exception as exc:
+                raise PermissionError("message_key_resolution_failed") from exc
+            if not isinstance(key, bytes) or len(key) < 32:
+                raise PermissionError("message_key_resolution_failed")
         receipt = InboxReceipt(message_id, row[0], self.recipient_id, row[1],
                                row[3], row[4], row[5])
         return receipt, bytes(row[2])
