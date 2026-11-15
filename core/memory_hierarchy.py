@@ -40,7 +40,13 @@ class MemoryHierarchy:
 
     @classmethod
     def _valid_key(cls, key: object) -> bool:
-        return isinstance(key, str) and bool(key.strip()) and len(key.encode("utf-8")) <= cls.MAX_KEY_BYTES
+        if not isinstance(key, str) or not key.strip():
+            return False
+        try:
+            encoded = key.encode("utf-8")
+        except UnicodeEncodeError:
+            return False
+        return len(encoded) <= cls.MAX_KEY_BYTES
 
     @classmethod
     def _validate_record(cls, record: object) -> MemoryRecord:
