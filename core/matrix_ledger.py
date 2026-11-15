@@ -47,6 +47,14 @@ class LocalDoubleEntryLedger:
                 journal_id INTEGER NOT NULL, asset_id TEXT NOT NULL,
                 account_id TEXT NOT NULL, amount_minor INTEGER NOT NULL,
                 FOREIGN KEY(journal_id) REFERENCES matrix_journal(journal_id))""")
+            db.execute("""CREATE TRIGGER IF NOT EXISTS matrix_journal_no_update
+                BEFORE UPDATE ON matrix_journal BEGIN SELECT RAISE(ABORT, 'journal_is_append_only'); END""")
+            db.execute("""CREATE TRIGGER IF NOT EXISTS matrix_journal_no_delete
+                BEFORE DELETE ON matrix_journal BEGIN SELECT RAISE(ABORT, 'journal_is_append_only'); END""")
+            db.execute("""CREATE TRIGGER IF NOT EXISTS matrix_postings_no_update
+                BEFORE UPDATE ON matrix_postings BEGIN SELECT RAISE(ABORT, 'postings_are_append_only'); END""")
+            db.execute("""CREATE TRIGGER IF NOT EXISTS matrix_postings_no_delete
+                BEFORE DELETE ON matrix_postings BEGIN SELECT RAISE(ABORT, 'postings_are_append_only'); END""")
 
     def post(self, request: LedgerRequest, authorization_proof: bytes,
              authorize: Callable[[LedgerRequest, bytes], bool]) -> LedgerPosting:
