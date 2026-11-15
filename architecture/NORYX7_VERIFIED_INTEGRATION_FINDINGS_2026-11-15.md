@@ -249,3 +249,13 @@ PR #81 (`fix/modelfabric-explicit-authenticated-results-2026-11-15`) adds an exp
 - #81 is a new draft remediation; its CI and integration with the operational factory are pending.
 - Gateway session secret strength, revocation/versioning, and HTTP-boundary rate limiting remain unresolved.
 - No cross-device consensus, hardware attestation, OS-level process termination, production KMS, production deployment, or independent security certification is claimed.
+
+
+## 12. Latest CI and security follow-up — 2026-11-15
+
+- **PR #81 ModelFabric:** all six configured checks completed successfully on `85e413ef5f863d706ba988753cecd638912a0fb1`. This verifies the explicit authenticated/unauthenticated result contract against the repository CI suite; it does not provision a production key or make the operational factory use HMAC by default.
+- **PR #82 Gateway session authority:** the first candidate run exposed three real test failures (two existing hosted-gateway fixtures still used short secrets, and one new test incorrectly expected signing-secret rotation to rotate the bootstrap token). The fixtures and expectation were corrected; a further race was closed by serializing bootstrap-token comparison and session registration against bootstrap rotation. The latest commit `bf4735ef592ebbfcafefc3e7576edf96bb67e7be` has CI running; do not mark #82 green until all six checks finish.
+- **PR #78 MemoryHierarchy + Android CI repository mirror:** Python compile and the full pytest suite passed on the mirror-adjusted branch head `d6017445f16ad04c967d08cc2e5bf281fbe82351`; the Android browser Gradle verification is still running. The mirror is a CI dependency-resolution resilience change; final success is pending.
+- **PR #75 architecture register:** five checks succeeded; Foundation/Android Browser verification remained in progress at the latest poll.
+
+The session hardening in #82 currently uses a bounded process-local active-session registry. It improves immediate revocation within one gateway process and intentionally invalidates all sessions after restart. It is not yet a multi-instance revocation service. HTTP bootstrap rate limiting remains a separate open task; it must be enforced at the actual socket/proxy boundary and must not trust spoofable forwarded headers by default.
