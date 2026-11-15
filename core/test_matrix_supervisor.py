@@ -309,7 +309,7 @@ def test_prepared_revocation_fences_admission_across_supervisor_processes(tmp_pa
     assert admitted.task_id == "task-2"
 
 
-def test_failed_grant_revocation_restores_admission_gate(tmp_path):
+def test_failed_grant_revocation_keeps_admission_fenced_until_reconciliation(tmp_path):
     supervisor, reservations, _ = _setup(tmp_path)
     supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
 
@@ -321,8 +321,38 @@ def test_failed_grant_revocation_restores_admission_gate(tmp_path):
         supervisor.revoke(expected_generation=1)
 
     second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        second_process_book.reserve(_request("task-2"))
+
+    # Only an authoritative read proving that the old grant is still enabled
+    # may clear the prepared intent and reopen admission.
+    assert reservations.recover_prepared_stop_intents(1, True) == ()
     admitted = second_process_book.reserve(_request("task-2"))
     assert admitted.task_id == "task-2"
+
+
+def test_ambiguous_revoke_commit_recovers_as_pending_stop_not_reopened(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+    original_revoke = supervisor.grants.revoke
+
+    def commit_then_lose_response(*args, **kwargs):
+        original_revoke(*args, **kwargs)
+        raise RuntimeError("grant_store_response_lost_after_commit")
+
+    supervisor.grants.revoke = commit_then_lose_response
+    with pytest.raises(RuntimeError, match="response_lost_after_commit"):
+        supervisor.revoke(expected_generation=1)
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), FakeExecutor(),
+    )
+    pending = reopened.list_stop_intents()
+    assert [(item.task_id, item.status) for item in pending] == [("task-1", "pending")]
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        reopened.reserve(_request("task-2"))
 
 
 def test_restart_reopens_admission_after_prepared_intent_without_reservations(tmp_path):
