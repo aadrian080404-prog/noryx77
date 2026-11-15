@@ -43,8 +43,8 @@ def test_hosted_gateway_http_e2e(monkeypatch):
     runtime = FakeOperationalRuntime()
     gateway = NoryxGateway(
         runtime_adapter=RuntimeAdapter(runtime),
-        bootstrap_token="hosted-bootstrap-test",
-        signing_secret="hosted-signing-test",
+        bootstrap_token="hosted-bootstrap-test-token-32-bytes-minimum",
+        signing_secret="hosted-signing-test-secret-32-bytes-minimum",
     )
     monkeypatch.setattr(web_app, "get_gateway", lambda: gateway)
     client = TestClient(web_app.app)
@@ -57,7 +57,7 @@ def test_hosted_gateway_http_e2e(monkeypatch):
     session = client.post(
         "/v1/session",
         json={
-            "bootstrap_token": "hosted-bootstrap-test",
+            "bootstrap_token": "hosted-bootstrap-test-token-32-bytes-minimum",
             "client_id": "noryx-browser-android",
         },
     )
@@ -83,8 +83,8 @@ def test_hosted_gateway_http_e2e(monkeypatch):
 def test_hosted_gateway_rejects_missing_authorization(monkeypatch):
     gateway = NoryxGateway(
         runtime_adapter=RuntimeAdapter(FakeOperationalRuntime()),
-        bootstrap_token="hosted-bootstrap-test",
-        signing_secret="hosted-signing-test",
+        bootstrap_token="hosted-bootstrap-test-token-32-bytes-minimum",
+        signing_secret="hosted-signing-test-secret-32-bytes-minimum",
     )
     monkeypatch.setattr(web_app, "get_gateway", lambda: gateway)
     client = TestClient(web_app.app)

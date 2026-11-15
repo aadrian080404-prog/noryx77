@@ -33,12 +33,12 @@ class FakeRuntime:
 def test_gateway_session_and_runtime_e2e():
     gateway = NoryxGateway(
         runtime_adapter=RuntimeAdapter(FakeRuntime()),
-        bootstrap_token="bootstrap-test",
-        signing_secret="signing-test",
+        bootstrap_token="bootstrap-test-token-32-bytes-minimum",
+        signing_secret="signing-test-secret-32-bytes-minimum",
     )
 
     session = gateway.create_session(
-        bootstrap_token="bootstrap-test",
+        bootstrap_token="bootstrap-test-token-32-bytes-minimum",
         client_id="noryx-browser-test",
     )
 
@@ -54,8 +54,8 @@ def test_gateway_session_and_runtime_e2e():
 def test_gateway_rejects_invalid_session():
     gateway = NoryxGateway(
         runtime_adapter=RuntimeAdapter(FakeRuntime()),
-        bootstrap_token="bootstrap-test",
-        signing_secret="signing-test",
+        bootstrap_token="bootstrap-test-token-32-bytes-minimum",
+        signing_secret="signing-test-secret-32-bytes-minimum",
     )
 
     try:
@@ -75,8 +75,8 @@ def test_gateway_rejects_invalid_session():
 def test_gateway_http_e2e():
     gateway = NoryxGateway(
         runtime_adapter=RuntimeAdapter(FakeRuntime()),
-        bootstrap_token="bootstrap-test",
-        signing_secret="signing-test",
+        bootstrap_token="bootstrap-test-token-32-bytes-minimum",
+        signing_secret="signing-test-secret-32-bytes-minimum",
     )
 
     from http.server import ThreadingHTTPServer
@@ -98,7 +98,7 @@ def test_gateway_http_e2e():
             base + "/v1/session",
             data=json.dumps(
                 {
-                    "bootstrap_token": "bootstrap-test",
+                    "bootstrap_token": "bootstrap-test-token-32-bytes-minimum",
                     "client_id": "browser-e2e",
                 }
             ).encode(),
@@ -141,3 +141,56 @@ def test_gateway_http_e2e():
     finally:
         server.shutdown()
         server.server_close()
+
+import pytest
+
+
+def test_session_authority_rejects_weak_secrets():
+    from gateway.auth import SessionAuthority
+
+    with pytest.raises(ValueError, match="bootstrap_token_too_weak"):
+        SessionAuthority(bootstrap_token="short", signing_secret="s" * 32)
+    with pytest.raises(ValueError, match="signing_secret_too_weak"):
+        SessionAuthority(bootstrap_token="b" * 32, signing_secret="short")
+
+
+def test_session_authority_revokes_one_session_and_all_sessions_for_client():
+    from gateway.auth import SessionAuthority, SessionError
+
+    authority = SessionAuthority(bootstrap_token="b" * 32, signing_secret="s" * 32)
+    first = authority.issue("b" * 32, "client-a")
+    second = authority.issue("b" * 32, "client-a")
+    third = authority.issue("b" * 32, "client-b")
+    authority.revoke(first)
+    with pytest.raises(SessionError, match="session_token_revoked"):
+        authority.verify(first)
+    assert authority.verify(second)["client_id"] == "client-a"
+    assert authority.revoke_client("client-a") == 1
+    with pytest.raises(SessionError, match="session_token_revoked"):
+        authority.verify(second)
+    assert authority.verify(third)["client_id"] == "client-b"
+
+
+def test_session_authority_rotation_invalidates_existing_tokens():
+    from gateway.auth import SessionAuthority, SessionError
+
+    authority = SessionAuthority(bootstrap_token="b" * 32, signing_secret="s" * 32)
+    token = authority.issue("b" * 32, "client-a")
+    authority.rotate_signing_secret("n" * 32)
+    with pytest.raises(SessionError):
+        authority.verify(token)
+    authority.rotate_bootstrap_token("r" * 32)
+    with pytest.raises(SessionError, match="bootstrap_auth_failed"):
+        authority.issue("b" * 32, "client-b")
+    assert authority.issue("r" * 32, "client-b")
+
+
+def test_session_authority_bounds_capacity_and_rejects_noncanonical_tokens():
+    from gateway.auth import SessionAuthority, SessionError
+
+    authority = SessionAuthority(bootstrap_token="b" * 32, signing_secret="s" * 32, max_sessions=1)
+    token = authority.issue("b" * 32, "client-a")
+    with pytest.raises(SessionError, match="session_capacity_reached"):
+        authority.issue("b" * 32, "client-b")
+    with pytest.raises(SessionError):
+        authority.verify(token + ".extra")
