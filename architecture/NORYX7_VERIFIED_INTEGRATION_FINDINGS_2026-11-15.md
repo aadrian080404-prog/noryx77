@@ -446,3 +446,26 @@ Regression coverage includes identity well-formedness, verification, generation,
 The PR #71 change hardens agent-to-agent identity checks inside the runtime; it does not solve the separate gateway end-user/device identity gap recorded in section 16. The gateway's shared bootstrap bearer still proves possession of a shared secret only. Do not map its caller-selected client label to an authenticated principal or use it to select principal memory.
 
 No PR was merged, no production deployment was performed, and no change was made to `main` or the frozen architecture branch.
+
+
+## 19. Durable identity and canonical runtime key continuity — 2026-11-16
+
+**Status: CONFIRMED / cross-branch integration blocker**
+
+A comparison of the durable identity branch (PR #46) with the sandbox/collaboration runtime branch (PR #71) shows that the two lines are not yet a drop-in integration:
+
+- PR #46 introduces `SQLiteIdentityRegistry`, which persists public trust anchors and revocation state. Its private signing keys are intentionally external.
+- PR #71 adds an in-memory trust-generation counter to `IdentityRegistry`; collaboration captures and rechecks that generation around each inference turn so revoke/re-register of the same public key is detected.
+- The current PR #46 registry implementation does not expose the same `generation(identity)` contract or persist a trust epoch. Simply swapping the registry classes would therefore break PR #71's collaboration revalidation semantics.
+- The canonical `NORYXRuntime` currently generates fresh random identities for built-in agents and registers them at construction. It does not load stable agent private keys from a key provider or reconcile those keys with a pre-populated durable registry. Injecting a durable registry containing the built-in agent IDs can therefore fail on duplicate registration; generating fresh keys on each restart is not a valid durable identity lifecycle.
+
+**Required integration design:**
+1. Define one registry protocol shared by in-memory and SQLite implementations: register, revoke, is_trusted, generation/trust_epoch, and atomic `with_trusted_identity`.
+2. Persist a monotonically increasing trust epoch across revoke/re-register, not just active/revoked state. Collaboration must compare the epoch captured before inference with the epoch after inference.
+3. Inject an agent key provider that loads the stable private key for each built-in agent. At startup, derive its public identity and verify exact agreement with the durable trust record; never silently overwrite or regenerate a trusted key.
+4. If key material or registry state is missing, mismatched, revoked, or unavailable, do not start the affected agent or silently downgrade to process-local trust.
+5. Add restart, cross-process revoke, same-key re-registration, and runtime-startup tests against the same SQLite database and external key-provider contract.
+
+This is an integration requirement, not a reason to merge PR #46 and PR #71 mechanically. Their overlapping identity changes must be reconciled on a dedicated integration branch after their individual tests are green.
+
+The malformed-UTF-8 hardening committed to PR #71 head `d663da76bd7eb80515a83871dfb92c8ae61b4f34` addresses input validation only; it does not solve durable key continuity or registry epoch persistence.
