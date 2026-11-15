@@ -101,3 +101,65 @@ The OpenRouter adapter sets `cost_per_call = 0.0` and a fixed expected latency. 
 - PR #75 is an architecture/documentation branch. This register does not itself fix the source code.
 - No merge, production deployment, independent security audit, distributed consensus, hardware attestation, or OS-level process termination is claimed.
 - Fixes must be made on isolated branches, tested against the relevant regression suites, and integrated only after dependency and overlap review.
+
+
+## 6. AuditLog append operations are not synchronized
+
+**Status: CONFIRMED / concurrency-integrity defect**
+
+In `core/audit.py`, `record()` reads the current chain tail, calculates the next digest, and appends to `_events` and `_digests` without a lock. `snapshot()`, `verify_integrity()`, and `digest()` also read mutable chain state without synchronization. Concurrent writers can observe the same previous digest and append sibling entries into a linear-chain structure, or readers can observe an intermediate state between the two appends.
+
+**Required correction:** serialize record/verify/snapshot/checkpoint operations with a re-entrant lock, or use an append transaction in the durable backend. Define whether checkpoints hold the lock for their full snapshot operation. Do not perform remote key-provider I/O while holding the chain lock unless the provider contract explicitly guarantees bounded local behavior.
+
+**Acceptance tests:** concurrent multi-thread appends preserve a single verifiable chain; snapshots are internally consistent during writes; checkpoint digest corresponds to a consistent chain prefix.
+
+## 7. MemoryHierarchy is a weaker parallel memory implementation
+
+**Status: CONFIRMED / inconsistent contract**
+
+`core/memory_hierarchy.py` currently exposes a small in-memory dictionary implementation alongside the more strongly validated `MemoryStore` and encrypted `EncryptedMemoryStore`.
+
+Observed gaps:
+- no synchronization around capacity check, put, get or promote;
+- `max_records=True` passes the numeric range check because booleans are integers in Python;
+- `put()` does not validate the record type, key/value types, or that level is a `MemoryLevel`;
+- `promote()` relies on raw dictionary indexing and accepts an unchecked level;
+- no persistence, encryption, execution/principal isolation, or promotion policy is implemented in this class.
+
+**Required correction:** either make this a clearly named low-level volatile index over the canonical memory stores, or retire it from operational routing. If retained as an API, add strict validation, synchronization and an explicit ownership/isolation key. Do not present L0-L5 labels as proof that storage tiers, retention, or distributed memory are operational.
+
+**Acceptance tests:** reject bool capacity and malformed records; concurrent capacity-bound writes never exceed capacity; invalid promotion fails with a stable error; memory ownership/isolation is tested.
+
+## 8. EncryptedMemoryStore does not share MemoryStore's validation boundary
+
+**Status: CONFIRMED / data-contract inconsistency**
+
+`core/secure_memory.py` serializes any `MemoryItem` without applying the full validation in `MemoryStore.put()`. Its deserializer checks that `importance` is numeric but does not enforce finiteness and the 0..1 range, and it checks `kind` is text but not that it belongs to `MemoryStore.VALID_KINDS`. This means callers can persist records that the in-memory store would reject, and those records can be returned by the encrypted store.
+
+**Required correction:** centralize MemoryItem validation and invoke it before serialization and after deserialization. Ensure schema migration is explicit and malformed authenticated records fail closed.
+
+**Acceptance tests:** NaN/infinite/out-of-range importance and unknown kinds are rejected both before persistence and after loading; valid records round-trip unchanged.
+
+## 9. Gateway session-secret strength and lifecycle need an explicit policy
+
+**Status: CONFIRMED / authentication hardening gap**
+
+`gateway/auth.py:SessionAuthority.__init__()` checks only that the bootstrap token and signing secret are non-empty. It accepts arbitrarily short signing secrets and bootstrap tokens. The session token is stateless: the generated nonce is not tracked, and there is no revocation/rotation mechanism in this class. The HTTP gateway also has no visible per-client rate-limit boundary around bootstrap session issuance.
+
+**Required correction:** enforce a minimum signing-secret entropy/length (prefer a generated 32-byte or stronger secret), define bootstrap-token rotation and secure provisioning, and add a revocation/version mechanism if sessions must be invalidated before expiry. Apply rate limiting and abuse controls at the gateway/reverse-proxy boundary; do not mistake a random nonce in a stateless token for replay prevention or revocation.
+
+**Acceptance tests:** weak secrets are rejected; secret rotation invalidates old sessions according to policy; revoked sessions fail immediately; bootstrap attempts are rate-limited at the actual HTTP boundary.
+
+## Updated integration priority
+
+| Priority | Area | Blocking condition | Required gate |
+|---|---|---|---|
+| P0 | Gateway bootstrap | Default entry point cannot build its runtime | Factory and startup tests |
+| P0 | Matrix revocation | Retry can stop healthy workloads | Pending-stop isolation tests |
+| P0 | Audit | Concurrent appends can break linear-chain consistency | Concurrent append/checkpoint tests |
+| P1 | Model result proof | Optional key means no cryptographic authentication | Explicit integrity/authentication modes |
+| P1 | Provider adapter | Unbounded response reads | Bounded streaming tests |
+| P1 | Session authority | Weak secrets and no revocation/rate-limit contract | Secret, rotation, revocation and abuse tests |
+| P1 | Memory | Multiple stores expose inconsistent validation/isolation semantics | Canonical validation and ownership tests |
+| P2 | Provider economics | Zero cost is a placeholder, not measured cost | Usage-aware accounting contract |
+
