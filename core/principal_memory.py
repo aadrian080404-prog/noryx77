@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from threading import RLock
 
-from .memory_hierarchy import MemoryHierarchy, MemoryRecord
+from .memory_hierarchy import MemoryHierarchy, MemoryLevel, MemoryRecord
 
 
 class PrincipalMemoryHierarchy:
@@ -51,7 +51,8 @@ class PrincipalMemoryHierarchy:
     def put(self, principal_id: str, record: MemoryRecord) -> None:
         with self._lock:
             store = self._store(principal_id, create=True)
-            assert store is not None
+            if store is None:
+                raise RuntimeError("principal_memory_store_unavailable")
             store.put(record)
 
     def get(self, principal_id: str, key: str) -> MemoryRecord | None:
@@ -59,7 +60,7 @@ class PrincipalMemoryHierarchy:
             store = self._store(principal_id, create=False)
             return None if store is None else store.get(key)
 
-    def promote(self, principal_id: str, key: str, level) -> MemoryRecord:
+    def promote(self, principal_id: str, key: str, level: MemoryLevel) -> MemoryRecord:
         with self._lock:
             store = self._store(principal_id, create=False)
             if store is None:
