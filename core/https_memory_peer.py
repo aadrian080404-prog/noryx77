@@ -20,6 +20,20 @@ from .signed_memory_replication import (
 )
 
 _PATH = "/v1/memory/merge"
+MAX_PEER_RESPONSE_BYTES = 1024
+
+
+def _read_bounded_response(response) -> bytes:
+    length = response.headers.get("Content-Length")
+    if length is not None:
+        if not length.isdigit() or int(length) > MAX_PEER_RESPONSE_BYTES:
+            raise RuntimeError("memory_peer_response_size_invalid")
+    raw = response.read(MAX_PEER_RESPONSE_BYTES + 1)
+    if len(raw) > MAX_PEER_RESPONSE_BYTES:
+        raise RuntimeError("memory_peer_response_size_invalid")
+    if length is not None and len(raw) != int(length):
+        raise RuntimeError("memory_peer_response_length_mismatch")
+    return raw
 
 
 def _batch_to_bytes(batch: SignedMemoryBatch) -> bytes:
@@ -175,7 +189,7 @@ class HTTPSMemoryPeerClient:
             with urlopen(request, context=self._tls, timeout=self._timeout) as response:
                 if response.status != 200 or response.headers.get_content_type() != "application/json":
                     raise RuntimeError("memory_peer_response_invalid")
-                raw = response.read(1024)
+                raw = _read_bounded_response(response)
         except (HTTPError, URLError, TimeoutError, ssl.SSLError) as exc:
             raise RuntimeError("memory_peer_transport_failed") from exc
         result = json.loads(raw.decode("utf-8"))
