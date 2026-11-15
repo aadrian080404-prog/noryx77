@@ -114,6 +114,13 @@ class DurableReservationBook:
         """Durably record every reservation as a prepared drain before revocation."""
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
+            # Fence admission in the same SQLite write transaction that snapshots
+            # current reservations. Other supervisor processes share this gate.
+            db.execute(
+                "UPDATE matrix_reservation_state SET enabled=0 "
+                "WHERE node_id=? AND generation=?",
+                (self.node.node_id, self.node.grant.generation),
+            )
             rows = db.execute(
                 """SELECT task_id,grant_generation FROM matrix_reservations
                    WHERE node_id=? ORDER BY task_id""", (self.node.node_id,)
@@ -145,6 +152,16 @@ class DurableReservationBook:
                 "DELETE FROM matrix_stop_intents WHERE node_id=? AND status='prepared'",
                 (self.node.node_id,),
             )
+            # Roll back the admission fence only when the original grant is still
+            # enabled and no earlier durable stop remains pending.
+            db.execute(
+                """UPDATE matrix_reservation_state SET enabled=1
+                   WHERE node_id=? AND generation=? AND NOT EXISTS (
+                       SELECT 1 FROM matrix_stop_intents
+                       WHERE node_id=? AND status='pending'
+                   )""",
+                (self.node.node_id, self.node.grant.generation, self.node.node_id),
+            )
             db.commit()
 
     def recover_prepared_stop_intents(self, current_generation: int | None, grant_enabled: bool) -> tuple[DurableStopIntent, ...]:
@@ -167,6 +184,23 @@ class DurableReservationBook:
                         "DELETE FROM matrix_stop_intents WHERE node_id=? AND task_id=?",
                         (self.node.node_id, task_id),
                     )
+            # Recover the admission gate even when the crash happened before any
+            # reservation existed (and therefore no stop-intent row was written).
+            # A stale or revoked grant must never reopen admission.
+            can_reopen = (
+                grant_enabled
+                and current_generation is not None
+                and current_generation == self.node.grant.generation
+            )
+            db.execute(
+                """UPDATE matrix_reservation_state
+                   SET enabled=CASE WHEN ?=1 AND NOT EXISTS (
+                       SELECT 1 FROM matrix_stop_intents
+                       WHERE node_id=? AND status='pending'
+                   ) THEN 1 ELSE 0 END
+                   WHERE node_id=?""",
+                (int(can_reopen), self.node.node_id, self.node.node_id),
+            )
             db.commit()
         return self.list_stop_intents()
 
@@ -269,7 +303,10 @@ class DurableReservationBook:
             current = db.execute(
                 "SELECT * FROM matrix_reservation_state WHERE node_id=?", (self.node.node_id,)
             ).fetchone()
-            if current is None or tuple(current) != old:
+            # prepare_stop_intents() deliberately flips only the durable enabled
+            # bit to fence concurrent admissions before grant revocation.
+            expected_fenced = old[:-1] + (0,)
+            if current is None or tuple(current) not in (old, expected_fenced):
                 raise PermissionError("reservation_state_changed_requires_refresh")
             cancelled = tuple(row[0] for row in db.execute(
                 "SELECT task_id FROM matrix_reservations WHERE node_id=? ORDER BY task_id",
