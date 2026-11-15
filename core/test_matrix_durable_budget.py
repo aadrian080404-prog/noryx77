@@ -90,8 +90,9 @@ def test_durable_fencing_serializes_concurrent_writers(tmp_path):
     from concurrent.futures import ThreadPoolExecutor
     db = tmp_path / "concurrent.db"
     DurableFencedResource(db, "resource").activate(9)
+    resources = [DurableFencedResource(db, "resource") for _ in range(8)]
     def write(index):
-        resource = DurableFencedResource(db, "resource")
+        resource = resources[index % len(resources)]
         return resource.apply(9, "tenant", f"op-{index}", str(index).encode()).version
     with ThreadPoolExecutor(max_workers=8) as pool:
         versions = list(pool.map(write, range(16)))
