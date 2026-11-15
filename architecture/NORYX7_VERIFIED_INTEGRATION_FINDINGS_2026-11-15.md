@@ -259,3 +259,29 @@ PR #81 (`fix/modelfabric-explicit-authenticated-results-2026-11-15`) adds an exp
 - **PR #75 architecture register:** five checks succeeded; Foundation/Android Browser verification remained in progress at the latest poll.
 
 The session hardening in #82 currently uses a bounded process-local active-session registry. It improves immediate revocation within one gateway process and intentionally invalidates all sessions after restart. It is not yet a multi-instance revocation service. HTTP bootstrap rate limiting remains a separate open task; it must be enforced at the actual socket/proxy boundary and must not trust spoofable forwarded headers by default.
+
+
+## 13. Subsequent remediation — 2026-11-15
+
+### CI completion
+- **PR #75 architecture blueprint/register:** all six configured checks completed successfully on `9a5baef37f0f33450f531d1ca125c47e94db72b9`.
+- **PR #78 MemoryHierarchy:** all six configured checks completed successfully on `d6017445f16ad04c967d08cc2e5bf281fbe82351`, including Foundation/Android Browser verification after adding a Google-hosted Maven Central mirror fallback. This is CI success for the candidate branch; the component remains process-local.
+- **PR #82 Gateway session authority:** all six configured checks completed successfully on `bf4735ef592ebbfcafefc3e7576edf96bb67e7be`. This includes regression tests for short-secret rejection, individual/client revocation, signing/bootstrap rotation, capacity limits, canonical token parsing, and the bootstrap rotation race.
+- **PR #83 Matrix durable stop intents:** tests, Core, Source Secrecy and Runner Smoke passed; Foundation remained in progress at the latest poll. Draft depends on #73.
+- **PR #84 Principal memory partitions:** newly opened draft; no workflow results had appeared at the latest poll. Depends on #78.
+
+### Matrix revocation durability extension — PR #83
+PR #83 adds a SQLite stop-intent ledger alongside durable reservations. It prepares intents before grant revocation, activates them after the durable generation change, recovers prepared intents after restart by comparing the stored grant generation, and acknowledges only after the executor returns success for the task/generation. The executor still must enforce generation fencing and idempotent stop semantics. This is local node durability, not cross-device consensus or proof of OS process termination.
+
+### Principal-scoped memory — PR #84
+PR #84 adds a process-local principal namespace over the hardened MemoryHierarchy, with explicit principal IDs on every operation, per-principal record quotas, total principal bounds, and serialized deletion. This prevents key collisions and accidental cross-namespace reads through this API. It does not authenticate callers, persist records, encrypt per principal, or replicate between devices. The gateway must supply a principal ID derived from verified identity, never from an untrusted request field.
+
+### Updated open integration gates
+1. Wire verified gateway identity to principal-scoped memory without allowing clients to select arbitrary tenant IDs.
+2. Replace process-local session revocation with shared consistent state for multi-instance gateways.
+3. Provision and rotate ModelFabric HMAC keys through a real key authority; operational runtime wiring is not yet complete.
+4. Finish Matrix target executor fencing, crash recovery tests for every stop-intent boundary, and explicit OS-level termination verification.
+5. Add full gateway→runtime→agent→model→TaskGraph→memory→authorization→audit→Matrix integration tests, including cancellation and restart.
+6. Keep provider usage/cost accounting tied to authoritative provider-reported usage and reconcile estimates against billing; adapter defaults must not imply zero real-world cost.
+
+No candidate PR listed above is merged by this work, and no production deployment or independent security certification is claimed.
