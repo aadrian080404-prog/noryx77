@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -42,7 +43,7 @@ class DurableFencedResource:
 
     def _initialize(self) -> None:
         Path(self.database).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as db:
+        with closing(self._connect()) as db:
             db.execute("PRAGMA journal_mode = WAL")
             db.execute(
                 """CREATE TABLE IF NOT EXISTS matrix_resource_state (
