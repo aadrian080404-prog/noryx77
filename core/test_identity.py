@@ -91,6 +91,13 @@ class AgentIdentityTests(unittest.TestCase):
         self.assertFalse(AgentIdentityAuthority.verify_identity(forged))
 
 
+    def test_unknown_revocation_does_not_consume_a_trust_generation(self):
+        registry = IdentityRegistry()
+        registry.revoke("not-yet-registered")
+        identity, _ = AgentIdentityAuthority.generate("not-yet-registered")
+        registry.register(identity)
+        self.assertEqual(registry.generation(identity), 1)
+
     def test_malformed_utf8_agent_identifiers_are_rejected_consistently(self):
         identity, _ = AgentIdentityAuthority.generate("agent-a")
         malformed = replace(identity, agent_id="\\ud800")
