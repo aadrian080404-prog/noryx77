@@ -75,6 +75,9 @@ class MatrixSupervisor:
         self._active: dict[str, int] = {
             item.task_id: item.grant_generation for item in reservations.list()
         }
+        # Only failed stop requests belong here; running workloads are not
+        # implicitly pending termination.
+        self._pending_stops: dict[str, int] = {}
         self._lock = RLock()
 
     def _current_authority(self, request: WorkloadRequest):
@@ -157,9 +160,11 @@ class MatrixSupervisor:
                 try:
                     self.executor.stop(task_id, generation)
                 except Exception as exc:
+                    self._pending_stops[task_id] = generation
                     failures.append(task_id + ":" + type(exc).__name__)
                 else:
                     self._active.pop(task_id, None)
+                    self._pending_stops.pop(task_id, None)
             return RevocationResult(revoked.grant.generation, cancelled, tuple(failures))
 
     def retry_pending_stops(self) -> tuple[str, ...]:
@@ -171,11 +176,12 @@ class MatrixSupervisor:
         """
         with self._lock:
             failures: list[str] = []
-            for task_id, generation in tuple(sorted(self._active.items())):
+            for task_id, generation in tuple(sorted(self._pending_stops.items())):
                 try:
                     self.executor.stop(task_id, generation)
                 except Exception as exc:
                     failures.append(task_id + ":" + type(exc).__name__)
                 else:
+                    self._pending_stops.pop(task_id, None)
                     self._active.pop(task_id, None)
             return tuple(failures)
