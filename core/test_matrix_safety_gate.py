@@ -52,7 +52,9 @@ def test_operator_authorization_and_local_interlock_fail_closed(tmp_path):
     with pytest.raises(PermissionError, match="operator_not_authorized"):
         denied.approve("p", "op-a", now=2)
 
-    blocked = prepared_gate(tmp_path / "blocked", interlock=False)
+    blocked_dir = tmp_path / "blocked"
+    blocked_dir.mkdir()
+    blocked = prepared_gate(blocked_dir, interlock=False)
     with pytest.raises(PermissionError, match="local_safety_interlock_blocked"):
         blocked.issue("proposal-1", now=4)
 
