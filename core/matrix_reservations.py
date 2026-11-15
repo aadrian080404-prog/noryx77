@@ -116,11 +116,13 @@ class DurableReservationBook:
             db.execute("BEGIN IMMEDIATE")
             # Fence admission in the same SQLite write transaction that snapshots
             # current reservations. Other supervisor processes share this gate.
-            db.execute(
+            fenced = db.execute(
                 "UPDATE matrix_reservation_state SET enabled=0 "
                 "WHERE node_id=? AND generation=?",
                 (self.node.node_id, self.node.grant.generation),
             )
+            if fenced.rowcount != 1:
+                raise PermissionError("durable_admission_fence_failed")
             rows = db.execute(
                 """SELECT task_id,grant_generation FROM matrix_reservations
                    WHERE node_id=? ORDER BY task_id""", (self.node.node_id,)
