@@ -185,3 +185,18 @@ def test_durable_registry_rejects_malformed_utf8_agent_identifiers(tmp_path):
     with pytest.raises(ValueError, match="invalid_agent_id"):
         registry.with_trusted_identity("\ud800", lambda _identity: None)
     registry.close()
+
+
+
+def test_unknown_revocation_does_not_consume_a_trust_generation(tmp_path):
+    local = __import__("core.identity", fromlist=["IdentityRegistry"]).IdentityRegistry()
+    local.revoke("not-yet-registered")
+    local_identity, _ = AgentIdentityAuthority.generate("not-yet-registered")
+    local.register(local_identity)
+    assert local.generation(local_identity) == 1
+
+    durable = SQLiteIdentityRegistry(str(tmp_path / "unknown-revoke.sqlite"))
+    durable.revoke("not-yet-registered")
+    durable.register(local_identity)
+    assert durable.generation(local_identity) == 1
+    durable.close()
