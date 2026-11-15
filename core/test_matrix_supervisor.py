@@ -146,3 +146,26 @@ def test_stop_failure_is_reported_not_claimed_as_terminated(tmp_path):
     assert result.stop_failures == ("task-1:RuntimeError",)
     assert reservations.list() == ()
     assert executor.stopped == []
+
+
+def test_pending_stop_can_be_retried_after_transient_executor_failure(tmp_path):
+    class FlakyExecutor(FakeExecutor):
+        def __init__(self):
+            super().__init__()
+            self.fail_once = True
+
+        def stop(self, task_id, generation):
+            if self.fail_once:
+                self.fail_once = False
+                raise RuntimeError("temporary_stop_failure")
+            super().stop(task_id, generation)
+
+    executor = FlakyExecutor()
+    supervisor, reservations, _ = _setup(tmp_path, executor)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    result = supervisor.revoke(expected_generation=1)
+    assert result.stop_failures == ("task-1:RuntimeError",)
+    assert reservations.list() == ()
+    assert supervisor.retry_pending_stops() == ()
+    assert executor.stopped == [("task-1", 1)]
+    assert supervisor.retry_pending_stops() == ()
