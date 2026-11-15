@@ -57,3 +57,19 @@ def test_ledger_journal_rows_are_append_only(tmp_path):
             db.execute("UPDATE matrix_journal SET amount_minor=1 WHERE journal_id=?", (posted.journal_id,))
         with pytest.raises(sqlite3.IntegrityError, match="postings_are_append_only"):
             db.execute("DELETE FROM matrix_postings WHERE journal_id=?", (posted.journal_id,))
+
+
+def test_ledger_integrity_audit_detects_unbalanced_or_extra_postings(tmp_path):
+    import sqlite3
+    path = tmp_path / "ledger.db"
+    ledger = LocalDoubleEntryLedger(path)
+    posted = ledger.post(req(), b"authorized", allow)
+    assert ledger.verify_integrity() == (True, ())
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "INSERT INTO matrix_postings(journal_id,asset_id,account_id,amount_minor) VALUES (?,?,?,?)",
+            (posted.journal_id, "EUR-cent", "rogue-account", 1),
+        )
+    valid, errors = ledger.verify_integrity()
+    assert not valid
+    assert errors == (f"journal:{posted.journal_id}:posting_mismatch",)
