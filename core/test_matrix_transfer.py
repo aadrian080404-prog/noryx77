@@ -88,3 +88,31 @@ def test_resume_rejects_wrong_participant_binding(tmp_path):
 def test_transfer_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
     with pytest.raises(ValueError, match="positive_database_timeout_required"):
         DurableTransferCoordinator(tmp_path / "bad.db", timeout=timeout)
+
+def test_transfer_state_cannot_be_downgraded_after_commit(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    source, destination = _participants()
+    committed = coordinator.execute(_request(), source, destination)
+    assert committed.state == "COMMITTED"
+
+    # Simulate a delayed worker reporting an obsolete failure/phase.
+    coordinator._set_state("tx-1", "IN_DOUBT")
+    coordinator._set_state("tx-1", "PREPARING")
+    coordinator._set_state("tx-1", "PREPARED")
+    assert coordinator.status("tx-1").state == "COMMITTED"
+
+
+def test_transfer_cannot_claim_commit_without_both_durable_confirmations(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    coordinator._ensure_intent(_request(), coordinator._digest(_request()))
+    with pytest.raises(PermissionError, match="transfer_prepare_confirmation_incomplete"):
+        coordinator._set_state("tx-1", "COMMITTING")
+    with pytest.raises(PermissionError, match="transfer_commit_confirmation_incomplete"):
+        coordinator._set_state("tx-1", "COMMITTED")
+    assert coordinator.status("tx-1").state == "PREPARING"
+
+
+def test_transfer_rejects_unknown_state_target(tmp_path):
+    coordinator = DurableTransferCoordinator(tmp_path / "transfer.db")
+    with pytest.raises(ValueError, match="invalid_transfer_state"):
+        coordinator._set_state("missing", "NOT_A_STATE")
