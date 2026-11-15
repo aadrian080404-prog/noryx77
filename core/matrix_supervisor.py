@@ -78,6 +78,16 @@ class MatrixSupervisor:
         # Only failed stop requests belong here; running workloads are not
         # implicitly pending termination.
         self._pending_stops: dict[str, int] = {}
+        # Recover intents prepared before a crash. A newer or missing grant
+        # means authority changed; an unchanged enabled grant means revocation
+        # never committed and the prepared intents can be discarded.
+        stored_grant = self.grants.get(self.node.grant.grant_id)
+        current_generation = None if stored_grant is None else stored_grant.grant.generation
+        grant_enabled = False if stored_grant is None else stored_grant.grant.enabled
+        recovered = self.reservations.recover_prepared_stop_intents(current_generation, grant_enabled)
+        self._pending_stops = {
+            item.task_id: item.grant_generation for item in recovered if item.status == "pending"
+        }
         self._lock = RLock()
 
     def _current_authority(self, request: WorkloadRequest):
@@ -147,22 +157,32 @@ class MatrixSupervisor:
         successful process termination. No new dispatch is admitted afterward.
         """
         with self._lock:
-            revoked = self.grants.revoke(self.node.grant.grant_id, expected_generation)
+            prepared = self.reservations.prepare_stop_intents()
+            try:
+                revoked = self.grants.revoke(self.node.grant.grant_id, expected_generation)
+            except Exception:
+                self.reservations.cancel_prepared_stop_intents()
+                raise
             next_node = NodeProfile(
                 self.node.node_id, self.node.failure_domain, self.node.attested,
                 self.node.sandbox_ready, self.node.envelope, revoked.grant,
             )
+            # Persist the grant-generation change in the reservation authority.
+            # If a crash occurs before this point, prepared intents are recovered
+            # by comparing the durable grant generation at next startup.
             cancelled = self.reservations.reconcile_grant(next_node)
             self.node = next_node
+            active_intents = self.reservations.activate_stop_intents()
             failures: list[str] = []
-            for task_id in cancelled:
-                generation = self._active.get(task_id, expected_generation)
+            for intent in active_intents:
+                task_id, generation = intent.task_id, intent.grant_generation
                 try:
                     self.executor.stop(task_id, generation)
                 except Exception as exc:
                     self._pending_stops[task_id] = generation
                     failures.append(task_id + ":" + type(exc).__name__)
                 else:
+                    self.reservations.acknowledge_stop_intent(task_id, generation)
                     self._active.pop(task_id, None)
                     self._pending_stops.pop(task_id, None)
             return RevocationResult(revoked.grant.generation, cancelled, tuple(failures))
@@ -182,6 +202,7 @@ class MatrixSupervisor:
                 except Exception as exc:
                     failures.append(task_id + ":" + type(exc).__name__)
                 else:
+                    self.reservations.acknowledge_stop_intent(task_id, generation)
                     self._pending_stops.pop(task_id, None)
                     self._active.pop(task_id, None)
             return tuple(failures)
