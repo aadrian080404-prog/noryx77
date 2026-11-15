@@ -163,3 +163,26 @@ Observed gaps:
 | P1 | Memory | Multiple stores expose inconsistent validation/isolation semantics | Canonical validation and ownership tests |
 | P2 | Provider economics | Zero cost is a placeholder, not measured cost | Usage-aware accounting contract |
 
+## 10. Cross-PR coverage pass — existing candidate branches (2026-11-15)
+
+This pass compared the findings above against existing feature branches and inspected the exact candidate source/test files. A branch containing a correction is not equivalent to a merged or CI-verified correction.
+
+| Finding | Candidate branch / source evidence | Regression evidence inspected | Current disposition |
+|---|---|---|---|
+| AuditLog concurrency | `security/audit-log-concurrency-2026-11-14` adds an `RLock`; record, snapshot, digest, integrity verification and checkpoint paths use a consistent lock strategy. Key-provider I/O is outside the chain lock, followed by a second consistency check. | `tests/test_audit_concurrency.py`: 500 concurrent appends, concurrent snapshots/verifications, checkpoint consistency. | **Candidate correction exists; not merged and not executed in this pass.** Needs CI on the candidate head and review of its broader 89-file branch diff before integration. |
+| MemoryHierarchy validation/thread safety | `memory/hierarchy-thread-safety-validation-2026-11-14` adds an `RLock`, strict non-bool integer capacity validation, bounded key/value validation, record/level type checks, safe lookup, delete and snapshot. | `tests/test_memory_hierarchy_hardening.py`: invalid capacities/records, bounds, promotion/deletion, concurrent capacity writes. | **Candidate correction exists; not merged and not executed in this pass.** It explicitly documents this as process-local, not distributed memory. Ownership isolation is still not implemented by this class and must remain an explicit architectural boundary. |
+| EncryptedMemoryStore validation parity | Compared `core/secure_memory.py` on main and `hardening/encrypted-memory-store-concurrency-2026-11-13`; the file is unchanged and the candidate diff does not include it. | No regression test for the identified NaN/Inf/range/allowed-kind mismatch was found in the inspected candidate files. | **Unresolved.** The encrypted SQLite adapter work in PR #20 is a separate concern and does not, by itself, close this validation-parity defect. |
+| Matrix revocation retry | Re-inspected `core/matrix_supervisor.py` on `architecture/noryx7-matrix-core-2026-11-14`; `retry_pending_stops()` still iterates `_active`, and successful dispatch still populates `_active`. | Existing `core/test_matrix_supervisor.py` is part of the branch, but the required active-workload/no-revocation regression was not demonstrated by the inspected source. | **Unresolved P0.** A separate pending-stop set and targeted tests remain required. |
+| Gateway bootstrap | Main still defaults through `NoryxGateway -> RuntimeAdapter -> OperationalNORYXRuntime()`, while the provider-injected factory remains in `noryx7_operational.py`. No inspected gateway branch closes this call-path gap. | Required startup/factory tests remain acceptance criteria. | **Unresolved P0.** |
+| Session authority | Main `gateway/auth.py` still accepts any non-empty bootstrap/signing secrets and does not implement session revocation or a gateway rate-limit boundary. | Required weak-secret, rotation, revocation and HTTP rate-limit tests remain acceptance criteria. | **Unresolved P1.** |
+| Model result authentication | Main operational factory still constructs `ModelFabric` without a binding key. | Required explicit unauthenticated-vs-authenticated mode tests remain acceptance criteria. | **Unresolved P1.** |
+| OpenRouter response bounds | Main adapter still requires bounded incremental reads on success and error paths. | Required oversized-body and malformed-response tests remain acceptance criteria. | **Unresolved P1.** |
+| Provider economics | Adapter contract still lacks authoritative usage/cost reconciliation. | Required usage metadata/accounting contract remains acceptance criteria. | **Unresolved P2.** |
+
+### Integration rules from this pass
+
+1. Do not cherry-pick either broad candidate branch wholesale: each is ahead of main by many commits and changes dozens of unrelated files. Extract only the reviewed feature delta after ancestry, tests and file overlap are reconciled.
+2. The audit and memory-hierarchy candidate branches are promising source-level corrections, not verified releases. Run their focused tests and all required CI before calling them complete.
+3. Do not confuse PR #20's encrypted SQLite transaction/concurrency work with validation parity in `core/secure_memory.py`, nor with distributed multi-device memory.
+4. Keep the Matrix revocation fix isolated to its own branch because it is a safety-critical behavioral correction in a new subsystem.
+5. No application code, PR state, deployment, or frozen branch was changed by this coverage pass. The six PR #75 workflows for commit `5c489f4016db99b2706d00be984282d361971389` subsequently completed successfully; this validates the documentation commit's configured CI, not the candidate branches or production behavior.
