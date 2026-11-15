@@ -87,6 +87,14 @@ class DeterministicNetwork:
     def heal(self, source: str, destination: str) -> None:
         self._partitions.discard(self._link(source, destination))
 
+    def partition_at(self, source: str, destination: str, at: int) -> TwinEvent:
+        link = self._link(source, destination)
+        return self.twin.schedule(at, "network_partition", link)
+
+    def heal_at(self, source: str, destination: str, at: int) -> TwinEvent:
+        link = self._link(source, destination)
+        return self.twin.schedule(at, "network_heal", link)
+
     def send(self, message_id: str, source: str, destination: str,
              payload: Any, delay: int = 0) -> TwinEvent:
         if not isinstance(message_id, str) or not message_id.strip():
@@ -98,6 +106,16 @@ class DeterministicNetwork:
         return self.twin.schedule(self.twin.now + delay, "network_delivery", message)
 
     def run(self, max_events: int = 10000) -> tuple[TwinEvent, ...]:
+        def partition(event: TwinEvent, _sim: DeterministicTwin) -> None:
+            if not isinstance(event.payload, frozenset) or len(event.payload) != 2:
+                raise ValueError("invalid_network_partition_event")
+            self._partitions.add(event.payload)
+
+        def heal(event: TwinEvent, _sim: DeterministicTwin) -> None:
+            if not isinstance(event.payload, frozenset) or len(event.payload) != 2:
+                raise ValueError("invalid_network_heal_event")
+            self._partitions.discard(event.payload)
+
         def deliver(event: TwinEvent, _sim: DeterministicTwin) -> None:
             message = event.payload
             if not isinstance(message, NetworkMessage):
@@ -106,4 +124,9 @@ class DeterministicNetwork:
                 self.dropped.append(message)
             else:
                 self.delivered.append(message)
-        return self.twin.run({"network_delivery": deliver}, max_events=max_events)
+
+        return self.twin.run({
+            "network_partition": partition,
+            "network_heal": heal,
+            "network_delivery": deliver,
+        }, max_events=max_events)
