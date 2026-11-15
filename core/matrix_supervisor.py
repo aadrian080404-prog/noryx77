@@ -70,17 +70,10 @@ class MatrixSupervisor:
         self.reservations = reservations
         self.device_policy = device_policy
         self.executor = executor
-        # Rehydrate pending workloads from the durable reservation authority so
-        # a supervisor restart does not forget which tasks require fencing/drain.
         self._active: dict[str, int] = {
             item.task_id: item.grant_generation for item in reservations.list()
         }
-        # Only failed stop requests belong here; running workloads are not
-        # implicitly pending termination.
         self._pending_stops: dict[str, int] = {}
-        # Recover intents prepared before a crash. A newer or missing grant
-        # means authority changed; an unchanged enabled grant means revocation
-        # never committed and the prepared intents can be discarded.
         stored_grant = self.grants.get(self.node.grant.grant_id)
         current_generation = None if stored_grant is None else stored_grant.grant.generation
         grant_enabled = False if stored_grant is None else stored_grant.grant.enabled
@@ -133,15 +126,9 @@ class MatrixSupervisor:
                 raise PermissionError("device_contribution_policy_denied:" + reason)
             reservation = self.reservations.reserve(request)
             try:
-                # Re-read the durable authority after reservation. Another
-                # supervisor/process may have revoked the grant since the first
-                # check; never dispatch from a stale local snapshot.
                 self._current_authority(request)
                 if reservation.grant_generation != request.generation:
                     raise PermissionError("reservation_generation_mismatch")
-                # The target adapter must still enforce this generation
-                # atomically; this second check narrows, but cannot close, the
-                # cross-database/time-of-check race by itself.
                 self.executor.start(request, reservation.grant_generation)
             except Exception:
                 self.reservations.release(request.task_id)
@@ -151,13 +138,9 @@ class MatrixSupervisor:
                                    reservation.grant_generation, age)
 
     def revoke(self, expected_generation: int) -> RevocationResult:
-        """Persist revocation first, clear reservations, then ask executor to stop.
-
-        A failed stop is reported explicitly; it is never represented as a
-        successful process termination. No new dispatch is admitted afterward.
-        """
+        """Persist revocation first, clear reservations, then ask executor to stop."""
         with self._lock:
-            prepared = self.reservations.prepare_stop_intents()
+            self.reservations.prepare_stop_intents()
             try:
                 revoked = self.grants.revoke(self.node.grant.grant_id, expected_generation)
             except Exception:
@@ -167,12 +150,15 @@ class MatrixSupervisor:
                 self.node.node_id, self.node.failure_domain, self.node.attested,
                 self.node.sandbox_ready, self.node.envelope, revoked.grant,
             )
-            # Persist the grant-generation change in the reservation authority.
-            # If a crash occurs before this point, prepared intents are recovered
-            # by comparing the durable grant generation at next startup.
             cancelled = self.reservations.reconcile_grant(next_node)
             self.node = next_node
             active_intents = self.reservations.activate_stop_intents()
+            # Mirror durable pending state before external calls. If the
+            # acknowledgement write fails after stop succeeds, retry remains
+            # possible in this process as well as after a restart.
+            for intent in active_intents:
+                if intent.status == "pending":
+                    self._pending_stops[intent.task_id] = intent.grant_generation
             failures: list[str] = []
             for intent in active_intents:
                 task_id, generation = intent.task_id, intent.grant_generation
@@ -188,13 +174,14 @@ class MatrixSupervisor:
             return RevocationResult(revoked.grant.generation, cancelled, tuple(failures))
 
     def retry_pending_stops(self) -> tuple[str, ...]:
-        """Retry target drains left pending by a previous failed stop request.
-
-        Executor.stop must be idempotent for a task/generation pair. A successful
-        retry removes the task from the local pending set; failures remain
-        visible and are never reported as completed termination.
-        """
+        """Retry only durable pending drains; executor.stop must be idempotent."""
         with self._lock:
+            # SQLite is the source of truth. Re-read it so a failed acknowledgement
+            # or another supervisor's pending intent is not hidden by stale RAM.
+            durable_pending = self.reservations.list_stop_intents()
+            for intent in durable_pending:
+                if intent.status == "pending":
+                    self._pending_stops[intent.task_id] = intent.grant_generation
             failures: list[str] = []
             for task_id, generation in tuple(sorted(self._pending_stops.items())):
                 try:
