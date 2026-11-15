@@ -6,11 +6,12 @@ transaction that records the idempotent operation.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 import math
 import sqlite3
-from typing import Union
+from typing import Iterator
 
 
 @dataclass(frozen=True)
@@ -23,14 +24,14 @@ class DurableAppliedOperation:
 
 
 class SQLiteFencedResource:
-    def __init__(self, database: Union[str, bytes], *, timeout: float = 5.0) -> None:
-        if not isinstance(database, (str, bytes)) or not database:
+    def __init__(self, database: str, *, timeout: float = 5.0) -> None:
+        if not isinstance(database, str) or not database:
             raise ValueError("database_path_required")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout_must_be_finite_and_positive")
         self._database = database
         self._timeout = float(timeout)
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS fenced_resources (
                     resource_id TEXT PRIMARY KEY,
@@ -51,12 +52,16 @@ class SQLiteFencedResource:
                 )"""
             )
 
-    def _connect(self):
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self._database, timeout=self._timeout, isolation_level=None)
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=%d" % int(self._timeout * 1000))
-        connection.execute("PRAGMA synchronous=FULL")
-        return connection
+        try:
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("PRAGMA busy_timeout=%d" % int(self._timeout * 1000))
+            connection.execute("PRAGMA synchronous=FULL")
+            yield connection
+        finally:
+            connection.close()
 
     @staticmethod
     def _validate_resource(resource_id: str) -> None:
