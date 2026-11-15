@@ -243,3 +243,26 @@ No component here should be described as production-ready or globally distribute
 - `core/test_matrix_inbox.py` covers authentication tampering, untrusted key IDs, recipient binding, expiry, replay conflicts, restart, delivery idempotency and payload limits.
 
 **Boundary:** This is an inbox persistence/authentication slice, not a network socket, transport encryption, public-key identity system, distributed replay cache, key rotation protocol, guaranteed delivery or consensus layer. HMAC requires shared secret distribution and rotation to be designed separately. No message is delivered to an application until its caller explicitly consumes/acknowledges it.
+
+
+## 20. Network identity and message handoff hardening
+
+- Inbox key IDs are now explicitly bound to an authorized sender identity. A valid HMAC under a trusted key cannot be used to assert an arbitrary sender name.
+- Envelope serialization uses length-prefixed fields, avoiding delimiter ambiguity in attacker-controlled identifiers.
+- `read_pending(message_id, now=...)` returns the payload only while it remains pending and unexpired. The caller can retry processing after a crash and acknowledge only after its own processing succeeds.
+- This is an **at-least-once handoff** contract. External side effects still need their own idempotency key; the inbox cannot promise exactly-once processing across a crash between the side effect and acknowledgement.
+- Tests cover sender/key impersonation, payload retrieval/retry, expiry during read and complete key-to-sender configuration.
+
+## 21. Digital Twin crash/restart and duplicate-delivery hardening
+
+- `DeterministicNetwork` now schedules node crash/restart events and models delivery failure while either endpoint is unavailable.
+- `send(..., copies=N)` can model bounded duplicate delivery (1–16 copies) with stable event ordering; the transport intentionally does not deduplicate because the receiver/inbox must prove replay safety.
+- Drop traces distinguish `PARTITION` from `NODE_UNAVAILABLE`.
+- Tests exercise duplicated message IDs, node crash, recovery and bounded fan-out.
+
+**Boundary:** these are deterministic fault-injection primitives, not a physical network, process lifecycle manager or consensus implementation. Crash/restart events alter the simulator's availability model only.
+
+## 22. Transfer journal hardening
+
+- The local transfer coordinator now rejects non-finite database timeouts and closes SQLite connections deterministically, including exceptional paths.
+- Its participant protocol remains at-least-once: prepare/commit adapters must be durable and idempotent. Concurrent coordinator instances can retry participant calls, so participant-side idempotency is mandatory.
