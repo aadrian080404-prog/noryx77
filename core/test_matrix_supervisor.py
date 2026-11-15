@@ -292,3 +292,47 @@ def test_pending_stop_is_retried_when_acknowledgement_write_fails(tmp_path):
     assert supervisor.retry_pending_stops() == ()
     assert executor.stopped == [("task-1", 1), ("task-1", 1)]
     assert reservations.list_stop_intents() == ()
+
+
+def test_prepared_revocation_fences_admission_across_supervisor_processes(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+
+    # A second process has its own book/lock but shares the SQLite authority.
+    second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    reservations.prepare_stop_intents()
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        second_process_book.reserve(_request("task-2"))
+
+    reservations.cancel_prepared_stop_intents()
+    admitted = second_process_book.reserve(_request("task-2"))
+    assert admitted.task_id == "task-2"
+
+
+def test_failed_grant_revocation_restores_admission_gate(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+
+    def fail_revoke(*_args, **_kwargs):
+        raise RuntimeError("grant_store_unavailable")
+
+    supervisor.grants.revoke = fail_revoke
+    with pytest.raises(RuntimeError, match="grant_store_unavailable"):
+        supervisor.revoke(expected_generation=1)
+
+    second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    admitted = second_process_book.reserve(_request("task-2"))
+    assert admitted.task_id == "task-2"
+
+
+def test_restart_reopens_admission_after_prepared_intent_without_reservations(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    reservations.prepare_stop_intents()
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), FakeExecutor(),
+    )
+    admitted = reopened.reserve(_request("task-after-recovery"))
+    assert admitted.task_id == "task-after-recovery"
