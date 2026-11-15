@@ -214,3 +214,13 @@ No component here should be described as production-ready or globally distribute
 - `core/test_matrix_supervisor.py` exercises the complete local path, stale/future telemetry rejection, startup rollback, revoked membership, owner revocation and failed-stop reporting.
 
 **Boundary:** this is a local orchestration contract, not a production process supervisor. The executor must implement target-side generation fencing and sandboxing atomically. The current adapter is an interface/fake-test contract; no OS process kill, cgroup/job-object enforcement, hardware attestation, distributed consensus, or cross-machine revocation propagation is claimed. Telemetry freshness uses a caller-supplied monotonic clock domain.
+
+## 17. Financial transfer and data-integrity integration slices
+
+- `core/matrix_transfer.py` adds a local durable two-participant transfer coordinator. It records an immutable request digest, participant bindings, prepare acknowledgements, commit acknowledgements and terminal/recovery states.
+- Retries require participant-side idempotent prepare/commit operations. A partial commit is retained as `IN_DOUBT`; recovery resumes missing commits and never claims completion until both participants confirm. Once commit begins, the coordinator does not attempt an unsafe compensating abort.
+- `core/test_matrix_transfer.py` covers normal commit, idempotent replay, request conflicts, partial-commit recovery and participant-binding rejection.
+- `core/matrix_data.py` now exposes `verify_authenticated_object`, requiring both a valid keyed manifest tag and a complete chunk/hash/object-ID verification before accepting the object.
+- `core/test_matrix_data_integrity.py` covers tampering, invalid tags, reordered/missing chunks and invalid manifest types.
+
+**Boundary:** transfer coordination is a local protocol journal, not a payment rail, custody service, distributed transaction manager or legal settlement. Participants need their own durable idempotency and atomic state transitions; coordinator/participant network partitions can leave transfers `IN_DOUBT` and require recovery. Data authentication is HMAC-based integrity/authenticity with externally managed keys; it is not encryption, key distribution, replica repair, erasure coding or proof of storage availability.
