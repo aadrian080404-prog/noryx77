@@ -156,11 +156,12 @@ class DurableReservationBook:
             # enabled and no earlier durable stop remains pending.
             db.execute(
                 """UPDATE matrix_reservation_state SET enabled=1
-                   WHERE node_id=? AND generation=? AND NOT EXISTS (
+                   WHERE node_id=? AND generation=? AND ?=1 AND NOT EXISTS (
                        SELECT 1 FROM matrix_stop_intents
                        WHERE node_id=? AND status='pending'
                    )""",
-                (self.node.node_id, self.node.grant.generation, self.node.node_id),
+                (self.node.node_id, self.node.grant.generation,
+                 int(self.node.grant.enabled), self.node.node_id),
             )
             db.commit()
 
