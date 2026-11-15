@@ -36,13 +36,22 @@ class NoryxGateway:
             ],
         }
 
-    def create_session(self, *, bootstrap_token: str, client_id: str) -> dict:
-        token = self.auth.issue(bootstrap_token, client_id)
-        return {"status": "authenticated", "client_id": client_id, "session_token": token}
+    def create_session(self, *, bootstrap_token: str, client_label: str) -> dict:
+        token = self.auth.issue(bootstrap_token, client_label)
+        return {
+            "status": "authenticated",
+            "client_label": client_label,
+            "identity_assurance": "bootstrap_bearer_only",
+            "session_token": token,
+        }
 
     def execute(self, *, session_token: str, text: str, execution_id: str | None = None) -> dict:
         identity = self.auth.verify(session_token)
-        return self.runtime.execute(client_id=identity["client_id"], text=text, execution_id=execution_id)
+        if identity.get("identity_assurance") != "bootstrap_bearer_only":
+            raise SessionError("session_assurance_invalid")
+        return self.runtime.execute(
+            client_label=identity["client_label"], text=text, execution_id=execution_id
+        )
 
     def handler_class(self):
         gateway = self
@@ -90,7 +99,7 @@ class NoryxGateway:
                     if self.path == "/v1/session":
                         result = gateway.create_session(
                             bootstrap_token=str(body.get("bootstrap_token", "")),
-                            client_id=str(body.get("client_id", "")),
+                            client_label=str(body.get("client_label", body.get("client_id", ""))),
                         )
                         self._json(200, result)
                         return
