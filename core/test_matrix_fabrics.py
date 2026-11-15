@@ -180,3 +180,27 @@ def test_deterministic_network_models_latency_reordering_and_partition_drop():
         "during-partition", "partition-before-arrival", "late"
     }
     assert twin.now == 11
+
+
+def test_twin_models_duplicate_delivery_and_node_crash_restart():
+    from .matrix_twin import DeterministicNetwork
+    twin = DeterministicTwin()
+    network = DeterministicNetwork(twin)
+    network.send("dup-1", "node-a", "node-b", b"same", delay=1, copies=2)
+    network.crash_at("node-b", at=2)
+    network.send("crashed", "node-a", "node-b", b"unavailable", delay=2)
+    network.restart_at("node-b", at=5)
+    network.send("recovered", "node-a", "node-b", b"available", delay=5)
+    network.run()
+    assert [message.message_id for message in network.delivered] == ["dup-1", "dup-1", "recovered"]
+    assert [message.message_id for message in network.dropped] == ["crashed"]
+    assert network.drop_reasons[0][1] == "NODE_UNAVAILABLE"
+
+
+def test_twin_bounds_duplicate_fanout():
+    from .matrix_twin import DeterministicNetwork
+    network = DeterministicNetwork(DeterministicTwin())
+    with pytest.raises(ValueError, match="network_copies_must_be_between_1_and_16"):
+        network.send("too-many", "a", "b", b"x", copies=17)
+    with pytest.raises(ValueError, match="network_copies_must_be_between_1_and_16"):
+        network.send("bool", "a", "b", b"x", copies=True)
