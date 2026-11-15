@@ -137,7 +137,7 @@ class IdentityRegistry:
         callback is intended for bounded cryptographic verification and state
         commit only; it must not perform external I/O or invoke agent code.
         """
-        if not isinstance(agent_id, str) or not agent_id.strip():
+        if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         if not callable(callback):
             raise TypeError("callback must be callable")
