@@ -41,19 +41,29 @@ class MemoryStore:
     def _valid_memory_id(cls, memory_id: str) -> bool:
         return isinstance(memory_id, str) and bool(memory_id) and len(memory_id.encode("utf-8")) <= cls.MAX_MEMORY_ID_BYTES
 
-    def put(self, item: MemoryItem) -> None:
-        if not isinstance(item, MemoryItem) or not self._valid_memory_id(item.memory_id):
+    @classmethod
+    def validate_item(cls, item: MemoryItem) -> MemoryItem:
+        """Apply the canonical record contract shared by all memory backends."""
+        if not isinstance(item, MemoryItem) or not cls._valid_memory_id(item.memory_id):
             raise ValueError("valid memory item with memory_id required")
-        if item.kind not in self.VALID_KINDS:
+        if item.kind not in cls.VALID_KINDS:
             raise ValueError("unsupported memory kind")
         if not isinstance(item.source, str):
             raise ValueError("memory source must be text")
-        if not self._valid_execution_id(item.execution_id):
+        if not cls._valid_execution_id(item.execution_id):
             raise ValueError("invalid memory execution identity")
         if isinstance(item.importance, bool) or not isinstance(item.importance, (int, float)):
             raise ValueError("memory importance must be numeric")
-        if not isfinite(float(item.importance)) or not 0.0 <= float(item.importance) <= 1.0:
+        try:
+            importance = float(item.importance)
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise ValueError("memory importance must be between 0 and 1") from exc
+        if not isfinite(importance) or not 0.0 <= importance <= 1.0:
             raise ValueError("memory importance must be between 0 and 1")
+        return item
+
+    def put(self, item: MemoryItem) -> None:
+        self.validate_item(item)
         try:
             isolated = deepcopy(item)
         except Exception as exc:
