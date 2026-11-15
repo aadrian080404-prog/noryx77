@@ -108,18 +108,9 @@ class SQLiteFencedResource:
         digest = hashlib.sha256(payload).hexdigest()
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            previous = connection.execute(
-                """SELECT fencing_token, payload_digest, version
-                   FROM fenced_operations WHERE resource_id=? AND operation_id=?""",
-                (resource_id, operation_id),
-            ).fetchone()
-            if previous is not None:
-                if previous[1] != digest:
-                    connection.rollback()
-                    raise PermissionError("idempotency_key_payload_conflict")
-                connection.commit()
-                return DurableAppliedOperation(resource_id, operation_id, previous[0], previous[1], previous[2])
-
+            # Check current authority before returning even an idempotent receipt.
+            # A retry from a revoked generation must not look successful after a
+            # newer generation has fenced this resource.
             resource = connection.execute(
                 "SELECT highest_token, version FROM fenced_resources WHERE resource_id=?",
                 (resource_id,),
@@ -127,6 +118,21 @@ class SQLiteFencedResource:
             if resource is None or token != resource[0]:
                 connection.rollback()
                 raise PermissionError("stale_or_unactivated_fencing_token")
+
+            previous = connection.execute(
+                """SELECT fencing_token, payload_digest, version
+                   FROM fenced_operations WHERE resource_id=? AND operation_id=?""",
+                (resource_id, operation_id),
+            ).fetchone()
+            if previous is not None:
+                if previous[0] != token:
+                    connection.rollback()
+                    raise PermissionError("idempotency_key_generation_conflict")
+                if previous[1] != digest:
+                    connection.rollback()
+                    raise PermissionError("idempotency_key_payload_conflict")
+                connection.commit()
+                return DurableAppliedOperation(resource_id, operation_id, previous[0], previous[1], previous[2])
             version = resource[1] + 1
             connection.execute(
                 "UPDATE fenced_resources SET version=? WHERE resource_id=?",
