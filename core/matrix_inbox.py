@@ -62,13 +62,15 @@ class DurableInbox:
             raise ValueError("max_payload_bytes_must_be_positive")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("timeout_must_be_finite_and_positive")
-        for key_id, key in trusted_keys.items():
-            if not isinstance(key_id, str) or not key_id.strip() or not isinstance(key, bytes) or len(key) < 32:
-                raise ValueError("invalid_trusted_key")
+        if trusted_keys is not None:
+            for key_id, key in trusted_keys.items():
+                if not isinstance(key_id, str) or not key_id.strip() or not isinstance(key, bytes) or len(key) < 32:
+                    raise ValueError("invalid_trusted_key")
         self.database = database
         self.recipient_id = recipient_id
-        self.trusted_keys = dict(trusted_keys)
+        self.trusted_keys = dict(trusted_keys or {})
         self.trusted_senders = dict(trusted_senders)
+        self.key_resolver = key_resolver
         self.trusted_key_resolver = trusted_key_resolver
         self.max_payload_bytes = max_payload_bytes
         self.timeout = float(timeout)
