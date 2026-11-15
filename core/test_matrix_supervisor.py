@@ -263,3 +263,32 @@ def test_prepared_stop_intent_recovers_if_grant_was_revoked_before_crash(tmp_pat
     revoked = supervisor.grants.revoke("grant-1", expected_generation=1)
     recovered = reservations.recover_prepared_stop_intents(revoked.grant.generation, False)
     assert [(item.task_id, item.status) for item in recovered] == [("task-1", "pending")]
+
+
+
+def test_pending_stop_is_retried_when_acknowledgement_write_fails(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    original_acknowledge = reservations.acknowledge_stop_intent
+    failed_once = True
+
+    def fail_first_acknowledgement(task_id, generation):
+        nonlocal failed_once
+        if failed_once:
+            failed_once = False
+            raise OSError("simulated_sqlite_acknowledgement_failure")
+        return original_acknowledge(task_id, generation)
+
+    reservations.acknowledge_stop_intent = fail_first_acknowledgement
+    with pytest.raises(OSError, match="simulated_sqlite_acknowledgement_failure"):
+        supervisor.revoke(expected_generation=1)
+
+    assert executor.stopped == [("task-1", 1)]
+    assert [(item.task_id, item.status) for item in reservations.list_stop_intents()] == [
+        ("task-1", "pending")
+    ]
+
+    reservations.acknowledge_stop_intent = original_acknowledge
+    assert supervisor.retry_pending_stops() == ()
+    assert executor.stopped == [("task-1", 1), ("task-1", 1)]
+    assert reservations.list_stop_intents() == ()
