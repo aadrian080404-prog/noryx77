@@ -179,20 +179,24 @@ The current branch now contains several deliberately narrow reference components
 - `core/matrix_scheduler.py`: deterministic placement proposal using eligibility and dominant resource utilization. A proposal is advisory; local reservation confirmation is still required.
 - `core/matrix_data.py`: SHA-256 content manifest for chunked immutable objects and corruption/order detection. It is not encryption, erasure coding, replication, access control or a distributed object store.
 - `core/matrix_twin.py`: deterministic virtual-time event queue with stable same-time ordering, bounded execution and replayable event trace. It is not yet a network/consensus simulator or model checker.
-- `core/matrix_fencing.py`: single-resource reference primitive that activates a strictly increasing epoch at the protected resource, rejects stale/unactivated writes and deduplicates operation IDs. Its state is in-memory; a production resource must persist the epoch and operation record atomically, and operation IDs must be namespaced by tenant/domain.
+- `core/matrix_fencing.py`: in-memory single-resource fencing reference.
+- `core/matrix_durable.py`: SQLite WAL/FULL local persistence adapter that atomically stores a resource epoch, version and tenant-scoped idempotency records across process restarts. It is still one local database, not distributed consensus or a replicated authority.
+- `core/matrix_budget.py`: owner-controlled contribution guard for opt-in state, battery, temperature, power, network-use ceiling, weekly schedule and estimated energy. It is a policy helper, not sensor measurement or OS-level enforcement, and is not yet wired into the scheduler.
+- `core/matrix_ledger.py`: local SQLite double-entry journal using integer minor units, atomic balanced postings, tenant-scoped idempotency and an injected authorization verifier. It is not a payment rail, custody system, cross-domain transfer protocol or compliance implementation.
 
-These are executable slices, not a production distributed system. Membership and reservation state are in-memory and process-local; they do not survive crashes and do not coordinate multiple processes. No module in this PR establishes global consensus, cryptographic device identity, a secure sandbox, financial custody, production storage, or planet-scale capacity. Those require durable protocols, independent security review and failure testing across real fault domains.
+These are executable slices, not a production distributed system. Membership and reservation state remain in-memory and process-local. The durable fencing adapter and journal survive ordinary process restarts when the local SQLite storage honors its durability contract, but they do not coordinate multiple machines or establish global consensus. No module in this PR establishes cryptographic device identity, a secure sandbox, financial custody, production distributed storage, or planet-scale capacity.
 
 ## 15. Required next hardening
 
-1. Persist node epochs, grants, reservations and revocations using crash-safe atomic transactions.
+1. Extend durable persistence to membership, grants, reservations and revocations; define backup, corruption recovery and schema migration.
 2. Bind every admission proof to node identity, owner, software measurement, nonce, epoch and verifier policy; use hardware-backed attestation where available.
 3. Enforce fencing tokens at the protected resource itself, atomically with each privileged write. A lease or coordinator-side check alone is insufficient.
-4. Add explicit energy, thermal, battery, user schedule, network egress and data-residency budgets to the scheduler.
+4. Integrate `matrix_budget.py` with scheduler admission and real OS/sensor enforcement; add network egress and data-residency controls.
 5. Replace advisory in-memory placement with reserve-confirm-commit, idempotent retries and reconciliation after lost acknowledgements.
 6. Add bounded membership storage, tombstone retention and safe identity re-enrollment procedures.
 7. Extend the Digital Twin with network partitions, clock drift, stale messages, crash/restart, Byzantine behaviors and deterministic seeded fault schedules.
-8. Add storage encryption, key separation, authenticated manifests, erasure coding, replication and rate-limited repair as independent tested layers.
+8. Add authenticated-manifest tests, storage encryption, key separation, erasure coding, replication and rate-limited repair as independent layers.
+9. Extend the local ledger with account policy, append-only external audit anchoring, reconciliation and a separately specified cross-partition transfer protocol; never expose it as real-money settlement.
 
 ## 16. Current implementation boundary
 
