@@ -64,3 +64,24 @@ def test_revocation_clears_persisted_reservations_and_rejects_stale_book(tmp_pat
     stale.database, stale.timeout, stale.node = str(path), 5.0, node()
     with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
         stale.reserve(request("stale-task"))
+
+
+def _reserve_from_separate_process(path, index):
+    book = DurableReservationBook(path, node())
+    try:
+        book.reserve(request(f"process-task-{index}", 500))
+        return True
+    except PermissionError:
+        return False
+
+
+def test_reservations_serialize_independent_processes(tmp_path):
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
+    path = str(tmp_path / "multi-process-reservations.db")
+    DurableReservationBook(path, node())
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=8, mp_context=context) as pool:
+        outcomes = list(pool.map(_reserve_from_separate_process, [path] * 16, range(16)))
+    assert sum(outcomes) == 3
+    assert len(DurableReservationBook(path, node()).list()) == 3
