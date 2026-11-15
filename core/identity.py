@@ -20,10 +20,24 @@ _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
 T = TypeVar("T")
 
 
+def _identity_id_size(value: str) -> int | None:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        return None
+
+
+def _valid_identity_id(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    size = _identity_id_size(value)
+    return size is not None and 0 < size <= MAX_ID_SIZE
+
+
 def _identity_field(value: str) -> bytes:
-    encoded = value.encode("utf-8")
-    if not encoded or len(encoded) > MAX_ID_SIZE:
+    if not _valid_identity_id(value):
         raise ValueError("identity_field_size_exceeded")
+    encoded = value.encode("utf-8")
     return len(encoded).to_bytes(4, "big") + encoded
 
 
@@ -35,9 +49,7 @@ class AgentIdentity:
 
     def is_well_formed(self) -> bool:
         return (
-            isinstance(self.agent_id, str)
-            and bool(self.agent_id.strip())
-            and len(self.agent_id.encode("utf-8")) <= MAX_ID_SIZE
+            _valid_identity_id(self.agent_id)
             and isinstance(self.public_key, bytes)
             and len(self.public_key) == PUBLIC_KEY_SIZE
             and self.version == IDENTITY_VERSION
@@ -93,7 +105,7 @@ class IdentityRegistry:
             self._generations[identity.agent_id] = self._generations.get(identity.agent_id, 0) + 1
 
     def revoke(self, agent_id: str) -> None:
-        if not isinstance(agent_id, str) or not agent_id.strip():
+        if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         with self._lock:
             self._keys.pop(agent_id, None)
@@ -143,7 +155,10 @@ class AgentIdentityAuthority:
     def generate(agent_id: str) -> tuple[AgentIdentity, Ed25519PrivateKey]:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
-        if len(agent_id.encode("utf-8")) > MAX_ID_SIZE:
+        size = _identity_id_size(agent_id)
+        if size is None:
+            raise ValueError("invalid_agent_id")
+        if size > MAX_ID_SIZE:
             raise ValueError("agent_id_size_exceeded")
         private_key = Ed25519PrivateKey.generate()
         public_key = private_key.public_key().public_bytes(
