@@ -406,3 +406,32 @@ def test_merge_rejects_equivocating_duplicate_actor_counter_atomically(tmp_path)
     assert target.read("key-a") is None
     assert target.read("key-b") is None
     target.close()
+
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        MemoryEvent("\ud800", 1, "key", "value", False, (("\ud800", 1),)),
+        MemoryEvent("actor", 1, "\ud800", "value", False, (("actor", 1),)),
+        MemoryEvent("actor", 1, "key", "\ud800", False, (("actor", 1),)),
+        MemoryEvent("actor", 1, "key", "value", False, (("actor", 1), ("\ud800", 0))),
+    ],
+)
+def test_memory_event_rejects_malformed_utf8_fields_as_value_error(event):
+    with pytest.raises(ValueError):
+        event.validate()
+
+
+def test_distributed_memory_store_rejects_malformed_utf8_actor_id(tmp_path):
+    with pytest.raises(ValueError, match="invalid_memory_actor"):
+        DistributedMemoryStore(str(tmp_path / "invalid-actor.sqlite"), actor_id="\ud800")
+
+
+def test_export_rejects_malformed_utf8_peer_actor_identifier(tmp_path):
+    store = DistributedMemoryStore(str(tmp_path / "invalid-peer.sqlite"), actor_id="local")
+    try:
+        with pytest.raises(ValueError, match="invalid_peer_vector_clock"):
+            store.export_since({"\ud800": 0})
+    finally:
+        store.close()
