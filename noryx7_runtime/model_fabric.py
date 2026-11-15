@@ -64,16 +64,19 @@ class FabricResult:
     runtime_id: str = ""
     request_digest: str = ""
     result_mac: str = ""
+    authenticated: bool = False
 
 Verifier = Callable[[str, Any], float]
 Synthesizer = Callable[[Sequence[ModelCandidate]], Any]
 
 class ModelFabric:
     """Provider-neutral intelligence layer with runtime-bound provenance."""
-    def __init__(self, models: Sequence[ModelAdapter], *, runtime_id: str | None = None, binding_key: bytes | None = None) -> None:
+    def __init__(self, models: Sequence[ModelAdapter], *, runtime_id: str | None = None, binding_key: bytes | None = None, require_authenticated_results: bool = False) -> None:
         if not models: raise ValueError("at least one model is required")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id): raise ValueError("runtime_id must be a non-empty string")
         if binding_key is not None and (not isinstance(binding_key, bytes) or len(binding_key) < 32): raise ValueError("binding_key must be at least 32 bytes")
+        if not isinstance(require_authenticated_results, bool): raise ValueError("require_authenticated_results must be boolean")
+        if require_authenticated_results and binding_key is None: raise ValueError("authenticated_results_require_binding_key")
         if binding_key is not None and runtime_id is None: raise ValueError("runtime_id is required for bound model fabric")
         names: set[str] = set(); validated: list[ModelAdapter] = []
         for model in models:
@@ -86,8 +89,13 @@ class ModelFabric:
             if isinstance(model.expected_latency_ms, bool) or not isinstance(model.expected_latency_ms, (int, float)) or not math.isfinite(model.expected_latency_ms) or model.expected_latency_ms <= 0: raise ValueError("invalid model economics")
             names.add(name); validated.append(model)
         self._models = tuple(validated); self._runtime_id = runtime_id; self._binding_key = binding_key
+        self._require_authenticated_results = require_authenticated_results
     @property
     def runtime_id(self) -> str | None: return self._runtime_id
+    @property
+    def authenticated_results(self) -> bool:
+        """Whether results carry a keyed HMAC, rather than only an unkeyed digest."""
+        return self._binding_key is not None
     def _rank(self, request: ModelRequest) -> tuple[ModelAdapter, ...]:
         if self._runtime_id is not None and request.runtime_id != self._runtime_id: raise PermissionError("model request runtime identity mismatch")
         required = frozenset(request.required_capabilities); preferred = frozenset(request.preferred_capabilities)
@@ -119,7 +127,12 @@ class ModelFabric:
         if self._runtime_id is not None and result.runtime_id != self._runtime_id: return False
         if not isinstance(result.selected_model, str) or not result.selected_model.strip(): return False
         if isinstance(result.confidence, bool) or not isinstance(result.confidence, (int, float)) or not math.isfinite(result.confidence) or not 0 <= result.confidence <= 1: return False
-        if not isinstance(result.degraded, bool) or not isinstance(result.runtime_id, str) or not isinstance(result.request_digest, str) or not isinstance(result.result_mac, str): return False
+        if not isinstance(result.degraded, bool) or not isinstance(result.runtime_id, str) or not isinstance(result.request_digest, str) or not isinstance(result.result_mac, str) or not isinstance(result.authenticated, bool): return False
+        # A SHA-256 digest detects accidental/tampered data only when the expected
+        # value is independently trusted. It is not an authenticator: anyone can
+        # recompute it. Keep this distinction explicit in the result contract.
+        if result.authenticated is not self.authenticated_results: return False
+        if self._require_authenticated_results and not result.authenticated: return False
         if len(result.candidates) < 1 or len(result.candidates) > len(self._models): return False
         expected_request_digest = self._request_digest(request)
         if result.request_digest != expected_request_digest or not result.candidates: return False
@@ -143,6 +156,9 @@ class ModelFabric:
         if self._binding_key is None: return hmac.compare_digest(result.result_mac, expected_envelope_digest)
         expected_mac = self._result_mac(result.request_digest, expected_envelope_digest, result.selected_model)
         return hmac.compare_digest(result.result_mac, expected_mac)
+    def verify_authenticated_result(self, request: ModelRequest, result: FabricResult) -> bool:
+        """Verify a result only when its envelope is protected by a keyed HMAC."""
+        return self.authenticated_results and result.authenticated and self.verify_result(request, result)
     def execute(self, request: ModelRequest, *, verifier: Verifier | None = None, synthesizer: Synthesizer | None = None) -> FabricResult:
         selected = self._rank(request); candidates: list[ModelCandidate] = []
         for model in selected:
@@ -175,7 +191,7 @@ class ModelFabric:
         else: output, selected_model, confidence = candidates[0].output, candidates[0].name, 0.0
         try:
             request_digest = self._request_digest(request); output_digest = self._result_envelope_digest(output, candidates, selected_model, request_digest, confidence, len(candidates) < len(selected))
-            result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model))
+            result = FabricResult(output, tuple(candidates), selected_model, confidence, len(candidates) < len(selected), request.runtime_id, request_digest, self._result_mac(request_digest, output_digest, selected_model), self.authenticated_results)
         except (TypeError, ValueError, OverflowError) as exc: raise RuntimeError("model_result_integrity_failure") from exc
         if not self.verify_result(request, result): raise RuntimeError("model_result_integrity_failure")
         return result
