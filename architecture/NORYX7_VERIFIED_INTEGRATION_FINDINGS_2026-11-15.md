@@ -285,3 +285,39 @@ PR #84 adds a process-local principal namespace over the hardened MemoryHierarch
 6. Keep provider usage/cost accounting tied to authoritative provider-reported usage and reconcile estimates against billing; adapter defaults must not imply zero real-world cost.
 
 No candidate PR listed above is merged by this work, and no production deployment or independent security certification is claimed.
+
+
+
+## 14. Post-remediation crash and input-boundary review — 2026-11-15
+
+### PR #83 — Matrix durable stop intents: additional retry boundary
+
+A focused review found one additional failure window in the first durable-intent implementation: the executor could successfully stop a task, then the SQLite acknowledgement could fail. The intent would remain durable, but the supervisor's in-memory retry map was not guaranteed to contain it, so a retry in the same process could miss the pending drain until restart.
+
+The latest PR #83 head `6a54103623c4bc3456670c734d094088fb3da443` now:
+- mirrors durable pending intents into the in-memory retry map before calling the executor;
+- reloads pending intents from SQLite at the beginning of every retry pass;
+- includes a regression test that simulates acknowledgement-write failure after executor stop, then verifies a subsequent retry re-reads and acknowledges the durable intent.
+
+The executor stop is intentionally retried in this case and must be idempotent for the exact task/generation pair. The new head has been pushed, but a workflow result for this exact SHA had not yet appeared at the time of this register update. Earlier PR #83 head `ae4f701859190f08291c30da27ec6278daec8f74` completed all five configured checks successfully; that earlier green run does not verify the new acknowledgement-failure regression. PR #83 remains draft and depends on #73.
+
+### PR #84 — Principal memory: malformed Unicode boundary
+
+A source review found that a Python string containing an unpaired surrogate can raise `UnicodeEncodeError` during UTF-8 length validation. That exception bypassed the API's stable invalid-principal error contract. The latest PR #84 head `61dfae16182e334a4b86a155402b48f3f193f245` catches malformed UTF-8 encoding and rejects the identifier as `ValueError("invalid_memory_principal")`; regression tests cover both lookup and namespace deletion.
+
+On this head, tests, Core Verification, Runner Smoke and Source Secrecy succeeded. Foundation/Android Browser verification remained pending. PR #84 remains draft and depends on #78. This does not change its process-local-only security boundary.
+
+### Exact current verification snapshot
+
+| PR | Latest relevant head | Observed state | What can be claimed |
+|---|---|---|---|
+| #83 Matrix durable stops | `6a54103623c4bc3456670c734d094088fb3da443` | No CI run/status returned for this exact head yet; previous head `ae4f701859190f08291c30da27ec6278daec8f74` had 5/5 success | New acknowledgement-failure regression is committed, not yet CI-verified |
+| #84 Principal memory | `61dfae16182e334a4b86a155402b48f3f193f245` | 4 checks success; Foundation pending | Python-focused checks pass; full Foundation/Android gate is not complete |
+| #75 Architecture register | Current documentation branch | Documentation-only update | No application implementation or deployment claim |
+
+### Remaining cross-system blockers
+
+- Matrix target-side fencing remains an external executor requirement; local SQLite intent durability cannot prove a process has terminated.
+- Principal namespace isolation is not authentication. A future integration must accept principal IDs only from the verified identity/session context, not request payloads.
+- The process-local principal store does not provide durable deletion, cryptographic erasure, per-principal encryption keys, or cross-device consistency.
+- The latest changes remain on draft branches. No merge to `main`, no modification of the frozen architecture branch, and no production deployment occurred.
