@@ -186,3 +186,22 @@ This pass compared the findings above against existing feature branches and insp
 3. Do not confuse PR #20's encrypted SQLite transaction/concurrency work with validation parity in `core/secure_memory.py`, nor with distributed multi-device memory.
 4. Keep the Matrix revocation fix isolated to its own branch because it is a safety-critical behavioral correction in a new subsystem.
 5. No application code, PR state, deployment, or frozen branch was changed by this coverage pass. The six PR #75 workflows for commit `5c489f4016db99b2706d00be984282d361971389` subsequently completed successfully; this validates the documentation commit's configured CI, not the candidate branches or production behavior.
+
+## 11. Isolated remediation PRs opened (2026-11-15)
+
+The following source-level corrections have now been extracted into small, isolated draft PRs. They are separate from this architecture/documentation PR and remain unmerged.
+
+| PR | Workstream | Exact change | Verification state at register update |
+|---|---|---|---|
+| [#73](https://github.com/aadrian080404-prog/noryx77/pull/73) | Matrix stop retry | Adds `_pending_stops`; only failed revocation stop requests are retried. Adds tests proving a healthy active task is not stopped by a retry call and only failed task IDs are retried. | Matrix tests, Core, JARVIS, Runner Smoke and Source Secrecy passed on head `9c286ca`; Foundation was still pending. Restart durability of pending stops remains unresolved and is not claimed. |
+| [#76](https://github.com/aadrian080404-prog/noryx77/pull/76) | Gateway bootstrap | Default `RuntimeAdapter` now lazily calls canonical `noryx7_operational.build_runtime()`; injected runtime/factory remain supported. Adds factory/injection tests. | Tests, Core, JARVIS, Runner Smoke and Source Secrecy passed on head `ec9d962`; Foundation was still in progress. |
+| [#77](https://github.com/aadrian080404-prog/noryx77/pull/77) | Audit concurrency | Extracts only synchronized `core/audit.py` and focused concurrent append/snapshot/checkpoint tests from the broad candidate branch. | Tests, Foundation, Core and JARVIS were in progress; Runner Smoke and Source Secrecy passed on head `086e308`. |
+| [#78](https://github.com/aadrian080404-prog/noryx77/pull/78) | Memory hierarchy | Extracts only validated, synchronized process-local `MemoryHierarchy` and focused hardening tests. | Workflow runs were not yet returned for head `ba8757d`; pending verification. |
+
+### Remaining integration gates
+
+- Matrix: persist pending stop intents durably across supervisor restart, and prove target-side generation fencing. The current PR fixes the live retry selection bug but does not yet close crash recovery.
+- Gateway: test startup with a real configured provider in a controlled environment and verify shutdown cleanup if construction partially succeeds.
+- Audit: run the complete existing audit/security suite; review checkpoint key rotation and external provider failure behavior.
+- Memory: centralize validation across `MemoryStore` and `EncryptedMemoryStore`; add the missing NaN/Inf/range/kind regression tests and explicit principal isolation before presenting memory as a complete multi-device service.
+- All four PRs remain draft, unmerged, and not deployed. Green individual workflows do not establish full system integration.
