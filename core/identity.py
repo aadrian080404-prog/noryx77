@@ -108,8 +108,8 @@ class IdentityRegistry:
         if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         with self._lock:
-            self._keys.pop(agent_id, None)
-            self._generations[agent_id] = self._generations.get(agent_id, 0) + 1
+            if self._keys.pop(agent_id, None) is not None:
+                self._generations[agent_id] = self._generations.get(agent_id, 0) + 1
 
     def is_trusted(self, identity: AgentIdentity) -> bool:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
