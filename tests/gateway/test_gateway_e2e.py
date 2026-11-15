@@ -39,7 +39,7 @@ def test_gateway_session_and_runtime_e2e():
 
     session = gateway.create_session(
         bootstrap_token="bootstrap-test",
-        client_id="noryx-browser-test",
+        client_label="noryx-browser-test",
     )
 
     result = gateway.execute(
@@ -49,6 +49,24 @@ def test_gateway_session_and_runtime_e2e():
 
     assert result["status"] == "completed"
     assert result["result"] == "NORYX7: test browser request"
+
+
+def test_gateway_marks_bootstrap_session_as_label_not_verified_principal():
+    gateway = NoryxGateway(
+        runtime_adapter=RuntimeAdapter(FakeRuntime()),
+        bootstrap_token="bootstrap-test",
+        signing_secret="signing-test",
+    )
+    session = gateway.create_session(
+        bootstrap_token="bootstrap-test",
+        client_label="user-controlled-device-name",
+    )
+    claims = gateway.auth.verify(session["session_token"])
+    assert session["identity_assurance"] == "bootstrap_bearer_only"
+    assert claims["identity_assurance"] == "bootstrap_bearer_only"
+    assert claims["client_label"] == "user-controlled-device-name"
+    assert "principal_id" not in claims
+    assert "client_id" not in claims
 
 
 def test_gateway_rejects_invalid_session():
@@ -99,7 +117,7 @@ def test_gateway_http_e2e():
             data=json.dumps(
                 {
                     "bootstrap_token": "bootstrap-test",
-                    "client_id": "browser-e2e",
+                    "client_label": "browser-e2e",
                 }
             ).encode(),
             headers={
