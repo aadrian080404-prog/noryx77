@@ -150,3 +150,13 @@ def test_twin_replays_partition_delay_crash_and_recovery_faults():
         "network_partition", "message_delayed", "node_crash", "node_restart", "partition_healed"
     ]
     assert observed[-1] == (25, "partition_healed", "domain-a<->domain-b")
+
+
+def test_manifest_authentication_detects_tampering_and_wrong_key():
+    chunks = (b"noryx", b"matrix")
+    manifest = ObjectManifest.from_chunks(chunks)
+    key = b"matrix-test-key-material-32-bytes"
+    tag = manifest.authenticate(key)
+    assert manifest.verify_authentication(key, tag)
+    assert not manifest.verify_authentication(b"other-test-key-material-32-bytes", tag)
+    assert not manifest.verify_authentication(key, tag[:-1] + ("0" if tag[-1] != "0" else "1"))
