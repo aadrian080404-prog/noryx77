@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import math
 import sqlite3
+import struct
 from contextlib import contextmanager
 from typing import Iterator
 
@@ -28,7 +29,9 @@ class InboxReceipt:
 def _canonical(sender_id: str, recipient_id: str, message_id: str,
                key_id: str, expires_at: int, payload: bytes) -> bytes:
     fields = (sender_id, recipient_id, message_id, key_id, str(expires_at))
-    return b"\x00".join(value.encode("utf-8") for value in fields) + b"\x00" + payload
+    encoded = [value.encode("utf-8") for value in fields]
+    framed = b"".join(struct.pack(">I", len(value)) + value for value in encoded)
+    return framed + struct.pack(">Q", len(payload)) + payload
 
 
 def sign_message(sender_id: str, recipient_id: str, message_id: str,
@@ -41,13 +44,18 @@ def sign_message(sender_id: str, recipient_id: str, message_id: str,
 
 class DurableInbox:
     def __init__(self, database: str, recipient_id: str, trusted_keys: dict[str, bytes],
-                 *, max_payload_bytes: int = 1_048_576, timeout: float = 5.0) -> None:
+                 *, trusted_senders: dict[str, str], max_payload_bytes: int = 1_048_576, timeout: float = 5.0) -> None:
         if not isinstance(database, str) or not database:
             raise ValueError("database_path_required")
         if not isinstance(recipient_id, str) or not recipient_id.strip():
             raise ValueError("recipient_id_required")
         if not isinstance(trusted_keys, dict) or not trusted_keys:
             raise ValueError("trusted_keys_required")
+        if not isinstance(trusted_senders, dict) or set(trusted_senders) != set(trusted_keys):
+            raise ValueError("trusted_sender_binding_required")
+        for key_id, sender_id in trusted_senders.items():
+            if not isinstance(sender_id, str) or not sender_id.strip():
+                raise ValueError("invalid_trusted_sender_binding")
         if isinstance(max_payload_bytes, bool) or not isinstance(max_payload_bytes, int) or max_payload_bytes <= 0:
             raise ValueError("max_payload_bytes_must_be_positive")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
@@ -58,6 +66,7 @@ class DurableInbox:
         self.database = database
         self.recipient_id = recipient_id
         self.trusted_keys = dict(trusted_keys)
+        self.trusted_senders = dict(trusted_senders)
         self.max_payload_bytes = max_payload_bytes
         self.timeout = float(timeout)
         with self._connection() as db:
@@ -101,6 +110,8 @@ class DurableInbox:
         key = self.trusted_keys.get(key_id)
         if key is None:
             raise PermissionError("untrusted_message_key_id")
+        if self.trusted_senders.get(key_id) != sender_id:
+            raise PermissionError("message_sender_key_binding_mismatch")
         expected = sign_message(sender_id, recipient_id, message_id, key_id, expires_at, payload, key)
         if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
             raise PermissionError("message_authentication_failed")
@@ -157,6 +168,39 @@ class DurableInbox:
                            (self.recipient_id, message_id))
             db.commit()
         return InboxReceipt(message_id, row[0], self.recipient_id, row[1], row[2], row[3], "DELIVERED")
+
+    def read_pending(self, message_id: str, *, now: int) -> tuple[InboxReceipt, bytes] | None:
+        """Read an unacknowledged payload; callers acknowledge only after processing.
+
+        Reads are intentionally repeatable until mark_delivered succeeds. This
+        provides at-least-once handoff, not exactly-once external side effects.
+        """
+        if not isinstance(message_id, str) or not message_id.strip():
+            raise ValueError("message_id_required")
+        if isinstance(now, bool) or not isinstance(now, int) or now < 0:
+            raise ValueError("now_must_be_nonnegative_integer")
+        with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT sender_id,key_id,payload,payload_digest,expires_at,state FROM matrix_inbox "
+                "WHERE recipient_id=? AND message_id=?",
+                (self.recipient_id, message_id),
+            ).fetchone()
+            if row is None:
+                db.rollback()
+                return None
+            if row[5] == "PENDING" and row[4] <= now:
+                db.execute("UPDATE matrix_inbox SET state='EXPIRED' WHERE recipient_id=? AND message_id=?",
+                           (self.recipient_id, message_id))
+                db.commit()
+                return None
+            if row[5] != "PENDING":
+                db.commit()
+                return None
+            db.commit()
+        receipt = InboxReceipt(message_id, row[0], self.recipient_id, row[1],
+                               row[3], row[4], row[5])
+        return receipt, bytes(row[2])
 
     def get(self, message_id: str) -> InboxReceipt | None:
         with self._connection() as db:
