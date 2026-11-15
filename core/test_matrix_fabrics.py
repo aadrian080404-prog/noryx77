@@ -168,9 +168,9 @@ def test_deterministic_network_models_latency_reordering_and_partition_drop():
     network = DeterministicNetwork(twin)
     network.send("late", "node-a", "node-b", b"late", delay=9)
     network.send("early", "node-a", "node-b", b"early", delay=3)
-    network.partition("node-a", "node-c")
+    network.partition_at("node-a", "node-c", at=1)
     network.send("during-partition", "node-a", "node-c", b"drop", delay=2)
-    network.partition("node-a", "node-b")
+    network.partition_at("node-a", "node-b", at=4)
     network.send("partition-before-arrival", "node-a", "node-b", b"drop-late", delay=5)
     network.run()
     assert [message.message_id for message in network.delivered] == ["early"]
