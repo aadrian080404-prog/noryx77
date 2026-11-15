@@ -187,3 +187,39 @@ def test_supervisor_restart_rehydrates_active_tasks_for_revocation(tmp_path):
     assert reopened.list() == ()
     assert restarted_executor.stopped == [("task-1", 1)]
     assert executor.stopped == []
+
+
+def test_retry_pending_stops_does_not_stop_healthy_active_workloads(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+    assert supervisor.retry_pending_stops() == ()
+    assert executor.stopped == []
+    assert [item.task_id for item in reservations.list()] == ["task-1"]
+
+
+def test_retry_pending_stops_retries_only_failed_revocations(tmp_path):
+    class SelectiveExecutor(FakeExecutor):
+        def __init__(self):
+            super().__init__(fail_stop={"task-1"})
+            self.fail_first = True
+
+        def stop(self, task_id, generation):
+            if task_id == "task-1" and self.fail_first:
+                self.fail_first = False
+                raise RuntimeError("temporary_stop_failure")
+            super().stop(task_id, generation)
+
+    executor = SelectiveExecutor()
+    supervisor, reservations, _ = _setup(tmp_path, executor)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+    supervisor.dispatch(_request("task-2"), _conditions(), 100, 100, 2, 0.25)
+
+    result = supervisor.revoke(expected_generation=1)
+    assert result.stop_failures == ("task-1:RuntimeError",)
+    assert executor.stopped == [("task-2", 1)]
+    executor.fail_stop.clear()
+
+    assert supervisor.retry_pending_stops() == ()
+    assert executor.stopped == [("task-2", 1), ("task-1", 1)]
+    assert supervisor.retry_pending_stops() == ()
