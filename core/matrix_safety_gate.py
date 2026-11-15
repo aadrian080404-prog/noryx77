@@ -169,13 +169,16 @@ class DurableSafetyGate:
                 db.execute("UPDATE safety_proposals SET state='EXPIRED' WHERE proposal_id=?", (proposal_id,))
                 db.commit()
                 raise PermissionError("proposal_expired")
-            approvals = db.execute(
-                "SELECT COUNT(DISTINCT operator_id) FROM safety_approvals WHERE proposal_id=?",
+            operators = [item[0] for item in db.execute(
+                "SELECT operator_id FROM safety_approvals WHERE proposal_id=? ORDER BY operator_id",
                 (proposal_id,),
-            ).fetchone()[0]
-            if approvals < 2:
+            ).fetchall()]
+            if len(operators) < 2:
                 db.rollback()
                 raise PermissionError("two_distinct_approvals_required")
+            if any(not self.authorize_operator(operator, row[0], row[1]) for operator in operators):
+                db.rollback()
+                raise PermissionError("approval_authorization_revoked")
             if not self.interlock_check(row[0], row[1]):
                 db.rollback()
                 raise PermissionError("local_safety_interlock_blocked")
@@ -210,6 +213,15 @@ class DurableSafetyGate:
             if digest != row[1] or permit.command_digest != row[1] or permit.resource_id != row[0]:
                 db.rollback()
                 raise PermissionError("permit_command_or_resource_mismatch")
+            operators = [item[0] for item in db.execute(
+                "SELECT operator_id FROM safety_approvals WHERE proposal_id=? ORDER BY operator_id",
+                (permit.proposal_id,),
+            ).fetchall()]
+            if len(operators) < 2 or any(
+                not self.authorize_operator(operator, row[0], row[1]) for operator in operators
+            ):
+                db.rollback()
+                raise PermissionError("approval_authorization_revoked")
             if not self.interlock_check(row[0], row[1]):
                 db.rollback()
                 raise PermissionError("local_safety_interlock_blocked")
