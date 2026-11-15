@@ -76,3 +76,16 @@ def test_concurrent_writes_respect_capacity():
     assert sum(outcomes) == 20
     assert len(store) == 20
     assert len(store.snapshot()) == 20
+
+
+
+def test_malformed_unicode_memory_keys_are_rejected_with_stable_contract():
+    store = MemoryHierarchy()
+    malformed = "\ud800"
+    with pytest.raises(ValueError, match="invalid_memory_key"):
+        store.put(MemoryRecord(malformed, "value", MemoryLevel.L0))
+    with pytest.raises(ValueError, match="invalid_memory_key"):
+        store.promote(malformed, MemoryLevel.L1)
+    assert store.get(malformed) is None
+    assert store.delete(malformed) is False
+    assert len(store) == 0
