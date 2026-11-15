@@ -9,8 +9,17 @@ from core.operational_runtime import OperationalNORYXRuntime
 class RuntimeAdapter:
     """Translate an authenticated browser request into the canonical operational runtime."""
 
-    def __init__(self, runtime: OperationalNORYXRuntime | None = None):
-        self.runtime = runtime or OperationalNORYXRuntime()
+    def __init__(self, runtime: OperationalNORYXRuntime | None = None, *, runtime_factory=None):
+        if runtime is not None and runtime_factory is not None:
+            raise ValueError("runtime_and_factory_are_mutually_exclusive")
+        if runtime is None:
+            if runtime_factory is None:
+                # Import lazily to keep the adapter injectable and avoid starting
+                # providers during module import or test collection.
+                from noryx7_operational import build_runtime
+                runtime_factory = build_runtime
+            runtime = runtime_factory()
+        self.runtime = runtime
 
     def execute(
         self,
