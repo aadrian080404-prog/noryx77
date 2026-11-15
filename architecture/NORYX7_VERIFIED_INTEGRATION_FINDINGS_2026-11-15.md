@@ -394,3 +394,33 @@ This change is committed on PR #83 head `26904351fa45d983b19c69ca124d83fbf8f78e9
 - Matrix durable intents remain node-local SQLite records. They do not provide distributed consensus or prove target-process termination.
 - PR #83 remains draft and depends on PR #73. PR #75 remains documentation-only.
 - No merge, deployment, change to `main`, or change to the frozen architecture branch is claimed.
+
+
+## 17. Replication input and transport response hardening — 2026-11-16
+
+### PR #70 — malformed UTF-8 identifiers in distributed memory
+
+The causal replication branch now uses a bounded UTF-8 validation helper for event actor IDs, memory keys/values, vector-clock actors, local store actor IDs, and peer vector-clock keys. Python strings containing unpaired surrogates are rejected through the documented `ValueError` boundary instead of leaking `UnicodeEncodeError` from a length check.
+
+Regression coverage was added for malformed actor, key, value, vector-clock actor, store actor ID, and exported peer actor ID. Latest head: `c2043a4fbc6cb1b303969d3c5ade596a1af74b82`. At the time of this register update, Tests, Core, Runner Smoke, Source Secrecy and Generated Scenario Verification succeeded; Foundation verification remained in progress. The new malformed-UTF-8 tests are committed on this head and are included in the completed Tests workflow.
+
+### PR #67 — bounded HTTPS memory-peer client response
+
+The mTLS memory-peer client previously read at most 1,024 bytes but did not detect a larger response if the first 1,024 bytes already formed valid JSON followed by whitespace. It now:
+- rejects a declared `Content-Length` above 1,024 bytes before reading;
+- reads at most 1,025 bytes when length is absent or within bounds, rejecting the sentinel byte;
+- rejects a mismatch between declared and actual response length;
+- retains JSON schema and inserted-count validation after the byte bound.
+
+Regression tests cover a valid complete response, an oversized declared response rejected before reading, and an oversized response without `Content-Length`. Latest source/test head: `e0fdad033737529a00c8cc432168ef4594206cd2`. No workflow result for this exact head had appeared at the time of this register update; these additions are **committed but not yet CI-verified**.
+
+### Exact concurrent verification snapshot
+
+| PR | Head | Latest observed state | Disposition |
+|---|---|---|---|
+| #83 Matrix durable stop intents | `26904351fa45d983b19c69ca124d83fbf8f78e9e` | Tests, Core, Runner Smoke and Source Secrecy success; Foundation in progress | New durable-fence rowcount test included in completed Tests; Foundation pending |
+| #70 causal memory replication | `c2043a4fbc6cb1b303969d3c5ade596a1af74b82` | Tests, Core, Runner Smoke, Source Secrecy and Generated Scenario success; Foundation in progress | Malformed UTF-8 regression is covered by completed Tests; Foundation pending |
+| #67 mTLS memory peer | `e0fdad033737529a00c8cc432168ef4594206cd2` | No workflow run returned for this exact head | New bounded-response tests await CI |
+| #75 architecture register | `9152cdec82d8e9695323c6b659a63150c0859f14` | Five checks success; Foundation in progress | Documentation-only branch; no implementation guarantee |
+
+No candidate was merged or deployed. Distributed-memory replication remains distinct from verified principal identity, durable key lifecycle, global anti-rollback, and distributed consensus. The mTLS peer transport still requires managed certificate issuance/rotation/revocation, operational rate limits, and peer discovery.
