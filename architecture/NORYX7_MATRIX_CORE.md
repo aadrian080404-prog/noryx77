@@ -293,3 +293,13 @@ No component here should be described as production-ready or globally distribute
 - The same scenario exercises authenticated inbox acceptance, pending payload handoff, durable acknowledgement and duplicate-message receipt; it then completes a two-participant transfer through the durable transfer journal.
 - Finally, owner revocation clears the local reservation and the test target advances its resource fence, proving that a late write carrying the old generation is rejected after revocation.
 - The test is intentionally local and deterministic. The executor double models the target-side fence contract; it does not prove remote propagation, process termination, distributed consensus, real payment settlement or network availability.
+
+
+## 26. Live key-policy enforcement at the inbox boundary
+
+- DurableInbox can now resolve key material dynamically through an injected policy-backed resolver instead of retaining a static key snapshot.
+- Sender-to-key binding is checked before resolution; the resolver can enforce owner, purpose, generation, authorization and revocation on every message acceptance.
+- A regression test accepts a message, revokes its NETWORK_HMAC key in the durable policy registry, then proves the same inbox instance rejects a subsequent message.
+- Existing static-key configuration remains supported for isolated tests and deployments that deliberately manage rotation outside the registry.
+
+**Boundary:** the resolver callback and its owner/sender mapping remain trust boundaries. This change does not distribute revocation across machines or replace KMS/HSM custody.
