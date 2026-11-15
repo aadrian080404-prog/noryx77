@@ -72,8 +72,6 @@ class SessionAuthority:
             self._active_nonces.pop(nonce, None)
 
     def issue(self, presented_bootstrap: str, client_id: str) -> str:
-        if not isinstance(presented_bootstrap, str) or not hmac.compare_digest(presented_bootstrap, self._bootstrap):
-            raise SessionError("bootstrap_auth_failed")
         if not isinstance(client_id, str) or not client_id.strip():
             raise SessionError("client_identity_required")
         if len(client_id.encode("utf-8")) > self.MAX_CLIENT_ID_BYTES:
@@ -86,13 +84,17 @@ class SessionAuthority:
             "nonce": secrets.token_urlsafe(24),
         }
         encoded = self._b64(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
-        token = encoded + "." + self._sign(encoded)
         with self._lock:
+            # Compare and register under the same lock as bootstrap rotation:
+            # a token accepted before rotation must not be issued afterwards.
+            if not isinstance(presented_bootstrap, str) or not hmac.compare_digest(presented_bootstrap, self._bootstrap):
+                raise SessionError("bootstrap_auth_failed")
             self._prune_expired(now)
             if len(self._active_nonces) >= self._max_sessions:
                 raise SessionError("session_capacity_reached")
+            token = encoded + "." + self._sign(encoded)
             self._active_nonces[payload["nonce"]] = (client_id, payload["exp"])
-        return token
+            return token
 
     def verify(self, token: str) -> dict:
         if not isinstance(token, str) or len(token.encode("utf-8")) > self.MAX_TOKEN_BYTES or token.count(".") != 1:
@@ -139,6 +141,7 @@ class SessionAuthority:
         if not isinstance(client_id, str) or not client_id.strip():
             raise ValueError("client_identity_required")
         with self._lock:
+            self._prune_expired(int(time.time()))
             matching = [nonce for nonce, (owner, _) in self._active_nonces.items() if owner == client_id]
             for nonce in matching:
                 self._active_nonces.pop(nonce, None)
