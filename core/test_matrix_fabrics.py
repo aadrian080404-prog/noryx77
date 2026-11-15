@@ -172,9 +172,11 @@ def test_deterministic_network_models_latency_reordering_and_partition_drop():
     network.send("during-partition", "node-a", "node-c", b"drop", delay=2)
     network.partition_at("node-a", "node-b", at=4)
     network.send("partition-before-arrival", "node-a", "node-b", b"drop-late", delay=5)
+    network.heal_at("node-a", "node-b", at=10)
+    network.send("after-heal", "node-a", "node-b", b"restored", delay=11)
     network.run()
-    assert [message.message_id for message in network.delivered] == ["early"]
+    assert [message.message_id for message in network.delivered] == ["early", "after-heal"]
     assert {message.message_id for message in network.dropped} == {
-        "during-partition", "partition-before-arrival"
+        "during-partition", "partition-before-arrival", "late"
     }
-    assert twin.now == 9
+    assert twin.now == 11
