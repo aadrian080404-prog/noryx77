@@ -223,3 +223,43 @@ def test_retry_pending_stops_retries_only_failed_revocations(tmp_path):
     assert supervisor.retry_pending_stops() == ()
     assert executor.stopped == [("task-2", 1), ("task-1", 1)]
     assert supervisor.retry_pending_stops() == ()
+
+
+def test_pending_stop_intent_survives_supervisor_restart(tmp_path):
+    executor = FakeExecutor(fail_stop={"task-1"})
+    supervisor, reservations, _ = _setup(tmp_path, executor)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    result = supervisor.revoke(expected_generation=1)
+    assert result.stop_failures == ("task-1:RuntimeError",)
+    intents = reservations.list_stop_intents()
+    assert [(item.task_id, item.grant_generation, item.status) for item in intents] == [
+        ("task-1", 1, "pending")
+    ]
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted_executor = FakeExecutor()
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), restarted_executor,
+    )
+    assert restarted.retry_pending_stops() == ()
+    assert restarted_executor.stopped == [("task-1", 1)]
+    assert reopened.list_stop_intents() == ()
+
+
+def test_prepared_stop_intent_is_cancelled_if_grant_revocation_never_commits(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    reservations.prepare_stop_intents()
+    recovered = reservations.recover_prepared_stop_intents(1, True)
+    assert recovered == ()
+    assert reservations.list_stop_intents() == ()
+
+
+def test_prepared_stop_intent_recovers_if_grant_was_revoked_before_crash(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    reservations.prepare_stop_intents()
+    revoked = supervisor.grants.revoke("grant-1", expected_generation=1)
+    recovered = reservations.recover_prepared_stop_intents(revoked.grant.generation, False)
+    assert [(item.task_id, item.status) for item in recovered] == [("task-1", "pending")]
