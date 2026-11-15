@@ -112,7 +112,7 @@ def test_inbox_requires_complete_sender_key_bindings(tmp_path):
 
 
 
-def test_inbox_resolves_key_policy_dynamically_and_rejects_revoked_key(tmp_path):
+def test_inbox_trusted_key_resolver_rejects_revocation(tmp_path):
     policy = DurableKeyPolicyRegistry(
         str(tmp_path / "key-policy.sqlite"),
         authorize=lambda *_args: True,
