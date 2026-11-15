@@ -13,7 +13,7 @@ def signed(message_id="m-1", payload=b"hello", *, sender="node-a", recipient="no
 
 
 def inbox(tmp_path):
-    return DurableInbox(str(tmp_path / "inbox.sqlite"), "node-b", {KEY_ID: KEY})
+    return DurableInbox(str(tmp_path / "inbox.sqlite"), "node-b", {KEY_ID: KEY}, trusted_senders={KEY_ID: "node-a"})
 
 
 def test_authenticated_message_is_durable_and_idempotent(tmp_path):
@@ -66,7 +66,7 @@ def test_pending_message_expires_before_delivery(tmp_path):
 
 def test_payload_size_is_bounded(tmp_path):
     store = DurableInbox(str(tmp_path / "small.sqlite"), "node-b",
-                         {KEY_ID: KEY}, max_payload_bytes=4)
+                         {KEY_ID: KEY}, trusted_senders={KEY_ID: "node-a"}, max_payload_bytes=4)
     args = signed(payload=b"12345")
     with pytest.raises(ValueError, match="payload_invalid_or_too_large"):
         store.accept(*args, now=1)
@@ -75,3 +75,35 @@ def test_payload_size_is_bounded(tmp_path):
 def test_unknown_message_cannot_be_marked_delivered(tmp_path):
     with pytest.raises(KeyError, match="message_not_found"):
         inbox(tmp_path).mark_delivered("missing", now=1)
+
+
+
+def test_key_id_is_bound_to_its_authorized_sender(tmp_path):
+    store = inbox(tmp_path)
+    args = signed(sender="node-impersonated")
+    with pytest.raises(PermissionError, match="message_sender_key_binding_mismatch"):
+        store.accept(*args, now=1)
+
+
+def test_pending_payload_can_be_read_and_retried_until_acknowledged(tmp_path):
+    store = inbox(tmp_path)
+    store.accept(*signed(payload=b"work-item"), now=1)
+    first = store.read_pending("m-1", now=2)
+    second = store.read_pending("m-1", now=3)
+    assert first == second
+    assert first[1] == b"work-item"
+    assert store.mark_delivered("m-1", now=4).state == "DELIVERED"
+    assert store.read_pending("m-1", now=5) is None
+
+
+def test_pending_payload_read_expires_atomically(tmp_path):
+    store = inbox(tmp_path)
+    store.accept(*signed(expiry=10), now=1)
+    assert store.read_pending("m-1", now=10) is None
+    assert store.get("m-1").state == "EXPIRED"
+
+
+def test_inbox_requires_complete_sender_key_bindings(tmp_path):
+    with pytest.raises(ValueError, match="trusted_sender_binding_required"):
+        DurableInbox(str(tmp_path / "bad.sqlite"), "node-b", {KEY_ID: KEY},
+                     trusted_senders={})
