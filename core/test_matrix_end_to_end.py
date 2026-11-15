@@ -20,6 +20,7 @@ from .matrix_reservations import DurableReservationBook
 from .matrix_safety_gate import DurableSafetyGate
 from .matrix_supervisor import MatrixSupervisor
 from .matrix_transfer import DurableTransferCoordinator, TransferRequest
+from .matrix_twin import DeterministicNetwork, DeterministicTwin
 
 
 class FencedExecutor:
@@ -198,3 +199,39 @@ def test_end_to_end_local_admission_message_transfer_and_revocation(tmp_path):
     assert safety.consume(permit, command, now=114)
     with pytest.raises(PermissionError, match="permit_invalid_or_already_consumed"):
         safety.consume(permit, command, now=115)
+
+
+def test_digital_twin_duplicate_network_delivery_is_inbox_idempotent(tmp_path):
+    key = b"network-test-key-material-32bytes"
+    inbox = DurableInbox(
+        str(tmp_path / "twin-inbox.db"), "node-b", {"key-1": key},
+        trusted_senders={"key-1": "node-a"},
+    )
+    payload = b'{"operation":"replicated-write","id":"op-77"}'
+    signature = sign_message(
+        "node-a", "node-b", "message-77", "key-1", 100, payload, key,
+    )
+
+    twin = DeterministicTwin()
+    network = DeterministicNetwork(twin)
+    network.send("message-77", "node-a", "node-b", {
+        "payload": payload, "signature": signature,
+    }, delay=4, copies=2)
+    network.run()
+    assert [message.message_id for message in network.delivered] == [
+        "message-77", "message-77",
+    ]
+
+    # At-least-once delivery is expected; the durable inbox must collapse
+    # duplicate transport deliveries into one logical message.
+    results = [
+        inbox.accept(
+            "node-a", "node-b", "message-77", "key-1", 100,
+            message.payload["payload"], message.payload["signature"],
+            now=twin.now,
+        )
+        for message in network.delivered
+    ]
+    assert [item.state for item in results] == ["PENDING", "PENDING"]
+    pending = inbox.read_pending("message-77", now=twin.now)
+    assert pending is not None and pending[1] == payload
