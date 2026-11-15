@@ -40,15 +40,23 @@ def test_idempotency_is_resource_scoped_and_payload_bound(tmp_path):
         store.apply("A", 1, "same-id", b"different")
 
 
-def test_idempotent_result_is_returned_without_replaying_side_effect(tmp_path):
+def test_stale_generation_cannot_replay_an_old_idempotency_receipt(tmp_path):
     store = SQLiteFencedResource(str(tmp_path / "fence.sqlite"))
     store.activate("R", 1)
     result = store.apply("R", 1, "op", b"payload")
     store.activate("R", 2)
-    assert store.apply("R", 1, "op", b"payload") == result
+    with pytest.raises(PermissionError, match="stale_or_unactivated_fencing_token"):
+        store.apply("R", 1, "op", b"payload")
     assert store.snapshot("R") == (2, 1)
-    with pytest.raises(PermissionError):
-        store.apply("R", 1, "new-op", b"payload")
+    assert result.version == 1
+
+
+def test_current_generation_can_retry_idempotently_without_replaying_side_effect(tmp_path):
+    store = SQLiteFencedResource(str(tmp_path / "fence.sqlite"))
+    store.activate("R", 1)
+    result = store.apply("R", 1, "op", b"payload")
+    assert store.apply("R", 1, "op", b"payload") == result
+    assert store.snapshot("R") == (1, 1)
 
 
 def test_concurrent_writes_are_serialized_and_versions_are_unique(tmp_path):
