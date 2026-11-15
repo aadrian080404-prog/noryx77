@@ -127,3 +127,26 @@ def test_local_reservations_are_atomic_under_concurrent_calls():
         results = list(pool.map(attempt, range(20)))
     assert sum(results) == 6
     assert book.node.envelope.committed.cpu_milli == 3000
+
+
+def test_twin_replays_partition_delay_crash_and_recovery_faults():
+    twin = DeterministicTwin()
+    observed = []
+    def record(event, sim):
+        observed.append((sim.now, event.kind, event.payload))
+    for kind, payload, at in (
+        ("network_partition", "domain-a<->domain-b", 10),
+        ("message_delayed", "commit-17", 12),
+        ("node_crash", "edge-4", 13),
+        ("node_restart", "edge-4", 20),
+        ("partition_healed", "domain-a<->domain-b", 25),
+    ):
+        twin.schedule(at, kind, payload)
+    handlers = {kind: record for kind in (
+        "network_partition", "message_delayed", "node_crash", "node_restart", "partition_healed"
+    )}
+    first = twin.run(handlers)
+    assert [event.kind for event in first] == [
+        "network_partition", "message_delayed", "node_crash", "node_restart", "partition_healed"
+    ]
+    assert observed[-1] == (25, "partition_healed", "domain-a<->domain-b")
