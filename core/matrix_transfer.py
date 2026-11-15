@@ -184,6 +184,12 @@ class DurableTransferCoordinator:
             if state == current:
                 db.commit()
                 return
+            phase = {"PREPARING": 0, "PREPARED": 1, "COMMITTING": 2, "COMMITTED": 3}
+            # A delayed worker may request an earlier phase after another worker
+            # has progressed. Treat that stale update as a no-op, not as failure.
+            if current in phase and state in phase and phase[state] < phase[current]:
+                db.commit()
+                return
             if state not in transitions[current]:
                 db.rollback()
                 raise PermissionError("invalid_transfer_state_transition")
