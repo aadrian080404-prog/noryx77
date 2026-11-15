@@ -31,11 +31,13 @@ class PrincipalMemoryHierarchy:
 
     @classmethod
     def _valid_principal(cls, principal_id: object) -> bool:
-        return (
-            isinstance(principal_id, str)
-            and bool(principal_id.strip())
-            and len(principal_id.encode("utf-8")) <= cls.MAX_PRINCIPAL_ID_BYTES
-        )
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            return False
+        try:
+            encoded = principal_id.encode("utf-8")
+        except UnicodeEncodeError:
+            return False
+        return len(encoded) <= cls.MAX_PRINCIPAL_ID_BYTES
 
     def _store(self, principal_id: str, *, create: bool) -> MemoryHierarchy | None:
         if not self._valid_principal(principal_id):
