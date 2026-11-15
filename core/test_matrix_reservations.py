@@ -85,3 +85,9 @@ def test_reservations_serialize_independent_processes(tmp_path):
         outcomes = list(pool.map(_reserve_from_separate_process, [path] * 16, range(16)))
     assert sum(outcomes) == 3
     assert len(DurableReservationBook(path, node()).list()) == 3
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), True])
+def test_reservation_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
+    with pytest.raises(ValueError, match="positive_database_timeout_required"):
+        DurableReservationBook(tmp_path / "bad.db", node(), timeout=timeout)
