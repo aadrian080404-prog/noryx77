@@ -82,3 +82,9 @@ def test_resume_rejects_wrong_participant_binding(tmp_path):
     wrong_source = FakeParticipant("wallet-other")
     with pytest.raises(PermissionError, match="transfer_participant_binding_mismatch"):
         coordinator.resume("tx-1", wrong_source, destination)
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), True])
+def test_transfer_database_timeout_must_be_finite_and_positive(tmp_path, timeout):
+    with pytest.raises(ValueError, match="positive_database_timeout_required"):
+        DurableTransferCoordinator(tmp_path / "bad.db", timeout=timeout)
