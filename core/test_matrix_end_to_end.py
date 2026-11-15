@@ -17,6 +17,7 @@ from .matrix_inbox import DurableInbox, sign_message
 from .matrix_key_policy import DurableKeyPolicyRegistry
 from .matrix_membership_durable import AdmissionEvidence, DurableMembershipRegistry
 from .matrix_reservations import DurableReservationBook
+from .matrix_safety_gate import DurableSafetyGate
 from .matrix_supervisor import MatrixSupervisor
 from .matrix_transfer import DurableTransferCoordinator, TransferRequest
 
@@ -176,6 +177,24 @@ def test_end_to_end_local_admission_message_transfer_and_revocation(tmp_path):
         supervisor.dispatch(
             WorkloadRequest("task-2", "compute", ResourceVector(100, 100_000), 2),
             DeviceConditions(90, 35, 2, 100, 100),
-            telemetry_captured_at=104, now=104, max_telemetry_age=2,
+            telemetry_captured_at=106, now=106, max_telemetry_age=2,
             estimated_duration_hours=0.1,
         )
+
+    # Critical-system command authorization is separate from AI/runtime control:
+    # two independent operators and the local interlock are rechecked at consume.
+    safety = DurableSafetyGate(
+        str(tmp_path / "safety.db"),
+        authorize_operator=lambda operator, _resource, _digest: operator in {
+            "operator-a", "operator-b"
+        },
+        interlock_check=lambda _resource, _digest: True,
+    )
+    command = b"set-pump-state:standby"
+    safety.propose("proposal-1", "agent-proposer", "pump-1", command, 200, now=110)
+    safety.approve("proposal-1", "operator-a", now=111)
+    safety.approve("proposal-1", "operator-b", now=112)
+    permit = safety.issue("proposal-1", now=113)
+    assert safety.consume(permit, command, now=114)
+    with pytest.raises(PermissionError, match="permit_invalid_or_already_consumed"):
+        safety.consume(permit, command, now=115)
