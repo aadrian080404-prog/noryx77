@@ -158,6 +158,10 @@ def test_inbox_resolves_key_policy_dynamically_and_rejects_revoked_key(tmp_path)
     with pytest.raises(PermissionError, match="key_revoked"):
         store.accept(*args, now=2)
 
+    # Previously accepted but not yet delivered payloads are also blocked.
+    with pytest.raises(PermissionError, match="key_revoked"):
+        store.read_pending("policy-message", now=2)
+
 
 def test_inbox_key_resolver_fails_closed_on_provider_error(tmp_path):
     def unavailable(_key_id):
