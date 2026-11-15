@@ -24,5 +24,7 @@ jobs:
           pip install pytest python-chess
       - name: Compile
         run: python -m compileall -q core noryx7_runtime jarvis web
+      - name: Validate architecture integration graph
+        run: python scripts/validate_integration_manifest.py
       - name: Test
         run: pytest -q
