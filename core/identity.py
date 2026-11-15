@@ -108,8 +108,8 @@ class IdentityRegistry:
         if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         with self._lock:
-            self._keys.pop(agent_id, None)
-            self._generations[agent_id] = self._generations.get(agent_id, 0) + 1
+            if self._keys.pop(agent_id, None) is not None:
+                self._generations[agent_id] = self._generations.get(agent_id, 0) + 1
 
     def generation(self, identity: AgentIdentity) -> int | None:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
@@ -283,12 +283,14 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                         (identity.agent_id, identity.public_key, identity.version, self._ACTIVE),
                     )
                 elif row[0] == self._REVOKED:
-                    self._db.execute(
+                    updated = self._db.execute(
                         "UPDATE agent_identity_trust SET public_key=?,version=?,state=?,generation=? "
                         "WHERE agent_id=? AND state=?",
                         (identity.public_key, identity.version, self._ACTIVE, int(row[1]) + 1,
                          identity.agent_id, self._REVOKED),
                     )
+                    if updated.rowcount != 1:
+                        raise RuntimeError("identity_trust_epoch_update_failed")
                 else:
                     raise ValueError("agent_identity_already_registered")
                 self._db.execute("COMMIT")
@@ -305,8 +307,9 @@ class SQLiteIdentityRegistry(IdentityRegistry):
         with self._lock:
             self._ensure_open()
             self._db.execute(
-                "UPDATE agent_identity_trust SET state=?,generation=generation+1 WHERE agent_id=?",
-                (self._REVOKED, agent_id),
+                "UPDATE agent_identity_trust SET state=?,generation=generation+1 "
+                "WHERE agent_id=? AND state=?",
+                (self._REVOKED, agent_id, self._ACTIVE),
             )
 
     def generation(self, identity: AgentIdentity) -> int | None:
