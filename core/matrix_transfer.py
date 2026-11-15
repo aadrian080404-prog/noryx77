@@ -5,12 +5,14 @@ participants must provide durable, idempotent prepare/commit/abort operations.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import sqlite3
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 
 
 class TransferParticipant(Protocol):
@@ -53,12 +55,12 @@ class DurableTransferCoordinator:
     MAX_MINOR = (1 << 63) - 1
 
     def __init__(self, database: str | Path, timeout: float = 5.0) -> None:
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("positive_database_timeout_required")
         self.database = str(database)
         self.timeout = float(timeout)
         Path(self.database).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("PRAGMA synchronous=FULL")
             db.execute("""CREATE TABLE IF NOT EXISTS matrix_transfers (
@@ -73,11 +75,15 @@ class DurableTransferCoordinator:
                 destination_committed INTEGER NOT NULL DEFAULT 0
             )""")
 
-    def _connect(self):
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.database, timeout=self.timeout, isolation_level=None)
-        db.execute("PRAGMA busy_timeout=%d" % int(self.timeout * 1000))
-        db.execute("PRAGMA synchronous=FULL")
-        return db
+        try:
+            db.execute("PRAGMA busy_timeout=%d" % int(self.timeout * 1000))
+            db.execute("PRAGMA synchronous=FULL")
+            yield db
+        finally:
+            db.close()
 
     @staticmethod
     def _digest(request: TransferRequest) -> str:
