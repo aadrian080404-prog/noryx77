@@ -113,14 +113,14 @@ class DurableTransferCoordinator:
                               bool(row[4]), bool(row[5]), row[6])
 
     def status(self, transfer_id: str) -> TransferStatus | None:
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute("""SELECT transfer_id,state,source_prepared,destination_prepared,
                 source_committed,destination_committed,request_digest
                 FROM matrix_transfers WHERE transfer_id=?""", (transfer_id,)).fetchone()
         return self._status(row) if row else None
 
     def _ensure_intent(self, request: TransferRequest, digest: str) -> TransferStatus:
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT transfer_id,state,source_prepared,destination_prepared,"
                 "source_committed,destination_committed,request_digest FROM matrix_transfers "
@@ -144,7 +144,7 @@ class DurableTransferCoordinator:
                    "destination_committed"}
         if column not in allowed:
             raise ValueError("invalid_transfer_progress_field")
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             if state is None:
                 db.execute(f"UPDATE matrix_transfers SET {column}=? WHERE transfer_id=?",
@@ -157,7 +157,7 @@ class DurableTransferCoordinator:
     def _set_state(self, transfer_id: str, state: str) -> None:
         if state not in self.STATES:
             raise ValueError("invalid_transfer_state")
-        with self._connect() as db:
+        with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE matrix_transfers SET state=? WHERE transfer_id=?", (state, transfer_id))
             db.commit()
@@ -178,7 +178,7 @@ class DurableTransferCoordinator:
             raise KeyError("unknown_transfer")
         if source.participant_id == destination.participant_id:
             raise ValueError("transfer_participants_must_differ")
-        with self._connect() as db:
+        with self._connection() as db:
             row = db.execute("SELECT source_id,destination_id,asset_id,amount_minor FROM "
                              "matrix_transfers WHERE transfer_id=?", (transfer_id,)).fetchone()
         if row[0] != source.participant_id or row[1] != destination.participant_id:
