@@ -82,3 +82,11 @@ def test_permit_is_not_consumed_if_interlock_fails_at_execution_boundary(tmp_pat
     gate.interlock_check = lambda *_: False
     with pytest.raises(PermissionError, match="local_safety_interlock_blocked"):
         gate.consume(permit, COMMAND, now=5)
+
+
+def test_approval_revocation_is_rechecked_at_consumption(tmp_path):
+    gate = prepared_gate(tmp_path)
+    permit = gate.issue("proposal-1", now=4)
+    gate.authorize_operator = lambda operator, _resource, _digest: operator == "op-a"
+    with pytest.raises(PermissionError, match="approval_authorization_revoked"):
+        gate.consume(permit, COMMAND, now=5)
