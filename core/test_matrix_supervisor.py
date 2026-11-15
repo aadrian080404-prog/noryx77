@@ -100,6 +100,22 @@ def test_executor_start_failure_releases_reservation(tmp_path):
     assert reservations.list() == ()
 
 
+def test_dispatch_rechecks_durable_grant_after_reservation(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    original_reserve = reservations.reserve
+
+    def reserve_then_revoke(request):
+        reservation = original_reserve(request)
+        supervisor.grants.revoke("grant-1", expected_generation=1)
+        return reservation
+
+    reservations.reserve = reserve_then_revoke
+    with pytest.raises(PermissionError, match="local_grant_snapshot_stale"):
+        supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    assert reservations.list() == ()
+    assert executor.started == []
+
+
 def test_dispatch_fails_closed_when_membership_is_revoked(tmp_path):
     supervisor, reservations, executor = _setup(tmp_path)
     supervisor.membership.revoke("node-1", 2)
