@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from .matrix_budget import DeviceConditions, DeviceContributionPolicy
@@ -366,3 +368,21 @@ def test_restart_reopens_admission_after_prepared_intent_without_reservations(tm
     )
     admitted = reopened.reserve(_request("task-after-recovery"))
     assert admitted.task_id == "task-after-recovery"
+
+
+
+def test_prepare_stop_intents_fails_closed_if_durable_fence_row_is_missing_or_stale(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+    with sqlite3.connect(tmp_path / "reservations.db") as db:
+        db.execute(
+            "UPDATE matrix_reservation_state SET generation=99 WHERE node_id='node-1'"
+        )
+
+    with pytest.raises(PermissionError, match="durable_admission_fence_failed"):
+        reservations.prepare_stop_intents()
+
+    # The failed transaction must not create a prepared stop intent or silently
+    # proceed with a revocation that has no durable admission fence.
+    assert reservations.list_stop_intents() == ()
