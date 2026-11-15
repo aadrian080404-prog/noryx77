@@ -303,14 +303,3 @@ No component here should be described as production-ready or globally distribute
 - Existing static-key configuration remains supported for isolated tests and deployments that deliberately manage rotation outside the registry.
 
 **Boundary:** the resolver callback and its owner/sender mapping remain trust boundaries. This change does not distribute revocation across machines or replace KMS/HSM custody.
-
-
-## 25. Dynamic key-policy enforcement at the network inbox boundary
-
-- Extend the durable inbox with an injected key resolver, preserving the existing static-key mode for local tests and controlled deployments.
-- The resolver is invoked for each accepted message, before inbox idempotency lookup, so a key revoked in the durable owner/purpose registry cannot authenticate a replay using a previously accepted message ID.
-- The inbox still binds each key ID to one sender identity; the key-policy adapter must resolve the key under the correct owner and `NETWORK_HMAC` purpose.
-- Provider failures and revoked/missing key material fail closed. The inbox does not cache resolved key bytes.
-- Add regression tests for live revocation and KMS/provider failure.
-
-This is an integration seam, not a production KMS, PKI, transport, or distributed revocation broadcast. The owner identity supplied to the resolver must come from a trusted local identity context, not message content.
