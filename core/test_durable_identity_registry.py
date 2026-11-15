@@ -5,6 +5,7 @@ import pytest
 
 from core.identity import (
     AgentIdentityAuthority,
+    IdentityRegistry,
     SQLiteIdentityRegistry,
 )
 
@@ -189,7 +190,7 @@ def test_durable_registry_rejects_malformed_utf8_agent_identifiers(tmp_path):
 
 
 def test_unknown_revocation_does_not_consume_a_trust_generation(tmp_path):
-    local = __import__("core.identity", fromlist=["IdentityRegistry"]).IdentityRegistry()
+    local = IdentityRegistry()
     local.revoke("not-yet-registered")
     local_identity, _ = AgentIdentityAuthority.generate("not-yet-registered")
     local.register(local_identity)
