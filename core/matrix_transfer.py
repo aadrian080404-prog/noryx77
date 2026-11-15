@@ -157,9 +157,48 @@ class DurableTransferCoordinator:
     def _set_state(self, transfer_id: str, state: str) -> None:
         if state not in self.STATES:
             raise ValueError("invalid_transfer_state")
+        transitions = {
+            "PREPARING": {"PREPARED", "IN_DOUBT"},
+            "PREPARED": {"COMMITTING", "IN_DOUBT"},
+            "COMMITTING": {"COMMITTED", "IN_DOUBT"},
+            "IN_DOUBT": {"PREPARED", "COMMITTING", "COMMITTED"},
+            "COMMITTED": set(),
+            "ABORTED": set(),
+        }
         with self._connection() as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("UPDATE matrix_transfers SET state=? WHERE transfer_id=?", (state, transfer_id))
+            row = db.execute(
+                "SELECT state,source_prepared,destination_prepared,"
+                "source_committed,destination_committed FROM matrix_transfers "
+                "WHERE transfer_id=?", (transfer_id,)
+            ).fetchone()
+            if row is None:
+                db.rollback()
+                raise KeyError("unknown_transfer")
+            current, source_prepared, destination_prepared, source_committed, destination_committed = row
+            # A stale worker must never downgrade a terminal result or overwrite
+            # a newer phase after another worker has advanced the transfer.
+            if current in {"COMMITTED", "ABORTED"}:
+                db.commit()
+                return
+            if state == current:
+                db.commit()
+                return
+            if state not in transitions[current]:
+                db.rollback()
+                raise PermissionError("invalid_transfer_state_transition")
+            if state in {"PREPARED", "COMMITTING"} and not (
+                source_prepared and destination_prepared
+            ):
+                db.rollback()
+                raise PermissionError("transfer_prepare_confirmation_incomplete")
+            if state == "COMMITTED" and not (
+                source_committed and destination_committed
+            ):
+                db.rollback()
+                raise PermissionError("transfer_commit_confirmation_incomplete")
+            db.execute("UPDATE matrix_transfers SET state=? WHERE transfer_id=?",
+                       (state, transfer_id))
             db.commit()
 
     def execute(self, request: TransferRequest, source: TransferParticipant,
