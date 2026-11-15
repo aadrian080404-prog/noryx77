@@ -76,7 +76,7 @@ class SQLiteFencedResource:
     def activate(self, resource_id: str, token: int) -> int:
         self._validate_resource(resource_id)
         self._validate_token(token)
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT highest_token FROM fenced_resources WHERE resource_id=?",
@@ -106,7 +106,7 @@ class SQLiteFencedResource:
         if not isinstance(payload, bytes):
             raise TypeError("payload_must_be_bytes")
         digest = hashlib.sha256(payload).hexdigest()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             previous = connection.execute(
                 """SELECT fencing_token, payload_digest, version
@@ -143,7 +143,7 @@ class SQLiteFencedResource:
 
     def snapshot(self, resource_id: str) -> tuple[int, int]:
         self._validate_resource(resource_id)
-        with self._connect() as connection:
+        with self._connection() as connection:
             row = connection.execute(
                 "SELECT highest_token, version FROM fenced_resources WHERE resource_id=?",
                 (resource_id,),
