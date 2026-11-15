@@ -76,3 +76,32 @@ class EncryptedMemoryStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_invalid_memory_contract_is_rejected_before_encryption(self):
+        invalid_items = (
+            MemoryItem("m1", "x", importance=float("nan")),
+            MemoryItem("m1", "x", importance=float("inf")),
+            MemoryItem("m1", "x", importance=-0.01),
+            MemoryItem("m1", "x", importance=1.01),
+            MemoryItem("m1", "x", kind="unknown"),
+        )
+        for item in invalid_items:
+            with self.subTest(item=item):
+                with self.assertRaises(ValueError):
+                    self.store.put(item, key_id="memory-key")
+        self.assertEqual(len(self.store), 0)
+
+    def test_invalid_authenticated_payload_contract_is_rejected_after_decryption(self):
+        import json
+
+        invalid_payloads = (
+            {"schema_version": 1, "memory_id": "m1", "content": "x", "kind": "working", "source": "", "importance": float("nan"), "execution_id": ""},
+            {"schema_version": 1, "memory_id": "m1", "content": "x", "kind": "working", "source": "", "importance": float("inf"), "execution_id": ""},
+            {"schema_version": 1, "memory_id": "m1", "content": "x", "kind": "working", "source": "", "importance": 1.5, "execution_id": ""},
+            {"schema_version": 1, "memory_id": "m1", "content": "x", "kind": "unknown", "source": "", "importance": 0.5, "execution_id": ""},
+        )
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                plaintext = json.dumps(payload).encode("utf-8")
+                with self.assertRaises(ValueError):
+                    self.store._deserialize("m1", plaintext)

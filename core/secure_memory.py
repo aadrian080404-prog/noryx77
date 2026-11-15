@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .crypto import AuthenticatedCipher, EncryptedEnvelope
-from .memory import MemoryItem
+from .memory import MemoryItem, MemoryStore
 from .secure_storage import EncryptedRecordStore, StoredCiphertext
 
 
@@ -37,8 +37,7 @@ class EncryptedMemoryStore:
 
     @staticmethod
     def _serialize(item: MemoryItem) -> bytes:
-        if not isinstance(item, MemoryItem):
-            raise ValueError("memory_item_required")
+        MemoryStore.validate_item(item)
         payload = {
             "schema_version": SCHEMA_VERSION,
             "memory_id": item.memory_id,
@@ -80,10 +79,10 @@ class EncryptedMemoryStore:
             importance=payload.get("importance", 0.0),
             execution_id=execution_id,
         )
-        if not item.memory_id or not isinstance(item.kind, str) or not isinstance(item.source, str):
-            raise ValueError("invalid_persisted_memory")
-        if isinstance(item.importance, bool) or not isinstance(item.importance, (int, float)):
-            raise ValueError("invalid_persisted_memory")
+        try:
+            MemoryStore.validate_item(item)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("invalid_persisted_memory") from exc
         return item
 
     def put(self, item: MemoryItem, *, key_id: str) -> None:
