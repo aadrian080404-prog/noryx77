@@ -160,3 +160,21 @@ def test_manifest_authentication_detects_tampering_and_wrong_key():
     assert manifest.verify_authentication(key, tag)
     assert not manifest.verify_authentication(b"other-test-key-material-32-bytes", tag)
     assert not manifest.verify_authentication(key, tag[:-1] + ("0" if tag[-1] != "0" else "1"))
+
+
+def test_deterministic_network_models_latency_reordering_and_partition_drop():
+    from .matrix_twin import DeterministicNetwork
+    twin = DeterministicTwin()
+    network = DeterministicNetwork(twin)
+    network.send("late", "node-a", "node-b", b"late", delay=9)
+    network.send("early", "node-a", "node-b", b"early", delay=3)
+    network.partition("node-a", "node-c")
+    network.send("during-partition", "node-a", "node-c", b"drop", delay=2)
+    network.partition("node-a", "node-b")
+    network.send("partition-before-arrival", "node-a", "node-b", b"drop-late", delay=5)
+    network.run()
+    assert [message.message_id for message in network.delivered] == ["early"]
+    assert {message.message_id for message in network.dropped} == {
+        "during-partition", "partition-before-arrival"
+    }
+    assert twin.now == 9
