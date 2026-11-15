@@ -315,3 +315,8 @@ No component here should be described as production-ready or globally distribute
 The local end-to-end test now composes the durable key-policy registry with the authenticated inbox. It accepts a signed message, then revokes the key and verifies that a second message already persisted as pending cannot be released afterward. This checks the policy boundary across components, not merely each component in isolation.
 
 The key registry stores metadata only. Secret bytes are supplied by an injected resolver; this test uses an in-memory test key and does not establish KMS/HSM integration, key rotation ceremonies, hardware protection, or atomic revocation across separate databases. A narrow check/use window remains between policy resolution and returning payload bytes; higher-assurance deployments need a shared transactional authority or short-lived, revocable capabilities enforced by the consumer.
+
+
+## 28. Critical-command safety gate integration
+
+The local end-to-end test also exercises the durable critical-command gate: a proposed command requires two distinct authorized operators, a live local interlock, a resource/command/expiry-bound one-time permit, and successful single consumption. The gate remains a permit issuer, not an actuator. A real adapter must atomically validate the permit at the target boundary and preserve the certified local safety controller as the final authority.
