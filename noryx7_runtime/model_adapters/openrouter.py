@@ -19,6 +19,7 @@ class OpenRouterAdapter:
         api_key: str | None = None,
         timeout_seconds: float = 90.0,
         app_name: str = "NORYX7",
+        max_response_bytes: int = 1_048_576,
     ) -> None:
         if not isinstance(model, str) or not model.strip():
             raise ValueError("model is required")
@@ -55,7 +56,39 @@ class OpenRouterAdapter:
         self._api_key = key
         self._model = model
         self._timeout_seconds = float(timeout_seconds)
+        if isinstance(max_response_bytes, bool) or not isinstance(max_response_bytes, int) or not 1 <= max_response_bytes <= 16_777_216:
+            raise ValueError("max_response_bytes must be between 1 and 16777216")
+
         self._app_name = app_name
+        self._max_response_bytes = max_response_bytes
+
+    def _read_bounded(self, response) -> bytes:
+        """Read at most max_response_bytes plus one sentinel byte."""
+        headers = getattr(response, "headers", None)
+        content_length = None
+        if headers is not None:
+            try:
+                raw_length = headers.get("Content-Length")
+                if raw_length is not None:
+                    content_length = int(raw_length)
+            except (TypeError, ValueError):
+                raise RuntimeError("openrouter_invalid_content_length")
+        if content_length is not None and (content_length < 0 or content_length > self._max_response_bytes):
+            raise RuntimeError("openrouter_response_too_large")
+
+        chunks = []
+        total = 0
+        while total <= self._max_response_bytes:
+            chunk = response.read(min(65536, self._max_response_bytes + 1 - total))
+            if not isinstance(chunk, bytes):
+                raise RuntimeError("openrouter_invalid_response_body")
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > self._max_response_bytes:
+                raise RuntimeError("openrouter_response_too_large")
+        return b"".join(chunks)
 
     def generate(
         self,
@@ -103,13 +136,17 @@ class OpenRouterAdapter:
                 request,
                 timeout=self._timeout_seconds,
             ) as response:
-                raw = response.read().decode("utf-8")
+                content_type = response.headers.get("Content-Type", "") if getattr(response, "headers", None) is not None else ""
+                media_type = content_type.split(";", 1)[0].strip().lower()
+                if media_type != "application/json" and not media_type.endswith("+json"):
+                    raise RuntimeError("openrouter_invalid_content_type")
+                raw = self._read_bounded(response).decode("utf-8")
 
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode(
-                "utf-8",
-                errors="replace",
-            )
+            try:
+                body = self._read_bounded(exc).decode("utf-8", errors="replace")
+            except RuntimeError as read_error:
+                body = str(read_error)
             raise RuntimeError(
                 f"openrouter_http_error:{exc.code}:{body[:1000]}"
             ) from exc
