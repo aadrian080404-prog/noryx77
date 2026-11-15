@@ -108,3 +108,35 @@ class LocalDoubleEntryLedger:
                    WHERE j.tenant_id=? AND p.asset_id=? AND p.account_id=?""",
                 (tenant_id, asset_id, account_id)).fetchone()
         return int(row[0])
+
+
+    def verify_integrity(self) -> tuple[bool, tuple[str, ...]]:
+        """Audit every journal's posting shape and balance from a consistent snapshot."""
+        errors: list[str] = []
+        with sqlite3.connect(self.database) as db:
+            db.execute("BEGIN")
+            journals = db.execute(
+                """SELECT journal_id,asset_id,debit_account,credit_account,amount_minor
+                   FROM matrix_journal ORDER BY journal_id"""
+            ).fetchall()
+            for journal_id, asset_id, debit, credit, amount in journals:
+                rows = db.execute(
+                    """SELECT asset_id,account_id,amount_minor FROM matrix_postings
+                       WHERE journal_id=? ORDER BY account_id""", (journal_id,)
+                ).fetchall()
+                expected = sorted([
+                    (asset_id, debit, -int(amount)),
+                    (asset_id, credit, int(amount)),
+                ])
+                actual = sorted((row[0], row[1], int(row[2])) for row in rows)
+                if actual != expected:
+                    errors.append(f"journal:{journal_id}:posting_mismatch")
+            orphaned = db.execute(
+                """SELECT COUNT(*) FROM matrix_postings p
+                   LEFT JOIN matrix_journal j USING(journal_id)
+                   WHERE j.journal_id IS NULL"""
+            ).fetchone()[0]
+            if orphaned:
+                errors.append("orphaned_postings")
+            db.commit()
+        return (not errors, tuple(errors))
