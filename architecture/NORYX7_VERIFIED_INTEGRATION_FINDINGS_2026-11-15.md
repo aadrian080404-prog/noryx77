@@ -207,3 +207,45 @@ The following source-level corrections have now been extracted into small, isola
 - Audit: all six configured workflows passed for PR #77 head `086e308`; still review checkpoint key rotation and external provider failure behavior before integration.
 - Memory: centralize validation across `MemoryStore` and `EncryptedMemoryStore`; add the missing NaN/Inf/range/kind regression tests and explicit principal isolation before presenting memory as a complete multi-device service.
 - All four PRs remain draft, unmerged, and not deployed. Green individual workflows do not establish full system integration.
+
+
+## 11. Follow-up verification and remediation snapshot — 2026-11-15
+
+This section records results observed after the prior candidate-coverage pass. CI status is tied to the exact commit SHA; a green PR is still unmerged and is not a production deployment.
+
+### CI results observed
+
+| PR | Commit | Checks | Disposition |
+|---|---|---|---|
+| #73 Matrix Core | `9c286ca01f5963c2410b8dc0473ea0733f779f20` | 6/6 success | Candidate tests pass; durable pending-stop recovery remains open |
+| #76 Gateway runtime bootstrap | `ec9d96274245a755fb501d772054d81b3790bc6e` | 6/6 success | Candidate tests pass; no production provider/deploy verification |
+| #77 Audit concurrency | `086e308980a11285c4b2f6c4f1139bc8e8fc978c` | 6/6 success | Candidate tests pass; key-provider lifecycle review remains open |
+| #78 MemoryHierarchy | `ba8757d4adc49d93f0e7ad08664dcb1ff3ec1432` | 5 success, Foundation failure | Python compile and complete pytest suite succeeded; Browser verification failed during Gradle dependency resolution because Maven Central returned HTTP 429 for multiple artifacts. This is an external dependency-fetch/rate-limit failure, not evidence of a MemoryHierarchy test failure. The PR remains unverified overall. |
+| #79 OpenRouter bounded reads | `3c90fd851beb9cdc7aa78815d5fd7427e2193c5d` | 6/6 success | Candidate tests pass; no live provider request |
+| #80 Encrypted memory validation | `7e4859e664bfc80cca57da47a19ea4b611f71284` | 6/6 success | Candidate tests pass; no principal isolation or distributed persistence claim |
+| #75 Architecture register | `55619fd4306ac2c73d1c78efafaa5b40ffbfdb01` | 5 success, Foundation in progress at last poll | Documentation branch only; final Foundation result not yet observed |
+
+The #78 Foundation job log identifies the failing step as **Verify NORYX Browser**. Gradle could not resolve several Android build dependencies because requests to `repo.maven.apache.org` returned HTTP 429. This must be handled as a CI supply-chain/repository-availability issue, not hidden by relabeling the check green. Repeated immediate retries are not a durable mitigation; inspect caching and repository routing before changing build configuration.
+
+### Matrix revocation: remaining crash-recovery gap
+
+PR #73 now separates `_pending_stops` from `_active`, so retrying failed stop requests no longer targets every healthy workload. However, `_pending_stops` is still an in-memory dictionary. The supervisor reconstructs `_active` from durable reservations on startup, while revocation reconciles/releases cancelled reservations before issuing executor stop calls. A process crash after durable revocation but before successful target termination can therefore lose the local retry list. This is **not** durable drain recovery.
+
+Required next increment:
+- persist stop intents (task ID, target node, grant generation, reason, creation time, status) before clearing/releasing the durable reservation;
+- make stop completion idempotent and persist acknowledgement only after the target confirms the exact task/generation is stopped;
+- rehydrate pending intents on supervisor startup;
+- reject stale generations at the target executor atomically;
+- test crash points before stop, after stop but before acknowledgement, and during repeated retry.
+
+### Model Fabric: explicit authentication state added in PR #81
+
+PR #81 (`fix/modelfabric-explicit-authenticated-results-2026-11-15`) adds an explicit `FabricResult.authenticated` marker, `ModelFabric.authenticated_results`, `verify_authenticated_result()`, and opt-in `require_authenticated_results`. Unkeyed SHA-256 envelope checking remains available for compatibility but is explicitly classified as unauthenticated. Authenticated mode requires a runtime-bound key of at least 32 bytes. Key provisioning, rotation, persistence, and KMS/HSM integration remain open. PR #81 is draft and its CI had not yet appeared at the time of this update.
+
+### Current disposition
+
+- #73, #76, #77, #79 and #80 have green candidate CI, but none is merged.
+- #78 has an infrastructure-related Foundation failure and must not be described as fully green.
+- #81 is a new draft remediation; its CI and integration with the operational factory are pending.
+- Gateway session secret strength, revocation/versioning, and HTTP-boundary rate limiting remain unresolved.
+- No cross-device consensus, hardware attestation, OS-level process termination, production KMS, production deployment, or independent security certification is claimed.
