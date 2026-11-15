@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from .matrix_budget import DeviceConditions, DeviceContributionPolicy
@@ -223,3 +225,164 @@ def test_retry_pending_stops_retries_only_failed_revocations(tmp_path):
     assert supervisor.retry_pending_stops() == ()
     assert executor.stopped == [("task-2", 1), ("task-1", 1)]
     assert supervisor.retry_pending_stops() == ()
+
+
+def test_pending_stop_intent_survives_supervisor_restart(tmp_path):
+    executor = FakeExecutor(fail_stop={"task-1"})
+    supervisor, reservations, _ = _setup(tmp_path, executor)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    result = supervisor.revoke(expected_generation=1)
+    assert result.stop_failures == ("task-1:RuntimeError",)
+    intents = reservations.list_stop_intents()
+    assert [(item.task_id, item.grant_generation, item.status) for item in intents] == [
+        ("task-1", 1, "pending")
+    ]
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted_executor = FakeExecutor()
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), restarted_executor,
+    )
+    assert restarted.retry_pending_stops() == ()
+    assert restarted_executor.stopped == [("task-1", 1)]
+    assert reopened.list_stop_intents() == ()
+
+
+def test_prepared_stop_intent_is_cancelled_if_grant_revocation_never_commits(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    reservations.prepare_stop_intents()
+    recovered = reservations.recover_prepared_stop_intents(1, True)
+    assert recovered == ()
+    assert reservations.list_stop_intents() == ()
+
+
+def test_prepared_stop_intent_recovers_if_grant_was_revoked_before_crash(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    reservations.prepare_stop_intents()
+    revoked = supervisor.grants.revoke("grant-1", expected_generation=1)
+    recovered = reservations.recover_prepared_stop_intents(revoked.grant.generation, False)
+    assert [(item.task_id, item.status) for item in recovered] == [("task-1", "pending")]
+
+
+
+def test_pending_stop_is_retried_when_acknowledgement_write_fails(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+    original_acknowledge = reservations.acknowledge_stop_intent
+    failed_once = True
+
+    def fail_first_acknowledgement(task_id, generation):
+        nonlocal failed_once
+        if failed_once:
+            failed_once = False
+            raise OSError("simulated_sqlite_acknowledgement_failure")
+        return original_acknowledge(task_id, generation)
+
+    reservations.acknowledge_stop_intent = fail_first_acknowledgement
+    with pytest.raises(OSError, match="simulated_sqlite_acknowledgement_failure"):
+        supervisor.revoke(expected_generation=1)
+
+    assert executor.stopped == [("task-1", 1)]
+    assert [(item.task_id, item.status) for item in reservations.list_stop_intents()] == [
+        ("task-1", "pending")
+    ]
+
+    reservations.acknowledge_stop_intent = original_acknowledge
+    assert supervisor.retry_pending_stops() == ()
+    assert executor.stopped == [("task-1", 1), ("task-1", 1)]
+    assert reservations.list_stop_intents() == ()
+
+
+def test_prepared_revocation_fences_admission_across_supervisor_processes(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+
+    # A second process has its own book/lock but shares the SQLite authority.
+    second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    reservations.prepare_stop_intents()
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        second_process_book.reserve(_request("task-2"))
+
+    reservations.cancel_prepared_stop_intents()
+    admitted = second_process_book.reserve(_request("task-2"))
+    assert admitted.task_id == "task-2"
+
+
+def test_failed_grant_revocation_keeps_admission_fenced_until_reconciliation(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+
+    def fail_revoke(*_args, **_kwargs):
+        raise RuntimeError("grant_store_unavailable")
+
+    supervisor.grants.revoke = fail_revoke
+    with pytest.raises(RuntimeError, match="grant_store_unavailable"):
+        supervisor.revoke(expected_generation=1)
+
+    second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        second_process_book.reserve(_request("task-2"))
+
+    # Only an authoritative read proving that the old grant is still enabled
+    # may clear the prepared intent and reopen admission.
+    assert reservations.recover_prepared_stop_intents(1, True) == ()
+    admitted = second_process_book.reserve(_request("task-2"))
+    assert admitted.task_id == "task-2"
+
+
+def test_ambiguous_revoke_commit_recovers_as_pending_stop_not_reopened(tmp_path):
+    supervisor, reservations, executor = _setup(tmp_path)
+    supervisor.dispatch(_request("task-1"), _conditions(), 100, 100, 2, 0.25)
+    original_revoke = supervisor.grants.revoke
+
+    def commit_then_lose_response(*args, **kwargs):
+        original_revoke(*args, **kwargs)
+        raise RuntimeError("grant_store_response_lost_after_commit")
+
+    supervisor.grants.revoke = commit_then_lose_response
+    with pytest.raises(RuntimeError, match="response_lost_after_commit"):
+        supervisor.revoke(expected_generation=1)
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), FakeExecutor(),
+    )
+    pending = reopened.list_stop_intents()
+    assert [(item.task_id, item.status) for item in pending] == [("task-1", "pending")]
+    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+        reopened.reserve(_request("task-2"))
+
+
+def test_restart_reopens_admission_after_prepared_intent_without_reservations(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    reservations.prepare_stop_intents()
+
+    reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+    restarted = MatrixSupervisor(
+        supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+        reopened, _policy(), FakeExecutor(),
+    )
+    admitted = reopened.reserve(_request("task-after-recovery"))
+    assert admitted.task_id == "task-after-recovery"
+
+
+
+def test_prepare_stop_intents_fails_closed_if_durable_fence_row_is_missing_or_stale(tmp_path):
+    supervisor, reservations, _ = _setup(tmp_path)
+    supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+    with sqlite3.connect(tmp_path / "reservations.db") as db:
+        db.execute(
+            "UPDATE matrix_reservation_state SET generation=99 WHERE node_id='node-1'"
+        )
+
+    with pytest.raises(PermissionError, match="durable_admission_fence_failed"):
+        reservations.prepare_stop_intents()
+
+    # The failed transaction must not create a prepared stop intent or silently
+    # proceed with a revocation that has no durable admission fence.
+    assert reservations.list_stop_intents() == ()
