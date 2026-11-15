@@ -116,8 +116,15 @@ class MatrixSupervisor:
                 raise PermissionError("device_contribution_policy_denied:" + reason)
             reservation = self.reservations.reserve(request)
             try:
-                # The target adapter, not this coordinator, must enforce this
-                # generation atomically when creating the isolated workload.
+                # Re-read the durable authority after reservation. Another
+                # supervisor/process may have revoked the grant since the first
+                # check; never dispatch from a stale local snapshot.
+                self._current_authority(request)
+                if reservation.grant_generation != request.generation:
+                    raise PermissionError("reservation_generation_mismatch")
+                # The target adapter must still enforce this generation
+                # atomically; this second check narrows, but cannot close, the
+                # cross-database/time-of-check race by itself.
                 self.executor.start(request, reservation.grant_generation)
             except Exception:
                 self.reservations.release(request.task_id)
