@@ -7,6 +7,7 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from enum import Enum
+import math
 import sqlite3
 from pathlib import Path
 from typing import Callable
@@ -44,7 +45,7 @@ class DurableMembershipRegistry:
     """SQLite-backed per-node membership state with monotonic epochs."""
 
     def __init__(self, database: str | Path, timeout: float = 5.0) -> None:
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("positive_database_timeout_required")
         self.database = str(database)
         self.timeout = float(timeout)
