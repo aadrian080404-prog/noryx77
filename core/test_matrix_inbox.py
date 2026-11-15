@@ -1,6 +1,7 @@
 import pytest
 
 from .matrix_inbox import DurableInbox, sign_message
+from .matrix_key_policy import DurableKeyPolicyRegistry
 
 
 KEY = b"noryx7-network-test-key-material-32-bytes"
@@ -107,3 +108,25 @@ def test_inbox_requires_complete_sender_key_bindings(tmp_path):
     with pytest.raises(ValueError, match="trusted_sender_binding_required"):
         DurableInbox(str(tmp_path / "bad.sqlite"), "node-b", {KEY_ID: KEY},
                      trusted_senders={})
+
+
+
+def test_inbox_resolves_key_policy_dynamically_and_rejects_revoked_key(tmp_path):
+    policy = DurableKeyPolicyRegistry(
+        str(tmp_path / "key-policy.sqlite"),
+        authorize=lambda *_args: True,
+        key_resolver=lambda _key_id: KEY,
+    )
+    policy.register(KEY_ID, "owner-a", "NETWORK_HMAC", 1)
+    def resolve(key_id, sender_id):
+        if sender_id != "node-a":
+            raise PermissionError("sender_not_authorized")
+        return policy.resolve(key_id, "owner-a", "NETWORK_HMAC")
+    store = DurableInbox(
+        str(tmp_path / "policy-inbox.sqlite"), "node-b", {},
+        trusted_senders={KEY_ID: "node-a"}, trusted_key_resolver=resolve,
+    )
+    store.accept(*signed(message_id="before-revoke"), now=1)
+    policy.revoke(KEY_ID, "owner-a", generation=2)
+    with pytest.raises(PermissionError, match="key_revoked"):
+        store.accept(*signed(message_id="after-revoke"), now=2)
