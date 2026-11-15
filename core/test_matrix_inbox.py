@@ -2,6 +2,7 @@ import pytest
 
 from .matrix_inbox import DurableInbox, sign_message
 from .matrix_key_policy import DurableKeyPolicyRegistry
+from .matrix_key_policy import DurableKeyPolicyRegistry
 
 
 KEY = b"noryx7-network-test-key-material-32-bytes"
@@ -130,3 +131,43 @@ def test_inbox_resolves_key_policy_dynamically_and_rejects_revoked_key(tmp_path)
     policy.revoke(KEY_ID, "owner-a", generation=2)
     with pytest.raises(PermissionError, match="key_revoked"):
         store.accept(*signed(message_id="after-revoke"), now=2)
+
+
+
+def test_inbox_resolves_key_policy_dynamically_and_rejects_revoked_key(tmp_path):
+    registry = DurableKeyPolicyRegistry(
+        str(tmp_path / "key-policy.sqlite"),
+        authorize=lambda *_args: True,
+        key_resolver=lambda _key_id: KEY,
+    )
+    registry.register(KEY_ID, "owner-a", "NETWORK_HMAC", 1)
+    store = DurableInbox(
+        str(tmp_path / "policy-inbox.sqlite"),
+        "node-b",
+        trusted_senders={KEY_ID: "node-a"},
+        key_resolver=lambda key_id: registry.resolve(
+            key_id, "owner-a", "NETWORK_HMAC"
+        ),
+    )
+    args = signed(message_id="policy-message", payload=b"before-revoke")
+    assert store.accept(*args, now=1).state == "PENDING"
+
+    registry.revoke(KEY_ID, "owner-a", generation=2)
+    # Key policy is checked before duplicate/idempotency handling, so a replay
+    # cannot continue to authenticate after the key has been revoked.
+    with pytest.raises(PermissionError, match="key_revoked"):
+        store.accept(*args, now=2)
+
+
+def test_inbox_key_resolver_fails_closed_on_provider_error(tmp_path):
+    def unavailable(_key_id):
+        raise RuntimeError("kms unavailable")
+
+    store = DurableInbox(
+        str(tmp_path / "resolver-inbox.sqlite"),
+        "node-b",
+        trusted_senders={KEY_ID: "node-a"},
+        key_resolver=unavailable,
+    )
+    with pytest.raises(PermissionError, match="message_key_resolution_failed"):
+        store.accept(*signed(), now=1)
