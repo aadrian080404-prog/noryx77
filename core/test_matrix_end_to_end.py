@@ -114,10 +114,8 @@ def test_end_to_end_local_admission_message_transfer_and_revocation(tmp_path):
     inbox = DurableInbox(
         str(tmp_path / "inbox.db"), "node-1", {},
         trusted_senders={"network-key-1": "coordinator-1"},
-        trusted_key_resolver=lambda key_id, sender_id: key_policy.resolve(
+        trusted_key_resolver=lambda key_id, _sender_id: key_policy.resolve(
             key_id, "owner-1", "NETWORK_HMAC"
-        ) if sender_id == "coordinator-1" else (_ for _ in ()).throw(
-            PermissionError("message_sender_key_binding_mismatch")
         ),
     )
     payload = b'{"task_id":"task-1","action":"prepare-transfer"}'
