@@ -214,6 +214,7 @@ No component here should be described as production-ready or globally distribute
 - `core/test_matrix_supervisor.py` exercises the complete local path, stale/future telemetry rejection, startup rollback, revoked membership, owner revocation and failed-stop reporting.
 - Dispatch re-reads the durable membership/grant authority after reserving capacity and releases the reservation if authority changed before executor start. This narrows cross-process revocation races; target-side fencing remains mandatory for the final atomic check at the protected resource.
 - Failed executor stops remain tracked in the supervisor's pending set and can be retried with `retry_pending_stops()`. The executor's stop operation must be idempotent for a task/generation pair; a failed drain is never reported as completed termination.
+- On supervisor initialization, active task generations are rehydrated from the durable reservation book. A process restart therefore does not silently discard the local list of workloads requiring a fenced stop; actual process discovery/termination still belongs to the executor/OS adapter.
 
 **Boundary:** this is a local orchestration contract, not a production process supervisor. The executor must implement target-side generation fencing and sandboxing atomically. The current adapter is an interface/fake-test contract; no OS process kill, cgroup/job-object enforcement, hardware attestation, distributed consensus, or cross-machine revocation propagation is claimed. Telemetry freshness uses a caller-supplied monotonic clock domain.
 
