@@ -52,3 +52,58 @@ class DeterministicTwin:
     @property
     def pending(self) -> int:
         return len(self._queue)
+
+
+@dataclass(frozen=True)
+class NetworkMessage:
+    message_id: str
+    source: str
+    destination: str
+    payload: Any
+
+
+class DeterministicNetwork:
+    """Deterministic message transport with latency, partitions and drop traces.
+
+    This is a test model, not a real network transport or consensus implementation.
+    """
+    def __init__(self, twin: DeterministicTwin) -> None:
+        self.twin = twin
+        self._partitions: set[frozenset[str]] = set()
+        self.delivered: list[NetworkMessage] = []
+        self.dropped: list[NetworkMessage] = []
+
+    @staticmethod
+    def _link(source: str, destination: str) -> frozenset[str]:
+        if (not isinstance(source, str) or not source.strip()
+                or not isinstance(destination, str) or not destination.strip()
+                or source == destination):
+            raise ValueError("distinct_network_endpoints_required")
+        return frozenset((source, destination))
+
+    def partition(self, source: str, destination: str) -> None:
+        self._partitions.add(self._link(source, destination))
+
+    def heal(self, source: str, destination: str) -> None:
+        self._partitions.discard(self._link(source, destination))
+
+    def send(self, message_id: str, source: str, destination: str,
+             payload: Any, delay: int = 0) -> TwinEvent:
+        if not isinstance(message_id, str) or not message_id.strip():
+            raise ValueError("message_id_required")
+        if isinstance(delay, bool) or not isinstance(delay, int) or delay < 0:
+            raise ValueError("network_delay_must_be_nonnegative_integer")
+        self._link(source, destination)
+        message = NetworkMessage(message_id, source, destination, payload)
+        return self.twin.schedule(self.twin.now + delay, "network_delivery", message)
+
+    def run(self, max_events: int = 10000) -> tuple[TwinEvent, ...]:
+        def deliver(event: TwinEvent, _sim: DeterministicTwin) -> None:
+            message = event.payload
+            if not isinstance(message, NetworkMessage):
+                raise ValueError("invalid_network_message_event")
+            if self._link(message.source, message.destination) in self._partitions:
+                self.dropped.append(message)
+            else:
+                self.delivered.append(message)
+        return self.twin.run({"network_delivery": deliver}, max_events=max_events)
