@@ -224,6 +224,18 @@ class SQLiteGenerationFencedExecutor:
                 ).fetchone()
                 if grant is None or int(grant[0]) != generation or int(grant[1]) != 1:
                     raise TargetFenceError("grant_revoked_before_launch")
+                current = self._db.execute(
+                    "SELECT generation, request_digest, state FROM matrix_target_executions "
+                    "WHERE node_id=? AND task_id=?",
+                    (self.node_id, request.task_id),
+                ).fetchone()
+                if current is None or int(current[0]) != generation or current[1] != digest:
+                    raise TargetFenceError("start_intent_changed_before_launch")
+                if current[2] == "running":
+                    self._db.execute("COMMIT")
+                    return
+                if current[2] != "starting":
+                    raise TargetFenceError("task_not_startable")
                 # The target supervisor must make start(task_id,generation)
                 # idempotent and linearizable with stop for this task.
                 self._executor.start(request, generation)
