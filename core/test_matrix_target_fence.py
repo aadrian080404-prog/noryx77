@@ -211,3 +211,40 @@ def test_target_fence_validates_node_and_lifecycle(tmp_path):
     fence.close()
     with pytest.raises(RuntimeError, match="closed"):
         fence.pending()
+
+
+def test_target_fence_migrates_legacy_execution_constraint(tmp_path):
+    path = str(tmp_path / "legacy.db")
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE matrix_target_grants (
+            node_id TEXT PRIMARY KEY,
+            generation INTEGER NOT NULL CHECK(generation >= 0),
+            enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+        );
+        CREATE TABLE matrix_target_executions (
+            node_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            generation INTEGER NOT NULL CHECK(generation >= 0),
+            request_digest TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('running', 'stop_pending')),
+            PRIMARY KEY(node_id, task_id)
+        );
+        INSERT INTO matrix_target_grants VALUES ('node-1', 4, 1);
+        INSERT INTO matrix_target_executions
+            VALUES ('node-1', 'task-legacy', 4, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'running');
+    """)
+    db.close()
+
+    fence = SQLiteGenerationFencedExecutor(path, "node-1", Executor())
+    try:
+        assert fence.pending() == (("task-legacy", 4, "running"),)
+        schema = fence._db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='matrix_target_executions'"
+        ).fetchone()[0]
+        assert "'starting'" in schema
+        assert fence._db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='matrix_target_executions_legacy'"
+        ).fetchone() is None
+    finally:
+        fence.close()
