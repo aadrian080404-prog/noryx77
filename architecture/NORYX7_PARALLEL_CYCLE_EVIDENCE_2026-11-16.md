@@ -7,7 +7,7 @@ This record captures exact repository evidence observed during the parallel inte
 ## Canonical gap-closure branch
 
 - PR: #85 — `integration/noryx7-architecture-gap-closure-2026-11-16`
-- Head: `9b3acc06df44edec3cc8b0614ad19d9c8f768ee2`
+- Head at this update: `cddbe9b4303e7fbd69877bc08c254ca58c0a65ac`
 - Base: `main`
 - State: open, draft, not merged.
 - Latest observed CI:
@@ -17,6 +17,7 @@ This record captures exact repository evidence observed during the parallel inte
   - Workflow run `43775434700` — Core Verification: success.
   - Workflow run `43775434695` — JARVIS Polyglot (Go, Rust, Python): success.
   - Workflow run `43775434687` — Foundation Verification: success, including Android browser verification.
+- Rechecked exact current head `cddbe9b4303e7fbd69877bc08c254ca58c0a65ac`: Foundation, Runner Smoke, Go, Python, Rust, both test jobs and Source Secrecy all completed successfully.
 - The manifest validator reports 18 modules: 1 implemented, 8 implemented_partial, 6 candidate_only, 3 specification_only.
 - The validator is a structural dependency/source-path gate. It is not a production-readiness detector.
 
@@ -80,3 +81,38 @@ This record captures exact repository evidence observed during the parallel inte
 - Core Verification and Foundation Verification were still running at the time this evidence record was updated.
 - Scope: durable SQLite metadata for key IDs, versions, active/retiring/revoked state; transactional transitions, startup validation, cross-connection visibility.
 - Not included: secret/private key material, KMS/HSM, key wrapping, hardware-backed custody or anti-rollback against database snapshot restoration.
+
+
+## Follow-on implementation — Matrix target-side generation fence
+
+- PR: #88 — `matrix/target-side-generation-fenced-executor-2026-11-16`
+- Exact head: `f623fcefbc54f0ccc995b66d73fcea2670c97acb`
+- Base: PR #83 durable Matrix stop-intent branch, head `26904351fa45d983b19c69ca124d83fbf8f78e9e`.
+- Exact-head checks: Foundation, tests (both jobs), Runner Smoke and Source Secrecy all completed successfully.
+- Follow-up corrections after the initial test-collection failure: complete target adapter implementation, durable pre-launch `starting` intent, grant/task-state recheck under SQLite write lock, legacy schema migration and recovery tests.
+- Scope: target-local generation fencing and durable stop/start intent.
+- Limits: no OS sandbox, no proof of process termination, no cross-device consensus, and no independent process supervisor. The wrapped executor must provide idempotent, linearizable task start/stop semantics.
+
+## Follow-on implementation — bounded authorization replay cache
+
+- PR: #89 — `security/bounded-authorization-replay-cache-2026-11-16`
+- Exact head: `d3a2f8adfa6e0ac7004fa106d9e7ec44bd0294c4`
+- Exact-head status at update: both test jobs, Runner Smoke and Source Secrecy succeeded; Foundation was still running.
+- Scope: bounded expiry-aware consumed-grant nonce cache; cache saturation denies rather than evicting valid replay records; expired entries are reclaimed.
+- Limit: process-local only; multi-instance replay protection requires a shared transactional nonce store or a single authority.
+
+## Follow-on implementation — verified offline principal binding
+
+- PR: #90 — `security/offline-verified-principal-binding-2026-11-16`
+- Exact head: `64f26abed866cbb00bb11b2e93374871a0670532`
+- Exact-head status at update: Runner Smoke succeeded; both test jobs, Foundation and Source Secrecy were still running.
+- Scope: execution IDs are no longer silently treated as principals; offline execution requires a principal ID, key fingerprint, trusted authenticator and snapshot/principal match before local execution.
+- Limit: production wiring must connect the authenticator to a trusted user/device identity provider and protected key lifecycle. Test callbacks do not establish production identity.
+
+## Follow-on implementation — audit concurrency
+
+- PR: #91 — `security/audit-concurrency-checkpoint-2026-11-16`
+- Exact head: `34430abd0484ec9e37c7b45bbdfb6e58db561f4d`
+- Exact-head status at update: Foundation, tests, Runner Smoke and Source Secrecy were still running.
+- Scope: serialized audit-chain append/snapshot/digest/integrity access; key-provider I/O remains outside the lock; checkpoint verification rechecks the chain head after key-provider I/O.
+- Limit: the log remains in-memory and process-local; concurrency safety does not make it durable or independently anchored.
