@@ -19,7 +19,7 @@ verified identity and consent -> attenuated capability -> taint-aware policy gat
 
 ### Main branch baseline
 
-The audited main baseline is `7d900bc75843ea9685886d251dbfac83a5d93b` (as recorded by the repository audit). It contains real foundations:
+The audited main baseline is `7d900bc75843ea968aa5886d251dbfac83a5d93b` (as recorded by the repository audit). It contains real foundations:
 
 - cognitive/runtime foundations in `core/hypersynth.py`, `core/hypersynth_runtime.py`, and operational runtime;
 - local Agent Fabric and Model Fabric, including an OpenRouter adapter;
