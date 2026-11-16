@@ -126,7 +126,15 @@ class AuditLog:
         payload = self._checkpoint_payload(current_digest)
         signer = hmac.HMAC(key, hashes.SHA256())
         signer.update(payload)
-        return AuditCheckpoint(1, key_id, current_digest, signer.finalize())
+        mac = signer.finalize()
+        # The chain may have advanced while the external key provider was
+        # queried. Do not return a checkpoint described as current if it is
+        # already stale at the time this method completes.
+        with self._lock:
+            latest_digest = self._digests[-1] if self._digests else self._GENESIS
+            if latest_digest != current_digest or not self._verify_integrity_locked():
+                raise ValueError("audit_chain_changed_during_checkpoint")
+        return AuditCheckpoint(1, key_id, current_digest, mac)
 
     def verify_checkpoint(self, checkpoint: AuditCheckpoint, provider: KeyProvider) -> bool:
         """Verify a checkpoint against the current chain and the external secret."""
