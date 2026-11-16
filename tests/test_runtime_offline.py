@@ -63,7 +63,7 @@ def test_runtime_offline_rejects_unconfigured_execution():
 
 def test_runtime_offline_does_not_commit_unverified_result():
     runtime = _runtime()
-    runtime.install_offline_snapshot(_snapshot("exec-1"))
+    runtime.install_offline_snapshot(_snapshot("user-1"))
     task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, execution_id="exec-1")
 
     result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: object(), principal_id="user-1", principal_key_fingerprint="a" * 64)
