@@ -57,3 +57,26 @@ This record captures exact repository evidence observed during the parallel inte
 - `candidate-only`: code remains on an unmerged branch and is not importable from the audited main branch.
 - `integrated`: dependency-complete source is present on the canonical integration line and its integration tests pass.
 - `hardware-verified` / `production-verified`: require separate device, deployment, security, recovery and operational evidence; neither status is claimed here.
+
+
+## Follow-on implementation — durable local outbox
+
+- PR: #86 — `integration/durable-offline-outbox-sqlite-2026-11-16`
+- Latest head: `ceccfda0777faab2358111779ec95b236644199c`
+- Base: PR #85 integration head `22b772fa01ac8fe70c4ea82c916d7fd41abdac2e`.
+- Exact commit CI: NORYX7 tests, Core Verification, Foundation Verification, Runner Smoke and Source Secrecy all completed successfully.
+- Test result: `789 passed in 7.53s`.
+- The initial test revision failed because its deliberately transparent cipher test double did not meet the ciphertext-opacity assertion; the test double was corrected to use a deterministic opaque transform. This is test-only and is not a production cipher.
+- Scope: local SQLite ciphertext outbox, metadata/digest, transaction, idempotent enqueue, capacity and restart semantics.
+- Not included: durable OfflineRuntime state/snapshot, stable production cipher/KMS, rollback-resistant anchor, exactly-once remote side effects, distributed replication.
+
+## Follow-on implementation — durable key lifecycle metadata
+
+- PR: #87 — `security/sqlite-key-lifecycle-metadata-2026-11-16`
+- Head: `24682e9dd3930ca4e5455eeb46e0d68a2814fe3c`
+- Base: PR #85 integration head `22b772fa01ac8fe70c4ea82c916d7fd41abdac2e`.
+- NORYX7 tests completed successfully: `789 passed in 7.53s`.
+- Source Secrecy and Runner Smoke completed successfully.
+- Core Verification and Foundation Verification were still running at the time this evidence record was updated.
+- Scope: durable SQLite metadata for key IDs, versions, active/retiring/revoked state; transactional transitions, startup validation, cross-connection visibility.
+- Not included: secret/private key material, KMS/HSM, key wrapping, hardware-backed custody or anti-rollback against database snapshot restoration.
