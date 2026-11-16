@@ -180,12 +180,20 @@ class SQLiteGenerationFencedExecutor:
                     self._db.execute("ROLLBACK")
                 raise
 
-            # The target supervisor must make start(task_id,generation)
-            # idempotent and linearizable with stop for the same task/generation.
-            # Retrying a durable 'starting' row reconciles an ambiguous launch.
-            self._executor.start(request, generation)
+            # Re-acquire the SQLite write lock and re-check the grant immediately
+            # before process control. Revocation cannot race this bounded call.
+            # The earlier committed 'starting' row survives rollback/crash.
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                grant = self._db.execute(
+                    "SELECT generation, enabled FROM matrix_target_grants WHERE node_id=?",
+                    (self.node_id,),
+                ).fetchone()
+                if grant is None or int(grant[0]) != generation or int(grant[1]) != 1:
+                    raise TargetFenceError("grant_revoked_before_launch")
+                # The target supervisor must make start(task_id,generation)
+                # idempotent and linearizable with stop for this task.
+                self._executor.start(request, generation)
                 cursor = self._db.execute(
                     "UPDATE matrix_target_executions SET state='running' "
                     "WHERE node_id=? AND task_id=? AND generation=? "
