@@ -70,6 +70,8 @@ class AuthorizationAuthority:
     def _remember_used_locked(self, grant: AuthorizationGrant) -> bool:
         now = float(self._clock())
         self._prune_used_locked(now)
+        if now >= float(grant.expires_at):
+            return False
         if grant.nonce in self._used:
             return False
         if len(self._used) >= self._max_consumed_grants:
