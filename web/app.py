@@ -103,7 +103,7 @@ def gateway_session(request: GatewaySessionRequest):
     try:
         return get_gateway().create_session(
             bootstrap_token=request.bootstrap_token,
-            client_id=request.client_id,
+            client_label=request.client_id,
         )
     except SessionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc

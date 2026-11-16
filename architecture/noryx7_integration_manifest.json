@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "purpose": "Machine-readable integration graph. Status describes evidence in this repository branch, not a promise of production readiness.",
+  "status_legend": {
+    "implemented_partial": "Source exists; at least one production-critical behavior or integration gate remains open.",
+    "implemented": "Source exists and local tests cover its declared contract; end-to-end/production proof may still be open.",
+    "candidate_only": "Implementation exists only on a separate unmerged PR/branch; not importable from this branch.",
+    "specification_only": "Architecture is documented but no complete implementation is present in this branch."
+  },
+  "modules": [
+    {
+      "id": "contracts",
+      "plane": "foundation",
+      "status": "implemented",
+      "paths": [
+        "core/contracts.py",
+        "core/limits.py"
+      ],
+      "depends_on": [],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "hypersynth",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "core/hypersynth.py",
+        "core/reasoning.py",
+        "core/metacognition.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "agent_fabric",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "core/agent_fabric.py",
+        "core/agent_runtime.py",
+        "core/agent_identity.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "model_fabric",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "noryx7_runtime/model_fabric.py",
+        "noryx7_runtime/model_adapters/openrouter.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "operational_runtime",
+      "plane": "runtime",
+      "status": "implemented_partial",
+      "paths": [
+        "core/operational_runtime.py",
+        "core/hypersynth_runtime.py"
+      ],
+      "depends_on": [
+        "hypersynth",
+        "agent_fabric",
+        "model_fabric"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "gateway",
+      "plane": "interface",
+      "status": "implemented_partial",
+      "paths": [
+        "gateway/server.py",
+        "gateway/auth.py",
+        "gateway/runtime_adapter.py"
+      ],
+      "depends_on": [
+        "operational_runtime",
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests/gateway",
+        "tests/web"
+      ]
+    },
+    {
+      "id": "memory_local",
+      "plane": "memory",
+      "status": "implemented_partial",
+      "paths": [
+        "core/memory.py",
+        "core/memory_hierarchy.py",
+        "core/secure_memory.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "audit",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/audit.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "identity_registry",
+      "plane": "security",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #46"
+    },
+    {
+      "id": "matrix_device_fabric",
+      "plane": "distribution",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "contracts",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #73/#83"
+    },
+    {
+      "id": "distributed_memory",
+      "plane": "memory",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "memory_local",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #70"
+    },
+    {
+      "id": "principal_memory",
+      "plane": "memory",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "memory_local",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #84"
+    },
+    {
+      "id": "quorum_witness",
+      "plane": "security",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "audit",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #66"
+    },
+    {
+      "id": "system_inspector_surf",
+      "plane": "systems",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "contracts",
+        "audit"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #72"
+    },
+    {
+      "id": "offline_durable_outbox",
+      "plane": "distribution",
+      "status": "specification_only",
+      "paths": [
+        "core/offline.py"
+      ],
+      "depends_on": [
+        "contracts",
+        "memory_local",
+        "audit"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "android_browser",
+      "plane": "interface",
+      "status": "implemented_partial",
+      "paths": [
+        "noryx-browser"
+      ],
+      "depends_on": [
+        "gateway"
+      ],
+      "integration_tests": [
+        "android build verification"
+      ]
+    },
+    {
+      "id": "governance_economy_marketplace",
+      "plane": "ecosystem",
+      "status": "specification_only",
+      "paths": [],
+      "depends_on": [
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": []
+    },
+    {
+      "id": "global_edge_cloud_fabric",
+      "plane": "distribution",
+      "status": "specification_only",
+      "paths": [],
+      "depends_on": [
+        "matrix_device_fabric",
+        "distributed_memory"
+      ],
+      "integration_tests": []
+    }
+  ]
+}
