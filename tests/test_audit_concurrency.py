@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from core.audit import AuditLog
-from core.crypto import InMemoryKeyProvider, KEY_SIZE
+from core.crypto import InMemoryKeyProvider, KeyProvider, KEY_SIZE
 
 
 def test_concurrent_records_preserve_audit_chain():
@@ -48,4 +48,23 @@ def test_concurrent_record_and_snapshot_never_exposes_partial_chain():
             future.result()
 
     assert len(log.snapshot()) == 400
+    assert log.verify_integrity()
+
+
+
+def test_checkpoint_rejects_chain_advanced_during_key_provider_io():
+    log = AuditLog()
+    log.record("before")
+
+    class AdvancingProvider(KeyProvider):
+        def get_key(self, key_id):
+            log.record("during_key_lookup")
+            return b"K" * KEY_SIZE
+
+    try:
+        log.checkpoint(AdvancingProvider(), key_id="audit")
+    except ValueError as exc:
+        assert str(exc) == "audit_chain_changed_during_checkpoint"
+    else:
+        raise AssertionError("stale checkpoint was returned")
     assert log.verify_integrity()
