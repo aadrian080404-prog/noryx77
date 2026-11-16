@@ -86,6 +86,7 @@ class NORYXRuntime:
         self.tool_executor = self.hypersynth.tool_executor
         self.frontier_capabilities = self.hypersynth.frontier_capabilities
         self._offline: OfflineRuntime | None = None
+        self._offline_principal_authenticator = None
 
     def configure_offline(
         self,
@@ -94,8 +95,12 @@ class NORYXRuntime:
         key_id: str,
         snapshot_authenticator,
         clock,
+        principal_authenticator=None,
     ) -> None:
         """Configure the canonical fail-closed offline runtime."""
+        if principal_authenticator is not None and not callable(principal_authenticator):
+            raise TypeError("offline_principal_authenticator_must_be_callable")
+        self._offline_principal_authenticator = principal_authenticator
         self._offline = OfflineRuntime(
             recovery=self.recovery,
             policy=PolicyOfflineAdapter(self.policy),
@@ -129,11 +134,12 @@ class NORYXRuntime:
         *,
         capability: str,
         local_executor,
+        principal_id: str | None = None,
+        principal_key_fingerprint: str | None = None,
     ) -> dict:
         """Execute one fail-closed offline task through the canonical runtime."""
         task_id = getattr(task, "task_id", None)
         execution_id = getattr(task, "execution_id", None) or str(uuid4())
-        principal_id = execution_id
 
         if self._offline is None:
             return {
@@ -163,6 +169,26 @@ class NORYXRuntime:
             snapshot = self._offline._snapshot
             if snapshot is None:
                 raise RuntimeError("offline_snapshot_required")
+            if (
+                not isinstance(principal_id, str)
+                or not principal_id.strip()
+                or len(principal_id.encode("utf-8")) > 256
+                or not isinstance(principal_key_fingerprint, str)
+                or len(principal_key_fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in principal_key_fingerprint)
+            ):
+                raise PermissionError("verified_offline_principal_required")
+            authenticator = self._offline_principal_authenticator
+            if not callable(authenticator):
+                raise PermissionError("offline_principal_authenticator_required")
+            try:
+                principal_verified = authenticator(principal_id, principal_key_fingerprint)
+            except Exception as exc:
+                raise PermissionError("offline_principal_authentication_failed") from exc
+            if principal_verified is not True:
+                raise PermissionError("offline_principal_authentication_failed")
+            if snapshot.principal_id != principal_id:
+                raise PermissionError("offline_snapshot_principal_mismatch")
 
             execution = OfflineExecution(
                 execution_id=execution_id,
@@ -193,10 +219,6 @@ class NORYXRuntime:
                     final_answer=str(produced),
                     status="verified",
                 )
-
-                principal_key_fingerprint = hashlib.sha256(
-                    f"offline-principal:{execution_spec.principal_id}".encode("utf-8")
-                ).hexdigest()
 
                 state_commit = self.state.commit(
                     state,
