@@ -42,6 +42,7 @@ class AuthorizationAuthority:
         clock=time.monotonic,
         max_ttl: float = 300.0,
         identity_registry: IdentityRegistry | None = None,
+        max_consumed_grants: int = 100_000,
     ):
         if not isinstance(secret, bytes) or len(secret) < 32:
             raise ValueError("authorization secret must be at least 32 bytes")
@@ -49,12 +50,34 @@ class AuthorizationAuthority:
             raise ValueError("invalid authorization configuration")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
             raise ValueError("invalid identity registry")
+        if isinstance(max_consumed_grants, bool) or not isinstance(max_consumed_grants, int) or not 1 <= max_consumed_grants <= 1_000_000:
+            raise ValueError("invalid consumed grant capacity")
         self._secret = bytes(secret)
         self._clock = clock
         self._max_ttl = float(max_ttl)
         self._identity_registry = identity_registry
-        self._used: set[str] = set()
+        # Nonces only need to remain recorded until their grant expires. Keeping
+        # an unbounded set would let a long-lived gateway exhaust memory.
+        self._max_consumed_grants = max_consumed_grants
+        self._used: dict[str, float] = {}
         self._lock = threading.Lock()
+
+    def _prune_used_locked(self, now: float) -> None:
+        expired = [nonce for nonce, expiry in self._used.items() if expiry <= now]
+        for nonce in expired:
+            self._used.pop(nonce, None)
+
+    def _remember_used_locked(self, grant: AuthorizationGrant) -> bool:
+        now = float(self._clock())
+        self._prune_used_locked(now)
+        if now >= float(grant.expires_at):
+            return False
+        if grant.nonce in self._used:
+            return False
+        if len(self._used) >= self._max_consumed_grants:
+            return False
+        self._used[grant.nonce] = float(grant.expires_at)
+        return True
 
     @staticmethod
     def _fingerprint(identity: AgentIdentity) -> str:
@@ -132,6 +155,10 @@ class AuthorizationAuthority:
             raise ValueError("invalid_authorization_principal")
         principal_id = principal.agent_id if principal is not None else ""
         fingerprint = self._fingerprint(principal) if principal is not None else ""
+        with self._lock:
+            self._prune_used_locked(float(self._clock()))
+            if len(self._used) >= self._max_consumed_grants:
+                raise RuntimeError("authorization_replay_cache_full")
         nonce = secrets.token_urlsafe(32)
         expires_at = float(self._clock()) + float(ttl)
         signature = self._sign(action, execution_id, principal_id, fingerprint, nonce, expires_at)
@@ -190,6 +217,7 @@ class AuthorizationAuthority:
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
+            self._prune_used_locked(float(self._clock()))
             return grant.nonce not in self._used
 
     def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, *, principal: AgentIdentity | None = None) -> bool:
@@ -202,8 +230,7 @@ class AuthorizationAuthority:
             if self._identity_registry is not None:
                 if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
                     return False
-            self._used.add(grant.nonce)
-            return True
+            return self._remember_used_locked(grant)
 
     def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
         """Linearize grant consumption and dispatch against identity revocation."""
@@ -214,10 +241,14 @@ class AuthorizationAuthority:
         with self._lock:
             if grant.nonce in self._used:
                 return False, None
+            self._prune_used_locked(float(self._clock()))
+            if len(self._used) >= self._max_consumed_grants:
+                return False, None
             with self._identity_registry._lock:
                 if not self._identity_registry.is_trusted(principal):
                     return False, None
-                self._used.add(grant.nonce)
+                if not self._remember_used_locked(grant):
+                    return False, None
                 # The capability is consumed before dispatch; executor failure is an execution
                 # failure, never an authorization success and never a reason to restore the grant.
                 return True, executor()
