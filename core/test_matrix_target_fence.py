@@ -17,7 +17,9 @@ class Executor:
     def start(self, request, generation):
         if self.fail_start:
             raise RuntimeError("start_failed")
-        self.started.append((request.task_id, generation))
+        item = (request.task_id, generation)
+        if item not in self.started:
+            self.started.append(item)
 
     def stop(self, task_id, generation):
         if self.fail_stop:
@@ -127,7 +129,13 @@ def test_target_fence_start_failure_does_not_leave_active_record(tmp_path):
         fence.apply_grant(4, enabled=True)
         with pytest.raises(RuntimeError, match="start_failed"):
             fence.start(request(), 4)
-        assert fence.pending() == ()
+        # The durable intent survives an ambiguous/failed launch so a retry
+        # can reconcile through the idempotent target supervisor.
+        assert fence.pending() == (("task-1", 4, "starting"),)
+        executor.fail_start = False
+        fence.start(request(), 4)
+        assert fence.pending() == (("task-1", 4, "running"),)
+        assert executor.started == [("task-1", 4)]
     finally:
         fence.close()
 
