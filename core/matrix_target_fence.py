@@ -1,7 +1,8 @@
 """Durable target-side generation fencing for trusted local Matrix executors.
 
 SQLite orders grant changes and starts on one target node. The wrapped executor
-must be a trusted local process supervisor with idempotent stop semantics.
+must be a trusted local process supervisor with idempotent, per-task start/stop
+semantics so ambiguous calls can be safely reconciled after a crash.
 This is not an OS sandbox, distributed consensus, or proof of process death.
 """
 from __future__ import annotations
@@ -16,8 +17,13 @@ from .matrix_core import WorkloadRequest
 
 
 class TargetExecutor(Protocol):
-    def start(self, request: WorkloadRequest, generation: int) -> None: ...
-    def stop(self, task_id: str, generation: int) -> None: ...
+    def start(self, request: WorkloadRequest, generation: int) -> None:
+        """Idempotently ensure this task/generation is running."""
+        ...
+
+    def stop(self, task_id: str, generation: int) -> None:
+        """Idempotently ensure this task/generation is stopped."""
+        ...
 
 
 class TargetFenceError(RuntimeError):
@@ -53,7 +59,7 @@ class SQLiteGenerationFencedExecutor:
                     task_id TEXT NOT NULL,
                     generation INTEGER NOT NULL CHECK(generation >= 0),
                     request_digest TEXT NOT NULL,
-                    state TEXT NOT NULL CHECK(state IN ('running', 'stop_pending')),
+                    state TEXT NOT NULL CHECK(state IN ('starting', 'running', 'stop_pending')),
                     PRIMARY KEY(node_id, task_id)
                 );
             """)
@@ -153,19 +159,41 @@ class SQLiteGenerationFencedExecutor:
                 if existing is not None:
                     if int(existing[0]) != generation or existing[1] != digest:
                         raise TargetFenceError("task_identity_conflict")
-                    if existing[2] != "running":
+                    if existing[2] == "running":
+                        self._db.execute("COMMIT")
+                        return
+                    if existing[2] == "stop_pending":
                         raise TargetFenceError("task_stop_pending")
-                    self._db.execute("COMMIT")
-                    return
-                # Keep the local SQLite write transaction across this bounded
-                # process-supervisor call so another connection cannot revoke
-                # the grant between admission and launch.
-                self._executor.start(request, generation)
-                self._db.execute(
-                    "INSERT INTO matrix_target_executions(node_id,task_id,generation,request_digest,state) "
-                    "VALUES(?,?,?,?, 'running')",
+                    # 'starting' is a durable intent left by an interrupted or
+                    # ambiguous launch. Retry through the idempotent supervisor.
+                else:
+                    self._db.execute(
+                        "INSERT INTO matrix_target_executions(node_id,task_id,generation,request_digest,state) "
+                        "VALUES(?,?,?,?, 'starting')",
+                        (self.node_id, request.task_id, generation, digest),
+                    )
+                # Commit the start intent BEFORE calling the process supervisor.
+                # A crash or ambiguous return therefore leaves a recoverable row.
+                self._db.execute("COMMIT")
+            except Exception:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                raise
+
+            # The target supervisor must make start(task_id,generation)
+            # idempotent and linearizable with stop for the same task/generation.
+            # Retrying a durable 'starting' row reconciles an ambiguous launch.
+            self._executor.start(request, generation)
+            try:
+                self._db.execute("BEGIN IMMEDIATE")
+                cursor = self._db.execute(
+                    "UPDATE matrix_target_executions SET state='running' "
+                    "WHERE node_id=? AND task_id=? AND generation=? "
+                    "AND request_digest=? AND state='starting'",
                     (self.node_id, request.task_id, generation, digest),
                 )
+                if cursor.rowcount != 1:
+                    raise TargetFenceError("start_intent_changed_during_launch")
                 self._db.execute("COMMIT")
             except Exception:
                 if self._db.in_transaction:
@@ -200,7 +228,7 @@ class SQLiteGenerationFencedExecutor:
                 raise
 
             # The durable stop intent is committed before external process control.
-            # The supervisor's stop operation must be idempotent across retries.
+            # The supervisor must serialize start/stop per task and make stop idempotent.
             self._executor.stop(task_id, generation)
             try:
                 self._db.execute("BEGIN IMMEDIATE")
