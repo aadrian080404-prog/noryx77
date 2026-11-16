@@ -63,6 +63,39 @@ class SQLiteGenerationFencedExecutor:
                     PRIMARY KEY(node_id, task_id)
                 );
             """)
+            schema = self._db.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='matrix_target_executions'"
+            ).fetchone()
+            if schema is not None and "'starting'" not in (schema[0] or ""):
+                # Upgrade databases created by the first draft of this adapter,
+                # whose CHECK constraint did not yet include the durable
+                # pre-launch state. Preserve every existing execution row.
+                self._db.execute("BEGIN IMMEDIATE")
+                try:
+                    self._db.execute(
+                        "ALTER TABLE matrix_target_executions RENAME TO matrix_target_executions_legacy"
+                    )
+                    self._db.execute("""
+                        CREATE TABLE matrix_target_executions (
+                            node_id TEXT NOT NULL,
+                            task_id TEXT NOT NULL,
+                            generation INTEGER NOT NULL CHECK(generation >= 0),
+                            request_digest TEXT NOT NULL,
+                            state TEXT NOT NULL CHECK(state IN ('starting', 'running', 'stop_pending')),
+                            PRIMARY KEY(node_id, task_id)
+                        )
+                    """)
+                    self._db.execute(
+                        "INSERT INTO matrix_target_executions(node_id,task_id,generation,request_digest,state) "
+                        "SELECT node_id,task_id,generation,request_digest,state "
+                        "FROM matrix_target_executions_legacy"
+                    )
+                    self._db.execute("DROP TABLE matrix_target_executions_legacy")
+                    self._db.execute("COMMIT")
+                except Exception:
+                    if self._db.in_transaction:
+                        self._db.execute("ROLLBACK")
+                    raise
         except Exception:
             self._db.close()
             self._closed = True
