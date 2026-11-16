@@ -12,14 +12,17 @@ from core.offline import (
 
 
 class Cipher:
+    """Deterministic opaque test double; not a production cryptographic cipher."""
+
     def encrypt(self, plaintext, *, aad):
-        return b"ENC:" + aad + b":" + plaintext
+        prefix = b"TEST:" + sha256(aad).digest()
+        return prefix + bytes(value ^ 0xA5 for value in plaintext)
 
     def decrypt(self, ciphertext, *, aad):
-        prefix = b"ENC:" + aad + b":"
+        prefix = b"TEST:" + sha256(aad).digest()
         if not ciphertext.startswith(prefix):
             raise ValueError("bad_ciphertext")
-        return ciphertext[len(prefix):]
+        return bytes(value ^ 0xA5 for value in ciphertext[len(prefix):])
 
 
 def execution(payload=b"persist me", execution_id="exec-1"):
