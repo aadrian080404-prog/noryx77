@@ -207,7 +207,7 @@
     {
       "id": "offline_durable_outbox",
       "plane": "distribution",
-      "status": "specification_only",
+      "status": "implemented_partial",
       "paths": [
         "core/offline.py"
       ],
@@ -217,7 +217,8 @@
         "audit"
       ],
       "integration_tests": [
-        "tests"
+        "tests/test_offline.py",
+        "tests/test_offline_sqlite_queue.py"
       ]
     },
     {
