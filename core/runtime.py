@@ -273,7 +273,7 @@ class NORYXRuntime:
                     execution_id=execution_spec.execution_id,
                     task_id=task_id,
                     verification_valid=True,
-                    verification_stage="runtime_result",
+                    verification_stage=verdict.stage,
                     principal_id=execution_spec.principal_id,
                     principal_key_fingerprint=principal_key_fingerprint,
                 )
