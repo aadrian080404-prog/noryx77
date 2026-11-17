@@ -207,9 +207,11 @@
     {
       "id": "offline_durable_outbox",
       "plane": "distribution",
-      "status": "specification_only",
+      "status": "implemented_partial",
       "paths": [
-        "core/offline.py"
+        "core/offline.py",
+        "core/runtime.py",
+        "core/offline_anchor.py"
       ],
       "depends_on": [
         "contracts",
@@ -217,7 +219,9 @@
         "audit"
       ],
       "integration_tests": [
-        "tests"
+        "tests/test_runtime_offline.py",
+        "tests/test_offline_sqlite_queue.py",
+        "tests/test_offline_anchor_concurrency.py"
       ]
     },
     {

@@ -1,9 +1,11 @@
 import hashlib
 import json
 
+import pytest
+
 from core.contracts import TaskSpec, VerificationResult
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider
-from core.offline import OfflineSnapshot
+from core.offline import OfflineDeniedError, OfflineSnapshot
 from core.runtime import NORYXRuntime
 
 
@@ -21,14 +23,14 @@ def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
 
 
-def _runtime() -> NORYXRuntime:
+def _runtime(queue_database_path: str | None = None, monotonic_anchor_path: str | None = None, clock_value: int = 100) -> NORYXRuntime:
     runtime = NORYXRuntime()
     provider = InMemoryKeyProvider({"offline-1": b"K" * 32})
     runtime.configure_offline(
         cipher=AuthenticatedCipher(provider),
         key_id="offline-1",
         snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
-        clock=lambda: 100,
+        clock=lambda: clock_value,
         principal_authenticator=lambda principal_id, fingerprint: (
             principal_id == "user-1" and fingerprint == "a" * 64
         ),
@@ -36,6 +38,8 @@ def _runtime() -> NORYXRuntime:
             True, "offline_semantic", "task_requirements_satisfied",
             task.verification_requirements,
         ),
+        queue_database_path=queue_database_path,
+        monotonic_anchor_path=monotonic_anchor_path,
     )
     return runtime
 
@@ -49,6 +53,7 @@ def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
 
     assert result["status"] == "completed"
     assert result["state_commit"].verification_stage == "runtime_result"
+    assert result["state_commit"].state.verification_results[0]["stage"] == "offline_semantic"
     assert result["state_commit"].state.status == "committed"
     assert result["sync_envelope"].ciphertext != b""
     assert runtime.offline is not None
@@ -118,3 +123,49 @@ def test_runtime_offline_requires_declared_verification_requirements():
     assert result["reason"] == "offline_verification_requirements_required"
     assert called == []
     assert len(runtime.state) == 0
+
+
+
+def test_runtime_offline_uses_sqlite_queue_across_runtime_restart(tmp_path):
+    database_path = str(tmp_path / "runtime-offline.sqlite")
+    first = _runtime(database_path)
+    first.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec(
+        "task-durable", "local-analysis", "analyze", {"x": 1},
+        verification_requirements=("objective_match",), execution_id="exec-durable"
+    )
+
+    result = first.run_offline(
+        task, capability="compute_local", local_executor=lambda task: "durable-result",
+        principal_id="user-1", principal_key_fingerprint="a" * 64,
+    )
+
+    assert result["status"] == "completed"
+    assert len(first.offline.queue) == 1
+    first.offline.queue.close()
+
+    second = _runtime(database_path)
+    try:
+        assert len(second.offline.queue) == 1
+        envelope = second.offline.queue.snapshot()[0]
+        assert envelope.execution.execution_id == "exec-durable"
+        assert second.offline.queue.decrypt("exec-durable")
+    finally:
+        second.offline.queue.close()
+
+def test_runtime_offline_anchor_survives_restart_and_rejects_rollback(tmp_path):
+    anchor_path = str(tmp_path / "offline-anchor.sqlite")
+    first = _runtime(monotonic_anchor_path=anchor_path)
+    first.install_offline_snapshot(_snapshot("user-1", issued_at=100))
+    assert first._offline_anchor.current() == (100, "snap-1")
+    first.close_offline()
+
+    second = _runtime(monotonic_anchor_path=anchor_path, clock_value=200)
+    try:
+        with pytest.raises(OfflineDeniedError, match="offline_snapshot_rollback"):
+            second.install_offline_snapshot(_snapshot("user-1", issued_at=99))
+        assert second._offline_anchor.current() == (100, "snap-1")
+        second.install_offline_snapshot(_snapshot("user-1", issued_at=101))
+        assert second._offline_anchor.current() == (101, "snap-1")
+    finally:
+        second.close_offline()
