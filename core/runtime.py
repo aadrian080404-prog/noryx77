@@ -86,6 +86,7 @@ class NORYXRuntime:
         self.tool_executor = self.hypersynth.tool_executor
         self.frontier_capabilities = self.hypersynth.frontier_capabilities
         self._offline: OfflineRuntime | None = None
+        self._offline_task_verifier = None
 
     def configure_offline(
         self,
@@ -94,8 +95,16 @@ class NORYXRuntime:
         key_id: str,
         snapshot_authenticator,
         clock,
+        task_verifier=None,
     ) -> None:
-        """Configure the canonical fail-closed offline runtime."""
+        """Configure offline execution with a separate task-semantic verifier.
+
+        The generic output verifier checks shape only. A task verifier must
+        independently establish the task's declared requirements before commit.
+        """
+        if task_verifier is not None and not callable(task_verifier):
+            raise TypeError("offline_task_verifier_must_be_callable")
+        self._offline_task_verifier = task_verifier
         self._offline = OfflineRuntime(
             recovery=self.recovery,
             policy=PolicyOfflineAdapter(self.policy),
@@ -144,6 +153,13 @@ class NORYXRuntime:
             }
 
         try:
+            if not isinstance(task, TaskSpec) or not task.is_well_formed():
+                raise ValueError("offline_task_contract_invalid")
+            if not task.verification_requirements:
+                raise PermissionError("offline_verification_requirements_required")
+            if not callable(self._offline_task_verifier):
+                raise PermissionError("offline_task_verifier_required")
+
             payload = json.dumps(
                 {
                     "task_id": task_id,
@@ -174,8 +190,28 @@ class NORYXRuntime:
             )
 
             committed = {}
+            semantic_verification = {}
+
+            def execute_and_verify():
+                produced = local_executor(task)
+                try:
+                    verdict = self._offline_task_verifier(task, produced)
+                except Exception as exc:
+                    raise PermissionError("offline_semantic_verification_failed") from exc
+                if not (
+                    isinstance(verdict, VerificationResult)
+                    and verdict.is_well_formed()
+                    and verdict.valid is True
+                    and verdict.stage == "offline_semantic"
+                ):
+                    raise PermissionError("offline_semantic_verification_failed")
+                semantic_verification["result"] = verdict
+                return produced
 
             def commit(execution_spec, produced) -> None:
+                verdict = semantic_verification.get("result")
+                if not isinstance(verdict, VerificationResult) or verdict.valid is not True:
+                    raise PermissionError("offline_semantic_verification_missing")
                 state = NORYXState(
                     input_digest=payload_digest,
                     goal=getattr(task, "objective", ""),
@@ -184,12 +220,13 @@ class NORYXRuntime:
                     hypotheses=[],
                     verification_results=[
                         {
-                            "stage": "runtime_result",
-                            "valid": True,
-                            "reason": "offline_result_verified",
+                            "stage": verdict.stage,
+                            "valid": verdict.valid,
+                            "reason": verdict.reason,
+                            "details": verdict.details,
                         }
                     ],
-                    confidence=1.0,
+                    confidence=0.0,
                     final_answer=str(produced),
                     status="verified",
                 )
@@ -203,7 +240,7 @@ class NORYXRuntime:
                     execution_id=execution_spec.execution_id,
                     task_id=task_id,
                     verification_valid=True,
-                    verification_stage="runtime_result",
+                    verification_stage="offline_semantic",
                     principal_id=execution_spec.principal_id,
                     principal_key_fingerprint=principal_key_fingerprint,
                 )
@@ -212,7 +249,7 @@ class NORYXRuntime:
             sync_envelope = self._offline.execute(
                 execution=execution,
                 payload=payload,
-                execute=lambda: local_executor(task),
+                execute=execute_and_verify,
                 commit=commit,
             )
 
