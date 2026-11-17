@@ -50,6 +50,7 @@ def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
 
     assert result["status"] == "completed"
     assert result["state_commit"].verification_stage == "runtime_result"
+    assert result["state_commit"].state.verification_results[0]["stage"] == "offline_semantic"
     assert result["state_commit"].state.status == "committed"
     assert result["sync_envelope"].ciphertext != b""
     assert runtime.offline is not None
