@@ -70,6 +70,7 @@ class MatrixSupervisor:
         self.reservations = reservations
         self.device_policy = device_policy
         self.executor = executor
+        self._sync_executor_grant(node.grant)
         self._active: dict[str, int] = {
             item.task_id: item.grant_generation for item in reservations.list()
         }
@@ -82,6 +83,12 @@ class MatrixSupervisor:
             item.task_id: item.grant_generation for item in recovered if item.status == "pending"
         }
         self._lock = RLock()
+
+    def _sync_executor_grant(self, grant) -> None:
+        """Propagate durable grant generations to target-side fences when supported."""
+        apply_grant = getattr(self.executor, "apply_grant", None)
+        if callable(apply_grant):
+            apply_grant(grant.generation, enabled=grant.enabled)
 
     def _current_authority(self, request: WorkloadRequest):
         member = self.membership.get(self.node.node_id)
@@ -120,13 +127,15 @@ class MatrixSupervisor:
             raise PermissionError("device_telemetry_stale_or_from_future")
 
         with self._lock:
-            self._current_authority(request)
+            _, stored = self._current_authority(request)
+            self._sync_executor_grant(stored.grant)
             permitted, reason = self.device_policy.permits(conditions, estimated_duration_hours)
             if not permitted:
                 raise PermissionError("device_contribution_policy_denied:" + reason)
             reservation = self.reservations.reserve(request)
             try:
-                self._current_authority(request)
+                _, current = self._current_authority(request)
+                self._sync_executor_grant(current.grant)
                 if reservation.grant_generation != request.generation:
                     raise PermissionError("reservation_generation_mismatch")
                 self.executor.start(request, reservation.grant_generation)
@@ -149,6 +158,9 @@ class MatrixSupervisor:
                 # fence and prepared intents; startup reconciliation must query
                 # authoritative grant state before reopening admission.
                 raise
+            # Disable the target-side generation before attempting external drains.
+            # A failed stop must never leave stale starts admissible.
+            self._sync_executor_grant(revoked.grant)
             next_node = NodeProfile(
                 self.node.node_id, self.node.failure_domain, self.node.attested,
                 self.node.sandbox_ready, self.node.envelope, revoked.grant,
