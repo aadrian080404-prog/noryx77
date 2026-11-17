@@ -21,7 +21,7 @@ def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
 
 
-def _runtime(queue_database_path: str | None = None) -> NORYXRuntime:
+def _runtime(queue_database_path: str | None = None, monotonic_anchor_path: str | None = None) -> NORYXRuntime:
     runtime = NORYXRuntime()
     provider = InMemoryKeyProvider({"offline-1": b"K" * 32})
     runtime.configure_offline(
@@ -37,6 +37,7 @@ def _runtime(queue_database_path: str | None = None) -> NORYXRuntime:
             task.verification_requirements,
         ),
         queue_database_path=queue_database_path,
+        monotonic_anchor_path=monotonic_anchor_path,
     )
     return runtime
 
@@ -149,3 +150,20 @@ def test_runtime_offline_uses_sqlite_queue_across_runtime_restart(tmp_path):
         assert second.offline.queue.decrypt("exec-durable")
     finally:
         second.offline.queue.close()
+
+def test_runtime_offline_anchor_survives_restart_and_rejects_rollback(tmp_path):
+    anchor_path = str(tmp_path / "offline-anchor.sqlite")
+    first = _runtime(monotonic_anchor_path=anchor_path)
+    first.install_offline_snapshot(_snapshot("user-1", issued_at=100))
+    assert first._offline_anchor.current() == (100, "snap-1")
+    first.close_offline()
+
+    second = _runtime(monotonic_anchor_path=anchor_path)
+    try:
+        with pytest.raises(Exception, match="offline_snapshot_rollback"):
+            second.install_offline_snapshot(_snapshot("user-1", issued_at=99))
+        assert second._offline_anchor.current() == (100, "snap-1")
+        second.install_offline_snapshot(_snapshot("user-1", issued_at=101))
+        assert second._offline_anchor.current() == (101, "snap-1")
+    finally:
+        second.close_offline()
