@@ -193,3 +193,27 @@ def test_sqlite_outbox_detects_execution_metadata_tampering(tmp_path):
             reopened.snapshot()
     finally:
         reopened.close()
+
+def test_sqlite_outbox_detects_sequence_tampering(tmp_path):
+    path = str(tmp_path / "offline-sequence.sqlite")
+    payload = b"sequence binding probe"
+    queue = SQLiteOfflineSyncQueue(path, Cipher())
+    queue.enqueue(execution(payload), payload)
+    queue.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "UPDATE offline_sync_queue SET sequence=sequence+1 WHERE execution_id=?",
+            ("exec-1",),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    reopened = SQLiteOfflineSyncQueue(path, Cipher())
+    try:
+        with pytest.raises(OfflineDeniedError, match="metadata_authentication"):
+            reopened.snapshot()
+    finally:
+        reopened.close()
