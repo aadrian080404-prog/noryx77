@@ -408,3 +408,25 @@ def test_supervisor_revocation_updates_target_fence_before_stop(tmp_path):
             target.start(_request(generation=1), 1)
     finally:
         target.close()
+
+def test_external_grant_revocation_updates_target_fence_before_stale_dispatch_rejects(tmp_path):
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", FakeExecutor()
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        original_reserve = reservations.reserve
+
+        def reserve_then_revoke(request):
+            reservation = original_reserve(request)
+            supervisor.grants.revoke("grant-1", expected_generation=1)
+            return reservation
+
+        reservations.reserve = reserve_then_revoke
+        with pytest.raises(PermissionError, match="local_grant_snapshot_stale"):
+            supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+        assert reservations.list() == ()
+        with pytest.raises(TargetFenceError, match="grant_not_active_for_generation"):
+            target.start(_request(generation=1), 1)
+    finally:
+        target.close()
