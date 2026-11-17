@@ -10,6 +10,7 @@ from .matrix_grants import DurableGrantRegistry
 from .matrix_membership_durable import AdmissionEvidence, DurableMembershipRegistry
 from .matrix_reservations import DurableReservationBook
 from .matrix_supervisor import MatrixSupervisor
+from .matrix_target_fence import SQLiteGenerationFencedExecutor, TargetFenceError
 
 
 def _grant(enabled=True, generation=1):
@@ -386,3 +387,24 @@ def test_prepare_stop_intents_fails_closed_if_durable_fence_row_is_missing_or_st
     # The failed transaction must not create a prepared stop intent or silently
     # proceed with a revocation that has no durable admission fence.
     assert reservations.list_stop_intents() == ()
+
+def test_supervisor_revocation_updates_target_fence_before_stop(tmp_path):
+    underlying = FakeExecutor()
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", underlying
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+        assert underlying.started == [("task-1", 1)]
+
+        result = supervisor.revoke(expected_generation=1)
+        assert result.grant_generation == 2
+        assert result.stop_failures == ()
+        assert underlying.stopped == [("task-1", 1)]
+        assert target.pending() == ()
+
+        with pytest.raises(TargetFenceError, match="grant_not_active_for_generation"):
+            target.start(_request(generation=1), 1)
+    finally:
+        target.close()
