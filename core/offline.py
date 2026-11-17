@@ -122,9 +122,16 @@ def _execution_metadata(execution: OfflineExecution) -> bytes:
     }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
-def _execution_aad(execution: OfflineExecution) -> bytes:
-    # Bind every routing/authority field to the payload's AEAD tag.
-    return b"noryx7/offline-sync/v2/" + _execution_metadata(execution)
+def _execution_aad(execution: OfflineExecution, sequence: int) -> bytes:
+    # Bind routing/authority metadata and queue ordering to the payload's AEAD tag.
+    if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
+        raise ValueError("invalid_offline_sequence")
+    return (
+        b"noryx7/offline-sync/v2/"
+        + _execution_metadata(execution)
+        + b"\\x00"
+        + str(sequence).encode("ascii")
+    )
 
 
 @dataclass(frozen=True)
@@ -159,11 +166,14 @@ class OfflineSyncQueue:
                 return existing
             if len(self._records) >= self._max_items:
                 raise OfflineDeniedError("offline_sync_queue_full")
-            ciphertext = self._cipher.encrypt(payload, aad=_execution_aad(execution))
+            sequence = self._sequence + 1
+            ciphertext = self._cipher.encrypt(
+                payload, aad=_execution_aad(execution, sequence)
+            )
             if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
                 raise OfflineDeniedError("encryption_required")
-            self._sequence += 1
-            envelope = SyncEnvelope(execution, ciphertext, _digest(ciphertext), self._sequence)
+            self._sequence = sequence
+            envelope = SyncEnvelope(execution, ciphertext, _digest(ciphertext), sequence)
             self._records[execution.execution_id] = envelope
             return envelope
 
@@ -174,7 +184,7 @@ class OfflineSyncQueue:
             if _digest(envelope.ciphertext) != envelope.record_digest:
                 raise OfflineDeniedError("offline_record_integrity_failed")
             plaintext = self._cipher.decrypt(
-                envelope.ciphertext, aad=_execution_aad(envelope.execution)
+                envelope.ciphertext, aad=_execution_aad(envelope.execution, envelope.sequence)
             )
             if not isinstance(plaintext, bytes) or not plaintext or _digest(plaintext) != envelope.execution.payload_digest:
                 raise OfflineDeniedError("offline_payload_integrity_failed")
@@ -278,11 +288,7 @@ class SQLiteOfflineSyncQueue:
             raise ValueError("invalid_payload")
         if _digest(payload) != execution.payload_digest:
             raise OfflineDeniedError("offline_payload_mismatch")
-        ciphertext = self._cipher.encrypt(payload, aad=_execution_aad(execution))
-        if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
-            raise OfflineDeniedError("encryption_required")
         encoded_execution = self._execution_json(execution)
-        digest = _digest(ciphertext)
         with self._lock:
             connection = self._connection
             try:
@@ -306,6 +312,12 @@ class SQLiteOfflineSyncQueue:
                 sequence = connection.execute(
                     "SELECT value FROM offline_sync_meta WHERE key='sequence'"
                 ).fetchone()[0] + 1
+                ciphertext = self._cipher.encrypt(
+                    payload, aad=_execution_aad(execution, sequence)
+                )
+                if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
+                    raise OfflineDeniedError("encryption_required")
+                digest = _digest(ciphertext)
                 connection.execute(
                     "UPDATE offline_sync_meta SET value=? WHERE key='sequence'",
                     (sequence,),
@@ -326,7 +338,7 @@ class SQLiteOfflineSyncQueue:
     def _decrypt_envelope(self, envelope: SyncEnvelope) -> bytes:
         try:
             plaintext = self._cipher.decrypt(
-                envelope.ciphertext, aad=_execution_aad(envelope.execution)
+                envelope.ciphertext, aad=_execution_aad(envelope.execution, envelope.sequence)
             )
         except Exception as exc:
             raise OfflineDeniedError(
