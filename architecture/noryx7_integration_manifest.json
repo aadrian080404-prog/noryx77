@@ -210,7 +210,8 @@
       "status": "implemented_partial",
       "paths": [
         "core/offline.py",
-        "core/runtime.py"
+        "core/runtime.py",
+        "core/offline_anchor.py"
       ],
       "depends_on": [
         "contracts",
@@ -219,7 +220,8 @@
       ],
       "integration_tests": [
         "tests/test_runtime_offline.py",
-        "tests/test_offline_sqlite_queue.py"
+        "tests/test_offline_sqlite_queue.py",
+        "tests/test_offline_anchor_concurrency.py"
       ]
     },
     {
