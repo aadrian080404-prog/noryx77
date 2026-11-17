@@ -430,3 +430,30 @@ def test_external_grant_revocation_updates_target_fence_before_stale_dispatch_re
             target.start(_request(generation=1), 1)
     finally:
         target.close()
+
+def test_restart_recovers_crash_after_grant_commit_before_reservation_reconcile(tmp_path):
+    underlying = FakeExecutor()
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", underlying
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+        # Simulate a crash after durable admission fencing and grant revocation,
+        # but before MatrixSupervisor can reconcile reservations or stop tasks.
+        reservations.prepare_stop_intents()
+        supervisor.grants.revoke("grant-1", expected_generation=1)
+
+        reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+        restarted = MatrixSupervisor(
+            supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+            reopened, _policy(), target,
+        )
+        assert restarted.node.grant.generation == 2
+        assert restarted.retry_pending_stops() == ()
+        assert underlying.stopped == [("task-1", 1)]
+        assert reopened.list() == ()
+        assert target.pending() == ()
+    finally:
+        target.close()
