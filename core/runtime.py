@@ -18,7 +18,7 @@ from .interaction_context import InteractionContext, build_interaction_context
 from .user_understanding import UnderstandingConsent, UserContent, UserUnderstandingEngine
 from .limits import RuntimeLimits
 from .memory import MemoryStore
-from .offline import OfflineExecution, OfflineRuntime, OfflineSnapshot
+from .offline import OfflineExecution, OfflineRuntime, OfflineSnapshot, SQLiteOfflineSyncQueue
 from .offline_adapters import BoundAuthenticatedCipher, PolicyOfflineAdapter, VerificationOfflineAdapter
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage
 from .policy import PolicyEngine
@@ -98,6 +98,7 @@ class NORYXRuntime:
         clock,
         task_verifier=None,
         principal_authenticator=None,
+        queue_database_path: str | None = None,
     ) -> None:
         """Configure offline execution with a separate task-semantic verifier.
 
@@ -108,8 +109,17 @@ class NORYXRuntime:
             raise TypeError("offline_task_verifier_must_be_callable")
         if principal_authenticator is not None and not callable(principal_authenticator):
             raise TypeError("offline_principal_authenticator_must_be_callable")
+        if queue_database_path is not None and (not isinstance(queue_database_path, str) or not queue_database_path.strip()):
+            raise ValueError("offline_database_path_required")
         self._offline_task_verifier = task_verifier
         self._offline_principal_authenticator = principal_authenticator
+        durable_queue = (
+            SQLiteOfflineSyncQueue(
+                queue_database_path,
+                BoundAuthenticatedCipher(cipher, key_id=key_id),
+            )
+            if queue_database_path is not None else None
+        )
         self._offline = OfflineRuntime(
             recovery=self.recovery,
             policy=PolicyOfflineAdapter(self.policy),
@@ -117,6 +127,7 @@ class NORYXRuntime:
             cipher=BoundAuthenticatedCipher(cipher, key_id=key_id),
             clock=clock,
             snapshot_authenticator=snapshot_authenticator,
+            queue=durable_queue,
         )
         self.audit.record(
             "offline_runtime_configured",
