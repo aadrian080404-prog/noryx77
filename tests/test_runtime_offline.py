@@ -21,7 +21,7 @@ def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
 
 
-def _runtime() -> NORYXRuntime:
+def _runtime(queue_database_path: str | None = None) -> NORYXRuntime:
     runtime = NORYXRuntime()
     provider = InMemoryKeyProvider({"offline-1": b"K" * 32})
     runtime.configure_offline(
@@ -36,6 +36,7 @@ def _runtime() -> NORYXRuntime:
             True, "offline_semantic", "task_requirements_satisfied",
             task.verification_requirements,
         ),
+        queue_database_path=queue_database_path,
     )
     return runtime
 
@@ -118,3 +119,32 @@ def test_runtime_offline_requires_declared_verification_requirements():
     assert result["reason"] == "offline_verification_requirements_required"
     assert called == []
     assert len(runtime.state) == 0
+
+
+
+def test_runtime_offline_uses_sqlite_queue_across_runtime_restart(tmp_path):
+    database_path = str(tmp_path / "runtime-offline.sqlite")
+    first = _runtime(database_path)
+    first.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec(
+        "task-durable", "local-analysis", "analyze", {"x": 1},
+        verification_requirements=("objective_match",), execution_id="exec-durable"
+    )
+
+    result = first.run_offline(
+        task, capability="compute_local", local_executor=lambda task: "durable-result",
+        principal_id="user-1", principal_key_fingerprint="a" * 64,
+    )
+
+    assert result["status"] == "completed"
+    assert len(first.offline.queue) == 1
+    first.offline.queue.close()
+
+    second = _runtime(database_path)
+    try:
+        assert len(second.offline.queue) == 1
+        envelope = second.offline.queue.snapshot()[0]
+        assert envelope.execution.execution_id == "exec-durable"
+        assert second.offline.queue.decrypt("exec-durable")
+    finally:
+        second.offline.queue.close()
