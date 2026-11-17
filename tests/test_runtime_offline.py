@@ -23,14 +23,14 @@ def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
 
 
-def _runtime(queue_database_path: str | None = None, monotonic_anchor_path: str | None = None) -> NORYXRuntime:
+def _runtime(queue_database_path: str | None = None, monotonic_anchor_path: str | None = None, clock_value: int = 100) -> NORYXRuntime:
     runtime = NORYXRuntime()
     provider = InMemoryKeyProvider({"offline-1": b"K" * 32})
     runtime.configure_offline(
         cipher=AuthenticatedCipher(provider),
         key_id="offline-1",
         snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
-        clock=lambda: 100,
+        clock=lambda: clock_value,
         principal_authenticator=lambda principal_id, fingerprint: (
             principal_id == "user-1" and fingerprint == "a" * 64
         ),
@@ -160,7 +160,7 @@ def test_runtime_offline_anchor_survives_restart_and_rejects_rollback(tmp_path):
     assert first._offline_anchor.current() == (100, "snap-1")
     first.close_offline()
 
-    second = _runtime(monotonic_anchor_path=anchor_path)
+    second = _runtime(monotonic_anchor_path=anchor_path, clock_value=200)
     try:
         with pytest.raises(OfflineDeniedError, match="offline_snapshot_rollback"):
             second.install_offline_snapshot(_snapshot("user-1", issued_at=99))
