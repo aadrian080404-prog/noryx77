@@ -19,6 +19,7 @@ from .user_understanding import UnderstandingConsent, UserContent, UserUnderstan
 from .limits import RuntimeLimits
 from .memory import MemoryStore
 from .offline import OfflineExecution, OfflineRuntime, OfflineSnapshot, SQLiteOfflineSyncQueue
+from .offline_anchor import MonotonicAnchor
 from .offline_adapters import BoundAuthenticatedCipher, PolicyOfflineAdapter, VerificationOfflineAdapter
 from .orchestration import OrchestrationCoordinator, OrchestrationEnvelope, OrchestrationStage
 from .policy import PolicyEngine
@@ -86,6 +87,7 @@ class NORYXRuntime:
         self.tool_executor = self.hypersynth.tool_executor
         self.frontier_capabilities = self.hypersynth.frontier_capabilities
         self._offline: OfflineRuntime | None = None
+        self._offline_anchor: MonotonicAnchor | None = None
         self._offline_task_verifier = None
         self._offline_principal_authenticator = None
 
@@ -99,6 +101,7 @@ class NORYXRuntime:
         task_verifier=None,
         principal_authenticator=None,
         queue_database_path: str | None = None,
+        monotonic_anchor_path: str | None = None,
     ) -> None:
         """Configure offline execution with a separate task-semantic verifier.
 
@@ -111,28 +114,54 @@ class NORYXRuntime:
             raise TypeError("offline_principal_authenticator_must_be_callable")
         if queue_database_path is not None and (not isinstance(queue_database_path, str) or not queue_database_path.strip()):
             raise ValueError("offline_database_path_required")
+        if monotonic_anchor_path is not None and (not isinstance(monotonic_anchor_path, str) or not monotonic_anchor_path.strip()):
+            raise ValueError("offline_anchor_path_required")
+        if self._offline is not None:
+            raise RuntimeError("offline_runtime_already_configured")
         self._offline_task_verifier = task_verifier
         self._offline_principal_authenticator = principal_authenticator
-        durable_queue = (
-            SQLiteOfflineSyncQueue(
-                queue_database_path,
-                BoundAuthenticatedCipher(cipher, key_id=key_id),
+        anchor = MonotonicAnchor(monotonic_anchor_path) if monotonic_anchor_path is not None else None
+        durable_queue = None
+        try:
+            durable_queue = (
+                SQLiteOfflineSyncQueue(
+                    queue_database_path,
+                    BoundAuthenticatedCipher(cipher, key_id=key_id),
+                )
+                if queue_database_path is not None else None
             )
-            if queue_database_path is not None else None
-        )
-        self._offline = OfflineRuntime(
-            recovery=self.recovery,
-            policy=PolicyOfflineAdapter(self.policy),
-            verifier=VerificationOfflineAdapter(self.verifier),
-            cipher=BoundAuthenticatedCipher(cipher, key_id=key_id),
-            clock=clock,
-            snapshot_authenticator=snapshot_authenticator,
-            queue=durable_queue,
-        )
+            self._offline = OfflineRuntime(
+                recovery=self.recovery,
+                policy=PolicyOfflineAdapter(self.policy),
+                verifier=VerificationOfflineAdapter(self.verifier),
+                cipher=BoundAuthenticatedCipher(cipher, key_id=key_id),
+                clock=clock,
+                snapshot_authenticator=snapshot_authenticator,
+                monotonic_anchor=anchor,
+                queue=durable_queue,
+            )
+            self._offline_anchor = anchor
+        except Exception:
+            if durable_queue is not None:
+                durable_queue.close()
+            if anchor is not None:
+                anchor.close()
+            raise
         self.audit.record(
             "offline_runtime_configured",
             key_id=key_id,
         )
+
+    def close_offline(self) -> None:
+        """Close local offline persistence resources without implying sync completion."""
+        offline = self._offline
+        anchor = self._offline_anchor
+        self._offline = None
+        self._offline_anchor = None
+        if offline is not None and isinstance(offline.queue, SQLiteOfflineSyncQueue):
+            offline.queue.close()
+        if anchor is not None:
+            anchor.close()
 
     @property
     def offline(self) -> OfflineRuntime | None:
