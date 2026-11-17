@@ -1,7 +1,7 @@
 import hashlib
 import json
 
-from core.contracts import TaskSpec
+from core.contracts import TaskSpec, VerificationResult
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider
 from core.offline import OfflineSnapshot
 from core.runtime import NORYXRuntime
@@ -29,16 +29,23 @@ def _runtime() -> NORYXRuntime:
         key_id="offline-1",
         snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
         clock=lambda: 100,
+        principal_authenticator=lambda principal_id, fingerprint: (
+            principal_id == "user-1" and fingerprint == "a" * 64
+        ),
+        task_verifier=lambda task, result: VerificationResult(
+            True, "offline_semantic", "task_requirements_satisfied",
+            task.verification_requirements,
+        ),
     )
     return runtime
 
 
 def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
     runtime = _runtime()
-    runtime.install_offline_snapshot(_snapshot("exec-1"))
-    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, execution_id="exec-1")
+    runtime.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, verification_requirements=("objective_match",), execution_id="exec-1")
 
-    result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: "local-result")
+    result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: "local-result", principal_id="user-1", principal_key_fingerprint="a" * 64)
 
     assert result["status"] == "completed"
     assert result["state_commit"].verification_stage == "runtime_result"
@@ -50,7 +57,7 @@ def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
 
 def test_runtime_offline_rejects_unconfigured_execution():
     runtime = NORYXRuntime()
-    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, execution_id="exec-1")
+    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, verification_requirements=("objective_match",), execution_id="exec-1")
 
     result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: "ok")
 
@@ -60,11 +67,54 @@ def test_runtime_offline_rejects_unconfigured_execution():
 
 def test_runtime_offline_does_not_commit_unverified_result():
     runtime = _runtime()
-    runtime.install_offline_snapshot(_snapshot("exec-1"))
-    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, execution_id="exec-1")
+    runtime.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, verification_requirements=("objective_match",), execution_id="exec-1")
 
-    result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: object())
+    result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: object(), principal_id="user-1", principal_key_fingerprint="a" * 64)
 
     assert result["status"] == "rejected"
     assert len(runtime.state) == 0
     assert len(runtime.offline.queue) == 0
+
+
+
+def test_runtime_offline_rejects_semantic_verification_failure_before_commit():
+    runtime = _runtime()
+    runtime._offline_task_verifier = lambda task, result: VerificationResult(
+        False, "offline_semantic", "objective_not_satisfied"
+    )
+    runtime.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec(
+        "task-1", "local-analysis", "analyze", {"x": 1},
+        verification_requirements=("objective_match",), execution_id="exec-1"
+    )
+    called = []
+
+    result = runtime.run_offline(
+        task, capability="compute_local",
+        local_executor=lambda task: called.append(True) or "present-but-wrong",
+        principal_id="user-1", principal_key_fingerprint="a" * 64,
+    )
+
+    assert result["status"] == "rejected"
+    assert result["reason"] == "offline_semantic_verification_failed"
+    assert called == [True]
+    assert len(runtime.state) == 0
+    assert len(runtime.offline.queue) == 0
+
+
+def test_runtime_offline_requires_declared_verification_requirements():
+    runtime = _runtime()
+    runtime.install_offline_snapshot(_snapshot("user-1"))
+    task = TaskSpec("task-1", "local-analysis", "analyze", {"x": 1}, execution_id="exec-1")
+    called = []
+
+    result = runtime.run_offline(
+        task, capability="compute_local",
+        local_executor=lambda task: called.append(True) or "not-verified"
+    )
+
+    assert result["status"] == "rejected"
+    assert result["reason"] == "offline_verification_requirements_required"
+    assert called == []
+    assert len(runtime.state) == 0
