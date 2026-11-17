@@ -8,14 +8,14 @@ class PolicyEngine:
         "observe", "search", "navigate", "compute", "create", "transform", "store",
         "jarvis_capability", "agent_collaboration", "web_research", "chess_analyze",
         "payments", "flights", "insurance", "execute_external", "publish",
-        "financial", "delete_external", "system_change",
+        "financial", "delete_external", "system_change", "sandboxed_process",
     }
     # These action types can cause financial, external, destructive, or durable
     # side effects. Their presence in ALLOWED_ACTIONS is not sufficient to run:
     # ActionGate must verify a one-shot grant before passing authorization_verified.
     REQUIRES_AUTHORIZATION = frozenset({
         "payments", "flights", "insurance", "execute_external", "publish",
-        "financial", "delete_external", "system_change",
+        "financial", "delete_external", "system_change", "sandboxed_process",
     })
     HIGH_RISK = REQUIRES_AUTHORIZATION
 

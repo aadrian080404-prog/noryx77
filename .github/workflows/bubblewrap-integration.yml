@@ -45,4 +45,4 @@ jobs:
       - name: Run real Bubblewrap namespace, network, workspace and resource-limit test
         env:
           NORYX7_RUN_BWRAP_E2E: "1"
-        run: python -m pytest -q core/test_os_sandbox_e2e.py
+        run: python -m pytest -q core/test_os_sandbox_e2e.py core/test_runtime_sandbox_injection.py

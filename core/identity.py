@@ -20,10 +20,24 @@ _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
 T = TypeVar("T")
 
 
+def _identity_id_size(value: str) -> int | None:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError:
+        return None
+
+
+def _valid_identity_id(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    size = _identity_id_size(value)
+    return size is not None and 0 < size <= MAX_ID_SIZE
+
+
 def _identity_field(value: str) -> bytes:
-    encoded = value.encode("utf-8")
-    if not encoded or len(encoded) > MAX_ID_SIZE:
+    if not _valid_identity_id(value):
         raise ValueError("identity_field_size_exceeded")
+    encoded = value.encode("utf-8")
     return len(encoded).to_bytes(4, "big") + encoded
 
 
@@ -35,9 +49,7 @@ class AgentIdentity:
 
     def is_well_formed(self) -> bool:
         return (
-            isinstance(self.agent_id, str)
-            and bool(self.agent_id.strip())
-            and len(self.agent_id.encode("utf-8")) <= MAX_ID_SIZE
+            _valid_identity_id(self.agent_id)
             and isinstance(self.public_key, bytes)
             and len(self.public_key) == PUBLIC_KEY_SIZE
             and self.version == IDENTITY_VERSION
@@ -80,6 +92,7 @@ class IdentityRegistry:
 
     def __init__(self):
         self._keys: dict[str, bytes] = {}
+        self._generations: dict[str, int] = {}
         self._lock = threading.RLock()
 
     def register(self, identity: AgentIdentity) -> None:
@@ -89,18 +102,33 @@ class IdentityRegistry:
             if identity.agent_id in self._keys:
                 raise ValueError("agent_identity_already_registered")
             self._keys[identity.agent_id] = bytes(identity.public_key)
+            self._generations[identity.agent_id] = self._generations.get(identity.agent_id, 0) + 1
 
     def revoke(self, agent_id: str) -> None:
-        if not isinstance(agent_id, str) or not agent_id.strip():
+        if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         with self._lock:
-            self._keys.pop(agent_id, None)
+            if self._keys.pop(agent_id, None) is not None:
+                self._generations[agent_id] = self._generations.get(agent_id, 0) + 1
 
     def is_trusted(self, identity: AgentIdentity) -> bool:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             return False
         with self._lock:
             return self._keys.get(identity.agent_id) == identity.public_key
+
+    def generation(self, identity: AgentIdentity) -> int | None:
+        """Return the current trust epoch for an exactly trusted identity.
+
+        Epochs advance on every registration and revocation, including a
+        revoke/re-register cycle that restores the same public key.
+        """
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            return None
+        with self._lock:
+            if self._keys.get(identity.agent_id) != identity.public_key:
+                return None
+            return self._generations.get(identity.agent_id, 0)
 
     def with_trusted_identity(self, agent_id: str, callback: Callable[[AgentIdentity], T]) -> T:
         """Run a short verification/commit critical section against one live key.
@@ -109,7 +137,7 @@ class IdentityRegistry:
         callback is intended for bounded cryptographic verification and state
         commit only; it must not perform external I/O or invoke agent code.
         """
-        if not isinstance(agent_id, str) or not agent_id.strip():
+        if not _valid_identity_id(agent_id):
             raise ValueError("invalid_agent_id")
         if not callable(callback):
             raise TypeError("callback must be callable")
@@ -127,7 +155,10 @@ class AgentIdentityAuthority:
     def generate(agent_id: str) -> tuple[AgentIdentity, Ed25519PrivateKey]:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
-        if len(agent_id.encode("utf-8")) > MAX_ID_SIZE:
+        size = _identity_id_size(agent_id)
+        if size is None:
+            raise ValueError("invalid_agent_id")
+        if size > MAX_ID_SIZE:
             raise ValueError("agent_id_size_exceeded")
         private_key = Ed25519PrivateKey.generate()
         public_key = private_key.public_key().public_bytes(

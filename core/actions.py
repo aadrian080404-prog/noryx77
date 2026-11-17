@@ -68,6 +68,11 @@ class AuthorizationAuthority:
         self._lock = threading.Lock()
 
     @property
+    def identity_registry(self) -> IdentityRegistry | None:
+        """Expose the exact trust registry this authority is cryptographically bound to."""
+        return self._identity_registry
+
+    @property
     def durable(self) -> bool:
         return self._replay_guard.durable
 
@@ -230,7 +235,13 @@ class AuthorizationAuthority:
             return self._replay_guard.consume(self._replay_token(grant), expires_at=grant.expires_at, now=self._clock())
 
     def consume_and_execute(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, principal: AgentIdentity, executor) -> tuple[bool, object | None]:
-        """Linearize grant consumption and dispatch against identity revocation."""
+        """Linearize grant consumption and dispatch against identity revocation.
+
+        The identity lock deliberately remains held through dispatch: a revoke
+        cannot interleave after the one-shot grant is consumed but before the
+        authorized action completes. Executors must therefore be bounded and
+        must not wait for another thread that needs this registry lock.
+        """
         if not callable(executor) or self._identity_registry is None or not self._replay_guard.durable:
             return False, None
         if not self._verify_unconsumed(action, execution_id, grant, principal):
@@ -244,6 +255,7 @@ class AuthorizationAuthority:
                 # The durable capability is consumed before dispatch; executor failure is an
                 # execution failure, never a reason to restore the grant.
                 return True, executor()
+
 
 
 class ActionGate:

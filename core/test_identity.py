@@ -90,6 +90,28 @@ class AgentIdentityTests(unittest.TestCase):
         forged = replace(identity, public_key=b"x")
         self.assertFalse(AgentIdentityAuthority.verify_identity(forged))
 
+
+    def test_unknown_revocation_does_not_consume_a_trust_generation(self):
+        registry = IdentityRegistry()
+        registry.revoke("not-yet-registered")
+        identity, _ = AgentIdentityAuthority.generate("not-yet-registered")
+        registry.register(identity)
+        self.assertEqual(registry.generation(identity), 1)
+
+    def test_malformed_utf8_agent_identifiers_are_rejected_consistently(self):
+        identity, _ = AgentIdentityAuthority.generate("agent-a")
+        malformed = replace(identity, agent_id="\ud800")
+        self.assertFalse(malformed.is_well_formed())
+        self.assertFalse(AgentIdentityAuthority.verify_identity(malformed))
+        with self.assertRaisesRegex(ValueError, "invalid_agent_id"):
+            AgentIdentityAuthority.generate("\ud800")
+
+        registry = IdentityRegistry()
+        with self.assertRaisesRegex(ValueError, "invalid_agent_id"):
+            registry.revoke("\ud800")
+        with self.assertRaisesRegex(ValueError, "invalid_agent_id"):
+            registry.with_trusted_identity("\ud800", lambda _identity: None)
+
     def test_malformed_attestation_is_rejected(self):
         identity, private_key = AgentIdentityAuthority.generate("agent-a")
         attestation = AgentIdentityAuthority.sign(identity, private_key, b"boot-state:v1")

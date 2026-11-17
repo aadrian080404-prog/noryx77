@@ -42,6 +42,8 @@ class NORYXRuntime:
         user_understanding: UserUnderstandingEngine | None = None,
         audit_log: AuditLog | None = None,
         sandboxed_process_adapter=None,
+        identity_registry: IdentityRegistry | None = None,
+        authorization_authority=None,
     ):
         if audit_log is not None and not isinstance(audit_log, AuditLog):
             raise TypeError("invalid_audit_log")
@@ -54,12 +56,24 @@ class NORYXRuntime:
         self.policy = PolicyEngine()
         self.recovery = RecoveryController()
         self.security = SecurityBoundary(self.policy, self.verifier, recovery=self.recovery)
-        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        self.action_gate = ActionGate(self.policy, self.security, self.limits, authorization=authorization_authority)
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
         self.state_journal = StateJournal(state_journal_path, max_commits=self.limits.max_memory_items) if state_journal_path else None
         self.state = StateStore(max_commits=self.limits.max_memory_items, journal=self.state_journal)
         self.audit = audit_log if audit_log is not None else AuditLog()
-        self.identity_registry = IdentityRegistry()
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise TypeError("invalid_identity_registry")
+        self.identity_registry = identity_registry if identity_registry is not None else IdentityRegistry()
+        if authorization_authority is not None:
+            from .actions import AuthorizationAuthority
+            if (
+                not isinstance(authorization_authority, AuthorizationAuthority)
+                or authorization_authority.identity_registry is not self.identity_registry
+                or not authorization_authority.durable
+                or not authorization_authority.integrity_protected
+                or not authorization_authority.requires_authenticated_replay
+            ):
+                raise ValueError("invalid_runtime_authorization_authority")
         deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
         self.identity_registry.register(deterministic_identity)
         self.router = ResourceRouter(identity_registry=self.identity_registry)
@@ -86,6 +100,7 @@ class NORYXRuntime:
             memory=self.memory,
             recovery=self.recovery,
             sandboxed_process_adapter=sandboxed_process_adapter,
+            authorization_authority=authorization_authority,
         )
         self.capability_registry = self.hypersynth.tool_executor.capabilities
         self.tool_executor = self.hypersynth.tool_executor
