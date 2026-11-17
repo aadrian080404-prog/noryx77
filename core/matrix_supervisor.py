@@ -101,6 +101,9 @@ class MatrixSupervisor:
             raise PermissionError("owner_grant_missing")
         if stored.node_id != self.node.node_id or stored.owner_id != self.owner_id:
             raise PermissionError("owner_grant_binding_mismatch")
+        # Even a stale supervisor must propagate an externally committed revoke
+        # to the target fence before refusing its own stale local snapshot.
+        self._sync_executor_grant(stored.grant)
         if stored.grant != self.node.grant:
             raise PermissionError("local_grant_snapshot_stale")
         if not stored.grant.enabled or request.generation != stored.grant.generation:
