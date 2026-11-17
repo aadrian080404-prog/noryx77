@@ -110,6 +110,23 @@ class OfflineExecution:
         if len(self.payload_digest) != 64 or any(c not in "0123456789abcdef" for c in self.payload_digest):
             raise ValueError("invalid_payload_digest")
 
+def _execution_metadata(execution: OfflineExecution) -> bytes:
+    """Canonical metadata authenticated together with the queued payload."""
+    return json.dumps({
+        "execution_id": execution.execution_id,
+        "principal_id": execution.principal_id,
+        "operation": execution.operation,
+        "capability": execution.capability,
+        "payload_digest": execution.payload_digest,
+        "base_state_version": execution.base_state_version,
+    }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+
+def _execution_aad(execution: OfflineExecution) -> bytes:
+    # Bind every routing/authority field to the payload's AEAD tag.
+    return b"noryx7/offline-sync/v2/" + _execution_metadata(execution)
+
+
 @dataclass(frozen=True)
 class SyncEnvelope:
     execution: OfflineExecution
@@ -142,8 +159,7 @@ class OfflineSyncQueue:
                 return existing
             if len(self._records) >= self._max_items:
                 raise OfflineDeniedError("offline_sync_queue_full")
-            aad = f"noryx7/offline-sync/v1/{execution.execution_id}".encode()
-            ciphertext = self._cipher.encrypt(payload, aad=aad)
+            ciphertext = self._cipher.encrypt(payload, aad=_execution_aad(execution))
             if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
                 raise OfflineDeniedError("encryption_required")
             self._sequence += 1
@@ -157,8 +173,9 @@ class OfflineSyncQueue:
             envelope = self._records[execution_id]
             if _digest(envelope.ciphertext) != envelope.record_digest:
                 raise OfflineDeniedError("offline_record_integrity_failed")
-            aad = f"noryx7/offline-sync/v1/{execution_id}".encode()
-            plaintext = self._cipher.decrypt(envelope.ciphertext, aad=aad)
+            plaintext = self._cipher.decrypt(
+                envelope.ciphertext, aad=_execution_aad(envelope.execution)
+            )
             if not isinstance(plaintext, bytes) or not plaintext or _digest(plaintext) != envelope.execution.payload_digest:
                 raise OfflineDeniedError("offline_payload_integrity_failed")
             return plaintext
@@ -224,14 +241,7 @@ class SQLiteOfflineSyncQueue:
 
     @staticmethod
     def _execution_json(execution: OfflineExecution) -> str:
-        return json.dumps({
-            "execution_id": execution.execution_id,
-            "principal_id": execution.principal_id,
-            "operation": execution.operation,
-            "capability": execution.capability,
-            "payload_digest": execution.payload_digest,
-            "base_state_version": execution.base_state_version,
-        }, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return _execution_metadata(execution).decode("utf-8")
 
     @staticmethod
     def _decode_execution(value: str) -> OfflineExecution:
@@ -268,8 +278,7 @@ class SQLiteOfflineSyncQueue:
             raise ValueError("invalid_payload")
         if _digest(payload) != execution.payload_digest:
             raise OfflineDeniedError("offline_payload_mismatch")
-        aad = f"noryx7/offline-sync/v1/{execution.execution_id}".encode()
-        ciphertext = self._cipher.encrypt(payload, aad=aad)
+        ciphertext = self._cipher.encrypt(payload, aad=_execution_aad(execution))
         if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
             raise OfflineDeniedError("encryption_required")
         encoded_execution = self._execution_json(execution)
@@ -286,6 +295,7 @@ class SQLiteOfflineSyncQueue:
                     envelope = self._row_to_envelope(existing)
                     if envelope.execution != execution:
                         raise OfflineConflictError("identity_conflict")
+                    self._decrypt_envelope(envelope)
                     connection.execute("COMMIT")
                     return envelope
                 count = connection.execute(
@@ -313,6 +323,22 @@ class SQLiteOfflineSyncQueue:
                     connection.execute("ROLLBACK")
                 raise
 
+    def _decrypt_envelope(self, envelope: SyncEnvelope) -> bytes:
+        try:
+            plaintext = self._cipher.decrypt(
+                envelope.ciphertext, aad=_execution_aad(envelope.execution)
+            )
+        except Exception as exc:
+            raise OfflineDeniedError(
+                "offline_execution_metadata_authentication_failed"
+            ) from exc
+        if (
+            not isinstance(plaintext, bytes) or not plaintext
+            or _digest(plaintext) != envelope.execution.payload_digest
+        ):
+            raise OfflineDeniedError("offline_payload_integrity_failed")
+        return plaintext
+
     def decrypt(self, execution_id: str) -> bytes:
         _bounded(execution_id, "execution_id")
         with self._lock:
@@ -323,14 +349,7 @@ class SQLiteOfflineSyncQueue:
             if row is None:
                 raise KeyError(execution_id)
             envelope = self._row_to_envelope(row)
-            aad = f"noryx7/offline-sync/v1/{execution_id}".encode()
-            plaintext = self._cipher.decrypt(envelope.ciphertext, aad=aad)
-            if (
-                not isinstance(plaintext, bytes) or not plaintext
-                or _digest(plaintext) != envelope.execution.payload_digest
-            ):
-                raise OfflineDeniedError("offline_payload_integrity_failed")
-            return plaintext
+            return self._decrypt_envelope(envelope)
 
     def acknowledge(self, execution_id: str) -> None:
         _bounded(execution_id, "execution_id")
@@ -345,7 +364,12 @@ class SQLiteOfflineSyncQueue:
             rows = self._connection.execute(
                 "SELECT * FROM offline_sync_queue ORDER BY sequence"
             ).fetchall()
-            return tuple(self._row_to_envelope(row) for row in rows)
+            envelopes = tuple(self._row_to_envelope(row) for row in rows)
+            # Authenticate metadata before callers use it for routing or sync.
+            # Each payload is checked and discarded one at a time to bound memory.
+            for envelope in envelopes:
+                self._decrypt_envelope(envelope)
+            return envelopes
 
     def __len__(self) -> int:
         with self._lock:
