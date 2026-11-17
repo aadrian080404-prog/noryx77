@@ -49,7 +49,7 @@ def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
     result = runtime.run_offline(task, capability="compute_local", local_executor=lambda task: "local-result", principal_id="user-1", principal_key_fingerprint="a" * 64)
 
     assert result["status"] == "completed"
-    assert result["state_commit"].verification_stage == "offline_semantic"
+    assert result["state_commit"].verification_stage == "runtime_result"
     assert result["state_commit"].state.status == "committed"
     assert result["sync_envelope"].ciphertext != b""
     assert runtime.offline is not None
