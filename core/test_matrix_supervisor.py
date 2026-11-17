@@ -304,7 +304,7 @@ def test_prepared_revocation_fences_admission_across_supervisor_processes(tmp_pa
     # A second process has its own book/lock but shares the SQLite authority.
     second_process_book = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
     reservations.prepare_stop_intents()
-    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+    with pytest.raises(PermissionError, match="node_not_eligible_for_workload"):
         second_process_book.reserve(_request("task-2"))
 
     reservations.cancel_prepared_stop_intents()
