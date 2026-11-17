@@ -70,14 +70,23 @@ class MatrixSupervisor:
         self.reservations = reservations
         self.device_policy = device_policy
         self.executor = executor
-        self._sync_executor_grant(node.grant)
         self._active: dict[str, int] = {
             item.task_id: item.grant_generation for item in reservations.list()
         }
         self._pending_stops: dict[str, int] = {}
         stored_grant = self.grants.get(self.node.grant.grant_id)
-        current_generation = None if stored_grant is None else stored_grant.grant.generation
-        grant_enabled = False if stored_grant is None else stored_grant.grant.enabled
+        if stored_grant is None:
+            raise PermissionError("owner_grant_not_found")
+        if stored_grant.node_id != self.node.node_id or stored_grant.owner_id != self.owner_id:
+            raise PermissionError("owner_grant_binding_mismatch")
+        # On restart, synchronize the authoritative durable grant before any
+        # local snapshot is trusted. A stale profile must not reactivate an old
+        # target generation while stop intents are being recovered.
+        self._sync_executor_grant(stored_grant.grant)
+        if stored_grant.grant != self.node.grant:
+            raise PermissionError("local_grant_snapshot_stale")
+        current_generation = stored_grant.grant.generation
+        grant_enabled = stored_grant.grant.enabled
         recovered = self.reservations.recover_prepared_stop_intents(current_generation, grant_enabled)
         self._pending_stops = {
             item.task_id: item.grant_generation for item in recovered if item.status == "pending"
