@@ -352,9 +352,11 @@ def test_ambiguous_revoke_commit_recovers_as_pending_stop_not_reopened(tmp_path)
         supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
         reopened, _policy(), FakeExecutor(),
     )
+    assert restarted.node.grant.generation == 2
+    assert restarted.node.grant.enabled is False
     pending = reopened.list_stop_intents()
     assert [(item.task_id, item.status) for item in pending] == [("task-1", "pending")]
-    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+    with pytest.raises(PermissionError, match="node_not_eligible_for_workload"):
         reopened.reserve(_request("task-2"))
 
 
