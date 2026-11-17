@@ -1,9 +1,11 @@
 import hashlib
 import json
 
+import pytest
+
 from core.contracts import TaskSpec, VerificationResult
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider
-from core.offline import OfflineSnapshot
+from core.offline import OfflineDeniedError, OfflineSnapshot
 from core.runtime import NORYXRuntime
 
 
@@ -160,7 +162,7 @@ def test_runtime_offline_anchor_survives_restart_and_rejects_rollback(tmp_path):
 
     second = _runtime(monotonic_anchor_path=anchor_path)
     try:
-        with pytest.raises(Exception, match="offline_snapshot_rollback"):
+        with pytest.raises(OfflineDeniedError, match="offline_snapshot_rollback"):
             second.install_offline_snapshot(_snapshot("user-1", issued_at=99))
         assert second._offline_anchor.current() == (100, "snap-1")
         second.install_offline_snapshot(_snapshot("user-1", issued_at=101))
