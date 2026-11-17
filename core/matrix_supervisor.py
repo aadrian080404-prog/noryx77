@@ -83,7 +83,18 @@ class MatrixSupervisor:
         # local snapshot is trusted. A stale profile must not reactivate an old
         # target generation while stop intents are being recovered.
         self._sync_executor_grant(stored_grant.grant)
-        if stored_grant.grant != self.node.grant:
+        if stored_grant.grant.generation < self.node.grant.generation:
+            raise PermissionError("authoritative_grant_generation_rollback")
+        if stored_grant.grant.generation > self.node.grant.generation:
+            recovered_node = NodeProfile(
+                self.node.node_id, self.node.failure_domain, self.node.attested,
+                self.node.sandbox_ready, self.node.envelope, stored_grant.grant,
+            )
+            # Recover the crash window after durable grant revocation but before
+            # the reservation book received the new generation.
+            self.reservations.reconcile_grant(recovered_node)
+            self.node = recovered_node
+        elif stored_grant.grant != self.node.grant:
             raise PermissionError("local_grant_snapshot_stale")
         current_generation = stored_grant.grant.generation
         grant_enabled = stored_grant.grant.enabled
