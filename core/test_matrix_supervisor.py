@@ -10,6 +10,7 @@ from .matrix_grants import DurableGrantRegistry
 from .matrix_membership_durable import AdmissionEvidence, DurableMembershipRegistry
 from .matrix_reservations import DurableReservationBook
 from .matrix_supervisor import MatrixSupervisor
+from .matrix_target_fence import SQLiteGenerationFencedExecutor, TargetFenceError
 
 
 def _grant(enabled=True, generation=1):
@@ -351,9 +352,11 @@ def test_ambiguous_revoke_commit_recovers_as_pending_stop_not_reopened(tmp_path)
         supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
         reopened, _policy(), FakeExecutor(),
     )
+    assert restarted.node.grant.generation == 2
+    assert restarted.node.grant.enabled is False
     pending = reopened.list_stop_intents()
     assert [(item.task_id, item.status) for item in pending] == [("task-1", "pending")]
-    with pytest.raises(PermissionError, match="durable_grant_generation_or_state_mismatch"):
+    with pytest.raises(PermissionError, match="node_not_eligible_for_workload"):
         reopened.reserve(_request("task-2"))
 
 
@@ -386,3 +389,73 @@ def test_prepare_stop_intents_fails_closed_if_durable_fence_row_is_missing_or_st
     # The failed transaction must not create a prepared stop intent or silently
     # proceed with a revocation that has no durable admission fence.
     assert reservations.list_stop_intents() == ()
+
+def test_supervisor_revocation_updates_target_fence_before_stop(tmp_path):
+    underlying = FakeExecutor()
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", underlying
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+        assert underlying.started == [("task-1", 1)]
+
+        result = supervisor.revoke(expected_generation=1)
+        assert result.grant_generation == 2
+        assert result.stop_failures == ()
+        assert underlying.stopped == [("task-1", 1)]
+        assert target.pending() == ()
+
+        with pytest.raises(TargetFenceError, match="grant_not_active_for_generation"):
+            target.start(_request(generation=1), 1)
+    finally:
+        target.close()
+
+def test_external_grant_revocation_updates_target_fence_before_stale_dispatch_rejects(tmp_path):
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", FakeExecutor()
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        original_reserve = reservations.reserve
+
+        def reserve_then_revoke(request):
+            reservation = original_reserve(request)
+            supervisor.grants.revoke("grant-1", expected_generation=1)
+            return reservation
+
+        reservations.reserve = reserve_then_revoke
+        with pytest.raises(PermissionError, match="local_grant_snapshot_stale"):
+            supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+        assert reservations.list() == ()
+        with pytest.raises(TargetFenceError, match="grant_not_active_for_generation"):
+            target.start(_request(generation=1), 1)
+    finally:
+        target.close()
+
+def test_restart_recovers_crash_after_grant_commit_before_reservation_reconcile(tmp_path):
+    underlying = FakeExecutor()
+    target = SQLiteGenerationFencedExecutor(
+        str(tmp_path / "target-fence.db"), "node-1", underlying
+    )
+    try:
+        supervisor, reservations, _ = _setup(tmp_path, target)
+        supervisor.dispatch(_request(), _conditions(), 100, 100, 2, 0.25)
+
+        # Simulate a crash after durable admission fencing and grant revocation,
+        # but before MatrixSupervisor can reconcile reservations or stop tasks.
+        reservations.prepare_stop_intents()
+        supervisor.grants.revoke("grant-1", expected_generation=1)
+
+        reopened = DurableReservationBook(tmp_path / "reservations.db", supervisor.node)
+        restarted = MatrixSupervisor(
+            supervisor.node, "owner-1", supervisor.membership, supervisor.grants,
+            reopened, _policy(), target,
+        )
+        assert restarted.node.grant.generation == 2
+        assert restarted.retry_pending_stops() == ()
+        assert underlying.stopped == [("task-1", 1)]
+        assert reopened.list() == ()
+        assert target.pending() == ()
+    finally:
+        target.close()

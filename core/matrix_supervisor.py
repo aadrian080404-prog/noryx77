@@ -75,13 +75,40 @@ class MatrixSupervisor:
         }
         self._pending_stops: dict[str, int] = {}
         stored_grant = self.grants.get(self.node.grant.grant_id)
-        current_generation = None if stored_grant is None else stored_grant.grant.generation
-        grant_enabled = False if stored_grant is None else stored_grant.grant.enabled
+        if stored_grant is None:
+            raise PermissionError("owner_grant_not_found")
+        if stored_grant.node_id != self.node.node_id or stored_grant.owner_id != self.owner_id:
+            raise PermissionError("owner_grant_binding_mismatch")
+        # On restart, synchronize the authoritative durable grant before any
+        # local snapshot is trusted. A stale profile must not reactivate an old
+        # target generation while stop intents are being recovered.
+        self._sync_executor_grant(stored_grant.grant)
+        if stored_grant.grant.generation < self.node.grant.generation:
+            raise PermissionError("authoritative_grant_generation_rollback")
+        if stored_grant.grant.generation > self.node.grant.generation:
+            recovered_node = NodeProfile(
+                self.node.node_id, self.node.failure_domain, self.node.attested,
+                self.node.sandbox_ready, self.node.envelope, stored_grant.grant,
+            )
+            # Recover the crash window after durable grant revocation but before
+            # the reservation book received the new generation.
+            self.reservations.reconcile_grant(recovered_node)
+            self.node = recovered_node
+        elif stored_grant.grant != self.node.grant:
+            raise PermissionError("local_grant_snapshot_stale")
+        current_generation = stored_grant.grant.generation
+        grant_enabled = stored_grant.grant.enabled
         recovered = self.reservations.recover_prepared_stop_intents(current_generation, grant_enabled)
         self._pending_stops = {
             item.task_id: item.grant_generation for item in recovered if item.status == "pending"
         }
         self._lock = RLock()
+
+    def _sync_executor_grant(self, grant) -> None:
+        """Propagate durable grant generations to target-side fences when supported."""
+        apply_grant = getattr(self.executor, "apply_grant", None)
+        if callable(apply_grant):
+            apply_grant(grant.generation, enabled=grant.enabled)
 
     def _current_authority(self, request: WorkloadRequest):
         member = self.membership.get(self.node.node_id)
@@ -94,6 +121,9 @@ class MatrixSupervisor:
             raise PermissionError("owner_grant_missing")
         if stored.node_id != self.node.node_id or stored.owner_id != self.owner_id:
             raise PermissionError("owner_grant_binding_mismatch")
+        # Even a stale supervisor must propagate an externally committed revoke
+        # to the target fence before refusing its own stale local snapshot.
+        self._sync_executor_grant(stored.grant)
         if stored.grant != self.node.grant:
             raise PermissionError("local_grant_snapshot_stale")
         if not stored.grant.enabled or request.generation != stored.grant.generation:
@@ -120,13 +150,15 @@ class MatrixSupervisor:
             raise PermissionError("device_telemetry_stale_or_from_future")
 
         with self._lock:
-            self._current_authority(request)
+            _, stored = self._current_authority(request)
+            self._sync_executor_grant(stored.grant)
             permitted, reason = self.device_policy.permits(conditions, estimated_duration_hours)
             if not permitted:
                 raise PermissionError("device_contribution_policy_denied:" + reason)
             reservation = self.reservations.reserve(request)
             try:
-                self._current_authority(request)
+                _, current = self._current_authority(request)
+                self._sync_executor_grant(current.grant)
                 if reservation.grant_generation != request.generation:
                     raise PermissionError("reservation_generation_mismatch")
                 self.executor.start(request, reservation.grant_generation)
@@ -149,6 +181,9 @@ class MatrixSupervisor:
                 # fence and prepared intents; startup reconciliation must query
                 # authoritative grant state before reopening admission.
                 raise
+            # Disable the target-side generation before attempting external drains.
+            # A failed stop must never leave stale starts admissible.
+            self._sync_executor_grant(revoked.grant)
             next_node = NodeProfile(
                 self.node.node_id, self.node.failure_domain, self.node.attested,
                 self.node.sandbox_ready, self.node.envelope, revoked.grant,
