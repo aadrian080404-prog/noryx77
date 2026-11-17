@@ -5,6 +5,7 @@ import hashlib
 import os
 import sqlite3
 import threading
+from contextlib import closing
 
 MAX_TOKENS = 4096
 TOKEN_SIZE = 32
@@ -69,7 +70,7 @@ class SQLiteAuthorizationReplayGuard(AuthorizationReplayGuard):
             raise ValueError("persistent_replay_database_required")
         self._database_path = path
         try:
-            with self._connect() as connection:
+            with closing(self._connect()) as connection:
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS authorization_replay_tokens ("
                     "token_hash TEXT PRIMARY KEY, consumed_at REAL NOT NULL)"
