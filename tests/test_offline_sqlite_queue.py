@@ -1,4 +1,5 @@
 from hashlib import sha256
+import json
 import sqlite3
 
 import pytest
@@ -162,3 +163,33 @@ def test_sqlite_outbox_rejects_invalid_configuration(tmp_path):
         SQLiteOfflineSyncQueue(str(tmp_path / "bad.sqlite"), Cipher(), max_items=True)
     with pytest.raises(ValueError, match="busy_timeout"):
         SQLiteOfflineSyncQueue(str(tmp_path / "bad-timeout.sqlite"), Cipher(), busy_timeout_ms=0)
+
+def test_sqlite_outbox_detects_execution_metadata_tampering(tmp_path):
+    path = str(tmp_path / "offline.sqlite")
+    payload = b"metadata binding probe"
+    queue = SQLiteOfflineSyncQueue(path, Cipher())
+    queue.enqueue(execution(payload), payload)
+    queue.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        row = connection.execute(
+            "SELECT execution_json FROM offline_sync_queue WHERE execution_id=?",
+            ("exec-1",),
+        ).fetchone()
+        metadata = json.loads(row[0])
+        metadata["principal_id"] = "attacker-principal"
+        connection.execute(
+            "UPDATE offline_sync_queue SET execution_json=? WHERE execution_id=?",
+            (json.dumps(metadata, sort_keys=True, separators=(",", ":")), "exec-1"),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    reopened = SQLiteOfflineSyncQueue(path, Cipher())
+    try:
+        with pytest.raises(OfflineDeniedError, match="metadata_authentication"):
+            reopened.snapshot()
+    finally:
+        reopened.close()
