@@ -64,6 +64,7 @@ class ContinuitySupervisor:
         approve_rejoin: RejoinApprover,
         audit: AuditSink,
         max_nodes: int = 1024,
+        state_store: object | None = None,
     ) -> None:
         if not callable(verify_attestation) or not callable(approve_rejoin) or not callable(audit):
             raise TypeError("continuity_security_dependencies_required")
@@ -73,8 +74,36 @@ class ContinuitySupervisor:
         self._approve_rejoin = approve_rejoin
         self._audit = audit
         self._max_nodes = max_nodes
+        self._state_store = state_store
         self._nodes: dict[str, NodeContinuityRecord] = {}
         self._lock = RLock()
+        if state_store is not None:
+            if not all(callable(getattr(state_store, name, None)) for name in (
+                "load_records", "insert_record", "replace_record"
+            )):
+                raise TypeError("continuity_state_store_contract_required")
+            restored = state_store.load_records()
+            if not isinstance(restored, (tuple, list)) or len(restored) > max_nodes:
+                raise RuntimeError("continuity_state_store_invalid")
+            for record in restored:
+                if not isinstance(record, NodeContinuityRecord) or record.node_id in self._nodes:
+                    raise RuntimeError("continuity_state_store_invalid")
+                self._validate_identity(record.node_id, record.identity_fingerprint, record.capabilities)
+                if (
+                    isinstance(record.generation, bool) or not isinstance(record.generation, int) or record.generation < 0
+                    or isinstance(record.sequence, bool) or not isinstance(record.sequence, int) or record.sequence < 0
+                    or not isinstance(record.state, NodeContinuityState)
+                ):
+                    raise RuntimeError("continuity_state_store_invalid")
+                self._nodes[record.node_id] = record
+
+    def _persist_insert(self, record: NodeContinuityRecord) -> None:
+        if self._state_store is not None:
+            self._state_store.insert_record(record)
+
+    def _persist_replace(self, previous: NodeContinuityRecord, replacement: NodeContinuityRecord) -> None:
+        if self._state_store is not None and self._state_store.replace_record(previous, replacement) is not True:
+            raise RuntimeError("continuity_state_store_conflict")
 
     @staticmethod
     def _validate_identity(node_id: str, fingerprint: str, capabilities: tuple[str, ...]) -> None:
@@ -131,6 +160,7 @@ class ContinuitySupervisor:
             node_id, identity_fingerprint, 0, 0, capabilities, NodeContinuityState.ACTIVE
         )
         self._emit("continuity_node_registered", node_id=node_id, generation=0)
+        self._persist_insert(record)
         self._nodes[node_id] = record
         return record
 
@@ -154,15 +184,17 @@ class ContinuitySupervisor:
             attestation=attestation,
         )
         if not trusted:
-            self._nodes[node_id] = NodeContinuityRecord(
+            isolated = NodeContinuityRecord(
                 current.node_id, current.identity_fingerprint, current.generation,
                 current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
             )
+            self._nodes[node_id] = isolated
             self._emit(
                 "continuity_node_isolated", node_id=node_id,
                 generation=current.generation, last_sequence=current.sequence,
                 reason="stale_or_invalid_heartbeat",
             )
+            self._persist_replace(current, isolated)
             raise PermissionError("node_heartbeat_rejected")
         updated = NodeContinuityRecord(
             current.node_id, current.identity_fingerprint, current.generation,
@@ -171,11 +203,17 @@ class ContinuitySupervisor:
         try:
             self._emit("continuity_node_heartbeat", node_id=node_id, sequence=sequence)
         except Exception:
-            self._nodes[node_id] = NodeContinuityRecord(
+            isolated = NodeContinuityRecord(
                 current.node_id, current.identity_fingerprint, current.generation,
                 current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
             )
+            self._nodes[node_id] = isolated
+            try:
+                self._persist_replace(current, isolated)
+            except Exception:
+                pass
             raise
+        self._persist_replace(current, updated)
         self._nodes[node_id] = updated
         return updated
 
@@ -190,8 +228,9 @@ class ContinuitySupervisor:
             current.node_id, current.identity_fingerprint, current.generation,
             current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
         )
-        self._nodes[node_id] = isolated
         self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
+        self._persist_replace(current, isolated)
+        self._nodes[node_id] = isolated
         return isolated
 
     @_synchronized
@@ -230,6 +269,7 @@ class ContinuitySupervisor:
             sequence, current.capabilities, NodeContinuityState.ACTIVE,
         )
         self._emit("continuity_node_rejoined", node_id=node_id, generation=generation)
+        self._persist_replace(current, updated)
         self._nodes[node_id] = updated
         return updated
 
