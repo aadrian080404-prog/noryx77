@@ -17,14 +17,17 @@ class SQLiteAuditLog(AuditLog):
 
     _SCHEMA_VERSION = 1
 
-    def __init__(self, database_path: str | os.PathLike[str]):
+    def __init__(self, database_path: str | os.PathLike[str], *, busy_timeout_ms: int = 5000):
         if not isinstance(database_path, (str, os.PathLike)):
             raise ValueError("persistent_audit_database_required")
         raw_path = os.fspath(database_path)
         if not isinstance(raw_path, str) or not raw_path.strip() or raw_path == ":memory:":
             raise ValueError("persistent_audit_database_required")
+        if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or not 1 <= busy_timeout_ms <= 60000:
+            raise ValueError("audit_busy_timeout_invalid")
         self.database_path = str(Path(raw_path).expanduser())
         Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        self._busy_timeout_ms = busy_timeout_ms
         self._closed = False
         super().__init__()
         with self._lock:
@@ -81,8 +84,10 @@ class SQLiteAuditLog(AuditLog):
     def _connect(self) -> sqlite3.Connection:
         if self._closed:
             raise RuntimeError("audit_log_closed")
-        connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
-        connection.execute("PRAGMA busy_timeout = 30000")
+        connection = sqlite3.connect(
+            self.database_path, timeout=self._busy_timeout_ms / 1000, isolation_level=None
+        )
+        connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute("PRAGMA trusted_schema = OFF")
