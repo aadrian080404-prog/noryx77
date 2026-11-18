@@ -1,6 +1,8 @@
 import hashlib
 from dataclasses import replace
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from core.contracts import TaskSpec
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider
 from core.continuity import NodeContinuityState, node_attestation_statement
@@ -8,10 +10,22 @@ from core.identity import AgentIdentityAuthority
 from core.journal_integrity import InMemoryMonotonicAnchor, JournalAuthenticator
 from core.offline import OfflineSnapshot, SQLiteOfflineSyncQueue
 from core.offline_adapters import BoundAuthenticatedCipher
+from core.offline_snapshot_auth import (
+    Ed25519OfflineSnapshotAuthenticator,
+    sign_offline_snapshot,
+)
 from core.runtime import NORYXRuntime
 from core.sqlite_audit import SQLiteAuditLog
 from core.sqlite_continuity import SQLiteContinuityStore
 from core.sqlite_identity import SQLiteIdentityRegistry
+
+
+class _OfflineSnapshotAuthenticator:
+    def __init__(self, issuer):
+        self._authenticator = Ed25519OfflineSnapshotAuthenticator({"runtime-test-issuer": issuer.public_key()})
+
+    def verify(self, snapshot):
+        return self._authenticator.verify(snapshot)
 
 
 class _OfflineAnchor:
@@ -86,10 +100,11 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
     )
     continuity.isolate(node_identity.agent_id, reason="full_restart_test")
 
+    issuer_key = Ed25519PrivateKey.generate()
     first.configure_offline(
         cipher=cipher,
         key_id="offline-key",
-        snapshot_authenticator=lambda snapshot: True,
+        snapshot_authenticator=_OfflineSnapshotAuthenticator(issuer_key),
         clock=lambda: 100,
         offline_queue=queue,
         monotonic_anchor=_OfflineAnchor(),
@@ -105,9 +120,12 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
         principal_key_fingerprint="d" * 64,
         integrity_digest="0" * 64,
     )
-    first.install_offline_snapshot(
-        replace(unsigned, integrity_digest=hashlib.sha256(unsigned.canonical_bytes()).hexdigest())
+    signed_snapshot = sign_offline_snapshot(
+        unsigned,
+        issuer_key_id="runtime-test-issuer",
+        signing_key=issuer_key,
     )
+    first.install_offline_snapshot(signed_snapshot)
     task = TaskSpec(
         task_id="offline-task-1",
         task_type="compute",

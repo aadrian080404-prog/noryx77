@@ -33,6 +33,11 @@ class Verifier:
         return True
 
 
+class SnapshotAuthenticator:
+    def verify(self, snapshot):
+        return True
+
+
 def make_snapshot(snapshot_id, issued_at, *, principal="p1", state_version="1"):
     body = {
         "snapshot_id": snapshot_id,
@@ -55,7 +60,7 @@ def runtime(clock=lambda: 200):
         verifier=Verifier(),
         cipher=Cipher(),
         clock=clock,
-        snapshot_authenticator=lambda snapshot: True,
+        snapshot_authenticator=SnapshotAuthenticator(),
     )
 
 

@@ -185,9 +185,9 @@
       "integration_tests": [
         "tests/test_runtime_persistent_agent_identity.py",
         "tests/test_sqlite_identity_revocation_tombstones.py",
-        "tests/test_runtime_full_durable_restart.py"
-      ],
-      "candidate": "PR #46"
+        "tests/test_runtime_full_durable_restart.py",
+        "tests/test_runtime_revocation_restart.py"
+      ]
     },
     {
       "id": "matrix_device_fabric",
@@ -241,8 +241,7 @@
       "integration_tests": [
         "core/test_quorum_witness.py",
         "tests/test_runtime_full_durable_restart.py"
-      ],
-      "candidate": "PR #66"
+      ]
     },
     {
       "id": "system_inspector_surf",
@@ -267,7 +266,8 @@
       "status": "implemented_partial",
       "paths": [
         "core/offline.py",
-        "core/offline_adapters.py"
+        "core/offline_adapters.py",
+        "core/offline_snapshot_auth.py"
       ],
       "depends_on": [
         "contracts",
@@ -278,7 +278,9 @@
       "integration_tests": [
         "tests/test_offline_sqlite_permissions.py",
         "tests/test_runtime_offline_durable_queue.py",
-        "tests/test_runtime_full_durable_restart.py"
+        "tests/test_runtime_full_durable_restart.py",
+        "tests/test_offline_snapshot_ed25519_auth.py",
+        "tests/test_runtime_offline_signed_snapshot.py"
       ]
     },
     {
