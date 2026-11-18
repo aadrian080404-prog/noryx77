@@ -10,6 +10,7 @@ from core.continuity import (
     node_attestation_statement,
 )
 from core.identity import AgentIdentityAuthority, IdentityRegistry
+from core.sqlite_identity import SQLiteIdentityRegistry
 from core.audit import AuditLog
 
 
@@ -200,3 +201,41 @@ def test_ncp_events_are_written_through_native_audit_log_contract():
         "continuity_node_isolated",
     ]
     assert audit.verify_integrity()
+
+
+
+def test_ncp_attestation_verifier_works_with_durable_sqlite_trust_registry(tmp_path):
+    registry = SQLiteIdentityRegistry(tmp_path / "trusted-nodes.sqlite3")
+    identity, private_key = AgentIdentityAuthority.generate("node-durable")
+    registry.register(identity)
+    fingerprint = hashlib.sha256(identity.public_key).hexdigest()
+    signed = AgentIdentityAuthority.sign(
+        identity, private_key,
+        node_attestation_statement(
+            node_id="node-durable", identity_fingerprint=fingerprint,
+            generation=0, sequence=0,
+        ),
+    )
+    supervisor = ContinuitySupervisor(
+        verify_attestation=agent_identity_attestation_verifier(registry),
+        approve_rejoin=lambda **_: True,
+        audit=lambda *_: None,
+    )
+    assert supervisor.register(
+        node_id="node-durable", identity_fingerprint=fingerprint,
+        capabilities=("compute",), attestation=signed,
+    ).state is NodeContinuityState.ACTIVE
+    registry.revoke("node-durable")
+    next_heartbeat = AgentIdentityAuthority.sign(
+        identity, private_key,
+        node_attestation_statement(
+            node_id="node-durable", identity_fingerprint=fingerprint,
+            generation=0, sequence=1,
+        ),
+    )
+    with pytest.raises(PermissionError, match="node_heartbeat_rejected"):
+        supervisor.heartbeat(
+            node_id="node-durable", generation=0, sequence=1,
+            attestation=next_heartbeat,
+        )
+    assert supervisor.snapshot()[0].state is NodeContinuityState.ISOLATED
