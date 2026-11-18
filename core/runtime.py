@@ -288,9 +288,7 @@ class NORYXRuntime:
                     status="verified",
                 )
 
-                principal_key_fingerprint = hashlib.sha256(
-                    f"offline-principal:{execution_spec.principal_id}".encode("utf-8")
-                ).hexdigest()
+                principal_key_fingerprint = snapshot.principal_key_fingerprint
 
                 state_commit = self.state.commit(
                     state,
