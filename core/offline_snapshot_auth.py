@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 from .offline import OfflineSnapshot
 
-_DOMAIN = b"NORYX7/OFFLINE_SNAPSHOT_AUTH/v1\\x00"
+_DOMAIN = b"NORYX7/OFFLINE_SNAPSHOT_AUTH/v1:"
 
 
 def sign_offline_snapshot(
