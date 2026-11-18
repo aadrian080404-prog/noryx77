@@ -163,6 +163,7 @@ def test_runtime_run_offline_uses_authenticated_snapshot_principal(tmp_path):
         artifact_version="artifact-1",
         capabilities=("local.execute",),
         state_version="state-1",
+        principal_key_fingerprint="c" * 64,
         integrity_digest="0" * 64,
     )
     snapshot = replace(
@@ -187,6 +188,7 @@ def test_runtime_run_offline_uses_authenticated_snapshot_principal(tmp_path):
     assert result["status"] == "completed"
     assert result["execution_id"] == "offline-execution-1"
     assert result["state_commit"].principal_id == "principal-1"
+    assert result["state_commit"].principal_key_fingerprint == "c" * 64
     assert len(queue) == 1
     assert queue.decrypt("offline-execution-1")
     queue.close()
