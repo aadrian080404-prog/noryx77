@@ -238,3 +238,21 @@ def test_ncp_attestation_verifier_works_with_durable_sqlite_trust_registry(tmp_p
             attestation=next_heartbeat,
         )
     assert supervisor.snapshot()[0].state is NodeContinuityState.ISOLATED
+
+
+
+def test_resolve_all_returns_sorted_active_nodes_only():
+    supervisor = ContinuitySupervisor(
+        verify_attestation=lambda **_: True,
+        approve_rejoin=lambda **_: True,
+        audit=lambda *_: None,
+        max_nodes=4,
+    )
+    register(supervisor, "node-z")
+    register(supervisor, "node-a")
+    register(supervisor, "node-m")
+    supervisor.isolate("node-m", reason="test_isolation")
+
+    candidates = supervisor.resolve_all("compute")
+    assert tuple(node.node_id for node in candidates) == ("node-a", "node-z")
+    assert all(node.state is NodeContinuityState.ACTIVE for node in candidates)
