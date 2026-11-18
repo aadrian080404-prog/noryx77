@@ -129,3 +129,12 @@ def test_state_journal_restricts_database_file_permissions(tmp_path):
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     finally:
         journal.close()
+
+
+
+def test_state_journal_rejects_boolean_sequence_numbers(tmp_path):
+    journal = StateJournal(str(tmp_path / "invalid-sequence.db"))
+    with pytest.raises(ValueError, match="invalid_state_commit_sequence"):
+        journal.append(_manual_commit("exec-bool", True))
+    assert journal.recover() == {}
+    journal.close()
