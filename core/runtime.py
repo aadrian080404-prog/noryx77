@@ -103,6 +103,7 @@ class NORYXRuntime:
         node_identity_registry: IdentityRegistry,
         approve_rejoin,
         max_nodes: int = 1024,
+        continuity_state_store: object | None = None,
     ):
         """Attach NCP to an explicit node trust registry and this runtime's audit sink."""
         if not isinstance(node_identity_registry, IdentityRegistry):
@@ -122,6 +123,7 @@ class NORYXRuntime:
             approve_rejoin=approve_rejoin,
             audit=audit_log_sink(self.audit),
             max_nodes=max_nodes,
+            state_store=continuity_state_store,
         )
         self.audit.record("continuity_supervisor_configured", max_nodes=max_nodes)
         self.device_fabric.set_continuity_supervisor(supervisor)
