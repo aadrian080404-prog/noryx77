@@ -25,6 +25,13 @@ class DeviceFabric:
         self._continuity = continuity_supervisor
         self._lock = RLock()
 
+    def set_continuity_supervisor(self, continuity_supervisor) -> None:
+        """Enable NCP fencing without discarding already registered devices."""
+        if not callable(getattr(continuity_supervisor, "resolve_all", None)):
+            raise TypeError("invalid_continuity_supervisor")
+        with self._lock:
+            self._continuity = continuity_supervisor
+
     def register(self, device: Device) -> None:
         if not isinstance(device, Device):
             raise TypeError("device_contract_invalid")
