@@ -7,6 +7,11 @@ from core.offline_adapters import BoundAuthenticatedCipher
 from core.runtime import NORYXRuntime
 
 
+class _SnapshotAuthenticator:
+    def verify(self, snapshot):
+        return True
+
+
 class _Anchor:
     def accept(self, issued_at, snapshot_id):
         return True
@@ -23,7 +28,7 @@ def test_runtime_uses_injected_sqlite_offline_outbox(tmp_path):
     runtime.configure_offline(
         cipher=cipher,
         key_id="offline-key",
-        snapshot_authenticator=lambda snapshot: True,
+        snapshot_authenticator=_SnapshotAuthenticator(),
         clock=lambda: 100,
         offline_queue=queue,
         monotonic_anchor=_Anchor(),
