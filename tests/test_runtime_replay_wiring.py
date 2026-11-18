@@ -1,6 +1,6 @@
 import pytest
 
-from core.actions import ActionSpec
+from core.contracts import ActionSpec
 from core.authorization_replay import SQLiteAuthorizationReplayGuard
 from core.identity import AgentIdentityAuthority
 from core.runtime import NORYXRuntime
@@ -23,7 +23,7 @@ def test_runtime_wires_durable_replay_authority_to_both_action_gates(tmp_path):
     runtime.identity_registry.register(principal)
     action = ActionSpec(
         action_id="runtime-authorized-action",
-        action_type="write",
+        action_type="compute",
         target="local-resource",
         parameters={"value": 1},
         risk_class="normal",
