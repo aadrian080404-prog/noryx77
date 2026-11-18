@@ -4,6 +4,7 @@ import pytest
 
 from core.state import NORYXState, StateStore
 from core.state_journal import StateJournal
+from core.journal_integrity import InMemoryMonotonicAnchor, JournalAuthenticator
 
 
 def make_state():
@@ -61,3 +62,91 @@ def test_failed_durable_append_does_not_publish_in_memory(monkeypatch, tmp_path)
     assert len(store) == 0
     assert store.version == 0
     journal.close()
+
+
+
+def _authenticator():
+    return JournalAuthenticator(b"noryx7-test-journal-key-material-32-bytes!!", key_id="test-key-v1")
+
+
+def test_state_journal_hmac_chain_and_external_anchor(tmp_path):
+    path = str(tmp_path / "anchored-state.db")
+    authenticator = _authenticator()
+    anchor = InMemoryMonotonicAnchor()
+    journal = StateJournal(path, authenticator=authenticator)
+    journal.append(_manual_commit("anchored-1", 1))
+    journal.append(_manual_commit("anchored-2", 2))
+
+    head = journal.verify_and_advance_anchor(anchor)
+    assert head.sequence == 2
+    assert anchor.read() == head
+    journal.close()
+
+    reopened = StateJournal(path, authenticator=authenticator)
+    assert len(reopened.recover()) == 2
+    assert reopened.verify_and_advance_anchor(anchor) == head
+    reopened.close()
+
+
+def test_state_journal_migrates_legacy_records_to_authenticated_chain(tmp_path):
+    path = str(tmp_path / "legacy-state.db")
+    legacy = StateJournal(path)
+    legacy.append(_manual_commit("legacy-1", 1))
+    legacy.append(_manual_commit("legacy-2", 2))
+    legacy.close()
+
+    authenticated = StateJournal(path, authenticator=_authenticator())
+    assert len(authenticated.recover()) == 2
+    assert authenticated.verify_and_advance_anchor(InMemoryMonotonicAnchor()).sequence == 2
+    authenticated.close()
+
+
+def test_state_journal_external_anchor_detects_database_rollback(tmp_path):
+    path = str(tmp_path / "rollback-state.db")
+    authenticator = _authenticator()
+    anchor = InMemoryMonotonicAnchor()
+    journal = StateJournal(path, authenticator=authenticator)
+    journal.append(_manual_commit("rollback-1", 1))
+    journal.append(_manual_commit("rollback-2", 2))
+    anchored_head = journal.verify_and_advance_anchor(anchor)
+    journal.close()
+
+    connection = sqlite3.connect(path)
+    connection.execute("DELETE FROM state_commits WHERE sequence=2")
+    connection.execute("DELETE FROM state_journal_proofs WHERE sequence=2")
+    connection.commit()
+    connection.close()
+
+    rolled_back = StateJournal(path, authenticator=authenticator)
+    with pytest.raises(RuntimeError, match="state_journal_rollback_detected"):
+        rolled_back.verify_and_advance_anchor(anchor)
+    rolled_back.close()
+
+
+def test_state_journal_rejects_modified_chain_proof(tmp_path):
+    path = str(tmp_path / "tampered-proof.db")
+    journal = StateJournal(path, authenticator=_authenticator())
+    journal.append(_manual_commit("proof-1", 1))
+    journal.close()
+
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "UPDATE state_journal_proofs SET mac=? WHERE sequence=1", ("f" * 64,)
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(RuntimeError, match="state_journal_authentication_failure"):
+        StateJournal(path, authenticator=_authenticator())
+
+
+def test_state_journal_refuses_authenticated_records_without_key(tmp_path):
+    path = str(tmp_path / "missing-key.db")
+    journal = StateJournal(path, authenticator=_authenticator())
+    journal.append(_manual_commit("requires-key", 1))
+    journal.close()
+
+    reopened = StateJournal(path)
+    with pytest.raises(RuntimeError, match="state_journal_authenticator_required"):
+        reopened.recover()
+    reopened.close()
