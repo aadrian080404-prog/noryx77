@@ -1,4 +1,5 @@
 import hashlib
+import sqlite3
 
 from core.crypto import AuthenticatedCipher, InMemoryKeyProvider
 from core.offline import OfflineExecution, SQLiteOfflineSyncQueue
@@ -96,4 +97,39 @@ def test_runtime_offline_outbox_rejects_execution_id_rebinding_after_restart(tmp
         assert str(exc) == "identity_conflict"
     else:
         raise AssertionError("execution ID rebinding was accepted")
+    reopened.close()
+
+
+def test_runtime_offline_outbox_detects_ciphertext_tampering(tmp_path):
+    import pytest
+    from core.offline import OfflineDeniedError
+
+    provider = InMemoryKeyProvider({"offline-key": b"t" * 32})
+    cipher = AuthenticatedCipher(provider)
+    bound_cipher = BoundAuthenticatedCipher(cipher, key_id="offline-key")
+    path = str(tmp_path / "tampered-outbox.sqlite3")
+    payload = b"payload-that-must-remain-authenticated"
+    execution = OfflineExecution(
+        execution_id="tamper-detect-1",
+        principal_id="principal-1",
+        operation="local-analysis",
+        capability="analysis",
+        payload_digest=hashlib.sha256(payload).hexdigest(),
+        base_state_version="state-1",
+    )
+    queue = SQLiteOfflineSyncQueue(path, bound_cipher)
+    queue.enqueue(execution, payload)
+    queue.close()
+
+    connection = sqlite3.connect(path)
+    connection.execute(
+        "UPDATE offline_sync_queue SET ciphertext=? WHERE execution_id=?",
+        (b"tampered-ciphertext", execution.execution_id),
+    )
+    connection.commit()
+    connection.close()
+
+    reopened = SQLiteOfflineSyncQueue(path, bound_cipher)
+    with pytest.raises(OfflineDeniedError, match="offline_record_integrity_failed"):
+        reopened.snapshot()
     reopened.close()
