@@ -1,3 +1,5 @@
+import copy
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -15,10 +17,9 @@ class SQLiteAuditLog(AuditLog):
     _SCHEMA_VERSION = 1
 
     def __init__(self, database_path: str | os.PathLike[str]):
-        if isinstance(database_path, (str, os.PathLike)):
-            raw_path = os.fspath(database_path)
-        else:
+        if not isinstance(database_path, (str, os.PathLike)):
             raise ValueError("persistent_audit_database_required")
+        raw_path = os.fspath(database_path)
         if not isinstance(raw_path, str) or not raw_path.strip() or raw_path == ":memory:":
             raise ValueError("persistent_audit_database_required")
         self.database_path = str(Path(raw_path))
@@ -66,7 +67,8 @@ class SQLiteAuditLog(AuditLog):
                     os.chmod(self.database_path, 0o600)
                 except OSError:
                     pass
-                self._refresh_cache_locked(connection)
+                if not self._read_and_verify_locked(connection):
+                    raise ValueError("audit_integrity_failed")
             except Exception:
                 connection.rollback()
                 raise
@@ -80,48 +82,56 @@ class SQLiteAuditLog(AuditLog):
         connection.execute("PRAGMA journal_mode = WAL")
         return connection
 
-    def _refresh_cache_locked(self, connection: sqlite3.Connection | None = None) -> None:
-        owns_connection = connection is None
-        if connection is None:
-            connection = self._connect()
+    def _read_and_verify_locked(self, connection: sqlite3.Connection) -> bool:
         try:
             rows = connection.execute(
-                "SELECT entry_json, digest FROM noryx7_audit_events ORDER BY sequence"
+                "SELECT sequence, entry_json, previous_digest, digest "
+                "FROM noryx7_audit_events ORDER BY sequence"
             ).fetchall()
             events = []
             digests = []
-            for entry_json, digest in rows:
-                entry = __import__("json").loads(entry_json)
+            previous_digest = self._GENESIS
+            for expected_sequence, row in enumerate(rows, start=1):
+                sequence, entry_json, stored_previous, stored_digest = row
+                if sequence != expected_sequence or stored_previous != previous_digest:
+                    return False
+                entry = json.loads(entry_json)
                 if not isinstance(entry, dict):
-                    raise ValueError("audit_record_malformed")
+                    return False
+                actual_digest = self._digest(entry, previous_digest)
+                if actual_digest != stored_digest:
+                    return False
                 events.append(entry)
-                digests.append(digest)
+                digests.append(stored_digest)
+                previous_digest = stored_digest
             self._events = events
             self._digests = digests
-        finally:
-            if owns_connection:
-                connection.close()
+            return True
+        except (sqlite3.Error, ValueError, TypeError, json.JSONDecodeError):
+            return False
 
     def _verify_integrity_locked(self) -> bool:
+        connection = self._connect()
         try:
-            self._refresh_cache_locked()
-        except (sqlite3.Error, ValueError, TypeError):
-            return False
-        return super()._verify_integrity_locked()
+            return self._read_and_verify_locked(connection)
+        finally:
+            connection.close()
 
     def record(self, event: str, **data):
         if not isinstance(event, str) or not event.strip():
             raise ValueError("audit event must be non-empty text")
-        import copy
-        import json
-
         stored = copy.deepcopy({"event": event, **data})
-        # Validate and canonicalize before opening the write transaction.
-        json.dumps(stored, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        try:
+            json.dumps(stored, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("audit data must be JSON serializable") from exc
+
         with self._lock:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                if not self._read_and_verify_locked(connection):
+                    raise ValueError("audit_integrity_failed")
                 row = connection.execute(
                     "SELECT sequence, digest FROM noryx7_audit_events ORDER BY sequence DESC LIMIT 1"
                 ).fetchone()
@@ -137,7 +147,8 @@ class SQLiteAuditLog(AuditLog):
                     (sequence, entry_json, previous_digest, digest),
                 )
                 connection.commit()
-                self._refresh_cache_locked(connection)
+                if not self._read_and_verify_locked(connection):
+                    raise RuntimeError("audit_commit_verification_failed")
                 return copy.deepcopy(stored)
             except Exception:
                 connection.rollback()
@@ -147,8 +158,13 @@ class SQLiteAuditLog(AuditLog):
 
     def snapshot(self):
         with self._lock:
-            self._refresh_cache_locked()
-            return super().snapshot()
+            connection = self._connect()
+            try:
+                if not self._read_and_verify_locked(connection):
+                    raise RuntimeError("audit_integrity_failed")
+                return super().snapshot()
+            finally:
+                connection.close()
 
     def verify_integrity(self) -> bool:
         with self._lock:
@@ -156,8 +172,19 @@ class SQLiteAuditLog(AuditLog):
 
     def digest(self) -> str:
         with self._lock:
-            try:
-                self._refresh_cache_locked()
-            except (sqlite3.Error, ValueError, TypeError):
-                raise RuntimeError("audit_storage_unavailable")
+            if not self._verify_integrity_locked():
+                raise RuntimeError("audit_integrity_failed")
             return super().digest()
+
+    def checkpoint(self, provider, *, key_id: str):
+        checkpoint = super().checkpoint(provider, key_id=key_id)
+        if self.digest() != checkpoint.digest:
+            raise ValueError("audit_chain_changed_during_checkpoint")
+        return checkpoint
+
+    def verify_checkpoint(self, checkpoint, provider) -> bool:
+        if not self.verify_integrity() or self.digest() != getattr(checkpoint, "digest", None):
+            return False
+        if not super().verify_checkpoint(checkpoint, provider):
+            return False
+        return self.digest() == checkpoint.digest
