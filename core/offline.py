@@ -248,9 +248,32 @@ class SQLiteOfflineSyncQueue:
                 value INTEGER NOT NULL CHECK(value >= 0)
             )
         """)
-        self._connection.execute(
-            "INSERT OR IGNORE INTO offline_sync_meta(key, value) VALUES ('sequence', 0)"
-        )
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            for key, value in (
+                ("sequence", 0),
+                ("schema_version", 1),
+                ("max_items", max_items),
+            ):
+                self._connection.execute(
+                    "INSERT OR IGNORE INTO offline_sync_meta(key, value) VALUES (?, ?)",
+                    (key, value),
+                )
+            stored_config = {
+                row["key"]: row["value"]
+                for row in self._connection.execute(
+                    "SELECT key, value FROM offline_sync_meta "
+                    "WHERE key IN ('schema_version', 'max_items')"
+                ).fetchall()
+            }
+            if stored_config != {"schema_version": 1, "max_items": max_items}:
+                raise ValueError("offline_queue_configuration_mismatch")
+            self._connection.execute("COMMIT")
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.execute("ROLLBACK")
+            self._connection.close()
+            raise
         try:
             os.chmod(database_path, 0o600)
         except OSError as exc:
