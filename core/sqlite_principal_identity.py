@@ -158,6 +158,26 @@ class SQLitePrincipalIdentityRegistry(PrincipalIdentityRegistry):
             finally:
                 connection.close()
 
+    def is_registered(self, principal_id: str) -> bool:
+        try:
+            self._validate_principal_id(principal_id)
+        except ValueError:
+            return False
+        with self._lock:
+            connection = self._connect()
+            try:
+                row = connection.execute(
+                    "SELECT 1 FROM noryx7_trusted_principals p "
+                    "LEFT JOIN noryx7_revoked_principals r ON r.principal_id=p.principal_id "
+                    "WHERE p.principal_id=? AND r.principal_id IS NULL",
+                    (principal_id,),
+                ).fetchone()
+                return row is not None
+            except sqlite3.Error:
+                return False
+            finally:
+                connection.close()
+
     def is_trusted(self, identity: PrincipalIdentity) -> bool:
         if not isinstance(identity, PrincipalIdentity) or not identity.is_well_formed():
             return False
