@@ -133,7 +133,8 @@
       ],
       "integration_tests": [
         "core/test_sqlite_audit_external_anchor.py",
-        "tests/test_runtime_audit_anchor.py"
+        "tests/test_runtime_audit_anchor.py",
+        "tests/test_runtime_full_durable_restart.py"
       ]
     },
     {
@@ -149,7 +150,8 @@
         "memory_local"
       ],
       "integration_tests": [
-        "tests/test_runtime_state_journal_anchor.py"
+        "tests/test_runtime_state_journal_anchor.py",
+        "tests/test_runtime_full_durable_restart.py"
       ]
     },
     {
@@ -165,7 +167,8 @@
         "audit"
       ],
       "integration_tests": [
-        "tests/test_sqlite_continuity.py"
+        "tests/test_sqlite_continuity.py",
+        "tests/test_runtime_full_durable_restart.py"
       ]
     },
     {
@@ -181,7 +184,8 @@
       ],
       "integration_tests": [
         "tests/test_runtime_persistent_agent_identity.py",
-        "tests/test_sqlite_identity_revocation_tombstones.py"
+        "tests/test_sqlite_identity_revocation_tombstones.py",
+        "tests/test_runtime_full_durable_restart.py"
       ],
       "candidate": "PR #46"
     },
@@ -235,7 +239,8 @@
         "durable_state_journal"
       ],
       "integration_tests": [
-        "core/test_quorum_witness.py"
+        "core/test_quorum_witness.py",
+        "tests/test_runtime_full_durable_restart.py"
       ],
       "candidate": "PR #66"
     },
@@ -267,7 +272,8 @@
       ],
       "integration_tests": [
         "tests/test_offline_sqlite_permissions.py",
-        "tests/test_runtime_offline_durable_queue.py"
+        "tests/test_runtime_offline_durable_queue.py",
+        "tests/test_runtime_full_durable_restart.py"
       ]
     },
     {
