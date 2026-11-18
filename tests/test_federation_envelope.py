@@ -35,6 +35,8 @@ def _verifier(tmp_path, private_key, *, now=lambda: 110, revoked=lambda _key: Fa
         is_issuer_revoked=revoked,
         is_principal_revoked=lambda _principal: False,
         is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=now,
     )
     return verifier, store
@@ -82,6 +84,8 @@ def test_unknown_or_revoked_issuer_is_rejected(tmp_path):
         is_issuer_revoked=lambda _key: False,
         is_principal_revoked=lambda _principal: False,
         is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=lambda: 110,
     )
     revoked, revoked_store = _verifier(
@@ -135,6 +139,8 @@ def test_replay_guard_survives_verifier_and_database_reopen(tmp_path):
         is_issuer_revoked=lambda _key: False,
         is_principal_revoked=lambda _principal: False,
         is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=lambda: 110,
     )
     verifier.verify_and_consume(envelope)
@@ -147,6 +153,8 @@ def test_replay_guard_survives_verifier_and_database_reopen(tmp_path):
         is_issuer_revoked=lambda _key: False,
         is_principal_revoked=lambda _principal: False,
         is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=lambda: 110,
     )
     try:
@@ -168,6 +176,8 @@ def test_revocation_lookup_failure_fails_closed(tmp_path):
         is_issuer_revoked=lambda _key: (_ for _ in ()).throw(RuntimeError("offline")),
         is_principal_revoked=lambda _principal: False,
         is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=lambda: 110,
     )
     try:
@@ -212,6 +222,8 @@ def test_revoked_principal_or_agent_is_rejected(tmp_path, principal_revoked, age
         is_issuer_revoked=lambda _key: False,
         is_principal_revoked=principal_revoked,
         is_agent_revoked=agent_revoked,
+        is_principal_trusted=lambda _principal: True,
+        is_agent_trusted=lambda _agent: True,
         clock=lambda: 110,
     )
     try:
