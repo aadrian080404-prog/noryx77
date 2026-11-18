@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "status": "compatibility_assessment_not_runtime_integration",
+  "repositories": {
+    "primary": "aadrian080404-prog/noryx77",
+    "secondary": "aadrian080404-prog/noryx7-verified"
+  },
+  "assessed_refs": {
+    "primary": "integration/full-durable-runtime-security-stack-2026-11-18",
+    "secondary": "fix/runtime-init-isolation-2026-11-18"
+  },
+  "principle": "Do not copy or merge subsystems until their trust, persistence, lifecycle and failure semantics have an explicit adapter contract and cross-repository tests.",
+  "component_map": [
+    {
+      "id": "principal_identity",
+      "primary": {
+        "implementation": "core/sqlite_identity.py",
+        "properties": [
+          "durable trusted-agent registry",
+          "permanent revocation tombstones",
+          "restart persistence"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/persistence.py principal_verifier injection",
+        "properties": [
+          "principal verifier callback",
+          "execution ownership checks",
+          "fail-closed when verifier is absent"
+        ]
+      },
+      "compatibility": "adapter_required",
+      "reason": "The secondary repository has no equivalent durable agent-key registry or shared revocation tombstone contract."
+    },
+    {
+      "id": "attestation",
+      "primary": {
+        "implementation": "core/identity.py and core/continuity.py",
+        "properties": [
+          "Ed25519 agent identity",
+          "signed node attestation",
+          "registry-backed trust"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/identity/attestation.py",
+        "properties": [
+          "Ed25519 challenge response",
+          "simulated local PUF key derivation",
+          "one-use nonce"
+        ]
+      },
+      "compatibility": "not_interchangeable",
+      "reason": "Secondary local software attestation proves possession of a locally derived key; it is not external hardware attestation or a trusted principal identity."
+    },
+    {
+      "id": "memory_and_state",
+      "primary": {
+        "implementation": "core/state_journal.py and core/journal_integrity.py",
+        "properties": [
+          "HMAC record chain",
+          "external monotonic-anchor interface",
+          "durable runtime state"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/persistence.py",
+        "properties": [
+          "SQLite executions and principal-scoped memory",
+          "hash journal",
+          "BM25 lexical retrieval"
+        ]
+      },
+      "compatibility": "adapter_required",
+      "reason": "The schemas, ownership rules and rollback guarantees differ; the secondary journal advertises a local hash chain without an external monotonic anchor."
+    },
+    {
+      "id": "runtime_execution",
+      "primary": {
+        "implementation": "core/runtime.py",
+        "properties": [
+          "canonical NORYXRuntime",
+          "ActionGate",
+          "offline runtime",
+          "continuity and audit wiring"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/runtime_integrated.py",
+        "properties": [
+          "IntegratedRuntime",
+          "principal-partitioned adaptive state",
+          "bounded execution pipeline"
+        ]
+      },
+      "compatibility": "adapter_required",
+      "reason": "The runtimes expose different execution contracts and have distinct lifecycle and state ownership."
+    },
+    {
+      "id": "offline_execution",
+      "primary": {
+        "implementation": "core/offline.py",
+        "properties": [
+          "encrypted durable outbox",
+          "injected snapshot authenticator interface",
+          "policy and recovery gates"
+        ]
+      },
+      "secondary": {
+        "implementation": null,
+        "properties": []
+      },
+      "compatibility": "primary_only",
+      "reason": "No matching offline authorization snapshot or durable outbox contract is present in the assessed secondary branch.",
+      "candidate": "PR #117 proposes Ed25519 issuer-authenticated snapshots; not yet part of the assessed primary base ref."
+    },
+    {
+      "id": "distributed_consensus",
+      "primary": {
+        "implementation": "core/quorum_witness.py and core/remote_witness.py",
+        "properties": [
+          "signed nonce-bound receipts",
+          "majority anchor",
+          "declared distinct failure domains"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/morphing/miam.py",
+        "properties": [
+          "service graph with a CONSENSUS role",
+          "no authenticated peer consensus protocol"
+        ]
+      },
+      "compatibility": "not_implemented_in_secondary",
+      "reason": "A topology role named CONSENSUS is not a consensus algorithm; secondary runtime explicitly rejects consensus opt-in."
+    },
+    {
+      "id": "adaptive_and_morphing_subsystems",
+      "primary": {
+        "implementation": "core/agent_fabric.py and core/hypersynth.py",
+        "properties": [
+          "specialized agent orchestration",
+          "verified action planning"
+        ]
+      },
+      "secondary": {
+        "implementation": "core/morphing/miam.py, core/morphing/churning.py, core/neuromorphic/snn.py, core/morphing/destructive_read.py",
+        "properties": [
+          "MIAM service graph morphing",
+          "per-principal ChurnEngine and LIF sessions",
+          "destructive vault"
+        ]
+      },
+      "compatibility": "secondary_candidate_subsystems",
+      "reason": "These capabilities are candidates for isolated adapters, not replacements for primary trust, audit or authorization controls."
+    },
+    {
+      "id": "protected_api",
+      "primary": {
+        "implementation": "gateway/server.py",
+        "properties": [
+          "gateway authentication and runtime adapter"
+        ]
+      },
+      "secondary": {
+        "implementation": "api/runtime_api.py",
+        "properties": [
+          "principal resolver absent by default",
+          "protected operations return 503 until authentication is configured"
+        ]
+      },
+      "compatibility": "adapter_required",
+      "reason": "The secondary API is intentionally closed without a configured principal resolver; it must remain closed until a real trust adapter exists."
+    }
+  ],
+  "required_shared_contracts": [
+    {
+      "id": "signed_execution_envelope",
+      "fields": [
+        "schema_version",
+        "execution_id",
+        "principal_id",
+        "agent_id",
+        "task_type",
+        "capabilities",
+        "policy_version",
+        "state_version",
+        "issued_at",
+        "expires_at",
+        "nonce",
+        "issuer_key_id",
+        "signature"
+      ],
+      "requirements": [
+        "canonical serialization",
+        "Ed25519 signature verification",
+        "key revocation check",
+        "replay rejection",
+        "strict schema and size limits"
+      ]
+    },
+    {
+      "id": "identity_federation",
+      "requirements": [
+        "explicit issuer trust configuration",
+        "durable revocation propagation",
+        "no implicit trust from local PUF or self-attestation"
+      ]
+    },
+    {
+      "id": "audit_event",
+      "requirements": [
+        "stable event IDs",
+        "principal and agent attribution",
+        "canonical event payload",
+        "idempotent ingestion",
+        "integrity proof and retention policy"
+      ]
+    },
+    {
+      "id": "recovery_and_fencing",
+      "requirements": [
+        "monotonic generation and epoch",
+        "durable isolation state",
+        "fail-closed rejoin",
+        "audit-before-or-durable-state-before-event ordering"
+      ]
+    },
+    {
+      "id": "memory_transfer",
+      "requirements": [
+        "principal-scoped export",
+        "encryption under recipient key",
+        "provenance",
+        "schema migration",
+        "explicit retention and deletion semantics"
+      ]
+    }
+  ],
+  "integration_gates": [
+    "Define versioned shared contracts without importing either runtime into the other.",
+    "Implement one-way adapters first; prohibit implicit cross-runtime authority escalation.",
+    "Verify signed envelope, key revocation, replay, principal isolation and audit attribution in cross-repository tests.",
+    "Test partial outages, stale epochs, duplicate delivery and restart recovery.",
+    "Only then consider a bidirectional runtime bridge."
+  ],
+  "non_goals": [
+    "No merge of the two repositories.",
+    "No replacement of the primary runtime by the secondary IntegratedRuntime.",
+    "No claim that simulated PUF is hardware attestation.",
+    "No claim that MIAM topology supplies distributed consensus.",
+    "No sharing of private keys or raw memory databases."
+  ]
+}
