@@ -224,7 +224,6 @@ class NORYXRuntime:
         """Execute one fail-closed offline task through the canonical runtime."""
         task_id = getattr(task, "task_id", None)
         execution_id = getattr(task, "execution_id", None) or str(uuid4())
-        principal_id = execution_id
 
         if self._offline is None:
             return {
@@ -254,6 +253,10 @@ class NORYXRuntime:
             snapshot = self._offline._snapshot
             if snapshot is None:
                 raise RuntimeError("offline_snapshot_required")
+            # The execution identifier is unique per operation; it is not the
+            # authenticated principal. Bind the operation to the principal in
+            # the installed, authenticated offline snapshot.
+            principal_id = snapshot.principal_id
 
             execution = OfflineExecution(
                 execution_id=execution_id,
