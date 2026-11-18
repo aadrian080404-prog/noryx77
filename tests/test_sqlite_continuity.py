@@ -118,3 +118,36 @@ def test_ncp_store_restricts_database_permissions(tmp_path):
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     finally:
         store.close()
+
+
+def test_ncp_isolation_is_durable_even_if_audit_sink_fails(tmp_path):
+    from core.continuity import ContinuitySupervisor
+
+    should_fail = {"value": False}
+
+    def audit(event, payload):
+        if should_fail["value"] and event == "continuity_node_isolated":
+            raise OSError("audit sink unavailable")
+
+    path = str(tmp_path / "audit-failure-continuity.sqlite3")
+    store = SQLiteContinuityStore(path)
+    supervisor = ContinuitySupervisor(
+        verify_attestation=lambda **_: True,
+        approve_rejoin=lambda **_: True,
+        audit=audit,
+        state_store=store,
+    )
+    supervisor.register(
+        node_id="audit-failure-node",
+        identity_fingerprint="c" * 64,
+        capabilities=("compute",),
+        attestation=object(),
+    )
+    should_fail["value"] = True
+    with pytest.raises(OSError, match="audit sink unavailable"):
+        supervisor.isolate("audit-failure-node", reason="audit_failure_test")
+    store.close()
+
+    reopened = SQLiteContinuityStore(path)
+    assert reopened.load_records()[0].state is NodeContinuityState.ISOLATED
+    reopened.close()
