@@ -4,7 +4,8 @@ from dataclasses import replace
 import time
 from uuid import uuid4
 
-from .actions import ActionGate
+from .actions import ActionGate, AuthorizationAuthority
+from .authorization_replay import AuthorizationReplayGuard
 from .agents import DeterministicAgent
 from .llm.agent import LLMBackedAgent
 from .llm.self_knowledge import SelfKnowledgeProvider
@@ -40,12 +41,16 @@ class NORYXRuntime:
         state_journal_path: str | None = None,
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
+        authorization_secret: bytes | None = None,
+        replay_guard: AuthorizationReplayGuard | None = None,
     ):
         self.limits = limits or RuntimeLimits()
         self._model_fabric = model_fabric
         if user_understanding is not None and not isinstance(user_understanding, UserUnderstandingEngine):
             raise TypeError("invalid_user_understanding_engine")
         self.user_understanding = user_understanding
+        if replay_guard is not None and authorization_secret is None:
+            raise ValueError("authorization_secret_required_for_replay_guard")
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
         self.recovery = RecoveryController()
@@ -73,6 +78,16 @@ class NORYXRuntime:
                 )
             )
 
+        self.authorization = (
+            AuthorizationAuthority(
+                authorization_secret,
+                identity_registry=self.identity_registry,
+                replay_guard=replay_guard,
+            )
+            if authorization_secret is not None
+            else None
+        )
+        self.action_gate.authorization = self.authorization
         self.decomposer = TaskDecomposer()
         self.hypersynth = HypersynthRuntime(
             verifier=self.verifier,
@@ -81,6 +96,7 @@ class NORYXRuntime:
             limits=self.limits,
             memory=self.memory,
             recovery=self.recovery,
+            authorization=self.authorization,
         )
         self.capability_registry = self.hypersynth.tool_executor.capabilities
         self.tool_executor = self.hypersynth.tool_executor
