@@ -40,11 +40,13 @@ def test_sqlite_principal_trust_survives_restart_and_revocation_is_permanent(tmp
     first = SQLitePrincipalIdentityRegistry(database)
     first.register(identity)
     assert first.is_trusted(identity) is True
+    assert first.is_registered(identity.principal_id) is True
     assert first.is_revoked(identity.principal_id) is False
     first.revoke(identity.principal_id)
 
     reopened = SQLitePrincipalIdentityRegistry(database)
     assert reopened.is_trusted(identity) is False
+    assert reopened.is_registered(identity.principal_id) is False
     assert reopened.is_revoked(identity.principal_id) is True
     with pytest.raises(PermissionError, match="permanently_revoked"):
         reopened.register(identity)
