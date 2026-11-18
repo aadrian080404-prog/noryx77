@@ -67,6 +67,7 @@ class OfflineSnapshot:
     artifact_version: str
     capabilities: tuple[str, ...]
     state_version: str
+    principal_key_fingerprint: str
     integrity_digest: str
 
     def __post_init__(self) -> None:
@@ -81,6 +82,12 @@ class OfflineSnapshot:
         normalized = tuple(_bounded(cap, "capability") for cap in self.capabilities)
         if len(set(normalized)) != len(normalized):
             raise ValueError("duplicate_capability")
+        if (
+            not isinstance(self.principal_key_fingerprint, str)
+            or len(self.principal_key_fingerprint) != 64
+            or any(c not in "0123456789abcdef" for c in self.principal_key_fingerprint)
+        ):
+            raise ValueError("invalid_principal_key_fingerprint")
         if not isinstance(self.integrity_digest, str) or len(self.integrity_digest) != 64 or any(c not in "0123456789abcdef" for c in self.integrity_digest):
             raise ValueError("invalid_integrity_digest")
 
@@ -88,7 +95,8 @@ class OfflineSnapshot:
         body = {"snapshot_id": self.snapshot_id, "principal_id": self.principal_id,
                 "issued_at": self.issued_at, "policy_version": self.policy_version,
                 "artifact_version": self.artifact_version, "capabilities": self.capabilities,
-                "state_version": self.state_version}
+                "state_version": self.state_version,
+                "principal_key_fingerprint": self.principal_key_fingerprint}
         return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     def verify_integrity(self) -> bool:
