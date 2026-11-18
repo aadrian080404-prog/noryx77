@@ -12,6 +12,7 @@ from .audit import AuditLog
 from .contracts import ActionSpec, AgentResult, TaskSpec, VerificationResult
 from .crypto import AuthenticatedCipher
 from .decomposition import TaskDecomposer
+from .device_fabric import DeviceFabric
 from .hypersynth_runtime import HypersynthRuntime
 from .identity import AgentIdentityAuthority, IdentityRegistry
 from .interaction_context import InteractionContext, build_interaction_context
@@ -60,6 +61,7 @@ class NORYXRuntime:
         self.audit = audit_log if audit_log is not None else AuditLog()
         self.identity_registry = IdentityRegistry()
         self._continuity = None
+        self.device_fabric = DeviceFabric()
         deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
         self.identity_registry.register(deterministic_identity)
         self.router = ResourceRouter(identity_registry=self.identity_registry)
@@ -105,6 +107,8 @@ class NORYXRuntime:
         """Attach NCP to an explicit node trust registry and this runtime's audit sink."""
         if not isinstance(node_identity_registry, IdentityRegistry):
             raise TypeError("node_identity_registry_required")
+        if self._continuity is not None:
+            raise RuntimeError("continuity_already_configured")
         if not callable(approve_rejoin):
             raise TypeError("rejoin_approval_callback_required")
         from .continuity import (
@@ -120,6 +124,7 @@ class NORYXRuntime:
             max_nodes=max_nodes,
         )
         self.audit.record("continuity_supervisor_configured", max_nodes=max_nodes)
+        self.device_fabric.set_continuity_supervisor(supervisor)
         self._continuity = supervisor
         return supervisor
 
