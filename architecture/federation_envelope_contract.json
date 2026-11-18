@@ -9,6 +9,7 @@
       "Ed25519 issuer signature",
       "explicit issuer public-key allowlist",
       "issuer, principal and agent revocation callbacks with fail-closed behavior",
+      "principal and agent registry membership checks before admission",
       "issued-at and expiry validation",
       "bounded envelope lifetime and clock skew",
       "durable SQLite nonce consumption",
@@ -37,7 +38,7 @@
   },
   "integration_gates": [
     "Wire verifier to the primary runtime ingress before any federated task is accepted.",
-    "Bind issuer revocation callback to durable identity/key tombstones.",
+    "Bind issuer revocation callback to durable issuer/key tombstones and principal/agent trust plus revocation callbacks to their respective registries.",
     "Add cross-process and concurrent replay tests against the deployment database.",
     "Add sender-to-receiver integration tests covering policy version mismatch, stale state, key rotation and revocation.",
     "Keep transport adapters unidirectional and deny-by-default until cross-repository tests pass."
