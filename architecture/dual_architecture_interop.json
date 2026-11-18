@@ -18,7 +18,8 @@
         "properties": [
           "durable trusted-agent registry",
           "permanent revocation tombstones",
-          "restart persistence"
+          "restart persistence",
+          "durable membership and revocation lookup for federation admission"
         ]
       },
       "secondary": {
@@ -30,13 +31,20 @@
         ]
       },
       "compatibility": "adapter_required",
-      "reason": "This is an agent-key registry keyed by agent_id, not a user/principal identity registry. It must not be treated as proof of an authenticated human or tenant principal."
+      "reason": "This is an agent-key registry keyed by agent_id, not a user/tenant principal identity registry. It provides durable membership and revocation checks for executable agents only."
     },
     {
       "id": "principal_identity",
       "primary": {
-        "implementation": null,
-        "properties": []
+        "implementation": "core/principal_identity.py and core/sqlite_principal_identity.py",
+        "properties": [
+          "separate principal-to-public-key registry",
+          "Ed25519 proof of key possession",
+          "durable revocation tombstones",
+          "restart-safe revocation checks",
+          "trusted callback under SQLite write transaction",
+          "membership lookup for federation admission"
+        ]
       },
       "secondary": {
         "implementation": "api/runtime_api.py principal_resolver injection",
@@ -45,8 +53,8 @@
           "protected API remains disabled until a resolver is configured"
         ]
       },
-      "compatibility": "missing_trust_root",
-      "reason": "Neither repository currently provides a durable principal-to-key registry with authenticated subject binding and permanent revocation tombstones. The primary gateway's bootstrap client_label is diagnostic metadata, not a verified principal."
+      "compatibility": "implemented_partial",
+      "reason": "A durable principal trust store now exists in the primary repository. External identity-provider enrollment, gateway authentication binding and production provisioning controls remain open."
     },
     {
       "id": "attestation",
@@ -264,7 +272,7 @@
     }
   ],
   "integration_gates": [
-    "Implement a durable principal identity registry separately from the agent identity registry; do not enable signed-envelope ingress until principal and agent revocation checks are backed by trusted persistent sources.",
+    "Bind the principal registry to a trusted enrollment/authentication provider and to the federation verifier; keep ingress disabled until this wiring is tested.",
     "Define versioned shared contracts without importing either runtime into the other.",
     "Implement one-way adapters first; prohibit implicit cross-runtime authority escalation.",
     "Verify signed envelope, key revocation, replay, principal isolation and audit attribution in cross-repository tests.",

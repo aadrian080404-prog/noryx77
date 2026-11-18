@@ -13,7 +13,9 @@ def test_revocation_is_permanent_across_restart_and_re_registration(tmp_path):
 
     registry = SQLiteIdentityRegistry(path)
     registry.register(identity)
+    assert registry.is_revoked(identity.agent_id) is False
     registry.revoke(identity.agent_id)
+    assert registry.is_revoked(identity.agent_id) is True
     assert not registry.is_trusted(identity)
     registry.close() if callable(getattr(registry, "close", None)) else None
 
@@ -102,3 +104,19 @@ def test_repeated_revocation_preserves_original_tombstone_timestamp(tmp_path):
 
     assert first == second
     assert not registry.is_trusted(identity)
+
+
+
+def test_agent_registry_exposes_membership_for_federation_admission(tmp_path):
+    path = tmp_path / "identity-membership.sqlite3"
+    identity, _ = AgentIdentityAuthority.generate("worker-membership")
+    registry = SQLiteIdentityRegistry(path)
+
+    assert registry.is_registered(identity.agent_id) is False
+    registry.register(identity)
+    assert registry.is_registered(identity.agent_id) is True
+    registry.revoke(identity.agent_id)
+    assert registry.is_registered(identity.agent_id) is False
+
+    reopened = SQLiteIdentityRegistry(path)
+    assert reopened.is_registered(identity.agent_id) is False
