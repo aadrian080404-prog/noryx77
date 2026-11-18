@@ -10,6 +10,7 @@ from collections.abc import Mapping
 
 from .contracts import ActionSpec, VerificationResult
 from .identity import AgentIdentity, IdentityRegistry
+from .authorization_replay import AuthorizationReplayGuard
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class AuthorizationAuthority:
         clock=time.monotonic,
         max_ttl: float = 300.0,
         identity_registry: IdentityRegistry | None = None,
+        replay_guard: AuthorizationReplayGuard | None = None,
     ):
         if not isinstance(secret, bytes) or len(secret) < 32:
             raise ValueError("authorization secret must be at least 32 bytes")
@@ -49,12 +51,21 @@ class AuthorizationAuthority:
             raise ValueError("invalid authorization configuration")
         if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
             raise ValueError("invalid identity registry")
+        if replay_guard is not None and not isinstance(replay_guard, AuthorizationReplayGuard):
+            raise ValueError("invalid authorization replay guard")
         self._secret = bytes(secret)
         self._clock = clock
         self._max_ttl = float(max_ttl)
         self._identity_registry = identity_registry
+        self._replay_guard = replay_guard
         self._used: set[str] = set()
         self._lock = threading.Lock()
+
+    @staticmethod
+    def _replay_token(nonce: str) -> bytes:
+        if not isinstance(nonce, str) or not nonce:
+            raise ValueError("invalid_authorization_nonce")
+        return hashlib.sha256(nonce.encode("utf-8")).digest()
 
     @staticmethod
     def _fingerprint(identity: AgentIdentity) -> str:
@@ -146,7 +157,7 @@ class AuthorizationAuthority:
             return False
         if grant.execution_id != execution_id or action.execution_id != execution_id:
             return False
-        if not grant.nonce or not isinstance(grant.signature, str):
+        if not isinstance(grant.nonce, str) or not grant.nonce or len(grant.nonce) > 256 or not isinstance(grant.signature, str):
             return False
         if self._identity_registry is not None:
             if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
@@ -190,6 +201,15 @@ class AuthorizationAuthority:
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
+            if self._replay_guard is not None:
+                try:
+                    token = self._replay_token(grant.nonce)
+                    return (
+                        not self._replay_guard.contains(token)
+                        and self._replay_guard.consumed_count < self._replay_guard.max_tokens
+                    )
+                except Exception:
+                    return False
             return grant.nonce not in self._used
 
     def consume(self, action: ActionSpec, execution_id: str, grant: AuthorizationGrant, *, principal: AgentIdentity | None = None) -> bool:
@@ -197,6 +217,14 @@ class AuthorizationAuthority:
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False
         with self._lock:
+            if self._replay_guard is not None:
+                if self._identity_registry is not None:
+                    if not isinstance(principal, AgentIdentity) or not self._identity_registry.is_trusted(principal):
+                        return False
+                try:
+                    return self._replay_guard.consume(self._replay_token(grant.nonce))
+                except Exception:
+                    return False
             if grant.nonce in self._used:
                 return False
             if self._identity_registry is not None:
@@ -212,14 +240,22 @@ class AuthorizationAuthority:
         if not self._verify_unconsumed(action, execution_id, grant, principal):
             return False, None
         with self._lock:
-            if grant.nonce in self._used:
-                return False, None
             with self._identity_registry._lock:
                 if not self._identity_registry.is_trusted(principal):
                     return False, None
-                self._used.add(grant.nonce)
-                # The capability is consumed before dispatch; executor failure is an execution
-                # failure, never an authorization success and never a reason to restore the grant.
+                if self._replay_guard is not None:
+                    try:
+                        consumed = self._replay_guard.consume(self._replay_token(grant.nonce))
+                    except Exception:
+                        consumed = False
+                    if not consumed:
+                        return False, None
+                else:
+                    if grant.nonce in self._used:
+                        return False, None
+                    self._used.add(grant.nonce)
+                # The capability is durably consumed before dispatch when a durable
+                # replay guard is configured. Executor failure never restores it.
                 return True, executor()
 
 
