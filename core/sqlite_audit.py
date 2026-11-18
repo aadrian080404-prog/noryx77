@@ -71,8 +71,8 @@ class SQLiteAuditLog(AuditLog):
                 connection.commit()
                 try:
                     os.chmod(self.database_path, 0o600)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    raise RuntimeError("audit_database_permissions_unavailable") from exc
                 if not self._read_and_verify_locked(connection):
                     raise ValueError("audit_integrity_failed")
             except Exception:
