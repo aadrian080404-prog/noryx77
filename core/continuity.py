@@ -1,0 +1,230 @@
+"""NORYX7 Continuity Protocol: authenticated node fencing and controlled rejoin.
+
+This module is a local policy primitive, not a network protocol or consensus
+implementation. Deployments must supply cryptographic attestation verification,
+human/authority rejoin approval, and a durable audit sink.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Callable, Mapping
+
+
+MAX_NODE_ID_BYTES = 256
+MAX_CAPABILITIES = 64
+
+
+class NodeContinuityState(str, Enum):
+    ACTIVE = "active"
+    ISOLATED = "isolated"
+
+
+@dataclass(frozen=True)
+class NodeContinuityRecord:
+    node_id: str
+    identity_fingerprint: str
+    generation: int
+    sequence: int
+    capabilities: tuple[str, ...]
+    state: NodeContinuityState
+
+
+AttestationVerifier = Callable[..., bool]
+RejoinApprover = Callable[..., bool]
+AuditSink = Callable[[str, Mapping[str, object]], None]
+
+
+class ContinuitySupervisor:
+    """Fences stale/untrusted nodes and requires explicit approval to rejoin.
+
+    The verifier must validate an attestation bound to every supplied field.
+    The supervisor deliberately does not implement cryptography, networking,
+    remote consensus, or human approval itself.
+    """
+
+    def __init__(
+        self,
+        *,
+        verify_attestation: AttestationVerifier,
+        approve_rejoin: RejoinApprover,
+        audit: AuditSink,
+        max_nodes: int = 1024,
+    ) -> None:
+        if not callable(verify_attestation) or not callable(approve_rejoin) or not callable(audit):
+            raise TypeError("continuity_security_dependencies_required")
+        if isinstance(max_nodes, bool) or not isinstance(max_nodes, int) or not 1 <= max_nodes <= 65_536:
+            raise ValueError("invalid_continuity_capacity")
+        self._verify_attestation = verify_attestation
+        self._approve_rejoin = approve_rejoin
+        self._audit = audit
+        self._max_nodes = max_nodes
+        self._nodes: dict[str, NodeContinuityRecord] = {}
+
+    @staticmethod
+    def _validate_identity(node_id: str, fingerprint: str, capabilities: tuple[str, ...]) -> None:
+        if not isinstance(node_id, str) or not node_id.strip() or len(node_id.encode("utf-8")) > MAX_NODE_ID_BYTES:
+            raise ValueError("invalid_node_id")
+        if (
+            not isinstance(fingerprint, str)
+            or len(fingerprint) != 64
+            or any(char not in "0123456789abcdef" for char in fingerprint)
+        ):
+            raise ValueError("invalid_identity_fingerprint")
+        if (
+            not isinstance(capabilities, tuple)
+            or not 1 <= len(capabilities) <= MAX_CAPABILITIES
+            or any(not isinstance(item, str) or not item.strip() for item in capabilities)
+            or len(set(capabilities)) != len(capabilities)
+        ):
+            raise ValueError("invalid_node_capabilities")
+
+    def _attested(
+        self, *, node_id: str, identity_fingerprint: str, generation: int,
+        sequence: int, attestation: object,
+    ) -> bool:
+        try:
+            return self._verify_attestation(
+                node_id=node_id,
+                identity_fingerprint=identity_fingerprint,
+                generation=generation,
+                sequence=sequence,
+                attestation=attestation,
+            ) is True
+        except Exception:
+            return False
+
+    def _emit(self, event: str, **payload: object) -> None:
+        self._audit(event, payload)
+
+    def register(
+        self, *, node_id: str, identity_fingerprint: str,
+        capabilities: tuple[str, ...], attestation: object,
+    ) -> NodeContinuityRecord:
+        self._validate_identity(node_id, identity_fingerprint, capabilities)
+        if node_id in self._nodes:
+            raise ValueError("node_already_registered")
+        if len(self._nodes) >= self._max_nodes:
+            raise OverflowError("continuity_node_capacity_exceeded")
+        if not self._attested(
+            node_id=node_id, identity_fingerprint=identity_fingerprint,
+            generation=0, sequence=0, attestation=attestation,
+        ):
+            raise PermissionError("node_attestation_rejected")
+        record = NodeContinuityRecord(
+            node_id, identity_fingerprint, 0, 0, capabilities, NodeContinuityState.ACTIVE
+        )
+        self._emit("continuity_node_registered", node_id=node_id, generation=0)
+        self._nodes[node_id] = record
+        return record
+
+    def heartbeat(
+        self, *, node_id: str, generation: int, sequence: int, attestation: object,
+    ) -> NodeContinuityRecord:
+        current = self._nodes.get(node_id)
+        if current is None:
+            raise LookupError("unknown_continuity_node")
+        valid_counters = (
+            isinstance(generation, int) and not isinstance(generation, bool)
+            and isinstance(sequence, int) and not isinstance(sequence, bool)
+            and generation == current.generation and sequence > current.sequence
+        )
+        trusted = valid_counters and current.state is NodeContinuityState.ACTIVE and self._attested(
+            node_id=node_id,
+            identity_fingerprint=current.identity_fingerprint,
+            generation=generation,
+            sequence=sequence,
+            attestation=attestation,
+        )
+        if not trusted:
+            self._nodes[node_id] = NodeContinuityRecord(
+                current.node_id, current.identity_fingerprint, current.generation,
+                current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
+            )
+            self._emit(
+                "continuity_node_isolated", node_id=node_id,
+                generation=current.generation, last_sequence=current.sequence,
+                reason="stale_or_invalid_heartbeat",
+            )
+            raise PermissionError("node_heartbeat_rejected")
+        updated = NodeContinuityRecord(
+            current.node_id, current.identity_fingerprint, current.generation,
+            sequence, current.capabilities, NodeContinuityState.ACTIVE,
+        )
+        try:
+            self._emit("continuity_node_heartbeat", node_id=node_id, sequence=sequence)
+        except Exception:
+            self._nodes[node_id] = NodeContinuityRecord(
+                current.node_id, current.identity_fingerprint, current.generation,
+                current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
+            )
+            raise
+        self._nodes[node_id] = updated
+        return updated
+
+    def isolate(self, node_id: str, *, reason: str) -> NodeContinuityRecord:
+        current = self._nodes.get(node_id)
+        if current is None:
+            raise LookupError("unknown_continuity_node")
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 256:
+            raise ValueError("invalid_isolation_reason")
+        isolated = NodeContinuityRecord(
+            current.node_id, current.identity_fingerprint, current.generation,
+            current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
+        )
+        self._nodes[node_id] = isolated
+        self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
+        return isolated
+
+    def rejoin(
+        self, *, node_id: str, generation: int, sequence: int,
+        attestation: object, approval: object,
+    ) -> NodeContinuityRecord:
+        current = self._nodes.get(node_id)
+        if current is None:
+            raise LookupError("unknown_continuity_node")
+        if current.state is not NodeContinuityState.ISOLATED:
+            raise PermissionError("node_is_not_isolated")
+        if (
+            isinstance(generation, bool) or not isinstance(generation, int)
+            or generation <= current.generation
+            or isinstance(sequence, bool) or not isinstance(sequence, int)
+            or sequence < 0
+        ):
+            raise PermissionError("node_rejoin_fence_rejected")
+        if not self._attested(
+            node_id=node_id, identity_fingerprint=current.identity_fingerprint,
+            generation=generation, sequence=sequence, attestation=attestation,
+        ):
+            raise PermissionError("node_rejoin_attestation_rejected")
+        try:
+            approved = self._approve_rejoin(
+                node_id=node_id, previous_generation=current.generation,
+                new_generation=generation, approval=approval,
+            ) is True
+        except Exception:
+            approved = False
+        if not approved:
+            raise PermissionError("node_rejoin_approval_required")
+        updated = NodeContinuityRecord(
+            current.node_id, current.identity_fingerprint, generation,
+            sequence, current.capabilities, NodeContinuityState.ACTIVE,
+        )
+        self._emit("continuity_node_rejoined", node_id=node_id, generation=generation)
+        self._nodes[node_id] = updated
+        return updated
+
+    def resolve(self, capability: str) -> NodeContinuityRecord:
+        if not isinstance(capability, str) or not capability.strip():
+            raise ValueError("capability_required")
+        candidates = (
+            node for node in self._nodes.values()
+            if node.state is NodeContinuityState.ACTIVE and capability in node.capabilities
+        )
+        try:
+            return min(candidates, key=lambda node: node.node_id)
+        except ValueError as exc:
+            raise LookupError("no_trusted_active_node") from exc
+
+    def snapshot(self) -> tuple[NodeContinuityRecord, ...]:
+        return tuple(self._nodes[key] for key in sorted(self._nodes))
