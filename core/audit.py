@@ -2,6 +2,7 @@ from copy import deepcopy
 import hashlib
 import json
 from dataclasses import dataclass
+from threading import RLock
 from typing import Any
 
 from cryptography.exceptions import InvalidSignature
@@ -41,16 +42,14 @@ class AuditLog:
     def __init__(self):
         self._events: list[dict[str, Any]] = []
         self._digests: list[str] = []
+        self._lock = RLock()
 
     @classmethod
     def _canonicalize(cls, entry: dict[str, Any], previous_digest: str) -> bytes:
         payload = {"previous_digest": previous_digest, "entry": entry}
         try:
             return json.dumps(
-                payload,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
+                payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
             ).encode("utf-8")
         except (TypeError, ValueError) as exc:
             raise ValueError("audit data must be JSON serializable") from exc
@@ -68,18 +67,23 @@ class AuditLog:
     def record(self, event: str, **data) -> dict[str, Any]:
         if not isinstance(event, str) or not event.strip():
             raise ValueError("audit event must be non-empty text")
-        entry = {"event": event, **data}
-        stored = deepcopy(entry)
-        previous_digest = self._digests[-1] if self._digests else self._GENESIS
-        digest = self._digest(stored, previous_digest)
-        self._events.append(stored)
-        self._digests.append(digest)
-        return deepcopy(stored)
+        stored = deepcopy({"event": event, **data})
+        with self._lock:
+            previous_digest = self._digests[-1] if self._digests else self._GENESIS
+            digest = self._digest(stored, previous_digest)
+            self._events.append(stored)
+            self._digests.append(digest)
+            return deepcopy(stored)
 
     def snapshot(self) -> tuple[dict[str, Any], ...]:
-        return tuple(deepcopy(event) for event in self._events)
+        with self._lock:
+            return tuple(deepcopy(event) for event in self._events)
 
     def verify_integrity(self) -> bool:
+        with self._lock:
+            return self._verify_integrity_locked()
+
+    def _verify_integrity_locked(self) -> bool:
         if len(self._events) != len(self._digests):
             return False
         previous_digest = self._GENESIS
@@ -96,7 +100,8 @@ class AuditLog:
         return True
 
     def digest(self) -> str:
-        return self._digests[-1] if self._digests else self._GENESIS
+        with self._lock:
+            return self._digests[-1] if self._digests else self._GENESIS
 
     def checkpoint(self, provider: KeyProvider, *, key_id: str) -> AuditCheckpoint:
         """Create an authenticated external checkpoint of the current chain root."""
@@ -104,25 +109,32 @@ class AuditLog:
             raise ValueError("key_provider_required")
         if not isinstance(key_id, str) or not key_id.strip():
             raise ValueError("invalid_key_id")
-        if not self.verify_integrity():
-            raise ValueError("audit_integrity_failed")
+        with self._lock:
+            if not self._verify_integrity_locked():
+                raise ValueError("audit_integrity_failed")
+            current_digest = self._digests[-1] if self._digests else self._GENESIS
         try:
             key = provider.get_key(key_id)
         except Exception as exc:
             raise ValueError("audit_checkpoint_key_unavailable") from exc
         if not isinstance(key, bytes) or not key:
             raise ValueError("audit_checkpoint_key_required")
-        payload = self._checkpoint_payload(self.digest())
         signer = hmac.HMAC(key, hashes.SHA256())
-        signer.update(payload)
-        return AuditCheckpoint(1, key_id, self.digest(), signer.finalize())
+        signer.update(self._checkpoint_payload(current_digest))
+        mac = signer.finalize()
+        with self._lock:
+            latest_digest = self._digests[-1] if self._digests else self._GENESIS
+            if latest_digest != current_digest or not self._verify_integrity_locked():
+                raise ValueError("audit_chain_changed_during_checkpoint")
+        return AuditCheckpoint(1, key_id, current_digest, mac)
 
     def verify_checkpoint(self, checkpoint: AuditCheckpoint, provider: KeyProvider) -> bool:
-        """Verify a checkpoint against the current chain and the external secret."""
         if not isinstance(provider, KeyProvider) or not isinstance(checkpoint, AuditCheckpoint):
             return False
-        if not checkpoint.is_well_formed() or not self.verify_integrity() or checkpoint.digest != self.digest():
-            return False
+        with self._lock:
+            current_digest = self._digests[-1] if self._digests else self._GENESIS
+            if not checkpoint.is_well_formed() or not self._verify_integrity_locked() or checkpoint.digest != current_digest:
+                return False
         try:
             key = provider.get_key(checkpoint.key_id)
             if not isinstance(key, bytes) or not key:
@@ -130,6 +142,8 @@ class AuditLog:
             verifier = hmac.HMAC(key, hashes.SHA256())
             verifier.update(self._checkpoint_payload(checkpoint.digest))
             verifier.verify(checkpoint.mac)
-            return True
+            with self._lock:
+                latest_digest = self._digests[-1] if self._digests else self._GENESIS
+                return latest_digest == current_digest and self._verify_integrity_locked()
         except Exception:
             return False
