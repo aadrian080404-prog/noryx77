@@ -71,3 +71,34 @@ def test_schema_v1_is_migrated_to_tombstone_schema_v2(tmp_path):
         connection.close()
     assert version == "2"
     assert table is not None
+
+
+def test_repeated_revocation_preserves_original_tombstone_timestamp(tmp_path):
+    path = tmp_path / "identity.sqlite3"
+    identity, _ = AgentIdentityAuthority.generate("worker-repeat-revoke")
+    registry = SQLiteIdentityRegistry(path)
+    registry.register(identity)
+    registry.revoke(identity.agent_id)
+
+    connection = sqlite3.connect(path)
+    try:
+        first = connection.execute(
+            "SELECT revoked_at FROM noryx7_revoked_agents WHERE agent_id = ?",
+            (identity.agent_id,),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    registry.revoke(identity.agent_id)
+
+    connection = sqlite3.connect(path)
+    try:
+        second = connection.execute(
+            "SELECT revoked_at FROM noryx7_revoked_agents WHERE agent_id = ?",
+            (identity.agent_id,),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert first == second
+    assert not registry.is_trusted(identity)
