@@ -209,7 +209,7 @@ class SQLiteAuditLog(AuditLog):
             getattr(anchor, "compare_and_swap", None)
         ):
             raise TypeError("monotonic_audit_anchor_contract_required")
-        with self._db_lock:
+        with self._lock:
             if not self._verify_integrity_locked():
                 raise ValueError("audit_integrity_failed")
             rows = self._rows()
