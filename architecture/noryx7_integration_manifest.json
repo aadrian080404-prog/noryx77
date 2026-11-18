@@ -247,14 +247,19 @@
     {
       "id": "system_inspector_surf",
       "plane": "systems",
-      "status": "candidate_only",
-      "paths": [],
+      "status": "implemented_partial",
+      "paths": [
+        "core/elf_inspector.py",
+        "core/system_inspector.py"
+      ],
       "depends_on": [
         "contracts",
         "audit"
       ],
-      "integration_tests": [],
-      "candidate": "PR #72"
+      "integration_tests": [
+        "core/test_elf_inspector.py",
+        "core/test_system_inspector_elf_integration.py"
+      ]
     },
     {
       "id": "offline_durable_outbox",
