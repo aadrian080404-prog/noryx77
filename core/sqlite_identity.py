@@ -86,6 +86,30 @@ class SQLiteIdentityRegistry(IdentityRegistry):
         if size > MAX_ID_SIZE:
             raise ValueError("invalid_agent_id")
 
+    def is_registered(self, agent_id: str) -> bool:
+        try:
+            self._validate_agent_id(agent_id)
+        except ValueError:
+            return False
+        with self._lock:
+            connection = self._connect()
+            try:
+                revoked = connection.execute(
+                    "SELECT 1 FROM noryx7_revoked_agents WHERE agent_id = ?",
+                    (agent_id,),
+                ).fetchone()
+                if revoked is not None:
+                    return False
+                row = connection.execute(
+                    "SELECT 1 FROM noryx7_trusted_agents WHERE agent_id = ?",
+                    (agent_id,),
+                ).fetchone()
+                return row is not None
+            except sqlite3.Error:
+                return False
+            finally:
+                connection.close()
+
     def register(self, identity: AgentIdentity) -> None:
         self._validate_identity(identity)
         with self._lock:
