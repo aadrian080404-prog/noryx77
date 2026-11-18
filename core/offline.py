@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 import json
+import os
+import sqlite3
 import threading
 from typing import Callable, Protocol, TypeVar
 
@@ -109,6 +111,30 @@ class OfflineExecution:
         if len(self.payload_digest) != 64 or any(c not in "0123456789abcdef" for c in self.payload_digest):
             raise ValueError("invalid_payload_digest")
 
+def _execution_metadata(execution: OfflineExecution) -> bytes:
+    """Canonical metadata authenticated together with the queued payload."""
+    return json.dumps({
+        "execution_id": execution.execution_id,
+        "principal_id": execution.principal_id,
+        "operation": execution.operation,
+        "capability": execution.capability,
+        "payload_digest": execution.payload_digest,
+        "base_state_version": execution.base_state_version,
+    }, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+
+def _execution_aad(execution: OfflineExecution, sequence: int) -> bytes:
+    # Bind routing/authority metadata and queue ordering to the payload's AEAD tag.
+    if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
+        raise ValueError("invalid_offline_sequence")
+    return (
+        b"noryx7/offline-sync/v2/"
+        + _execution_metadata(execution)
+        + b"\\x00"
+        + str(sequence).encode("ascii")
+    )
+
+
 @dataclass(frozen=True)
 class SyncEnvelope:
     execution: OfflineExecution
@@ -141,12 +167,14 @@ class OfflineSyncQueue:
                 return existing
             if len(self._records) >= self._max_items:
                 raise OfflineDeniedError("offline_sync_queue_full")
-            aad = f"noryx7/offline-sync/v1/{execution.execution_id}".encode()
-            ciphertext = self._cipher.encrypt(payload, aad=aad)
+            sequence = self._sequence + 1
+            ciphertext = self._cipher.encrypt(
+                payload, aad=_execution_aad(execution, sequence)
+            )
             if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
                 raise OfflineDeniedError("encryption_required")
-            self._sequence += 1
-            envelope = SyncEnvelope(execution, ciphertext, _digest(ciphertext), self._sequence)
+            self._sequence = sequence
+            envelope = SyncEnvelope(execution, ciphertext, _digest(ciphertext), sequence)
             self._records[execution.execution_id] = envelope
             return envelope
 
@@ -156,8 +184,9 @@ class OfflineSyncQueue:
             envelope = self._records[execution_id]
             if _digest(envelope.ciphertext) != envelope.record_digest:
                 raise OfflineDeniedError("offline_record_integrity_failed")
-            aad = f"noryx7/offline-sync/v1/{execution_id}".encode()
-            plaintext = self._cipher.decrypt(envelope.ciphertext, aad=aad)
+            plaintext = self._cipher.decrypt(
+                envelope.ciphertext, aad=_execution_aad(envelope.execution, envelope.sequence)
+            )
             if not isinstance(plaintext, bytes) or not plaintext or _digest(plaintext) != envelope.execution.payload_digest:
                 raise OfflineDeniedError("offline_payload_integrity_failed")
             return plaintext
@@ -174,6 +203,235 @@ class OfflineSyncQueue:
         with self._lock:
             return len(self._records)
 
+
+class SQLiteOfflineSyncQueue:
+    """Crash-persistent encrypted outbox backed by SQLite.
+
+    The cipher and its key lifecycle are supplied by the caller. SQLite stores
+    ciphertext plus canonical execution metadata only. This is local durable
+    storage, not distributed consensus or a cross-device replication protocol.
+    """
+
+    def __init__(self, database_path: str, cipher: OfflineCipher, *,
+                 max_items: int = MAX_QUEUE_ITEMS, busy_timeout_ms: int = 5000) -> None:
+        if not isinstance(database_path, str) or not database_path.strip():
+            raise ValueError("offline_database_path_required")
+        if database_path == ":memory:":
+            raise ValueError("persistent_offline_database_required")
+        if not callable(getattr(cipher, "encrypt", None)) or not callable(getattr(cipher, "decrypt", None)):
+            raise TypeError("offline_cipher_contract_required")
+        if isinstance(max_items, bool) or not isinstance(max_items, int) or not 1 <= max_items <= MAX_QUEUE_ITEMS:
+            raise ValueError("invalid_max_items")
+        if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or not 1 <= busy_timeout_ms <= 60000:
+            raise ValueError("invalid_busy_timeout")
+        self._cipher, self._max_items = cipher, max_items
+        self._lock = threading.RLock()
+        self._connection = sqlite3.connect(
+            database_path, timeout=busy_timeout_ms / 1000,
+            isolation_level=None, check_same_thread=False,
+        )
+        self._connection.row_factory = sqlite3.Row
+        self._connection.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+        self._connection.execute("PRAGMA synchronous=FULL")
+        self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS offline_sync_queue (
+                execution_id TEXT PRIMARY KEY,
+                execution_json TEXT NOT NULL,
+                ciphertext BLOB NOT NULL,
+                record_digest TEXT NOT NULL,
+                sequence INTEGER NOT NULL UNIQUE CHECK(sequence > 0)
+            )
+        """)
+        self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS offline_sync_meta (
+                key TEXT PRIMARY KEY,
+                value INTEGER NOT NULL CHECK(value >= 0)
+            )
+        """)
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            for key, value in (
+                ("sequence", 0),
+                ("schema_version", 1),
+                ("max_items", max_items),
+            ):
+                self._connection.execute(
+                    "INSERT OR IGNORE INTO offline_sync_meta(key, value) VALUES (?, ?)",
+                    (key, value),
+                )
+            stored_config = {
+                row["key"]: row["value"]
+                for row in self._connection.execute(
+                    "SELECT key, value FROM offline_sync_meta "
+                    "WHERE key IN ('schema_version', 'max_items')"
+                ).fetchall()
+            }
+            if stored_config != {"schema_version": 1, "max_items": max_items}:
+                raise ValueError("offline_queue_configuration_mismatch")
+            self._connection.execute("COMMIT")
+        except Exception:
+            if self._connection.in_transaction:
+                self._connection.execute("ROLLBACK")
+            self._connection.close()
+            raise
+        try:
+            os.chmod(database_path, 0o600)
+        except OSError as exc:
+            self._connection.close()
+            raise OfflineDeniedError("offline_database_permissions_unavailable") from exc
+
+    @staticmethod
+    def _execution_json(execution: OfflineExecution) -> str:
+        return _execution_metadata(execution).decode("utf-8")
+
+    @staticmethod
+    def _decode_execution(value: str) -> OfflineExecution:
+        try:
+            payload = json.loads(value)
+            if not isinstance(payload, dict) or set(payload) != {
+                "execution_id", "principal_id", "operation", "capability",
+                "payload_digest", "base_state_version",
+            }:
+                raise ValueError("offline_execution_metadata_invalid")
+            return OfflineExecution(**payload)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise OfflineDeniedError("offline_execution_metadata_invalid") from exc
+
+    @classmethod
+    def _row_to_envelope(cls, row: sqlite3.Row) -> SyncEnvelope:
+        execution = cls._decode_execution(row["execution_json"])
+        ciphertext = bytes(row["ciphertext"])
+        digest = row["record_digest"]
+        sequence = row["sequence"]
+        if (
+            not ciphertext or not isinstance(digest, str)
+            or digest != _digest(ciphertext)
+            or isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0
+            or execution.execution_id != row["execution_id"]
+        ):
+            raise OfflineDeniedError("offline_record_integrity_failed")
+        return SyncEnvelope(execution, ciphertext, digest, sequence)
+
+    def enqueue(self, execution: OfflineExecution, payload: bytes) -> SyncEnvelope:
+        if not isinstance(execution, OfflineExecution):
+            raise TypeError("offline_execution_required")
+        if not isinstance(payload, bytes) or not 0 < len(payload) <= MAX_PAYLOAD_BYTES:
+            raise ValueError("invalid_payload")
+        if _digest(payload) != execution.payload_digest:
+            raise OfflineDeniedError("offline_payload_mismatch")
+        encoded_execution = self._execution_json(execution)
+        with self._lock:
+            connection = self._connection
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    "SELECT * FROM offline_sync_queue WHERE execution_id=?",
+                    (execution.execution_id,),
+                ).fetchone()
+                if existing is not None:
+                    envelope = self._row_to_envelope(existing)
+                    if envelope.execution != execution:
+                        raise OfflineConflictError("identity_conflict")
+                    self._decrypt_envelope(envelope)
+                    connection.execute("COMMIT")
+                    return envelope
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM offline_sync_queue"
+                ).fetchone()[0]
+                if count >= self._max_items:
+                    raise OfflineDeniedError("offline_sync_queue_full")
+                sequence = connection.execute(
+                    "SELECT value FROM offline_sync_meta WHERE key='sequence'"
+                ).fetchone()[0] + 1
+                ciphertext = self._cipher.encrypt(
+                    payload, aad=_execution_aad(execution, sequence)
+                )
+                if not isinstance(ciphertext, bytes) or not ciphertext or ciphertext == payload:
+                    raise OfflineDeniedError("encryption_required")
+                digest = _digest(ciphertext)
+                connection.execute(
+                    "UPDATE offline_sync_meta SET value=? WHERE key='sequence'",
+                    (sequence,),
+                )
+                connection.execute(
+                    "INSERT INTO offline_sync_queue "
+                    "(execution_id, execution_json, ciphertext, record_digest, sequence) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (execution.execution_id, encoded_execution, ciphertext, digest, sequence),
+                )
+                connection.execute("COMMIT")
+                return SyncEnvelope(execution, ciphertext, digest, sequence)
+            except Exception:
+                if connection.in_transaction:
+                    connection.execute("ROLLBACK")
+                raise
+
+    def _decrypt_envelope(self, envelope: SyncEnvelope) -> bytes:
+        try:
+            plaintext = self._cipher.decrypt(
+                envelope.ciphertext, aad=_execution_aad(envelope.execution, envelope.sequence)
+            )
+        except Exception as exc:
+            raise OfflineDeniedError(
+                "offline_execution_metadata_authentication_failed"
+            ) from exc
+        if (
+            not isinstance(plaintext, bytes) or not plaintext
+            or _digest(plaintext) != envelope.execution.payload_digest
+        ):
+            raise OfflineDeniedError("offline_payload_integrity_failed")
+        return plaintext
+
+    def decrypt(self, execution_id: str) -> bytes:
+        _bounded(execution_id, "execution_id")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM offline_sync_queue WHERE execution_id=?",
+                (execution_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(execution_id)
+            envelope = self._row_to_envelope(row)
+            return self._decrypt_envelope(envelope)
+
+    def acknowledge(self, execution_id: str) -> None:
+        _bounded(execution_id, "execution_id")
+        with self._lock:
+            self._connection.execute(
+                "DELETE FROM offline_sync_queue WHERE execution_id=?",
+                (execution_id,),
+            )
+
+    def snapshot(self) -> tuple[SyncEnvelope, ...]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM offline_sync_queue ORDER BY sequence"
+            ).fetchall()
+            envelopes = tuple(self._row_to_envelope(row) for row in rows)
+            # Authenticate metadata before callers use it for routing or sync.
+            # Each payload is checked and discarded one at a time to bound memory.
+            for envelope in envelopes:
+                self._decrypt_envelope(envelope)
+            return envelopes
+
+    def __len__(self) -> int:
+        with self._lock:
+            return self._connection.execute(
+                "SELECT COUNT(*) FROM offline_sync_queue"
+            ).fetchone()[0]
+
+    def close(self) -> None:
+        with self._lock:
+            self._connection.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+        return False
+
+
 T = TypeVar("T")
 
 class OfflineRuntime:
@@ -182,14 +440,17 @@ class OfflineRuntime:
                  cipher: OfflineCipher, clock: Callable[[], int],
                  snapshot_authenticator: Callable[[OfflineSnapshot], bool],
                  max_snapshot_age: int = MAX_SNAPSHOT_AGE,
-                 monotonic_anchor: MonotonicAnchorLike | None = None) -> None:
+                 monotonic_anchor: MonotonicAnchorLike | None = None,
+                 queue: OfflineSyncQueue | SQLiteOfflineSyncQueue | None = None) -> None:
         if not callable(snapshot_authenticator) or not callable(clock):
             raise TypeError("offline_authenticator_and_clock_required")
         if isinstance(max_snapshot_age, bool) or not isinstance(max_snapshot_age, int) or max_snapshot_age < 0:
             raise ValueError("invalid_max_snapshot_age")
         self._recovery, self._policy, self._verifier = recovery, policy, verifier
         self._clock, self._snapshot_authenticator = clock, snapshot_authenticator
-        self._queue = OfflineSyncQueue(cipher)
+        if queue is not None and not all(callable(getattr(queue, name, None)) for name in ("enqueue", "decrypt", "acknowledge", "snapshot")):
+            raise TypeError("offline_queue_contract_required")
+        self._queue = queue if queue is not None else OfflineSyncQueue(cipher)
         self._snapshot: OfflineSnapshot | None = None
         self._state = OfflineState.ONLINE
         self._lock = threading.RLock()
@@ -212,7 +473,7 @@ class OfflineRuntime:
             return self._state
 
     @property
-    def queue(self) -> OfflineSyncQueue:
+    def queue(self) -> OfflineSyncQueue | SQLiteOfflineSyncQueue:
         return self._queue
 
     def install_snapshot(self, snapshot: OfflineSnapshot) -> None:
