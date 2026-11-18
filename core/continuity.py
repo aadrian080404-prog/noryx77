@@ -234,17 +234,21 @@ class ContinuitySupervisor:
         return updated
 
     @_synchronized
-    def resolve(self, capability: str) -> NodeContinuityRecord:
+    def resolve_all(self, capability: str) -> tuple[NodeContinuityRecord, ...]:
+        """Return all active nodes for a capability in deterministic node-ID order."""
         if not isinstance(capability, str) or not capability.strip():
             raise ValueError("capability_required")
-        candidates = (
-            node for node in self._nodes.values()
+        return tuple(
+            node for node in sorted(self._nodes.values(), key=lambda item: item.node_id)
             if node.state is NodeContinuityState.ACTIVE and capability in node.capabilities
         )
-        try:
-            return min(candidates, key=lambda node: node.node_id)
-        except ValueError as exc:
-            raise LookupError("no_trusted_active_node") from exc
+
+    @_synchronized
+    def resolve(self, capability: str) -> NodeContinuityRecord:
+        candidates = self.resolve_all(capability)
+        if not candidates:
+            raise LookupError("no_trusted_active_node")
+        return candidates[0]
 
     @_synchronized
     def snapshot(self) -> tuple[NodeContinuityRecord, ...]:
