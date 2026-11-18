@@ -137,6 +137,8 @@ class NORYXRuntime:
         key_id: str,
         snapshot_authenticator,
         clock,
+        offline_queue=None,
+        monotonic_anchor=None,
     ) -> None:
         """Configure the canonical fail-closed offline runtime."""
         self._offline = OfflineRuntime(
@@ -146,6 +148,8 @@ class NORYXRuntime:
             cipher=BoundAuthenticatedCipher(cipher, key_id=key_id),
             clock=clock,
             snapshot_authenticator=snapshot_authenticator,
+            queue=offline_queue,
+            monotonic_anchor=monotonic_anchor,
         )
         self.audit.record(
             "offline_runtime_configured",
