@@ -5,6 +5,7 @@ import pytest
 from core.principal_identity import (
     PrincipalIdentity,
     PrincipalIdentityAuthority,
+    PrincipalIdentityRegistry,
 )
 from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
 
@@ -29,8 +30,6 @@ def test_principal_proof_rejects_wrong_private_key():
 
 def test_principal_identity_validates_fields():
     with pytest.raises(ValueError, match="invalid_principal_identity"):
-        SQLitePrincipalIdentityRegistry  # keep import visible for the test module
-        from core.principal_identity import PrincipalIdentityRegistry
         PrincipalIdentityRegistry().register(PrincipalIdentity(" ", b"x" * 32))
 
 
@@ -85,8 +84,6 @@ def test_sqlite_registry_fails_closed_for_invalid_principal_lookup(tmp_path):
 
 
 def test_in_memory_registry_also_keeps_revocation_tombstones():
-    from core.principal_identity import PrincipalIdentityRegistry
-
     identity, _private_key = PrincipalIdentityAuthority.generate("user:memory")
     registry = PrincipalIdentityRegistry()
     registry.register(identity)
