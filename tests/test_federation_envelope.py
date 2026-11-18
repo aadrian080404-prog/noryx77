@@ -133,6 +133,8 @@ def test_replay_guard_survives_verifier_and_database_reopen(tmp_path):
         {"issuer-v1": key.public_key()},
         first,
         is_issuer_revoked=lambda _key: False,
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
         clock=lambda: 110,
     )
     verifier.verify_and_consume(envelope)
@@ -143,6 +145,8 @@ def test_replay_guard_survives_verifier_and_database_reopen(tmp_path):
         {"issuer-v1": key.public_key()},
         reopened,
         is_issuer_revoked=lambda _key: False,
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
         clock=lambda: 110,
     )
     try:
