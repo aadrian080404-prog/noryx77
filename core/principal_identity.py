@@ -116,9 +116,11 @@ class PrincipalIdentityAuthority:
         )
         if not identity.is_well_formed() or public_key != identity.public_key:
             raise ValueError("principal_private_key_mismatch")
+        if not isinstance(statement, bytes) or len(statement) > MAX_PRINCIPAL_STATEMENT_SIZE:
+            raise ValueError("invalid_principal_statement")
         return PrincipalProof(
             identity=identity,
-            statement=bytes(statement),
+            statement=statement,
             signature=private_key.sign(_principal_message(identity, statement)),
         )
 
@@ -156,12 +158,22 @@ class PrincipalIdentityRegistry:
     def revoke(self, principal_id: str) -> None:
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise ValueError("invalid_principal_id")
+        try:
+            if len(principal_id.encode("utf-8")) > MAX_PRINCIPAL_ID_SIZE:
+                raise ValueError("invalid_principal_id")
+        except UnicodeEncodeError as exc:
+            raise ValueError("invalid_principal_id") from exc
         with self._lock:
             self._revoked.add(principal_id)
             self._principals.pop(principal_id, None)
 
     def is_revoked(self, principal_id: str) -> bool:
         if not isinstance(principal_id, str) or not principal_id.strip():
+            return True
+        try:
+            if len(principal_id.encode("utf-8")) > MAX_PRINCIPAL_ID_SIZE:
+                return True
+        except UnicodeEncodeError:
             return True
         with self._lock:
             return principal_id in self._revoked
@@ -180,6 +192,11 @@ class PrincipalIdentityRegistry:
     ) -> T:
         if not isinstance(principal_id, str) or not principal_id.strip():
             raise ValueError("invalid_principal_id")
+        try:
+            if len(principal_id.encode("utf-8")) > MAX_PRINCIPAL_ID_SIZE:
+                raise ValueError("invalid_principal_id")
+        except UnicodeEncodeError as exc:
+            raise ValueError("invalid_principal_id") from exc
         if not callable(callback):
             raise TypeError("callback_must_be_callable")
         with self._lock:
