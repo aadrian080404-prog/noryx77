@@ -69,8 +69,6 @@ def test_ncp_state_survives_runtime_restart(tmp_path):
     assert restored[0].state is NodeContinuityState.ISOLATED
     assert second.resolve_all("compute") == ()
     second_store.close()
-    reopened_identity_registry.close()
-    identity_registry.close()
 
 
 def test_ncp_persisted_heartbeat_advances_sequence_across_restart(tmp_path):
