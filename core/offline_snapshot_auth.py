@@ -65,7 +65,7 @@ class Ed25519OfflineSnapshotAuthenticator:
             keys[key_id] = value
         self._trusted_public_keys = keys
 
-    def __call__(self, snapshot: OfflineSnapshot) -> bool:
+    def verify(self, snapshot: OfflineSnapshot) -> bool:
         if not isinstance(snapshot, OfflineSnapshot):
             return False
         if not snapshot.verify_integrity() or len(snapshot.signature) != 64:
@@ -81,3 +81,5 @@ class Ed25519OfflineSnapshotAuthenticator:
         except (InvalidSignature, ValueError, TypeError):
             return False
         return True
+    def __call__(self, snapshot: OfflineSnapshot) -> bool:
+        return self.verify(snapshot)
