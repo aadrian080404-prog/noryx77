@@ -16,6 +16,7 @@ def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
         "artifact_version": "artifact-1",
         "capabilities": ("compute_local",),
         "state_version": "0",
+        "principal_key_fingerprint": "b" * 64,
     }
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
@@ -42,6 +43,7 @@ def test_runtime_offline_uses_shared_policy_verification_recovery_and_state():
 
     assert result["status"] == "completed"
     assert result["state_commit"].verification_stage == "runtime_result"
+    assert result["state_commit"].principal_key_fingerprint == "b" * 64
     assert result["state_commit"].state.status == "committed"
     assert result["sync_envelope"].ciphertext != b""
     assert runtime.offline is not None

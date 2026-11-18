@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from .audit import AuditLog
+from .journal_integrity import AnchorSnapshot, MonotonicAnchor, ZERO_MAC
 
 
 class SQLiteAuditLog(AuditLog):
@@ -16,13 +17,18 @@ class SQLiteAuditLog(AuditLog):
 
     _SCHEMA_VERSION = 1
 
-    def __init__(self, database_path: str | os.PathLike[str]):
+    def __init__(self, database_path: str | os.PathLike[str], *, busy_timeout_ms: int = 5000):
         if not isinstance(database_path, (str, os.PathLike)):
             raise ValueError("persistent_audit_database_required")
         raw_path = os.fspath(database_path)
         if not isinstance(raw_path, str) or not raw_path.strip() or raw_path == ":memory:":
             raise ValueError("persistent_audit_database_required")
-        self.database_path = str(Path(raw_path))
+        if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or not 1 <= busy_timeout_ms <= 60000:
+            raise ValueError("audit_busy_timeout_invalid")
+        self.database_path = str(Path(raw_path).expanduser())
+        Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        self._busy_timeout_ms = busy_timeout_ms
+        self._closed = False
         super().__init__()
         with self._lock:
             connection = self._connect()
@@ -65,8 +71,8 @@ class SQLiteAuditLog(AuditLog):
                 connection.commit()
                 try:
                     os.chmod(self.database_path, 0o600)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    raise RuntimeError("audit_database_permissions_unavailable") from exc
                 if not self._read_and_verify_locked(connection):
                     raise ValueError("audit_integrity_failed")
             except Exception:
@@ -76,10 +82,15 @@ class SQLiteAuditLog(AuditLog):
                 connection.close()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
-        connection.execute("PRAGMA busy_timeout = 30000")
+        if self._closed:
+            raise RuntimeError("audit_log_closed")
+        connection = sqlite3.connect(
+            self.database_path, timeout=self._busy_timeout_ms / 1000, isolation_level=None
+        )
+        connection.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
         connection.execute("PRAGMA synchronous = FULL")
         connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA trusted_schema = OFF")
         return connection
 
     def _read_and_verify_locked(self, connection: sqlite3.Connection) -> bool:
@@ -181,6 +192,100 @@ class SQLiteAuditLog(AuditLog):
         if self.digest() != checkpoint.digest:
             raise ValueError("audit_chain_changed_during_checkpoint")
         return checkpoint
+
+    def _rows(self):
+        connection = self._connect()
+        try:
+            return connection.execute(
+                "SELECT sequence, entry_json, digest FROM noryx7_audit_events ORDER BY sequence"
+            ).fetchall()
+        finally:
+            connection.close()
+
+    def verify_and_advance_anchor(self, anchor: MonotonicAnchor) -> AnchorSnapshot:
+        """Verify the external head and advance it over any valid local tail.
+
+        A database older than the external anchor, or a chain that diverges at
+        the anchored sequence, is rejected. A crash after a local append but
+        before the external CAS is recoverable: the authenticated anchored
+        prefix is checked before advancing the anchor to the longer local tip.
+        """
+        if not callable(getattr(anchor, "read", None)) or not callable(
+            getattr(anchor, "compare_and_swap", None)
+        ):
+            raise TypeError("monotonic_audit_anchor_contract_required")
+        with self._lock:
+            if not self._verify_integrity_locked():
+                raise ValueError("audit_integrity_failed")
+            rows = self._rows()
+            local_head = AnchorSnapshot(
+                len(rows), rows[-1][2] if rows else ZERO_MAC
+            )
+            anchored = anchor.read()
+            if not isinstance(anchored, AnchorSnapshot):
+                raise ValueError("audit_anchor_snapshot_invalid")
+            if (
+                isinstance(anchored.sequence, bool)
+                or not isinstance(anchored.sequence, int)
+                or anchored.sequence < 0
+                or not isinstance(anchored.mac, str)
+                or len(anchored.mac) != 64
+            ):
+                raise ValueError("audit_anchor_snapshot_invalid")
+            try:
+                decoded_mac = bytes.fromhex(anchored.mac)
+            except ValueError as exc:
+                raise ValueError("audit_anchor_snapshot_invalid") from exc
+            if len(decoded_mac) != 32 or decoded_mac.hex() != anchored.mac:
+                raise ValueError("audit_anchor_snapshot_invalid")
+            if anchored.sequence > len(rows):
+                raise ValueError("audit_database_rollback_detected")
+            expected_mac = ZERO_MAC if anchored.sequence == 0 else rows[anchored.sequence - 1][2]
+            if anchored.mac != expected_mac:
+                raise ValueError("audit_anchor_chain_mismatch")
+            if anchored == local_head:
+                return local_head
+
+            # The witness protocol deliberately advances one sequence at a
+            # time. A local database may contain several valid events written
+            # since the last checkpoint, so publish each authenticated prefix
+            # rather than attempting an invalid multi-sequence jump.
+            current = anchored
+            for sequence in range(anchored.sequence + 1, local_head.sequence + 1):
+                replacement = AnchorSnapshot(sequence, rows[sequence - 1][2])
+                try:
+                    accepted = anchor.compare_and_swap(current, replacement)
+                except Exception as exc:
+                    # A remote witness may commit the CAS and lose its reply.
+                    # Resolve this uncertain outcome by reading the authenticated
+                    # anchor before deciding whether to retry or fail closed.
+                    try:
+                        latest = anchor.read()
+                    except Exception as read_exc:
+                        raise ValueError("audit_anchor_outcome_uncertain") from read_exc
+                    if latest == replacement:
+                        current = replacement
+                        continue
+                    raise ValueError("audit_anchor_outcome_uncertain") from exc
+                if accepted:
+                    current = replacement
+                    continue
+
+                # A competing writer may have committed this exact prefix.
+                # If the read-back also fails, the durable outcome is unknown.
+                try:
+                    latest = anchor.read()
+                except Exception as read_exc:
+                    raise ValueError("audit_anchor_outcome_uncertain") from read_exc
+                if latest == replacement:
+                    current = replacement
+                    continue
+                raise ValueError("audit_anchor_compare_and_swap_failed")
+            return local_head
+
+    def close(self) -> None:
+        with self._lock:
+            self._closed = True
 
     def verify_checkpoint(self, checkpoint, provider) -> bool:
         if not self.verify_integrity() or self.digest() != getattr(checkpoint, "digest", None):

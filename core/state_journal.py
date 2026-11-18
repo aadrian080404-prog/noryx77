@@ -24,7 +24,8 @@ class StateJournal:
     SCHEMA_VERSION = 1
 
     def __init__(self, path: str, *, max_commits: int = 10_000,
-                 authenticator: JournalAuthenticator | None = None) -> None:
+                 authenticator: JournalAuthenticator | None = None,
+                 anchor=None) -> None:
         if not isinstance(path, str) or not path.strip():
             raise ValueError("journal_path_required")
         if path == ":memory:":
@@ -33,7 +34,14 @@ class StateJournal:
             raise ValueError("max_commits_must_be_positive")
         if authenticator is not None and not isinstance(authenticator, JournalAuthenticator):
             raise TypeError("journal_authenticator_required")
+        if anchor is not None and (
+            authenticator is None
+            or not callable(getattr(anchor, "read", None))
+            or not callable(getattr(anchor, "compare_and_swap", None))
+        ):
+            raise TypeError("authenticated_state_journal_anchor_required")
         self.authenticator = authenticator
+        self.anchor = anchor
         self.path = path
         self.max_commits = max_commits
         self._lock = RLock()
@@ -93,6 +101,8 @@ class StateJournal:
         if self.authenticator is not None:
             try:
                 self._initialize_proof_chain()
+                if self.anchor is not None:
+                    self.verify_and_advance_anchor(self.anchor)
             except Exception:
                 self._db.close()
                 raise
@@ -319,6 +329,8 @@ class StateJournal:
                 if self._db.in_transaction:
                     self._db.execute("ROLLBACK")
                 raise
+            if self.anchor is not None:
+                self.verify_and_advance_anchor(self.anchor)
 
     def get(self, execution_id: str) -> StateCommit | None:
         with self._lock:

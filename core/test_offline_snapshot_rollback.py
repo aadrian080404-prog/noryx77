@@ -42,6 +42,7 @@ def make_snapshot(snapshot_id, issued_at, *, principal="p1", state_version="1"):
         "artifact_version": "artifact-1",
         "capabilities": ("compute",),
         "state_version": state_version,
+        "principal_key_fingerprint": "a" * 64,
     }
     canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
     return OfflineSnapshot(**body, integrity_digest=hashlib.sha256(canonical).hexdigest())
