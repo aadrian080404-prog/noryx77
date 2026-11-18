@@ -65,6 +65,18 @@ def test_failed_durable_append_does_not_publish_in_memory(monkeypatch, tmp_path)
 
 
 
+def _manual_commit(execution_id, sequence):
+    return StateCommit(
+        execution_id=execution_id,
+        task_id=f"task-{execution_id}",
+        state=make_state(),
+        verification_stage="runtime_result",
+        sequence=sequence,
+        principal_id="principal-1",
+        principal_key_fingerprint="a" * 64,
+    )
+
+
 def _authenticator():
     return JournalAuthenticator(b"noryx7-test-journal-key-material-32-bytes!!", key_id="test-key-v1")
 
