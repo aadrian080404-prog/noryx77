@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "implemented_partial",
+  "implementation": {
+    "module": "core/federation_envelope.py",
+    "tests": ["tests/test_federation_envelope.py"],
+    "properties": [
+      "canonical versioned execution envelope",
+      "Ed25519 issuer signature",
+      "explicit issuer public-key allowlist",
+      "issuer, principal and agent revocation callbacks with fail-closed behavior",
+      "principal and agent registry membership checks before admission",
+      "issued-at and expiry validation",
+      "bounded envelope lifetime and clock skew",
+      "durable SQLite nonce consumption",
+      "replay rejection across verifier restart"
+    ]
+  },
+  "authenticated_fields": [
+    "schema_version",
+    "execution_id",
+    "principal_id",
+    "agent_id",
+    "task_type",
+    "capabilities",
+    "policy_version",
+    "state_version",
+    "issued_at",
+    "expires_at",
+    "nonce",
+    "issuer_key_id"
+  ],
+  "trust_boundaries": {
+    "private_key_custody": "External trusted signer or KMS/HSM; not implemented in this repository module.",
+    "issuer_revocation": "Injected callback must read a durable trusted registry; deployment wiring remains open.",
+    "runtime_authorization": "Successful envelope verification authenticates claims but does not itself authorize capabilities or execute tasks. The receiving runtime must independently enforce principal identity, capability policy, state version and ActionGate.",
+    "replay_store": "SQLite provides local crash-persistent one-use nonce consumption. Shared multi-node replay protection requires a deployment-grade shared transactional store or equivalent protocol."
+  },
+  "integration_gates": [
+    "Wire verifier to the primary runtime ingress before any federated task is accepted.",
+    "Bind issuer revocation callback to durable issuer/key tombstones and principal/agent trust plus revocation callbacks to their respective registries.",
+    "Add cross-process and concurrent replay tests against the deployment database.",
+    "Add sender-to-receiver integration tests covering policy version mismatch, stale state, key rotation and revocation.",
+    "Keep transport adapters unidirectional and deny-by-default until cross-repository tests pass."
+  ],
+  "non_goals": [
+    "No network transport is implemented.",
+    "No private signing key is stored in the runtime.",
+    "No distributed consensus or multi-region replay guarantee is claimed.",
+    "No authorization decision is delegated to the envelope signature alone."
+  ]
+}

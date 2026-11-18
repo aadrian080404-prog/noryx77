@@ -12,7 +12,7 @@
   "principle": "Do not copy or merge subsystems until their trust, persistence, lifecycle and failure semantics have an explicit adapter contract and cross-repository tests.",
   "component_map": [
     {
-      "id": "principal_identity",
+      "id": "agent_identity_registry",
       "primary": {
         "implementation": "core/sqlite_identity.py",
         "properties": [
@@ -30,7 +30,23 @@
         ]
       },
       "compatibility": "adapter_required",
-      "reason": "The secondary repository has no equivalent durable agent-key registry or shared revocation tombstone contract."
+      "reason": "This is an agent-key registry keyed by agent_id, not a user/principal identity registry. It must not be treated as proof of an authenticated human or tenant principal."
+    },
+    {
+      "id": "principal_identity",
+      "primary": {
+        "implementation": null,
+        "properties": []
+      },
+      "secondary": {
+        "implementation": "api/runtime_api.py principal_resolver injection",
+        "properties": [
+          "resolver absent by default",
+          "protected API remains disabled until a resolver is configured"
+        ]
+      },
+      "compatibility": "missing_trust_root",
+      "reason": "Neither repository currently provides a durable principal-to-key registry with authenticated subject binding and permanent revocation tombstones. The primary gateway's bootstrap client_label is diagnostic metadata, not a verified principal."
     },
     {
       "id": "attestation",
@@ -175,6 +191,16 @@
   ],
   "required_shared_contracts": [
     {
+      "id": "principal_identity_registry",
+      "requirements": [
+        "distinct principal IDs and agent IDs; never infer one from the other",
+        "authenticated principal-to-public-key or trusted external identity binding",
+        "durable revocation tombstones and restart-safe lookup",
+        "issuer and principal status checked at execution admission",
+        "no authorization based on bootstrap client labels or caller-supplied identity strings"
+      ]
+    },
+    {
       "id": "signed_execution_envelope",
       "fields": [
         "schema_version",
@@ -238,6 +264,7 @@
     }
   ],
   "integration_gates": [
+    "Implement a durable principal identity registry separately from the agent identity registry; do not enable signed-envelope ingress until principal and agent revocation checks are backed by trusted persistent sources.",
     "Define versioned shared contracts without importing either runtime into the other.",
     "Implement one-way adapters first; prohibit implicit cross-runtime authority escalation.",
     "Verify signed envelope, key revocation, replay, principal isolation and audit attribution in cross-repository tests.",
@@ -249,6 +276,7 @@
     "No replacement of the primary runtime by the secondary IntegratedRuntime.",
     "No claim that simulated PUF is hardware attestation.",
     "No claim that MIAM topology supplies distributed consensus.",
-    "No sharing of private keys or raw memory databases."
+    "No sharing of private keys or raw memory databases.",
+    "No assumption that the primary SQLite agent registry authenticates human principals."
   ]
 }
