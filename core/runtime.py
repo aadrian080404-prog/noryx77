@@ -14,7 +14,7 @@ from .crypto import AuthenticatedCipher
 from .decomposition import TaskDecomposer
 from .device_fabric import DeviceFabric
 from .hypersynth_runtime import HypersynthRuntime
-from .identity import AgentIdentityAuthority, IdentityRegistry
+from .identity import AgentIdentity, AgentIdentityAuthority, IdentityRegistry
 from .interaction_context import InteractionContext, build_interaction_context
 from .user_understanding import UnderstandingConsent, UserContent, UserUnderstandingEngine
 from .limits import RuntimeLimits
@@ -42,6 +42,8 @@ class NORYXRuntime:
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
         audit_log: AuditLog | None = None,
+        identity_registry: IdentityRegistry | None = None,
+        agent_identity_provider=None,
     ):
         self.limits = limits or RuntimeLimits()
         self._model_fabric = model_fabric
@@ -59,17 +61,35 @@ class NORYXRuntime:
         if audit_log is not None and not isinstance(audit_log, AuditLog):
             raise TypeError("invalid_audit_log")
         self.audit = audit_log if audit_log is not None else AuditLog()
-        self.identity_registry = IdentityRegistry()
+        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry):
+            raise TypeError("invalid_identity_registry")
+        if agent_identity_provider is not None and not callable(agent_identity_provider):
+            raise TypeError("agent_identity_provider_required")
+        if (identity_registry is None) != (agent_identity_provider is None):
+            raise ValueError("persistent_agent_identity_registry_and_provider_required")
+        self.identity_registry = identity_registry if identity_registry is not None else IdentityRegistry()
+        self._agent_identity_provider = agent_identity_provider
         self._continuity = None
         self.device_fabric = DeviceFabric()
-        deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
-        self.identity_registry.register(deterministic_identity)
+
+        def resolve_agent_identity(agent_id: str) -> AgentIdentity:
+            if self._agent_identity_provider is None:
+                identity, _ = AgentIdentityAuthority.generate(agent_id)
+                self.identity_registry.register(identity)
+                return identity
+            identity = self._agent_identity_provider(agent_id)
+            if not isinstance(identity, AgentIdentity) or not identity.is_well_formed() or identity.agent_id != agent_id:
+                raise TypeError("persistent_agent_identity_invalid")
+            if not self.identity_registry.is_trusted(identity):
+                raise PermissionError("persistent_agent_identity_untrusted")
+            return identity
+
+        deterministic_identity = resolve_agent_identity("deterministic")
         self.router = ResourceRouter(identity_registry=self.identity_registry)
         self.router.register(DeterministicAgent(self.verifier, identity=deterministic_identity))
 
         if model_fabric is not None:
-            llm_identity, _ = AgentIdentityAuthority.generate("noryx7-llm")
-            self.identity_registry.register(llm_identity)
+            llm_identity = resolve_agent_identity("noryx7-llm")
             self.router.register(
                 LLMBackedAgent(
                     model_fabric,
@@ -137,6 +157,8 @@ class NORYXRuntime:
         key_id: str,
         snapshot_authenticator,
         clock,
+        offline_queue=None,
+        monotonic_anchor=None,
     ) -> None:
         """Configure the canonical fail-closed offline runtime."""
         self._offline = OfflineRuntime(
@@ -146,6 +168,8 @@ class NORYXRuntime:
             cipher=BoundAuthenticatedCipher(cipher, key_id=key_id),
             clock=clock,
             snapshot_authenticator=snapshot_authenticator,
+            queue=offline_queue,
+            monotonic_anchor=monotonic_anchor,
         )
         self.audit.record(
             "offline_runtime_configured",
