@@ -69,6 +69,8 @@ class OfflineSnapshot:
     state_version: str
     principal_key_fingerprint: str
     integrity_digest: str
+    issuer_key_id: str = ""
+    signature: bytes = b""
 
     def __post_init__(self) -> None:
         for value, name in ((self.snapshot_id, "snapshot_id"), (self.principal_id, "principal_id"),
@@ -90,6 +92,12 @@ class OfflineSnapshot:
             raise ValueError("invalid_principal_key_fingerprint")
         if not isinstance(self.integrity_digest, str) or len(self.integrity_digest) != 64 or any(c not in "0123456789abcdef" for c in self.integrity_digest):
             raise ValueError("invalid_integrity_digest")
+        if not isinstance(self.issuer_key_id, str) or (self.issuer_key_id and (
+            not self.issuer_key_id.strip() or len(self.issuer_key_id.encode("utf-8")) > MAX_ID_BYTES
+        )):
+            raise ValueError("invalid_snapshot_issuer_key_id")
+        if not isinstance(self.signature, bytes) or (self.signature and len(self.signature) != 64):
+            raise ValueError("invalid_snapshot_signature")
 
     def canonical_bytes(self) -> bytes:
         body = {"snapshot_id": self.snapshot_id, "principal_id": self.principal_id,
@@ -97,6 +105,8 @@ class OfflineSnapshot:
                 "artifact_version": self.artifact_version, "capabilities": self.capabilities,
                 "state_version": self.state_version,
                 "principal_key_fingerprint": self.principal_key_fingerprint}
+        if self.issuer_key_id:
+            body["issuer_key_id"] = self.issuer_key_id
         return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     def verify_integrity(self) -> bool:
