@@ -185,9 +185,9 @@
       "integration_tests": [
         "tests/test_runtime_persistent_agent_identity.py",
         "tests/test_sqlite_identity_revocation_tombstones.py",
-        "tests/test_runtime_full_durable_restart.py"
-      ],
-      "candidate": "PR #46"
+        "tests/test_runtime_full_durable_restart.py",
+        "tests/test_runtime_revocation_restart.py"
+      ]
     },
     {
       "id": "matrix_device_fabric",
@@ -241,8 +241,7 @@
       "integration_tests": [
         "core/test_quorum_witness.py",
         "tests/test_runtime_full_durable_restart.py"
-      ],
-      "candidate": "PR #66"
+      ]
     },
     {
       "id": "system_inspector_surf",
