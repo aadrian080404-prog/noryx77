@@ -44,6 +44,38 @@ class StateJournal:
             "record_digest TEXT NOT NULL, schema_version INTEGER NOT NULL)"
         )
         try:
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS state_journal_meta "
+                "(key TEXT PRIMARY KEY, value INTEGER NOT NULL CHECK(value >= 0))"
+            )
+            self._db.execute("BEGIN IMMEDIATE")
+            for key, value in (
+                ("schema_version", self.SCHEMA_VERSION),
+                ("max_commits", max_commits),
+            ):
+                self._db.execute(
+                    "INSERT OR IGNORE INTO state_journal_meta(key, value) VALUES (?, ?)",
+                    (key, value),
+                )
+            stored_config = {
+                row[0]: row[1]
+                for row in self._db.execute(
+                    "SELECT key, value FROM state_journal_meta "
+                    "WHERE key IN ('schema_version', 'max_commits')"
+                ).fetchall()
+            }
+            if stored_config != {
+                "schema_version": self.SCHEMA_VERSION,
+                "max_commits": max_commits,
+            }:
+                raise ValueError("state_journal_configuration_mismatch")
+            self._db.execute("COMMIT")
+        except Exception:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            self._db.close()
+            raise
+        try:
             os.chmod(path, 0o600)
         except OSError as exc:
             self._db.close()
