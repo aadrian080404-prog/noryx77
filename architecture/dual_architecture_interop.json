@@ -18,7 +18,8 @@
         "properties": [
           "durable trusted-agent registry",
           "permanent revocation tombstones",
-          "restart persistence"
+          "restart persistence",
+          "durable membership and revocation lookup for federation admission"
         ]
       },
       "secondary": {
@@ -30,7 +31,7 @@
         ]
       },
       "compatibility": "adapter_required",
-      "reason": "This is an agent-key registry keyed by agent_id, not a user/principal identity registry. It must not be treated as proof of an authenticated human or tenant principal."
+      "reason": "This is an agent-key registry keyed by agent_id, not a user/tenant principal identity registry. It provides durable membership and revocation checks for executable agents only."
     },
     {
       "id": "principal_identity",
@@ -41,7 +42,8 @@
           "Ed25519 proof of key possession",
           "durable revocation tombstones",
           "restart-safe revocation checks",
-          "trusted callback under SQLite write transaction"
+          "trusted callback under SQLite write transaction",
+          "membership lookup for federation admission"
         ]
       },
       "secondary": {
