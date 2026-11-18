@@ -77,10 +77,8 @@ def test_external_anchor_rejects_same_sequence_divergent_chain(tmp_path):
             "UPDATE noryx7_audit_events SET entry_json=? WHERE sequence=1",
             ('{"event":"substituted"}',),
         )
-    tampered = SQLiteAuditLog(path)
     with pytest.raises(ValueError, match="audit_integrity_failed"):
-        tampered.verify_and_advance_anchor(anchor)
-    tampered.close()
+        SQLiteAuditLog(path)
 
 def test_external_anchor_rejects_noncanonical_sha256_encoding(tmp_path):
     audit = SQLiteAuditLog(str(tmp_path / "malformed-anchor.sqlite"))
