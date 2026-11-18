@@ -233,9 +233,15 @@ def test_sqlite_audit_rejects_noncanonical_external_anchor_mac(tmp_path):
 def _crash_during_uncommitted_audit_append(database_path):
     connection = sqlite3.connect(database_path, isolation_level=None)
     connection.execute("BEGIN IMMEDIATE")
+    row = connection.execute(
+        "SELECT sequence, digest FROM noryx7_audit_events ORDER BY sequence DESC LIMIT 1"
+    ).fetchone()
+    sequence = 1 if row is None else row[0] + 1
+    previous_digest = "0" * 64 if row is None else row[1]
     connection.execute(
-        "INSERT INTO audit_events(event_json, digest) VALUES (?, ?)",
-        ('{"event":"uncommitted-crash-probe"}', "0" * 64),
+        "INSERT INTO noryx7_audit_events(sequence, entry_json, previous_digest, digest) "
+        "VALUES (?, ?, ?, ?)",
+        (sequence, '{"event":"uncommitted-crash-probe"}', previous_digest, "f" * 64),
     )
     # Simulate abrupt process death: no Python finally block and no ROLLBACK.
     os._exit(73)
