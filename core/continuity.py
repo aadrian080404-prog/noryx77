@@ -213,7 +213,15 @@ class ContinuitySupervisor:
             except Exception:
                 pass
             raise
-        self._persist_replace(current, updated)
+        try:
+            self._persist_replace(current, updated)
+        except Exception:
+            isolated = NodeContinuityRecord(
+                current.node_id, current.identity_fingerprint, current.generation,
+                current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
+            )
+            self._nodes[node_id] = isolated
+            raise
         self._nodes[node_id] = updated
         return updated
 
@@ -229,8 +237,8 @@ class ContinuitySupervisor:
             current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
         )
         self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
-        self._persist_replace(current, isolated)
         self._nodes[node_id] = isolated
+        self._persist_replace(current, isolated)
         return isolated
 
     @_synchronized
