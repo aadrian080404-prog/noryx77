@@ -40,6 +40,7 @@ class NORYXRuntime:
         state_journal_path: str | None = None,
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
+        audit_log: AuditLog | None = None,
     ):
         self.limits = limits or RuntimeLimits()
         self._model_fabric = model_fabric
@@ -54,8 +55,11 @@ class NORYXRuntime:
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
         self.state_journal = StateJournal(state_journal_path, max_commits=self.limits.max_memory_items) if state_journal_path else None
         self.state = StateStore(max_commits=self.limits.max_memory_items, journal=self.state_journal)
-        self.audit = AuditLog()
+        if audit_log is not None and not isinstance(audit_log, AuditLog):
+            raise TypeError("invalid_audit_log")
+        self.audit = audit_log if audit_log is not None else AuditLog()
         self.identity_registry = IdentityRegistry()
+        self._continuity = None
         deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
         self.identity_registry.register(deterministic_identity)
         self.router = ResourceRouter(identity_registry=self.identity_registry)
@@ -86,6 +90,38 @@ class NORYXRuntime:
         self.tool_executor = self.hypersynth.tool_executor
         self.frontier_capabilities = self.hypersynth.frontier_capabilities
         self._offline: OfflineRuntime | None = None
+
+    @property
+    def continuity(self):
+        return self._continuity
+
+    def configure_continuity(
+        self,
+        *,
+        node_identity_registry: IdentityRegistry,
+        approve_rejoin,
+        max_nodes: int = 1024,
+    ):
+        """Attach NCP to an explicit node trust registry and this runtime's audit sink."""
+        if not isinstance(node_identity_registry, IdentityRegistry):
+            raise TypeError("node_identity_registry_required")
+        if not callable(approve_rejoin):
+            raise TypeError("rejoin_approval_callback_required")
+        from .continuity import (
+            ContinuitySupervisor,
+            agent_identity_attestation_verifier,
+            audit_log_sink,
+        )
+
+        supervisor = ContinuitySupervisor(
+            verify_attestation=agent_identity_attestation_verifier(node_identity_registry),
+            approve_rejoin=approve_rejoin,
+            audit=audit_log_sink(self.audit),
+            max_nodes=max_nodes,
+        )
+        self._continuity = supervisor
+        self.audit.record("continuity_supervisor_configured", max_nodes=max_nodes)
+        return supervisor
 
     def configure_offline(
         self,
