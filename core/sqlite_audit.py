@@ -1,215 +1,201 @@
-"""Crash-durable SQLite implementation of the NORYX7 audit-chain contract."""
-from __future__ import annotations
-
+import copy
 import json
 import os
 import sqlite3
-from contextlib import contextmanager
-from copy import deepcopy
 from pathlib import Path
-from threading import RLock
-from typing import Any
 
-from cryptography.hazmat.primitives import hashes, hmac
-
-from .audit import AuditCheckpoint, AuditLog
-from .crypto import KeyProvider
+from .audit import AuditLog
 from .journal_integrity import AnchorSnapshot, MonotonicAnchor, ZERO_MAC
 
 
 class SQLiteAuditLog(AuditLog):
-    """Append-only, multi-process audit chain backed by SQLite WAL.
+    """Durable append-only audit chain coordinated by SQLite transactions.
 
-    Each append obtains a write transaction before reading the chain tip, so
-    concurrent writers serialize and cannot fork the local chain. FULL
-    synchronous commits are used; external checkpoints remain necessary to
-    detect replacement of the entire database by an older valid copy.
+    This coordinates processes that open the same database file. It is not a
+    consensus protocol and does not coordinate independent databases/devices.
     """
 
-    def __init__(self, path: str, *, busy_timeout_ms: int = 5000) -> None:
-        if isinstance(path, os.PathLike):
-            path = os.fspath(path)
-        if not isinstance(path, str) or not path.strip():
-            raise ValueError("audit_database_path_required")
-        if path == ":memory:":
-            raise ValueError("persistent_audit_database_required")
-        if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or not 1 <= busy_timeout_ms <= 60000:
-            raise ValueError("audit_busy_timeout_invalid")
-        self.path = str(Path(path).expanduser())
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._busy_timeout_ms = busy_timeout_ms
-        self._closed = False
-        self._db_lock = RLock()
-        super().__init__()
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        with self._connection() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS audit_events (
-                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_json TEXT NOT NULL,
-                    digest TEXT NOT NULL
-                )"""
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS audit_events_digest_idx ON audit_events(digest)"
-            )
-        try:
-            os.chmod(self.path, 0o600)
-        except OSError as exc:
-            self._closed = True
-            raise RuntimeError("audit_database_permissions_unavailable") from exc
-        self._reload_cache()
+    _SCHEMA_VERSION = 1
 
-    @contextmanager
-    def _connection(self):
+    def __init__(self, database_path: str | os.PathLike[str]):
+        if not isinstance(database_path, (str, os.PathLike)):
+            raise ValueError("persistent_audit_database_required")
+        raw_path = os.fspath(database_path)
+        if not isinstance(raw_path, str) or not raw_path.strip() or raw_path == ":memory:":
+            raise ValueError("persistent_audit_database_required")
+        self.database_path = str(Path(raw_path).expanduser())
+        Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        self._closed = False
+        super().__init__()
+        with self._lock:
+            connection = self._connect()
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS noryx7_audit_metadata "
+                    "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+                )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS noryx7_audit_events "
+                    "(sequence INTEGER PRIMARY KEY, entry_json TEXT NOT NULL, "
+                    "previous_digest TEXT NOT NULL, digest TEXT NOT NULL UNIQUE)"
+                )
+                row = connection.execute(
+                    "SELECT value FROM noryx7_audit_metadata WHERE key = 'schema_version'"
+                ).fetchone()
+                if row is None:
+                    existing = connection.execute(
+                        "SELECT COUNT(*) FROM noryx7_audit_events"
+                    ).fetchone()[0]
+                    if existing:
+                        raise ValueError("audit_schema_metadata_missing")
+                    connection.execute(
+                        "INSERT INTO noryx7_audit_metadata(key, value) VALUES('schema_version', ?)",
+                        (str(self._SCHEMA_VERSION),),
+                    )
+                elif row[0] != str(self._SCHEMA_VERSION):
+                    raise ValueError("audit_schema_version_mismatch")
+                connection.execute(
+                    "CREATE TRIGGER IF NOT EXISTS noryx7_audit_events_no_update "
+                    "BEFORE UPDATE ON noryx7_audit_events "
+                    "BEGIN SELECT RAISE(ABORT, 'audit_events_are_append_only'); END"
+                )
+                connection.execute(
+                    "CREATE TRIGGER IF NOT EXISTS noryx7_audit_events_no_delete "
+                    "BEFORE DELETE ON noryx7_audit_events "
+                    "BEGIN SELECT RAISE(ABORT, 'audit_events_are_append_only'); END"
+                )
+                connection.commit()
+                try:
+                    os.chmod(self.database_path, 0o600)
+                except OSError:
+                    pass
+                if not self._read_and_verify_locked(connection):
+                    raise ValueError("audit_integrity_failed")
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                connection.close()
+
+    def _connect(self) -> sqlite3.Connection:
+        if self._closed:
+            raise RuntimeError("audit_log_closed")
+        connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+        connection.execute("PRAGMA busy_timeout = 30000")
+        connection.execute("PRAGMA synchronous = FULL")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA trusted_schema = OFF")
+        return connection
+
+    def _read_and_verify_locked(self, connection: sqlite3.Connection) -> bool:
+        try:
+            rows = connection.execute(
+                "SELECT sequence, entry_json, previous_digest, digest "
+                "FROM noryx7_audit_events ORDER BY sequence"
+            ).fetchall()
+            events = []
+            digests = []
+            previous_digest = self._GENESIS
+            for expected_sequence, row in enumerate(rows, start=1):
+                sequence, entry_json, stored_previous, stored_digest = row
+                if sequence != expected_sequence or stored_previous != previous_digest:
+                    return False
+                entry = json.loads(entry_json)
+                if not isinstance(entry, dict):
+                    return False
+                actual_digest = self._digest(entry, previous_digest)
+                if actual_digest != stored_digest:
+                    return False
+                events.append(entry)
+                digests.append(stored_digest)
+                previous_digest = stored_digest
+            self._events = events
+            self._digests = digests
+            return True
+        except (sqlite3.Error, ValueError, TypeError, json.JSONDecodeError):
+            return False
+
+    def _verify_integrity_locked(self) -> bool:
         connection = self._connect()
         try:
-            yield connection
+            return self._read_and_verify_locked(connection)
         finally:
             connection.close()
 
-    def _connect(self):
-        if self._closed:
-            raise RuntimeError("audit_log_closed")
-        connection = sqlite3.connect(
-            self.path, timeout=self._busy_timeout_ms / 1000, isolation_level=None
-        )
-        connection.execute(f"PRAGMA busy_timeout={self._busy_timeout_ms}")
-        connection.execute("PRAGMA synchronous=FULL")
-        connection.execute("PRAGMA trusted_schema=OFF")
-        return connection
-
-    @staticmethod
-    def _decode_rows(rows) -> tuple[dict[str, Any], ...]:
-        decoded = []
-        for raw in rows:
-            item = json.loads(raw)
-            if not isinstance(item, dict):
-                raise ValueError("audit_record_not_object")
-            decoded.append(item)
-        return tuple(decoded)
-
-    def _reload_cache(self) -> None:
-        rows = self.snapshot()
-        digests = []
-        with self._connection() as connection:
-            digests = [row[0] for row in connection.execute(
-                "SELECT digest FROM audit_events ORDER BY sequence"
-            )]
-        with self._db_lock:
-            self._events = [deepcopy(item) for item in rows]
-            self._digests = list(digests)
-
-    def record(self, event: str, **data) -> dict[str, Any]:
+    def record(self, event: str, **data):
         if not isinstance(event, str) or not event.strip():
             raise ValueError("audit event must be non-empty text")
-        entry = deepcopy({"event": event, **data})
+        stored = copy.deepcopy({"event": event, **data})
         try:
-            encoded = json.dumps(
-                entry, sort_keys=True, separators=(",", ":"),
-                ensure_ascii=False, allow_nan=False,
-            )
+            json.dumps(stored, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         except (TypeError, ValueError) as exc:
             raise ValueError("audit data must be JSON serializable") from exc
-        with self._db_lock:
-            with self._connect() as connection:
+
+        with self._lock:
+            connection = self._connect()
+            try:
                 connection.execute("BEGIN IMMEDIATE")
-                try:
-                    row = connection.execute(
-                        "SELECT digest FROM audit_events ORDER BY sequence DESC LIMIT 1"
-                    ).fetchone()
-                    previous = row[0] if row else self._GENESIS
-                    digest = self._digest(entry, previous)
-                    connection.execute(
-                        "INSERT INTO audit_events(event_json, digest) VALUES (?, ?)",
-                        (encoded, digest),
-                    )
-                    connection.execute("COMMIT")
-                except Exception:
-                    connection.execute("ROLLBACK")
-                    raise
-            self._reload_cache()
-        return deepcopy(entry)
+                if not self._read_and_verify_locked(connection):
+                    raise ValueError("audit_integrity_failed")
+                row = connection.execute(
+                    "SELECT sequence, digest FROM noryx7_audit_events ORDER BY sequence DESC LIMIT 1"
+                ).fetchone()
+                sequence = 1 if row is None else row[0] + 1
+                previous_digest = self._GENESIS if row is None else row[1]
+                digest = self._digest(stored, previous_digest)
+                entry_json = json.dumps(
+                    stored, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                )
+                connection.execute(
+                    "INSERT INTO noryx7_audit_events(sequence, entry_json, previous_digest, digest) "
+                    "VALUES(?, ?, ?, ?)",
+                    (sequence, entry_json, previous_digest, digest),
+                )
+                connection.commit()
+                if not self._read_and_verify_locked(connection):
+                    raise RuntimeError("audit_commit_verification_failed")
+                return copy.deepcopy(stored)
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                connection.close()
 
-    def snapshot(self) -> tuple[dict[str, Any], ...]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT event_json FROM audit_events ORDER BY sequence"
-            ).fetchall()
-        return self._decode_rows(row[0] for row in rows)
-
-    def _rows(self):
-        with self._connect() as connection:
-            return connection.execute(
-                "SELECT sequence, event_json, digest FROM audit_events ORDER BY sequence"
-            ).fetchall()
-
-    def _verify_integrity_locked(self) -> bool:
-        try:
-            rows = self._rows()
-            previous = self._GENESIS
-            for expected_sequence, (sequence, raw, digest) in enumerate(rows, 1):
-                if sequence != expected_sequence:
-                    return False
-                entry = json.loads(raw)
-                if not isinstance(entry, dict) or not isinstance(digest, str):
-                    return False
-                if self._digest(entry, previous) != digest:
-                    return False
-                previous = digest
-            return True
-        except Exception:
-            return False
+    def snapshot(self):
+        with self._lock:
+            connection = self._connect()
+            try:
+                if not self._read_and_verify_locked(connection):
+                    raise RuntimeError("audit_integrity_failed")
+                return super().snapshot()
+            finally:
+                connection.close()
 
     def verify_integrity(self) -> bool:
-        with self._db_lock:
+        with self._lock:
             return self._verify_integrity_locked()
 
     def digest(self) -> str:
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT digest FROM audit_events ORDER BY sequence DESC LIMIT 1"
-            ).fetchone()
-        return row[0] if row else self._GENESIS
-
-    def checkpoint(self, provider: KeyProvider, *, key_id: str) -> AuditCheckpoint:
-        if not isinstance(provider, KeyProvider):
-            raise ValueError("key_provider_required")
-        if not isinstance(key_id, str) or not key_id.strip():
-            raise ValueError("invalid_key_id")
-        with self._db_lock:
+        with self._lock:
             if not self._verify_integrity_locked():
-                raise ValueError("audit_integrity_failed")
-            current_digest = self.digest()
-        try:
-            key = provider.get_key(key_id)
-        except Exception as exc:
-            raise ValueError("audit_checkpoint_key_unavailable") from exc
-        if not isinstance(key, bytes) or not key:
-            raise ValueError("audit_checkpoint_key_required")
-        signer = hmac.HMAC(key, hashes.SHA256())
-        signer.update(self._checkpoint_payload(current_digest))
-        return AuditCheckpoint(1, key_id, current_digest, signer.finalize())
+                raise RuntimeError("audit_integrity_failed")
+            return super().digest()
 
-    def verify_checkpoint(self, checkpoint: AuditCheckpoint, provider: KeyProvider) -> bool:
-        if not isinstance(provider, KeyProvider) or not isinstance(checkpoint, AuditCheckpoint):
-            return False
-        with self._db_lock:
-            current_digest = self.digest()
-            if not checkpoint.is_well_formed() or checkpoint.digest != current_digest or not self._verify_integrity_locked():
-                return False
+    def checkpoint(self, provider, *, key_id: str):
+        checkpoint = super().checkpoint(provider, key_id=key_id)
+        if self.digest() != checkpoint.digest:
+            raise ValueError("audit_chain_changed_during_checkpoint")
+        return checkpoint
+
+    def _rows(self):
+        connection = self._connect()
         try:
-            key = provider.get_key(checkpoint.key_id)
-            if not isinstance(key, bytes) or not key:
-                return False
-            verifier = hmac.HMAC(key, hashes.SHA256())
-            verifier.update(self._checkpoint_payload(checkpoint.digest))
-            verifier.verify(checkpoint.mac)
-            with self._db_lock:
-                return self.digest() == current_digest and self._verify_integrity_locked()
-        except Exception:
-            return False
+            return connection.execute(
+                "SELECT sequence, entry_json, digest FROM noryx7_audit_events ORDER BY sequence"
+            ).fetchall()
+        finally:
+            connection.close()
 
     def verify_and_advance_anchor(self, anchor: MonotonicAnchor) -> AnchorSnapshot:
         """Verify the external head and advance it over any valid local tail.
@@ -293,5 +279,12 @@ class SQLiteAuditLog(AuditLog):
             return local_head
 
     def close(self) -> None:
-        with self._db_lock:
+        with self._lock:
             self._closed = True
+
+    def verify_checkpoint(self, checkpoint, provider) -> bool:
+        if not self.verify_integrity() or self.digest() != getattr(checkpoint, "digest", None):
+            return False
+        if not super().verify_checkpoint(checkpoint, provider):
+            return False
+        return self.digest() == checkpoint.digest
