@@ -7,6 +7,7 @@ retained for corruption detection; this signature establishes issuer authority.
 from __future__ import annotations
 
 from dataclasses import replace
+import hashlib
 from typing import Mapping
 
 from cryptography.exceptions import InvalidSignature
@@ -39,7 +40,7 @@ def sign_offline_snapshot(
         issuer_key_id=issuer_key_id,
         signature=b"",
     )
-    digest = __import__("hashlib").sha256(unsigned.canonical_bytes()).hexdigest()
+    digest = hashlib.sha256(unsigned.canonical_bytes()).hexdigest()
     prepared = replace(unsigned, integrity_digest=digest)
     signature = signing_key.sign(_DOMAIN + prepared.canonical_bytes())
     return replace(prepared, signature=signature)
