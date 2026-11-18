@@ -55,3 +55,16 @@ def test_runtime_rejects_provider_returning_wrong_agent_id(tmp_path):
             identity_registry=registry,
             agent_identity_provider=lambda _agent_id: wrong,
         )
+
+
+def test_runtime_rejects_revoked_persistent_agent_identity(tmp_path):
+    registry = SQLiteIdentityRegistry(tmp_path / "revoked-identities.sqlite3")
+    identity, _private_key = AgentIdentityAuthority.generate("deterministic")
+    registry.register(identity)
+    registry.revoke(identity.agent_id)
+
+    with pytest.raises(PermissionError, match="persistent_agent_identity_untrusted"):
+        NORYXRuntime(
+            identity_registry=registry,
+            agent_identity_provider=lambda _agent_id: identity,
+        )
