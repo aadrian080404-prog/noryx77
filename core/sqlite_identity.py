@@ -3,7 +3,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, TypeVar
 
-from .identity import AgentIdentity, IdentityRegistry, MAX_ID_SIZE, PUBLIC_KEY_SIZE
+from .identity import AgentIdentity, IdentityRegistry, MAX_ID_SIZE
 
 T = TypeVar("T")
 
