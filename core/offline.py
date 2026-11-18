@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 import hashlib
 import json
+import os
 import sqlite3
 import threading
 from typing import Callable, Protocol, TypeVar
@@ -215,6 +216,8 @@ class SQLiteOfflineSyncQueue:
                  max_items: int = MAX_QUEUE_ITEMS, busy_timeout_ms: int = 5000) -> None:
         if not isinstance(database_path, str) or not database_path.strip():
             raise ValueError("offline_database_path_required")
+        if database_path == ":memory:":
+            raise ValueError("persistent_offline_database_required")
         if not callable(getattr(cipher, "encrypt", None)) or not callable(getattr(cipher, "decrypt", None)):
             raise TypeError("offline_cipher_contract_required")
         if isinstance(max_items, bool) or not isinstance(max_items, int) or not 1 <= max_items <= MAX_QUEUE_ITEMS:
@@ -248,6 +251,11 @@ class SQLiteOfflineSyncQueue:
         self._connection.execute(
             "INSERT OR IGNORE INTO offline_sync_meta(key, value) VALUES ('sequence', 0)"
         )
+        try:
+            os.chmod(database_path, 0o600)
+        except OSError as exc:
+            self._connection.close()
+            raise OfflineDeniedError("offline_database_permissions_unavailable") from exc
 
     @staticmethod
     def _execution_json(execution: OfflineExecution) -> str:
