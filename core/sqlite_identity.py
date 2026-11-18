@@ -55,8 +55,8 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                 connection.commit()
                 try:
                     os.chmod(self.database_path, 0o600)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    raise RuntimeError("identity_database_permissions_unavailable") from exc
             except Exception:
                 connection.rollback()
                 raise
