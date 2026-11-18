@@ -33,9 +33,37 @@ def test_runtime_wires_durable_replay_authority_to_both_action_gates(tmp_path):
     grant = runtime.authorization.issue(
         action, "runtime-execution", principal=principal
     )
-    assert runtime.authorization.consume(
-        action, "runtime-execution", grant, principal=principal
+    decision, result = runtime.action_gate.authorize_and_execute(
+        action,
+        lambda: "runtime-dispatched",
+        execution_id="runtime-execution",
+        grant=grant,
+        principal=principal,
     )
+    assert decision.allowed is True
+    assert result == "runtime-dispatched"
+
+    hypersynth_action = ActionSpec(
+        action_id="hypersynth-authorized-action",
+        action_type="compute",
+        target="local-resource",
+        parameters={"value": 2},
+        risk_class="normal",
+        requires_authorization=True,
+        execution_id="hypersynth-execution",
+    )
+    hypersynth_grant = runtime.authorization.issue(
+        hypersynth_action, "hypersynth-execution", principal=principal
+    )
+    hypersynth_decision, hypersynth_result = runtime.hypersynth.action_gate.authorize_and_execute(
+        hypersynth_action,
+        lambda: "hypersynth-dispatched",
+        execution_id="hypersynth-execution",
+        grant=hypersynth_grant,
+        principal=principal,
+    )
+    assert hypersynth_decision.allowed is True
+    assert hypersynth_result == "hypersynth-dispatched"
 
 
 def test_runtime_preserves_legacy_no_authorization_default():
