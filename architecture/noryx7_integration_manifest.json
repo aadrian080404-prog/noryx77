@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "Machine-readable integration graph. Status describes evidence in this repository branch, not a promise of production readiness.",
+  "purpose": "Machine-readable integration graph. Status reflects code and tests present on this integration branch; implemented_partial explicitly retains open production and cross-system gates.",
   "status_legend": {
     "implemented_partial": "Source exists; at least one production-critical behavior or integration gate remains open.",
     "implemented": "Source exists and local tests cover its declared contract; end-to-end/production proof may still be open.",
@@ -124,24 +124,65 @@
       "plane": "security",
       "status": "implemented_partial",
       "paths": [
-        "core/audit.py"
+        "core/audit.py",
+        "core/sqlite_audit.py",
+        "core/journal_integrity.py"
       ],
       "depends_on": [
         "contracts"
       ],
       "integration_tests": [
-        "tests"
+        "core/test_sqlite_audit_external_anchor.py",
+        "tests/test_runtime_audit_anchor.py"
+      ]
+    },
+    {
+      "id": "durable_state_journal",
+      "plane": "memory",
+      "status": "implemented_partial",
+      "paths": [
+        "core/state_journal.py",
+        "core/journal_integrity.py"
+      ],
+      "depends_on": [
+        "contracts",
+        "memory_local"
+      ],
+      "integration_tests": [
+        "tests/test_runtime_state_journal_anchor.py"
+      ]
+    },
+    {
+      "id": "node_continuity_fencing",
+      "plane": "distribution",
+      "status": "implemented_partial",
+      "paths": [
+        "core/continuity.py",
+        "core/sqlite_continuity.py"
+      ],
+      "depends_on": [
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": [
+        "tests/test_sqlite_continuity.py"
       ]
     },
     {
       "id": "identity_registry",
       "plane": "security",
-      "status": "candidate_only",
-      "paths": [],
+      "status": "implemented_partial",
+      "paths": [
+        "core/identity.py",
+        "core/sqlite_identity.py"
+      ],
       "depends_on": [
         "contracts"
       ],
-      "integration_tests": [],
+      "integration_tests": [
+        "tests/test_runtime_persistent_agent_identity.py",
+        "tests/test_sqlite_identity_revocation_tombstones.py"
+      ],
       "candidate": "PR #46"
     },
     {
@@ -183,13 +224,19 @@
     {
       "id": "quorum_witness",
       "plane": "security",
-      "status": "candidate_only",
-      "paths": [],
+      "status": "implemented_partial",
+      "paths": [
+        "core/quorum_witness.py",
+        "core/remote_witness.py",
+        "core/witness_authority.py"
+      ],
       "depends_on": [
         "audit",
-        "identity_registry"
+        "durable_state_journal"
       ],
-      "integration_tests": [],
+      "integration_tests": [
+        "core/test_quorum_witness.py"
+      ],
       "candidate": "PR #66"
     },
     {
@@ -207,17 +254,20 @@
     {
       "id": "offline_durable_outbox",
       "plane": "distribution",
-      "status": "specification_only",
+      "status": "implemented_partial",
       "paths": [
-        "core/offline.py"
+        "core/offline.py",
+        "core/offline_adapters.py"
       ],
       "depends_on": [
         "contracts",
         "memory_local",
-        "audit"
+        "audit",
+        "identity_registry"
       ],
       "integration_tests": [
-        "tests"
+        "tests/test_offline_sqlite_permissions.py",
+        "tests/test_runtime_offline_durable_queue.py"
       ]
     },
     {
