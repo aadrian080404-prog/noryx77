@@ -149,7 +149,6 @@ def test_ncp_ed25519_attestation_is_bound_to_generation_and_sequence():
     with pytest.raises(PermissionError, match="node_attestation_rejected"):
         supervisor.register(
             node_id="node-bound", identity_fingerprint=fingerprint,
-            node_id="node-bound", identity_fingerprint=fingerprint,
             capabilities=("compute",),
             attestation=AgentIdentityAuthority.sign(
                 identity, private_key,
