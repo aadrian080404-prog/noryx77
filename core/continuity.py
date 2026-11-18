@@ -7,10 +7,14 @@ human/authority rejoin approval, and a durable audit sink.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from enum import Enum
 from functools import wraps
 from threading import RLock
 from typing import Callable, Mapping
+
+from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityRegistry
 
 
 MAX_NODE_ID_BYTES = 256
@@ -245,3 +249,73 @@ class ContinuitySupervisor:
     @_synchronized
     def snapshot(self) -> tuple[NodeContinuityRecord, ...]:
         return tuple(self._nodes[key] for key in sorted(self._nodes))
+
+
+
+def node_attestation_statement(
+    *, node_id: str, identity_fingerprint: str, generation: int, sequence: int,
+) -> bytes:
+    """Canonical, domain-separated statement signed by an NORYX7 node identity."""
+    if not isinstance(node_id, str) or not node_id.strip():
+        raise ValueError("invalid_node_id")
+    if (
+        not isinstance(identity_fingerprint, str)
+        or len(identity_fingerprint) != 64
+        or any(char not in "0123456789abcdef" for char in identity_fingerprint)
+    ):
+        raise ValueError("invalid_identity_fingerprint")
+    if (
+        isinstance(generation, bool) or not isinstance(generation, int) or generation < 0
+        or isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0
+    ):
+        raise ValueError("invalid_node_attestation_counters")
+    payload = {
+        "domain": "noryx7/node-continuity-attestation/v1",
+        "node_id": node_id,
+        "identity_fingerprint": identity_fingerprint,
+        "generation": generation,
+        "sequence": sequence,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def agent_identity_attestation_verifier(registry: IdentityRegistry) -> AttestationVerifier:
+    """Adapt the existing Ed25519 identity registry to NCP's attestation contract.
+
+    The registry's short trusted-identity critical section covers only key
+    comparison and signature verification. It performs no external I/O.
+    """
+    if not isinstance(registry, IdentityRegistry):
+        raise TypeError("identity_registry_required")
+
+    def verify(
+        *, node_id: str, identity_fingerprint: str, generation: int,
+        sequence: int, attestation: object,
+    ) -> bool:
+        if not isinstance(attestation, AgentAttestation):
+            return False
+        identity = attestation.identity
+        if (
+            identity.agent_id != node_id
+            or hashlib.sha256(identity.public_key).hexdigest() != identity_fingerprint
+        ):
+            return False
+        try:
+            expected_statement = node_attestation_statement(
+                node_id=node_id,
+                identity_fingerprint=identity_fingerprint,
+                generation=generation,
+                sequence=sequence,
+            )
+            if attestation.statement != expected_statement:
+                return False
+            return registry.with_trusted_identity(
+                node_id,
+                lambda trusted: (
+                    trusted == identity and AgentIdentityAuthority.verify(attestation)
+                ),
+            ) is True
+        except Exception:
+            return False
+
+    return verify
