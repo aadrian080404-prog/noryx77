@@ -8,6 +8,7 @@ protection boundary and requires independent monotonic storage/backup controls.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -47,8 +48,8 @@ class SQLiteWitnessAuthority:
         witness_id: str,
         signing_key: Ed25519PrivateKey,
     ) -> None:
-        if not isinstance(path, str) or not path.strip():
-            raise ValueError("witness_database_path_required")
+        if not isinstance(path, str) or not path.strip() or path == ":memory:":
+            raise ValueError("persistent_witness_database_required")
         if not isinstance(witness_id, str) or not witness_id.strip() or len(witness_id) > 128:
             raise ValueError("witness_id_invalid")
         if not isinstance(signing_key, Ed25519PrivateKey):
@@ -74,6 +75,10 @@ class SQLiteWitnessAuthority:
                 (self.witness_id, ZERO_MAC),
             )
             self._read_locked()
+            try:
+                os.chmod(path, 0o600)
+            except OSError as exc:
+                raise RuntimeError("witness_database_permissions_unavailable") from exc
         except Exception:
             self._db.close()
             self._closed = True
