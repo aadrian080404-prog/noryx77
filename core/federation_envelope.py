@@ -198,6 +198,8 @@ class ExecutionEnvelopeVerifier:
         replay_store: ReplayStore,
         *,
         is_issuer_revoked: Callable[[str], bool],
+        is_principal_revoked: Callable[[str], bool],
+        is_agent_revoked: Callable[[str], bool],
         clock: Callable[[], int] = lambda: int(time.time()),
         max_lifetime_seconds: int = _MAX_LIFETIME_SECONDS,
         allowed_clock_skew_seconds: int = 5,
@@ -206,8 +208,8 @@ class ExecutionEnvelopeVerifier:
             raise ValueError("trusted_issuers_required")
         if not callable(getattr(replay_store, "consume", None)):
             raise TypeError("replay_store_contract_required")
-        if not callable(is_issuer_revoked) or not callable(clock):
-            raise TypeError("revocation_and_clock_callbacks_required")
+        if not all(callable(callback) for callback in (is_issuer_revoked, is_principal_revoked, is_agent_revoked, clock)):
+            raise TypeError("issuer_principal_agent_revocation_and_clock_callbacks_required")
         if isinstance(max_lifetime_seconds, bool) or not isinstance(max_lifetime_seconds, int) or not 1 <= max_lifetime_seconds <= _MAX_LIFETIME_SECONDS:
             raise ValueError("invalid_max_lifetime")
         if isinstance(allowed_clock_skew_seconds, bool) or not isinstance(allowed_clock_skew_seconds, int) or not 0 <= allowed_clock_skew_seconds <= 60:
@@ -225,6 +227,8 @@ class ExecutionEnvelopeVerifier:
         self._keys = keys
         self._replay_store = replay_store
         self._is_issuer_revoked = is_issuer_revoked
+        self._is_principal_revoked = is_principal_revoked
+        self._is_agent_revoked = is_agent_revoked
         self._clock = clock
         self._max_lifetime = max_lifetime_seconds
         self._skew = allowed_clock_skew_seconds
@@ -247,7 +251,21 @@ class ExecutionEnvelopeVerifier:
         except Exception:
             raise EnvelopeRejected("issuer_revocation_check_unavailable") from None
         try:
-            now = self._clock()
+            try:
+            if self._is_principal_revoked(envelope.principal_id):
+                raise EnvelopeRejected("execution_principal_revoked")
+        except EnvelopeRejected:
+            raise
+        except Exception:
+            raise EnvelopeRejected("principal_revocation_check_unavailable") from None
+        try:
+            if self._is_agent_revoked(envelope.agent_id):
+                raise EnvelopeRejected("execution_agent_revoked")
+        except EnvelopeRejected:
+            raise
+        except Exception:
+            raise EnvelopeRejected("agent_revocation_check_unavailable") from None
+        now = self._clock()
         except Exception:
             raise EnvelopeRejected("trusted_clock_unavailable") from None
         if isinstance(now, bool) or not isinstance(now, int) or now < 0:
