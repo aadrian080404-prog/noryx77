@@ -2,7 +2,7 @@ import hashlib
 import inspect
 import time
 
-from .actions import ActionGate
+from .actions import ActionGate, AuthorizationAuthority
 from .audit import AuditLog
 from .collaboration import AgentCollaboration
 from .contracts import TaskSpec, VerificationResult
@@ -21,7 +21,7 @@ from .frontier_capabilities import install_frontier_capabilities
 
 class HypersynthRuntime:
     """Fail-closed facade owning HYPERSYNTH safety dependencies and context."""
-    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None):
+    def __init__(self, verifier=None, router=None, planner=None, audit=None, limits=None, memory=None, clock=None, recovery=None, authorization: AuthorizationAuthority | None = None):
         self.audit = audit or AuditLog()
         self.verifier = verifier or VerificationEngine()
         self.router = router or ResourceRouter()
@@ -32,7 +32,8 @@ class HypersynthRuntime:
         if not isinstance(self.recovery, RecoveryController): raise TypeError("invalid_recovery_controller")
         self.identity_registry = getattr(self.router, "identity_registry", None)
         self.security = SecurityBoundary(self.policy, self.verifier, self.recovery)
-        self.action_gate = ActionGate(self.policy, self.security, self.limits)
+        if authorization is not None and not isinstance(authorization, AuthorizationAuthority): raise TypeError("invalid_authorization_authority")
+        self.action_gate = ActionGate(self.policy, self.security, self.limits, authorization=authorization)
         self.tool_executor = ToolExecutor(self.action_gate, self.verifier)
         self.frontier_capabilities = install_frontier_capabilities(self.tool_executor)
         self.collaboration = AgentCollaboration(self.verifier)
