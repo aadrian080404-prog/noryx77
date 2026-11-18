@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import pytest
 
@@ -33,19 +34,25 @@ def test_with_trusted_identity_holds_transaction_against_revocation(tmp_path):
     identity, _ = AgentIdentityAuthority.generate("worker-c")
     registry = SQLiteIdentityRegistry(path)
     registry.register(identity)
-    entered = []
+    callback_started = Event()
+    allow_callback_to_finish = Event()
 
-    def verify():
-        return registry.with_trusted_identity(
-            identity.agent_id,
-            lambda current: entered.append(current.public_key) or True,
-        )
+    def callback(current):
+        callback_started.set()
+        assert allow_callback_to_finish.wait(timeout=5)
+        return current.public_key == identity.public_key
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        assert pool.submit(verify).result(timeout=5)
-        pool.submit(registry.revoke, identity.agent_id).result(timeout=5)
+        verification = pool.submit(
+            registry.with_trusted_identity, identity.agent_id, callback
+        )
+        assert callback_started.wait(timeout=5)
+        revocation = pool.submit(registry.revoke, identity.agent_id)
+        assert not revocation.done()
+        allow_callback_to_finish.set()
+        assert verification.result(timeout=5)
+        revocation.result(timeout=5)
 
-    assert entered == [identity.public_key]
     assert not registry.is_trusted(identity)
 
 
