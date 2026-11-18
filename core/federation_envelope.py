@@ -59,7 +59,7 @@ class SignedExecutionEnvelope:
     signature: bytes = b""
 
     def __post_init__(self) -> None:
-        if isinstance(self.schema_version, bool) or self.schema_version != 1:
+        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int) or self.schema_version != 1:
             raise ValueError("unsupported_envelope_schema")
         for value, field in (
             (self.execution_id, "execution_id"),
@@ -246,7 +246,10 @@ class ExecutionEnvelopeVerifier:
             raise
         except Exception:
             raise EnvelopeRejected("issuer_revocation_check_unavailable") from None
-        now = self._clock()
+        try:
+            now = self._clock()
+        except Exception:
+            raise EnvelopeRejected("trusted_clock_unavailable") from None
         if isinstance(now, bool) or not isinstance(now, int) or now < 0:
             raise EnvelopeRejected("trusted_clock_unavailable")
         if envelope.issued_at > now + self._skew:
