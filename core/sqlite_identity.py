@@ -9,9 +9,9 @@ T = TypeVar("T")
 
 
 class SQLiteIdentityRegistry(IdentityRegistry):
-    """Durable trust-anchor registry shared by processes using one SQLite file."""
+    """Durable trust-anchor registry with permanent revocation tombstones."""
 
-    _SCHEMA_VERSION = 1
+    _SCHEMA_VERSION = 2
 
     def __init__(self, database_path: str | os.PathLike[str]):
         if not isinstance(database_path, (str, os.PathLike)):
@@ -33,12 +33,21 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                     "CREATE TABLE IF NOT EXISTS noryx7_trusted_agents "
                     "(agent_id TEXT PRIMARY KEY, public_key BLOB NOT NULL)"
                 )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS noryx7_revoked_agents "
+                    "(agent_id TEXT PRIMARY KEY, revoked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+                )
                 row = connection.execute(
                     "SELECT value FROM noryx7_identity_metadata WHERE key = 'schema_version'"
                 ).fetchone()
                 if row is None:
                     connection.execute(
                         "INSERT INTO noryx7_identity_metadata(key, value) VALUES('schema_version', ?)",
+                        (str(self._SCHEMA_VERSION),),
+                    )
+                elif row[0] == "1":
+                    connection.execute(
+                        "UPDATE noryx7_identity_metadata SET value = ? WHERE key = 'schema_version'",
                         (str(self._SCHEMA_VERSION),),
                     )
                 elif row[0] != str(self._SCHEMA_VERSION):
@@ -66,12 +75,29 @@ class SQLiteIdentityRegistry(IdentityRegistry):
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
 
+    @staticmethod
+    def _validate_agent_id(agent_id: str) -> None:
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("invalid_agent_id")
+        try:
+            size = len(agent_id.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise ValueError("invalid_agent_id") from exc
+        if size > MAX_ID_SIZE:
+            raise ValueError("invalid_agent_id")
+
     def register(self, identity: AgentIdentity) -> None:
         self._validate_identity(identity)
         with self._lock:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                revoked = connection.execute(
+                    "SELECT 1 FROM noryx7_revoked_agents WHERE agent_id = ?",
+                    (identity.agent_id,),
+                ).fetchone()
+                if revoked is not None:
+                    raise PermissionError("agent_identity_permanently_revoked")
                 try:
                     connection.execute(
                         "INSERT INTO noryx7_trusted_agents(agent_id, public_key) VALUES(?, ?)",
@@ -87,12 +113,15 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                 connection.close()
 
     def revoke(self, agent_id: str) -> None:
-        if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id.encode("utf-8")) > MAX_ID_SIZE:
-            raise ValueError("invalid_agent_id")
+        self._validate_agent_id(agent_id)
         with self._lock:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "INSERT OR IGNORE INTO noryx7_revoked_agents(agent_id) VALUES(?)",
+                    (agent_id,),
+                )
                 connection.execute(
                     "DELETE FROM noryx7_trusted_agents WHERE agent_id = ?", (agent_id,)
                 )
@@ -109,6 +138,12 @@ class SQLiteIdentityRegistry(IdentityRegistry):
         with self._lock:
             connection = self._connect()
             try:
+                revoked = connection.execute(
+                    "SELECT 1 FROM noryx7_revoked_agents WHERE agent_id = ?",
+                    (identity.agent_id,),
+                ).fetchone()
+                if revoked is not None:
+                    return False
                 row = connection.execute(
                     "SELECT public_key FROM noryx7_trusted_agents WHERE agent_id = ?",
                     (identity.agent_id,),
@@ -123,14 +158,19 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                 connection.close()
 
     def with_trusted_identity(self, agent_id: str, callback: Callable[[AgentIdentity], T]) -> T:
-        if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id.encode("utf-8")) > MAX_ID_SIZE:
-            raise ValueError("invalid_agent_id")
+        self._validate_agent_id(agent_id)
         if not callable(callback):
             raise TypeError("callback must be callable")
         with self._lock:
             connection = self._connect()
             try:
                 connection.execute("BEGIN IMMEDIATE")
+                revoked = connection.execute(
+                    "SELECT 1 FROM noryx7_revoked_agents WHERE agent_id = ?",
+                    (agent_id,),
+                ).fetchone()
+                if revoked is not None:
+                    raise PermissionError("agent_identity_permanently_revoked")
                 row = connection.execute(
                     "SELECT public_key FROM noryx7_trusted_agents WHERE agent_id = ?",
                     (agent_id,),
