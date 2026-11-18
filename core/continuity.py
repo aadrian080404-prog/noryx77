@@ -189,12 +189,12 @@ class ContinuitySupervisor:
                 current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
             )
             self._nodes[node_id] = isolated
+            self._persist_replace(current, isolated)
             self._emit(
                 "continuity_node_isolated", node_id=node_id,
                 generation=current.generation, last_sequence=current.sequence,
                 reason="stale_or_invalid_heartbeat",
             )
-            self._persist_replace(current, isolated)
             raise PermissionError("node_heartbeat_rejected")
         updated = NodeContinuityRecord(
             current.node_id, current.identity_fingerprint, current.generation,
@@ -236,9 +236,9 @@ class ContinuitySupervisor:
             current.node_id, current.identity_fingerprint, current.generation,
             current.sequence, current.capabilities, NodeContinuityState.ISOLATED,
         )
-        self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
         self._nodes[node_id] = isolated
         self._persist_replace(current, isolated)
+        self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
         return isolated
 
     @_synchronized
