@@ -242,7 +242,12 @@ def test_ncp_attestation_verifier_works_with_durable_sqlite_trust_registry(tmp_p
 
 
 def test_resolve_all_returns_sorted_active_nodes_only():
-    supervisor, _ = make_supervisor()
+    supervisor = ContinuitySupervisor(
+        verify_attestation=lambda **_: True,
+        approve_rejoin=lambda **_: True,
+        audit=lambda *_: None,
+        max_nodes=4,
+    )
     register(supervisor, "node-z")
     register(supervisor, "node-a")
     register(supervisor, "node-m")
