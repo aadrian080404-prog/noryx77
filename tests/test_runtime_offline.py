@@ -7,6 +7,11 @@ from core.offline import OfflineSnapshot
 from core.runtime import NORYXRuntime
 
 
+class _SnapshotAuthenticator:
+    def verify(self, snapshot):
+        return snapshot.snapshot_id == "snap-1"
+
+
 def _snapshot(principal: str, issued_at: int = 100) -> OfflineSnapshot:
     body = {
         "snapshot_id": "snap-1",
@@ -28,7 +33,7 @@ def _runtime() -> NORYXRuntime:
     runtime.configure_offline(
         cipher=AuthenticatedCipher(provider),
         key_id="offline-1",
-        snapshot_authenticator=lambda snapshot: snapshot.snapshot_id == "snap-1",
+        snapshot_authenticator=_SnapshotAuthenticator(),
         clock=lambda: 100,
     )
     return runtime
