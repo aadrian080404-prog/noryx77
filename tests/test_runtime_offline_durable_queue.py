@@ -154,7 +154,7 @@ def test_runtime_run_offline_uses_authenticated_snapshot_principal(tmp_path):
     runtime.configure_offline(
         cipher=cipher,
         key_id="offline-key",
-        snapshot_authenticator=lambda snapshot: True,
+        snapshot_authenticator=_SnapshotAuthenticator(),
         clock=lambda: 100,
         offline_queue=queue,
         monotonic_anchor=_Anchor(),
