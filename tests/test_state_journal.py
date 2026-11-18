@@ -1,8 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import os
+import stat
 
 import pytest
 
-from core.state import NORYXState, StateStore
+from core.state import NORYXState, StateCommit, StateStore
 from core.state_journal import StateJournal
 
 
@@ -61,3 +64,68 @@ def test_failed_durable_append_does_not_publish_in_memory(monkeypatch, tmp_path)
     assert len(store) == 0
     assert store.version == 0
     journal.close()
+
+
+
+def _manual_commit(execution_id, sequence):
+    return StateCommit(
+        execution_id=execution_id,
+        task_id=f"task-{execution_id}",
+        state=make_state(),
+        verification_stage="runtime_result",
+        sequence=sequence,
+        principal_id="principal-1",
+        principal_key_fingerprint="a" * 64,
+    )
+
+
+def test_state_journal_serializes_capacity_and_sequence_across_instances(tmp_path):
+    path = str(tmp_path / "shared-state.db")
+    first = StateJournal(path, max_commits=1)
+    second = StateJournal(path, max_commits=1)
+    commits = (
+        (first, _manual_commit("exec-first", 1)),
+        (second, _manual_commit("exec-second", 2)),
+    )
+
+    def append_one(item):
+        journal, commit = item
+        try:
+            journal.append(commit)
+            return "committed"
+        except (MemoryError, RuntimeError):
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(append_one, commits))
+
+    assert results.count("committed") == 1
+    assert results.count("rejected") == 1
+    recovered = first.recover()
+    assert len(recovered) == 1
+    assert next(iter(recovered.values())).sequence == 1
+    first.close()
+    second.close()
+
+
+def test_state_journal_rejects_capacity_configuration_mismatch(tmp_path):
+    path = str(tmp_path / "state-config.db")
+    journal = StateJournal(path, max_commits=2)
+    journal.close()
+    with pytest.raises(ValueError, match="state_journal_configuration_mismatch"):
+        StateJournal(path, max_commits=3)
+
+
+def test_state_journal_requires_persistent_storage():
+    with pytest.raises(ValueError, match="persistent_journal_path_required"):
+        StateJournal(":memory:")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permission semantics required")
+def test_state_journal_restricts_database_file_permissions(tmp_path):
+    path = tmp_path / "private-state.db"
+    journal = StateJournal(str(path))
+    try:
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    finally:
+        journal.close()
