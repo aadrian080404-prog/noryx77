@@ -1,6 +1,14 @@
+import hashlib
+
 import pytest
 
-from core.continuity import ContinuitySupervisor, NodeContinuityState
+from core.continuity import (
+    ContinuitySupervisor,
+    NodeContinuityState,
+    agent_identity_attestation_verifier,
+    node_attestation_statement,
+)
+from core.identity import AgentIdentityAuthority, IdentityRegistry
 
 
 def make_supervisor(*, audit=None, approve=True, verify=True):
@@ -100,3 +108,81 @@ def test_resolution_is_deterministic_and_capacity_is_bounded():
     assert supervisor.resolve("compute").node_id == "node-a"
     with pytest.raises(OverflowError, match="continuity_node_capacity_exceeded"):
         register(supervisor, "node-c")
+
+
+
+def test_ncp_attestation_uses_existing_ed25519_identity_registry():
+    registry = IdentityRegistry()
+    identity, private_key = AgentIdentityAuthority.generate("node-signed")
+    registry.register(identity)
+    fingerprint = hashlib.sha256(identity.public_key).hexdigest()
+    statement = node_attestation_statement(
+        node_id="node-signed", identity_fingerprint=fingerprint,
+        generation=0, sequence=0,
+    )
+    attestation = AgentIdentityAuthority.sign(identity, private_key, statement)
+    supervisor = ContinuitySupervisor(
+        verify_attestation=agent_identity_attestation_verifier(registry),
+        approve_rejoin=lambda **_: True,
+        audit=lambda *_: None,
+    )
+    admitted = supervisor.register(
+        node_id="node-signed", identity_fingerprint=fingerprint,
+        capabilities=("compute",), attestation=attestation,
+    )
+    assert admitted.state is NodeContinuityState.ACTIVE
+
+
+def test_ncp_ed25519_attestation_is_bound_to_generation_and_sequence():
+    registry = IdentityRegistry()
+    identity, private_key = AgentIdentityAuthority.generate("node-bound")
+    registry.register(identity)
+    fingerprint = hashlib.sha256(identity.public_key).hexdigest()
+    signed = AgentIdentityAuthority.sign(
+        identity,
+        private_key,
+        node_attestation_statement(
+            node_id="node-bound", identity_fingerprint=fingerprint,
+            generation=0, sequence=0,
+        ),
+    )
+    supervisor = ContinuitySupervisor(
+        verify_attestation=agent_identity_attestation_verifier(registry),
+        approve_rejoin=lambda **_: True,
+        audit=lambda *_: None,
+    )
+    with pytest.raises(PermissionError, match="node_attestation_rejected"):
+        supervisor.register(
+            node_id="node-bound", identity_fingerprint=fingerprint,
+            capabilities=("compute",), attestation=signed,
+        ) if False else supervisor.register(
+            node_id="node-bound", identity_fingerprint=fingerprint,
+            capabilities=("compute",),
+            attestation=AgentIdentityAuthority.sign(
+                identity, private_key,
+                node_attestation_statement(
+                    node_id="node-bound", identity_fingerprint=fingerprint,
+                    generation=1, sequence=0,
+                ),
+            ),
+        )
+
+
+def test_ncp_attestation_rejects_revoked_identity():
+    registry = IdentityRegistry()
+    identity, private_key = AgentIdentityAuthority.generate("node-revoked")
+    registry.register(identity)
+    fingerprint = hashlib.sha256(identity.public_key).hexdigest()
+    signed = AgentIdentityAuthority.sign(
+        identity, private_key,
+        node_attestation_statement(
+            node_id="node-revoked", identity_fingerprint=fingerprint,
+            generation=0, sequence=0,
+        ),
+    )
+    registry.revoke("node-revoked")
+    verifier = agent_identity_attestation_verifier(registry)
+    assert verifier(
+        node_id="node-revoked", identity_fingerprint=fingerprint,
+        generation=0, sequence=0, attestation=signed,
+    ) is False
