@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from copy import deepcopy
@@ -26,11 +27,16 @@ class SQLiteAuditLog(AuditLog):
     """
 
     def __init__(self, path: str, *, busy_timeout_ms: int = 5000) -> None:
+        if isinstance(path, os.PathLike):
+            path = os.fspath(path)
         if not isinstance(path, str) or not path.strip():
             raise ValueError("audit_database_path_required")
+        if path == ":memory:":
+            raise ValueError("persistent_audit_database_required")
         if isinstance(busy_timeout_ms, bool) or not isinstance(busy_timeout_ms, int) or not 1 <= busy_timeout_ms <= 60000:
             raise ValueError("audit_busy_timeout_invalid")
         self.path = str(Path(path).expanduser())
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._busy_timeout_ms = busy_timeout_ms
         self._closed = False
         self._db_lock = RLock()
@@ -48,6 +54,11 @@ class SQLiteAuditLog(AuditLog):
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS audit_events_digest_idx ON audit_events(digest)"
             )
+        try:
+            os.chmod(self.path, 0o600)
+        except OSError as exc:
+            self._closed = True
+            raise RuntimeError("audit_database_permissions_unavailable") from exc
         self._reload_cache()
 
     @contextmanager
