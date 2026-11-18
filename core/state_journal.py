@@ -135,9 +135,10 @@ class StateJournal:
             "FROM state_commits c LEFT JOIN state_journal_proofs p ON p.sequence=c.sequence "
             "ORDER BY c.sequence"
         ).fetchall()
-        if not rows and self._db.execute(
+        proof_count = self._db.execute(
             "SELECT COUNT(*) FROM state_journal_proofs"
-        ).fetchone()[0]:
+        ).fetchone()[0]
+        if proof_count != len(rows):
             raise RuntimeError("state_journal_proof_chain_orphaned")
         expected = 1
         previous = ZERO_MAC
