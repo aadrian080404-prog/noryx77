@@ -319,3 +319,18 @@ def agent_identity_attestation_verifier(registry: IdentityRegistry) -> Attestati
             return False
 
     return verify
+
+
+
+def audit_log_sink(audit_log: object) -> AuditSink:
+    """Adapt the native AuditLog.record(event, **fields) contract to NCP."""
+    recorder = getattr(audit_log, "record", None)
+    if not callable(recorder):
+        raise TypeError("audit_log_recorder_required")
+
+    def record(event: str, payload: Mapping[str, object]) -> None:
+        if not isinstance(payload, Mapping):
+            raise ValueError("invalid_continuity_audit_payload")
+        recorder(event, **dict(payload))
+
+    return record
