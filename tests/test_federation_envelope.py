@@ -33,6 +33,8 @@ def _verifier(tmp_path, private_key, *, now=lambda: 110, revoked=lambda _key: Fa
         {"issuer-v1": private_key.public_key()},
         store,
         is_issuer_revoked=revoked,
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
         clock=now,
     )
     return verifier, store
@@ -78,6 +80,8 @@ def test_unknown_or_revoked_issuer_is_rejected(tmp_path):
         {"different-issuer": key.public_key()},
         unknown_store,
         is_issuer_revoked=lambda _key: False,
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
         clock=lambda: 110,
     )
     revoked, revoked_store = _verifier(
@@ -158,6 +162,8 @@ def test_revocation_lookup_failure_fails_closed(tmp_path):
         {"issuer-v1": key.public_key()},
         store,
         is_issuer_revoked=lambda _key: (_ for _ in ()).throw(RuntimeError("offline")),
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
         clock=lambda: 110,
     )
     try:
@@ -180,3 +186,32 @@ def test_invalid_envelope_shapes_are_rejected_before_signing():
             ("task.execute",), "policy", "state",
             100, 120, b"short", "issuer",
         )
+
+
+
+@pytest.mark.parametrize(
+    ("principal_revoked", "agent_revoked", "reason"),
+    [
+        (lambda _principal: True, lambda _agent: False, "execution_principal_revoked"),
+        (lambda _principal: False, lambda _agent: True, "execution_agent_revoked"),
+    ],
+)
+def test_revoked_principal_or_agent_is_rejected(tmp_path, principal_revoked, agent_revoked, reason):
+    key = Ed25519PrivateKey.generate()
+    envelope = sign_execution_envelope(
+        _unsigned(nonce=b"z" * 32), issuer_key_id="issuer-v1", signing_key=key
+    )
+    store = SQLiteEnvelopeReplayStore(str(tmp_path / "identity-revocation.sqlite3"))
+    verifier = ExecutionEnvelopeVerifier(
+        {"issuer-v1": key.public_key()},
+        store,
+        is_issuer_revoked=lambda _key: False,
+        is_principal_revoked=principal_revoked,
+        is_agent_revoked=agent_revoked,
+        clock=lambda: 110,
+    )
+    try:
+        with pytest.raises(EnvelopeRejected, match=reason):
+            verifier.verify_and_consume(envelope)
+    finally:
+        store.close()
