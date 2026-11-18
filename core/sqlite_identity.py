@@ -113,7 +113,10 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                     "SELECT public_key FROM noryx7_trusted_agents WHERE agent_id = ?",
                     (identity.agent_id,),
                 ).fetchone()
-                return row is not None and bytes(row[0]) == identity.public_key
+                if row is None:
+                    return False
+                stored_identity = AgentIdentity(identity.agent_id, bytes(row[0]))
+                return stored_identity.is_well_formed() and stored_identity.public_key == identity.public_key
             except sqlite3.Error:
                 return False
             finally:
@@ -134,7 +137,10 @@ class SQLiteIdentityRegistry(IdentityRegistry):
                 ).fetchone()
                 if row is None:
                     raise PermissionError("agent_identity_not_trusted")
-                result = callback(AgentIdentity(agent_id, bytes(row[0])))
+                trusted_identity = AgentIdentity(agent_id, bytes(row[0]))
+                if not trusted_identity.is_well_formed():
+                    raise PermissionError("agent_identity_not_trusted")
+                result = callback(trusted_identity)
                 connection.commit()
                 return result
             except Exception:
