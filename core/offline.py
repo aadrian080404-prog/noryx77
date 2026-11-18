@@ -41,6 +41,9 @@ class OfflinePolicy(Protocol):
 class OfflineVerifier(Protocol):
     def verify(self, result: object) -> bool: ...
 
+class OfflineSnapshotAuthenticator(Protocol):
+    def verify(self, snapshot: "OfflineSnapshot") -> bool: ...
+
 class MonotonicAnchorLike(Protocol):
     def accept(self, issued_at: int, snapshot_id: str) -> bool: ...
 
@@ -456,12 +459,12 @@ class OfflineRuntime:
     """Offline admission -> durable monotonic admission -> encrypted outbox -> verified commit -> sync."""
     def __init__(self, *, recovery: RecoveryLike, policy: OfflinePolicy, verifier: OfflineVerifier,
                  cipher: OfflineCipher, clock: Callable[[], int],
-                 snapshot_authenticator: Callable[[OfflineSnapshot], bool],
+                 snapshot_authenticator: OfflineSnapshotAuthenticator,
                  max_snapshot_age: int = MAX_SNAPSHOT_AGE,
                  monotonic_anchor: MonotonicAnchorLike | None = None,
                  queue: OfflineSyncQueue | SQLiteOfflineSyncQueue | None = None) -> None:
-        if not callable(snapshot_authenticator) or not callable(clock):
-            raise TypeError("offline_authenticator_and_clock_required")
+        if not callable(getattr(snapshot_authenticator, "verify", None)) or not callable(clock):
+            raise TypeError("offline_snapshot_authenticator_and_clock_required")
         if isinstance(max_snapshot_age, bool) or not isinstance(max_snapshot_age, int) or max_snapshot_age < 0:
             raise ValueError("invalid_max_snapshot_age")
         self._recovery, self._policy, self._verifier = recovery, policy, verifier
@@ -481,7 +484,7 @@ class OfflineRuntime:
         if not isinstance(snapshot, OfflineSnapshot) or not snapshot.verify_integrity():
             return False
         try:
-            return self._snapshot_authenticator(snapshot) is True
+            return self._snapshot_authenticator.verify(snapshot) is True
         except Exception:
             return False
 
