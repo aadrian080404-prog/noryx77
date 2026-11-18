@@ -113,6 +113,12 @@ class StateJournal:
     def append(self, commit: StateCommit) -> None:
         if not isinstance(commit, StateCommit):
             raise TypeError("state_commit_required")
+        if (
+            isinstance(commit.sequence, bool)
+            or not isinstance(commit.sequence, int)
+            or commit.sequence < 1
+        ):
+            raise ValueError("invalid_state_commit_sequence")
         digest = self._digest(commit)
         state_json = json.dumps(
             asdict(commit.state), ensure_ascii=False, sort_keys=True, separators=(",", ":")
