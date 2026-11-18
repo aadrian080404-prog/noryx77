@@ -47,3 +47,13 @@ def test_sqlite_offline_queue_restricts_permissions_on_existing_database(tmp_pat
         assert stat.S_IMODE(database.stat().st_mode) == 0o600
     finally:
         reopened.close()
+
+
+
+def test_sqlite_offline_queue_rejects_capacity_configuration_mismatch(tmp_path):
+    database = tmp_path / "offline-capacity.sqlite3"
+    first = SQLiteOfflineSyncQueue(str(database), TestCipher(), max_items=4)
+    first.close()
+
+    with pytest.raises(ValueError, match="offline_queue_configuration_mismatch"):
+        SQLiteOfflineSyncQueue(str(database), TestCipher(), max_items=5)
