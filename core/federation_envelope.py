@@ -243,29 +243,23 @@ class ExecutionEnvelopeVerifier:
             key.verify(envelope.signature, _DOMAIN + envelope.canonical_bytes())
         except (InvalidSignature, ValueError, TypeError):
             raise EnvelopeRejected("execution_envelope_signature_invalid") from None
-        try:
-            if self._is_issuer_revoked(envelope.issuer_key_id):
-                raise EnvelopeRejected("execution_issuer_revoked")
-        except EnvelopeRejected:
-            raise
-        except Exception:
-            raise EnvelopeRejected("issuer_revocation_check_unavailable") from None
-        try:
+
+        revocation_checks = (
+            (self._is_issuer_revoked, envelope.issuer_key_id, "issuer"),
+            (self._is_principal_revoked, envelope.principal_id, "principal"),
+            (self._is_agent_revoked, envelope.agent_id, "agent"),
+        )
+        for check, identity, label in revocation_checks:
             try:
-            if self._is_principal_revoked(envelope.principal_id):
-                raise EnvelopeRejected("execution_principal_revoked")
-        except EnvelopeRejected:
-            raise
-        except Exception:
-            raise EnvelopeRejected("principal_revocation_check_unavailable") from None
+                if check(identity):
+                    raise EnvelopeRejected(f"execution_{label}_revoked")
+            except EnvelopeRejected:
+                raise
+            except Exception:
+                raise EnvelopeRejected(f"{label}_revocation_check_unavailable") from None
+
         try:
-            if self._is_agent_revoked(envelope.agent_id):
-                raise EnvelopeRejected("execution_agent_revoked")
-        except EnvelopeRejected:
-            raise
-        except Exception:
-            raise EnvelopeRejected("agent_revocation_check_unavailable") from None
-        now = self._clock()
+            now = self._clock()
         except Exception:
             raise EnvelopeRejected("trusted_clock_unavailable") from None
         if isinstance(now, bool) or not isinstance(now, int) or now < 0:
