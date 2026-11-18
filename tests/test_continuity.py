@@ -79,10 +79,13 @@ def test_rejoin_requires_new_generation_attestation_and_approval():
 
 
 def test_audit_failure_during_heartbeat_fences_node():
+    audit_state = {"fail": False}
     def broken_audit(_event, _payload):
-        raise OSError("audit unavailable")
+        if audit_state["fail"]:
+            raise OSError("audit unavailable")
     supervisor, _ = make_supervisor(audit=broken_audit)
     register(supervisor)
+    audit_state["fail"] = True
     with pytest.raises(OSError, match="audit unavailable"):
         supervisor.heartbeat(
             node_id="node-a", generation=0, sequence=1, attestation=b"heartbeat"
