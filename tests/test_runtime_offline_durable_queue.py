@@ -133,3 +133,60 @@ def test_runtime_offline_outbox_detects_ciphertext_tampering(tmp_path):
     with pytest.raises(OfflineDeniedError, match="offline_record_integrity_failed"):
         reopened.snapshot()
     reopened.close()
+
+
+def test_runtime_run_offline_uses_authenticated_snapshot_principal(tmp_path):
+    from dataclasses import replace
+
+    from core.contracts import TaskSpec
+    from core.offline import OfflineSnapshot
+
+    provider = InMemoryKeyProvider({"offline-key": b"r" * 32})
+    cipher = AuthenticatedCipher(provider)
+    bound_cipher = BoundAuthenticatedCipher(cipher, key_id="offline-key")
+    queue = SQLiteOfflineSyncQueue(str(tmp_path / "runtime-execution.sqlite3"), bound_cipher)
+    runtime = NORYXRuntime()
+    runtime.configure_offline(
+        cipher=cipher,
+        key_id="offline-key",
+        snapshot_authenticator=lambda snapshot: True,
+        clock=lambda: 100,
+        offline_queue=queue,
+        monotonic_anchor=_Anchor(),
+    )
+
+    unsigned = OfflineSnapshot(
+        snapshot_id="runtime-snapshot-1",
+        principal_id="principal-1",
+        issued_at=100,
+        policy_version="policy-1",
+        artifact_version="artifact-1",
+        capabilities=("local.execute",),
+        state_version="state-1",
+        integrity_digest="0" * 64,
+    )
+    snapshot = replace(
+        unsigned,
+        integrity_digest=hashlib.sha256(unsigned.canonical_bytes()).hexdigest(),
+    )
+    runtime.install_offline_snapshot(snapshot)
+
+    task = TaskSpec(
+        task_id="offline-task-1",
+        task_type="compute",
+        objective="verify offline principal binding",
+        input={"value": 7},
+        execution_id="offline-execution-1",
+    )
+    result = runtime.run_offline(
+        task,
+        capability="local.execute",
+        local_executor=lambda _: "verified offline result",
+    )
+
+    assert result["status"] == "completed"
+    assert result["execution_id"] == "offline-execution-1"
+    assert result["state_commit"].principal_id == "principal-1"
+    assert len(queue) == 1
+    assert queue.decrypt("offline-execution-1")
+    queue.close()
