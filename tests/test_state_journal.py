@@ -2,7 +2,7 @@ import hashlib
 
 import pytest
 
-from core.state import NORYXState, StateStore
+from core.state import NORYXState, StateCommit, StateStore
 from core.state_journal import StateJournal
 from core.journal_integrity import InMemoryMonotonicAnchor, JournalAuthenticator
 
