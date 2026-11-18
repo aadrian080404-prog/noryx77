@@ -119,8 +119,8 @@ class NORYXRuntime:
             audit=audit_log_sink(self.audit),
             max_nodes=max_nodes,
         )
-        self._continuity = supervisor
         self.audit.record("continuity_supervisor_configured", max_nodes=max_nodes)
+        self._continuity = supervisor
         return supervisor
 
     def configure_offline(
