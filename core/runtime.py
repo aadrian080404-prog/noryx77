@@ -39,6 +39,8 @@ class NORYXRuntime:
         limits: RuntimeLimits | None = None,
         *,
         state_journal_path: str | None = None,
+        state_journal_authenticator=None,
+        state_journal_anchor=None,
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
         audit_log: AuditLog | None = None,
@@ -56,7 +58,17 @@ class NORYXRuntime:
         self.security = SecurityBoundary(self.policy, self.verifier, recovery=self.recovery)
         self.action_gate = ActionGate(self.policy, self.security, self.limits)
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
-        self.state_journal = StateJournal(state_journal_path, max_commits=self.limits.max_memory_items) if state_journal_path else None
+        if state_journal_path is None and (state_journal_authenticator is not None or state_journal_anchor is not None):
+            raise ValueError("state_journal_path_required_for_durable_integrity")
+        self.state_journal = (
+            StateJournal(
+                state_journal_path,
+                max_commits=self.limits.max_memory_items,
+                authenticator=state_journal_authenticator,
+                anchor=state_journal_anchor,
+            )
+            if state_journal_path else None
+        )
         self.state = StateStore(max_commits=self.limits.max_memory_items, journal=self.state_journal)
         if audit_log is not None and not isinstance(audit_log, AuditLog):
             raise TypeError("invalid_audit_log")
