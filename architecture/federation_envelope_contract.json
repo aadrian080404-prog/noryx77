@@ -8,7 +8,7 @@
       "canonical versioned execution envelope",
       "Ed25519 issuer signature",
       "explicit issuer public-key allowlist",
-      "issuer revocation callback with fail-closed behavior",
+      "issuer, principal and agent revocation callbacks with fail-closed behavior",
       "issued-at and expiry validation",
       "bounded envelope lifetime and clock skew",
       "durable SQLite nonce consumption",
