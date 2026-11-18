@@ -54,7 +54,7 @@ class Cipher:
 
 
 def make_snapshot(now=100, snapshot_id="snap-1", state_version="state-1"):
-    base = OfflineSnapshot(snapshot_id, "principal-1", now, "policy-1", "artifact-1", ("local.execute",), state_version, "0" * 64)
+    base = OfflineSnapshot(snapshot_id, "principal-1", now, "policy-1", "artifact-1", ("local.execute",), state_version, "a" * 64, "0" * 64)
     return replace(base, integrity_digest=sha256(base.canonical_bytes()).hexdigest())
 
 
@@ -174,3 +174,10 @@ def test_duplicate_execution_identity_cannot_change_payload_or_principal():
     altered = replace(execution, principal_id="principal-2")
     with pytest.raises(OfflineConflictError, match="identity_conflict"):
         runtime.queue.enqueue(altered, payload)
+
+
+
+def test_snapshot_requires_a_well_formed_principal_key_fingerprint():
+    snapshot = make_snapshot()
+    with pytest.raises(ValueError, match="invalid_principal_key_fingerprint"):
+        replace(snapshot, principal_key_fingerprint="not-a-key-fingerprint")
