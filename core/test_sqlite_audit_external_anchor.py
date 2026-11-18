@@ -72,8 +72,9 @@ def test_external_anchor_rejects_same_sequence_divergent_chain(tmp_path):
     audit.close()
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TRIGGER noryx7_audit_events_no_update")
         connection.execute(
-            "UPDATE audit_events SET event_json=? WHERE sequence=1",
+            "UPDATE noryx7_audit_events SET entry_json=? WHERE sequence=1",
             ('{"event":"substituted"}',),
         )
     tampered = SQLiteAuditLog(path)
