@@ -178,6 +178,17 @@ class PrincipalIdentityRegistry:
         with self._lock:
             return principal_id in self._revoked
 
+    def is_registered(self, principal_id: str) -> bool:
+        if not isinstance(principal_id, str) or not principal_id.strip():
+            return False
+        try:
+            if len(principal_id.encode("utf-8")) > MAX_PRINCIPAL_ID_SIZE:
+                return False
+        except UnicodeEncodeError:
+            return False
+        with self._lock:
+            return principal_id in self._principals and principal_id not in self._revoked
+
     def is_trusted(self, identity: PrincipalIdentity) -> bool:
         if not isinstance(identity, PrincipalIdentity) or not identity.is_well_formed():
             return False
