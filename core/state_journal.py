@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import hashlib
 import json
+import os
 import sqlite3
 from threading import RLock
 from typing import Any
@@ -24,6 +25,8 @@ class StateJournal:
     def __init__(self, path: str, *, max_commits: int = 10_000) -> None:
         if not isinstance(path, str) or not path.strip():
             raise ValueError("journal_path_required")
+        if path == ":memory:":
+            raise ValueError("persistent_journal_path_required")
         if isinstance(max_commits, bool) or not isinstance(max_commits, int) or max_commits < 1:
             raise ValueError("max_commits_must_be_positive")
         self.path = path
@@ -40,6 +43,11 @@ class StateJournal:
             "principal_id TEXT NOT NULL, principal_key_fingerprint TEXT NOT NULL, "
             "record_digest TEXT NOT NULL, schema_version INTEGER NOT NULL)"
         )
+        try:
+            os.chmod(path, 0o600)
+        except OSError as exc:
+            self._db.close()
+            raise RuntimeError("state_journal_permissions_unavailable") from exc
 
     @staticmethod
     def _canonical(commit: StateCommit) -> str:
@@ -71,16 +79,30 @@ class StateJournal:
         return commit
 
     def append(self, commit: StateCommit) -> None:
+        if not isinstance(commit, StateCommit):
+            raise TypeError("state_commit_required")
+        digest = self._digest(commit)
+        state_json = json.dumps(
+            asdict(commit.state), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
         with self._lock:
-            if self._db.execute("SELECT 1 FROM state_commits WHERE execution_id=?", (commit.execution_id,)).fetchone():
-                raise PermissionError("execution_already_journaled")
-            count = self._db.execute("SELECT COUNT(*) FROM state_commits").fetchone()[0]
-            if count >= self.max_commits:
-                raise MemoryError("journal_capacity_exceeded")
-            digest = self._digest(commit)
-            state_json = json.dumps(asdict(commit.state), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
             try:
                 self._db.execute("BEGIN IMMEDIATE")
+                if self._db.execute(
+                    "SELECT 1 FROM state_commits WHERE execution_id=?",
+                    (commit.execution_id,),
+                ).fetchone():
+                    raise PermissionError("execution_already_journaled")
+                count = self._db.execute(
+                    "SELECT COUNT(*) FROM state_commits"
+                ).fetchone()[0]
+                if count >= self.max_commits:
+                    raise MemoryError("journal_capacity_exceeded")
+                latest_sequence = self._db.execute(
+                    "SELECT COALESCE(MAX(sequence), 0) FROM state_commits"
+                ).fetchone()[0]
+                if commit.sequence != latest_sequence + 1:
+                    raise RuntimeError("state_journal_sequence_conflict")
                 self._db.execute(
                     "INSERT INTO state_commits VALUES (?,?,?,?,?,?,?,?,?)",
                     (commit.execution_id, commit.task_id, state_json, commit.verification_stage,
@@ -89,7 +111,8 @@ class StateJournal:
                 )
                 self._db.execute("COMMIT")
             except Exception:
-                self._db.execute("ROLLBACK")
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
                 raise
 
     def get(self, execution_id: str) -> StateCommit | None:
