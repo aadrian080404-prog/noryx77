@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from functools import wraps
+from threading import RLock
 from typing import Callable, Mapping
 
 
@@ -35,6 +37,14 @@ RejoinApprover = Callable[..., bool]
 AuditSink = Callable[[str, Mapping[str, object]], None]
 
 
+def _synchronized(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class ContinuitySupervisor:
     """Fences stale/untrusted nodes and requires explicit approval to rejoin.
 
@@ -60,6 +70,7 @@ class ContinuitySupervisor:
         self._audit = audit
         self._max_nodes = max_nodes
         self._nodes: dict[str, NodeContinuityRecord] = {}
+        self._lock = RLock()
 
     @staticmethod
     def _validate_identity(node_id: str, fingerprint: str, capabilities: tuple[str, ...]) -> None:
@@ -97,6 +108,7 @@ class ContinuitySupervisor:
     def _emit(self, event: str, **payload: object) -> None:
         self._audit(event, payload)
 
+    @_synchronized
     def register(
         self, *, node_id: str, identity_fingerprint: str,
         capabilities: tuple[str, ...], attestation: object,
@@ -118,6 +130,7 @@ class ContinuitySupervisor:
         self._nodes[node_id] = record
         return record
 
+    @_synchronized
     def heartbeat(
         self, *, node_id: str, generation: int, sequence: int, attestation: object,
     ) -> NodeContinuityRecord:
@@ -162,6 +175,7 @@ class ContinuitySupervisor:
         self._nodes[node_id] = updated
         return updated
 
+    @_synchronized
     def isolate(self, node_id: str, *, reason: str) -> NodeContinuityRecord:
         current = self._nodes.get(node_id)
         if current is None:
@@ -176,6 +190,7 @@ class ContinuitySupervisor:
         self._emit("continuity_node_isolated", node_id=node_id, reason=reason)
         return isolated
 
+    @_synchronized
     def rejoin(
         self, *, node_id: str, generation: int, sequence: int,
         attestation: object, approval: object,
@@ -214,6 +229,7 @@ class ContinuitySupervisor:
         self._nodes[node_id] = updated
         return updated
 
+    @_synchronized
     def resolve(self, capability: str) -> NodeContinuityRecord:
         if not isinstance(capability, str) or not capability.strip():
             raise ValueError("capability_required")
@@ -226,5 +242,6 @@ class ContinuitySupervisor:
         except ValueError as exc:
             raise LookupError("no_trusted_active_node") from exc
 
+    @_synchronized
     def snapshot(self) -> tuple[NodeContinuityRecord, ...]:
         return tuple(self._nodes[key] for key in sorted(self._nodes))
