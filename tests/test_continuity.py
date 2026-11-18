@@ -6,9 +6,11 @@ from core.continuity import (
     ContinuitySupervisor,
     NodeContinuityState,
     agent_identity_attestation_verifier,
+    audit_log_sink,
     node_attestation_statement,
 )
 from core.identity import AgentIdentityAuthority, IdentityRegistry
+from core.audit import AuditLog
 
 
 def make_supervisor(*, audit=None, approve=True, verify=True):
@@ -176,3 +178,25 @@ def test_ncp_attestation_rejects_revoked_identity():
         node_id="node-revoked", identity_fingerprint=fingerprint,
         generation=0, sequence=0, attestation=signed,
     ) is False
+
+
+
+def test_ncp_events_are_written_through_native_audit_log_contract():
+    audit = AuditLog()
+    supervisor = ContinuitySupervisor(
+        verify_attestation=lambda **_: True,
+        approve_rejoin=lambda **_: True,
+        audit=audit_log_sink(audit),
+    )
+    register(supervisor)
+    supervisor.heartbeat(
+        node_id="node-a", generation=0, sequence=1, attestation=b"heartbeat"
+    )
+    supervisor.isolate("node-a", reason="test_isolation")
+    events = audit.snapshot()
+    assert [entry["event"] for entry in events] == [
+        "continuity_node_registered",
+        "continuity_node_heartbeat",
+        "continuity_node_isolated",
+    ]
+    assert audit.verify_integrity()
