@@ -102,6 +102,7 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
         artifact_version="artifact-1",
         capabilities=("local.execute",),
         state_version="state-1",
+        principal_key_fingerprint="d" * 64,
         integrity_digest="0" * 64,
     )
     first.install_offline_snapshot(
@@ -121,6 +122,7 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
     )
     assert result["status"] == "completed"
     assert result["state_commit"].principal_id == "principal-1"
+    assert result["state_commit"].principal_key_fingerprint == "d" * 64
     audit_head = first.checkpoint_audit_anchor(audit_anchor)
 
     first.state_journal.close()
@@ -149,6 +151,7 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
     recovered_commit = second.state.get("offline-execution-1")
     assert second.state.version == 1
     assert recovered_commit.principal_id == "principal-1"
+    assert recovered_commit.principal_key_fingerprint == "d" * 64
     assert reopened_queue.decrypt("offline-execution-1")
     assert len(reopened_queue) == 1
     assert restored_continuity.snapshot()[0].sequence == 7
