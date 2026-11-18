@@ -42,6 +42,11 @@ class Verifier:
         return self.valid
 
 
+class SnapshotAuthenticator:
+    def verify(self, snapshot):
+        return snapshot.snapshot_id in {"snap-1", "snap-2"}
+
+
 class Cipher:
     def encrypt(self, plaintext, *, aad):
         return b"ENC:" + aad + b":" + plaintext
@@ -65,7 +70,7 @@ def make_runtime(recovery=None, policy=None, verifier=None, now=100, max_snapsho
         verifier=verifier or Verifier(),
         cipher=Cipher(),
         clock=lambda: now,
-        snapshot_authenticator=authenticator or (lambda snapshot: snapshot.snapshot_id in {"snap-1", "snap-2"}),
+        snapshot_authenticator=authenticator or SnapshotAuthenticator(),
         max_snapshot_age=max_snapshot_age,
     )
 
