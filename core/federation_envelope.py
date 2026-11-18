@@ -200,6 +200,8 @@ class ExecutionEnvelopeVerifier:
         is_issuer_revoked: Callable[[str], bool],
         is_principal_revoked: Callable[[str], bool],
         is_agent_revoked: Callable[[str], bool],
+        is_principal_trusted: Callable[[str], bool],
+        is_agent_trusted: Callable[[str], bool],
         clock: Callable[[], int] = lambda: int(time.time()),
         max_lifetime_seconds: int = _MAX_LIFETIME_SECONDS,
         allowed_clock_skew_seconds: int = 5,
@@ -208,8 +210,8 @@ class ExecutionEnvelopeVerifier:
             raise ValueError("trusted_issuers_required")
         if not callable(getattr(replay_store, "consume", None)):
             raise TypeError("replay_store_contract_required")
-        if not all(callable(callback) for callback in (is_issuer_revoked, is_principal_revoked, is_agent_revoked, clock)):
-            raise TypeError("issuer_principal_agent_revocation_and_clock_callbacks_required")
+        if not all(callable(callback) for callback in (is_issuer_revoked, is_principal_revoked, is_agent_revoked, is_principal_trusted, is_agent_trusted, clock)):
+            raise TypeError("issuer_principal_agent_trust_revocation_and_clock_callbacks_required")
         if isinstance(max_lifetime_seconds, bool) or not isinstance(max_lifetime_seconds, int) or not 1 <= max_lifetime_seconds <= _MAX_LIFETIME_SECONDS:
             raise ValueError("invalid_max_lifetime")
         if isinstance(allowed_clock_skew_seconds, bool) or not isinstance(allowed_clock_skew_seconds, int) or not 0 <= allowed_clock_skew_seconds <= 60:
@@ -229,6 +231,8 @@ class ExecutionEnvelopeVerifier:
         self._is_issuer_revoked = is_issuer_revoked
         self._is_principal_revoked = is_principal_revoked
         self._is_agent_revoked = is_agent_revoked
+        self._is_principal_trusted = is_principal_trusted
+        self._is_agent_trusted = is_agent_trusted
         self._clock = clock
         self._max_lifetime = max_lifetime_seconds
         self._skew = allowed_clock_skew_seconds
@@ -257,6 +261,19 @@ class ExecutionEnvelopeVerifier:
                 raise
             except Exception:
                 raise EnvelopeRejected(f"{label}_revocation_check_unavailable") from None
+
+        trust_checks = (
+            (self._is_principal_trusted, envelope.principal_id, "principal"),
+            (self._is_agent_trusted, envelope.agent_id, "agent"),
+        )
+        for check, identity, label in trust_checks:
+            try:
+                if check(identity) is not True:
+                    raise EnvelopeRejected(f"execution_{label}_untrusted")
+            except EnvelopeRejected:
+                raise
+            except Exception:
+                raise EnvelopeRejected(f"{label}_trust_check_unavailable") from None
 
         try:
             now = self._clock()
