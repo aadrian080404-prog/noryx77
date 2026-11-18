@@ -119,3 +119,43 @@ def test_authorization_authority_fails_closed_when_durable_replay_store_is_full(
     assert authority.consume(action, "execution-1", first)
     assert not authority.verify(action, "execution-1", second)
     assert not authority.consume(action, "execution-1", second)
+
+
+
+def test_authorized_dispatch_consumes_durable_grant_before_executor(tmp_path):
+    from core.actions import AuthorizationAuthority
+    from core.identity import AgentIdentityAuthority, IdentityRegistry
+
+    registry = IdentityRegistry()
+    principal, _private_key = AgentIdentityAuthority.generate("dispatch-principal")
+    registry.register(principal)
+    database = tmp_path / "dispatch-replay.sqlite3"
+    secret = b"P" * 32
+    action = _authorized_action()
+    authority = AuthorizationAuthority(
+        secret,
+        identity_registry=registry,
+        replay_guard=SQLiteAuthorizationReplayGuard(database, max_tokens=8),
+    )
+    grant = authority.issue(action, "execution-1", principal=principal)
+    calls = []
+    consumed, result = authority.consume_and_execute(
+        action, "execution-1", grant, principal,
+        lambda: calls.append("executed") or "ok",
+    )
+    assert consumed is True
+    assert result == "ok"
+    assert calls == ["executed"]
+
+    reopened = AuthorizationAuthority(
+        secret,
+        identity_registry=registry,
+        replay_guard=SQLiteAuthorizationReplayGuard(database, max_tokens=8),
+    )
+    consumed_again, result_again = reopened.consume_and_execute(
+        action, "execution-1", grant, principal,
+        lambda: calls.append("replayed"),
+    )
+    assert consumed_again is False
+    assert result_again is None
+    assert calls == ["executed"]
