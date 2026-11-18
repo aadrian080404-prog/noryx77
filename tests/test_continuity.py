@@ -138,14 +138,6 @@ def test_ncp_ed25519_attestation_is_bound_to_generation_and_sequence():
     identity, private_key = AgentIdentityAuthority.generate("node-bound")
     registry.register(identity)
     fingerprint = hashlib.sha256(identity.public_key).hexdigest()
-    signed = AgentIdentityAuthority.sign(
-        identity,
-        private_key,
-        node_attestation_statement(
-            node_id="node-bound", identity_fingerprint=fingerprint,
-            generation=0, sequence=0,
-        ),
-    )
     supervisor = ContinuitySupervisor(
         verify_attestation=agent_identity_attestation_verifier(registry),
         approve_rejoin=lambda **_: True,
@@ -154,8 +146,6 @@ def test_ncp_ed25519_attestation_is_bound_to_generation_and_sequence():
     with pytest.raises(PermissionError, match="node_attestation_rejected"):
         supervisor.register(
             node_id="node-bound", identity_fingerprint=fingerprint,
-            capabilities=("compute",), attestation=signed,
-        ) if False else supervisor.register(
             node_id="node-bound", identity_fingerprint=fingerprint,
             capabilities=("compute",),
             attestation=AgentIdentityAuthority.sign(
