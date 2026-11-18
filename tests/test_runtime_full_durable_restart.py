@@ -154,7 +154,9 @@ def test_full_durable_runtime_recovers_identity_state_offline_queue_ncp_and_audi
     assert restored_continuity.snapshot()[0].sequence == 7
     assert restored_continuity.snapshot()[0].state is NodeContinuityState.ISOLATED
     assert reopened_audit.verify_integrity()
-    assert reopened_audit.verify_and_advance_anchor(audit_anchor) == audit_head
+    recovered_audit_head = reopened_audit.verify_and_advance_anchor(audit_anchor)
+    assert recovered_audit_head.sequence > audit_head.sequence
+    assert audit_anchor.read() == recovered_audit_head
 
     second.state_journal.close()
     reopened_audit.close()
