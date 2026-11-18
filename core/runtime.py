@@ -117,6 +117,18 @@ class NORYXRuntime:
     def continuity(self):
         return self._continuity
 
+    def checkpoint_audit_anchor(self, anchor):
+        """Publish the current durable audit head to an external monotonic anchor.
+
+        Deployments must call this at their configured durability boundary
+        (for example after a verified execution commit). The anchor must live
+        outside the local audit database's rollback domain.
+        """
+        checkpoint = getattr(self.audit, "verify_and_advance_anchor", None)
+        if not callable(checkpoint):
+            raise RuntimeError("durable_audit_anchor_backend_required")
+        return checkpoint(anchor)
+
     def configure_continuity(
         self,
         *,
