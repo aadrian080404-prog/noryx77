@@ -40,12 +40,15 @@ class NORYXRuntime:
         state_journal_path: str | None = None,
         model_fabric=None,
         user_understanding: UserUnderstandingEngine | None = None,
+        audit_log: AuditLog | None = None,
     ):
         self.limits = limits or RuntimeLimits()
         self._model_fabric = model_fabric
         if user_understanding is not None and not isinstance(user_understanding, UserUnderstandingEngine):
             raise TypeError("invalid_user_understanding_engine")
         self.user_understanding = user_understanding
+        if audit_log is not None and not isinstance(audit_log, AuditLog):
+            raise TypeError("invalid_audit_log")
         self.verifier = VerificationEngine()
         self.policy = PolicyEngine()
         self.recovery = RecoveryController()
@@ -54,7 +57,7 @@ class NORYXRuntime:
         self.memory = MemoryStore(max_items=self.limits.max_memory_items)
         self.state_journal = StateJournal(state_journal_path, max_commits=self.limits.max_memory_items) if state_journal_path else None
         self.state = StateStore(max_commits=self.limits.max_memory_items, journal=self.state_journal)
-        self.audit = AuditLog()
+        self.audit = audit_log if audit_log is not None else AuditLog()
         self.identity_registry = IdentityRegistry()
         deterministic_identity, _ = AgentIdentityAuthority.generate("deterministic")
         self.identity_registry.register(deterministic_identity)
