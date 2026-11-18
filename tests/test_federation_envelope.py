@@ -231,3 +231,35 @@ def test_revoked_principal_or_agent_is_rejected(tmp_path, principal_revoked, age
             verifier.verify_and_consume(envelope)
     finally:
         store.close()
+
+
+@pytest.mark.parametrize(
+    ("principal_trusted", "agent_trusted", "reason"),
+    [
+        (lambda _principal: False, lambda _agent: True, "execution_principal_untrusted"),
+        (lambda _principal: True, lambda _agent: False, "execution_agent_untrusted"),
+    ],
+)
+def test_unregistered_principal_or_agent_is_rejected(
+    tmp_path, principal_trusted, agent_trusted, reason
+):
+    key = Ed25519PrivateKey.generate()
+    envelope = sign_execution_envelope(
+        _unsigned(nonce=b"u" * 32), issuer_key_id="issuer-v1", signing_key=key
+    )
+    store = SQLiteEnvelopeReplayStore(str(tmp_path / "identity-trust.sqlite3"))
+    verifier = ExecutionEnvelopeVerifier(
+        {"issuer-v1": key.public_key()},
+        store,
+        is_issuer_revoked=lambda _key: False,
+        is_principal_revoked=lambda _principal: False,
+        is_agent_revoked=lambda _agent: False,
+        is_principal_trusted=principal_trusted,
+        is_agent_trusted=agent_trusted,
+        clock=lambda: 110,
+    )
+    try:
+        with pytest.raises(EnvelopeRejected, match=reason):
+            verifier.verify_and_consume(envelope)
+    finally:
+        store.close()
