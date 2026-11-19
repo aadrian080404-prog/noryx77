@@ -157,11 +157,11 @@ class AnchoredFederatedAuditSink:
 
     def record(self, event: str, **data):
         with self._writer_lease.hold():
-          with self._lock:
-            # Reconcile a possible commit left behind by a prior interrupted call.
-            self._synchronizer.synchronize()
-            stored = self._audit_log.record(event, **data)
-            # The caller only sees a successful write after the independent
-            # checkpoint confirms the exact resulting local chain head.
-            self._synchronizer.synchronize()
-            return stored
+            with self._lock:
+                # Reconcile a possible commit left behind by a prior interrupted call.
+                self._synchronizer.synchronize()
+                stored = self._audit_log.record(event, **data)
+                # The caller only sees a successful write after the independent
+                # checkpoint confirms the exact resulting local chain head.
+                self._synchronizer.synchronize()
+                return stored
