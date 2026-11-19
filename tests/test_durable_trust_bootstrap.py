@@ -337,6 +337,9 @@ def test_bootstrap_uses_live_durable_principal_agent_binding_registry(tmp_path):
         runtime = build_durable_trust_runtime(**base)
         assert runtime.agent_identity.agent_id == identity.agent_id
         bindings.revoke_binding(principal.principal_id, identity.agent_id)
+        assert not bindings.is_agent_owned_by_principal(
+            principal.principal_id, identity.agent_id
+        )
         try:
             build_durable_trust_runtime(**base)
         except PermissionError as exc:
