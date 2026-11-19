@@ -159,3 +159,40 @@ def test_external_anchor_comparison_detects_rollback_and_divergence(tmp_path):
     newer = audit.verify_against_anchor(sequence, digest)
     assert newer[0] == sequence + 1
     audit.close()
+
+
+
+def test_checkpoint_verification_and_head_share_one_sqlite_read_snapshot(tmp_path):
+    path = tmp_path / "stable-checkpoint-snapshot.sqlite"
+    reader = SQLiteFederatedAuditLog(path, clock=lambda: 10.0)
+    writer = SQLiteFederatedAuditLog(path, clock=lambda: 11.0)
+    try:
+        reader.record("event", value="verified-prefix")
+        original_verify = reader._verify_locked
+        injected = {"done": False}
+
+        def verify_then_concurrent_append():
+            valid = original_verify()
+            if valid and not injected["done"]:
+                injected["done"] = True
+                writer.record("event", value="concurrent-append")
+            return valid
+
+        reader._verify_locked = verify_then_concurrent_append
+        sequence, digest = reader.checkpoint()
+
+        # The append committed after the reader established its snapshot.
+        # It must not leak into a checkpoint whose verification predates it.
+        assert (sequence, digest) == (1, reader._event_digest(
+            reader._conn.execute(
+                "SELECT previous_digest FROM federated_audit_events WHERE sequence=1"
+            ).fetchone()[0],
+            reader._conn.execute(
+                "SELECT event_json FROM federated_audit_events WHERE sequence=1"
+            ).fetchone()[0],
+        ))
+        assert writer.checkpoint()[0] == 2
+        assert reader.checkpoint()[0] == 2
+    finally:
+        reader.close()
+        writer.close()
