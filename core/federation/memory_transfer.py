@@ -99,6 +99,9 @@ def validate_memory_transfer(
     if bool(envelope["source_agent_id"]) != bool(envelope["recipient_agent_id"]):
         raise MemoryTransferRejected("agent_scope_mapping_required")
 
+    if (isinstance(max_ttl_seconds, bool) or not isinstance(max_ttl_seconds, int)
+            or not 1 <= max_ttl_seconds <= 604_800):
+        raise MemoryTransferRejected("invalid_max_ttl")
     issued_at, expires_at = envelope["issued_at"], envelope["expires_at"]
     if (isinstance(issued_at, bool) or not isinstance(issued_at, int)
             or isinstance(expires_at, bool) or not isinstance(expires_at, int)):
@@ -110,10 +113,6 @@ def validate_memory_transfer(
             or expires_at <= issued_at
             or expires_at - issued_at > max_ttl_seconds):
         raise MemoryTransferRejected("transfer_expired_or_invalid_ttl")
-    if (isinstance(max_ttl_seconds, bool) or not isinstance(max_ttl_seconds, int)
-            or not 1 <= max_ttl_seconds <= 604_800):
-        raise MemoryTransferRejected("invalid_max_ttl")
-
     digest = envelope["ciphertext_sha256"]
     if not isinstance(digest, str) or not _HEX_256.fullmatch(digest):
         raise MemoryTransferRejected("invalid_ciphertext_digest")
