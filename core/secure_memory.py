@@ -130,7 +130,7 @@ class EncryptedMemoryStore:
         record_id = self._record_id(memory_id, principal_id, agent_id, execution_id)
         plaintext = self._store.get(record_id)
         legacy = False
-        if plaintext is None and not principal_id and not agent_id and not execution_id:
+        if plaintext is None and record_id != memory_id:
             plaintext = self._store.get(memory_id)
             legacy = plaintext is not None
         if plaintext is None:
@@ -159,13 +159,15 @@ class EncryptedMemoryStore:
         record_id = self._record_id(memory_id, principal_id, agent_id, execution_id)
         if self._store.delete(record_id):
             return True
-        if principal_id or agent_id or execution_id:
-            return False
         legacy = self._store.get(memory_id)
         if legacy is None:
             return False
         item = self._deserialize(memory_id, legacy)
-        if item.principal_id or item.agent_id or item.execution_id:
+        if (
+            item.principal_id != principal_id
+            or item.agent_id != agent_id
+            or item.execution_id != execution_id
+        ):
             return False
         return self._store.delete(memory_id)
 
