@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import time
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -128,7 +129,10 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
     )
+    current = int(time.time())
     envelope = make_envelope()
+    envelope["issued_at"] = current - 10
+    envelope["expires_at"] = current + 3_600
     payload = canonical_unsigned_envelope(envelope)
     envelope["signature"] = base64.b64encode(private_key.sign(payload)).decode("ascii")
     verifier = ed25519_signature_verifier(
@@ -159,7 +163,7 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
                 verify_source_agent=lambda *_: True,
                 verify_recipient_agent=lambda *_: True,
                 reserve_nonce=registry.reserve,
-                now=150,
+                now=current,
             )
     finally:
         registry.close()
@@ -167,7 +171,7 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
     # A fresh connection to the same database must still reject the nonce.
     restarted = SQLiteNonceRegistry(str(nonce_db))
     try:
-        assert restarted.reserve("issuer-key-a", "unique-nonce", 200) is False
+        assert restarted.reserve("issuer-key-a", "unique-nonce", current + 3_600) is False
     finally:
         restarted.close()
 
