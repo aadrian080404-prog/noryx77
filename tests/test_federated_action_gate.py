@@ -302,6 +302,7 @@ def test_federated_action_gate_anchors_decision_and_outcome_before_return(tmp_pa
     from core.federated_audit_anchor import (
         AnchoredFederatedAuditSink,
         FederatedAuditSynchronizer,
+        SQLiteFederatedAuditWriterLease,
     )
     from core.sqlite_federated_audit import SQLiteFederatedAuditLog
 
@@ -324,7 +325,10 @@ def test_federated_action_gate_anchors_decision_and_outcome_before_return(tmp_pa
     synchronizer = FederatedAuditSynchronizer(
         durable_log, external, namespace="noryx7/runtime-gate"
     )
-    anchored_sink = AnchoredFederatedAuditSink(durable_log, synchronizer)
+    anchored_sink = AnchoredFederatedAuditSink(
+        durable_log, synchronizer,
+        SQLiteFederatedAuditWriterLease(tmp_path / "gate-external-anchored.lease"),
+    )
     gate, _, _, agent, action, admission, agent_grant, principal_grant, _ = _setup(
         tmp_path, audit_log=anchored_sink
     )
