@@ -155,4 +155,3 @@ def test_federated_action_rejects_stale_policy_version(tmp_path):
     assert decision.reason == "federated_policy_version_mismatch"
     assert result is None
     assert dispatched == []
-}
