@@ -91,7 +91,8 @@ def identity_rotation_message(
         raise ValueError("invalid_new_public_key")
     if old_public_key == new_public_key:
         raise ValueError("rotation_key_must_change")
-    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+    if (isinstance(generation, bool) or not isinstance(generation, int)
+            or not 1 <= generation <= (2**64 - 1)):
         raise ValueError("invalid_identity_generation")
     return (
         _ROTATION_DOMAIN
@@ -152,7 +153,8 @@ class IdentityRegistry:
         """
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
-        if isinstance(expected_generation, bool) or not isinstance(expected_generation, int) or expected_generation < 1:
+        if (isinstance(expected_generation, bool) or not isinstance(expected_generation, int)
+                or not 1 <= expected_generation <= (2**64 - 1)):
             raise ValueError("invalid_identity_generation")
         if not isinstance(old_key_signature, bytes) or len(old_key_signature) != SIGNATURE_SIZE:
             raise ValueError("invalid_old_key_signature")
@@ -179,6 +181,8 @@ class IdentityRegistry:
             except (InvalidSignature, ValueError, TypeError):
                 raise PermissionError("identity_rotation_proof_invalid") from None
 
+            if current_generation >= (2**64 - 1):
+                raise OverflowError("identity_generation_exhausted")
             next_generation = current_generation + 1
             self._keys[agent_id] = bytes(identity.public_key)
             self._generations[agent_id] = next_generation
