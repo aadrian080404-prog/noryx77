@@ -246,9 +246,9 @@ def test_bootstrap_rejects_non_utf8_surrogate_identifiers_before_witness_or_sign
     )
     try:
         for override, expected in (
-            ({"witness_namespace": "bad\\ud800"}, "invalid_witness_namespace_encoding"),
-            ({"principal_id": "bad\\ud800"}, "invalid_principal_id_encoding"),
-            ({"key_id": "bad\\ud800"}, "invalid_key_id_encoding"),
+            ({"witness_namespace": "bad\ud800"}, "invalid_witness_namespace_encoding"),
+            ({"principal_id": "bad\ud800"}, "invalid_principal_id_encoding"),
+            ({"key_id": "bad\ud800"}, "invalid_key_id_encoding"),
         ):
             try:
                 build_durable_trust_runtime(**{**base, **override})
