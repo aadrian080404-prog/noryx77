@@ -17,6 +17,7 @@ SIGNATURE_SIZE: Final[int] = 64
 MAX_ID_SIZE: Final[int] = 1024
 MAX_STATEMENT_SIZE: Final[int] = 16 * 1024 * 1024
 _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
+_ROTATION_DOMAIN: Final[bytes] = b"noryx7/agent-identity-rotation/v1/"
 T = TypeVar("T")
 
 
@@ -75,26 +76,113 @@ def _attestation_message(identity: AgentIdentity, statement: bytes) -> bytes:
     return _identity_bytes(identity) + len(statement).to_bytes(8, "big") + statement
 
 
+def identity_rotation_message(
+    agent_id: str,
+    old_public_key: bytes,
+    new_public_key: bytes,
+    generation: int,
+) -> bytes:
+    """Return the domain-separated message both old and new keys must sign."""
+    if not isinstance(agent_id, str) or not agent_id.strip() or len(agent_id.encode("utf-8")) > MAX_ID_SIZE:
+        raise ValueError("invalid_agent_id")
+    if not isinstance(old_public_key, bytes) or len(old_public_key) != PUBLIC_KEY_SIZE:
+        raise ValueError("invalid_old_public_key")
+    if not isinstance(new_public_key, bytes) or len(new_public_key) != PUBLIC_KEY_SIZE:
+        raise ValueError("invalid_new_public_key")
+    if old_public_key == new_public_key:
+        raise ValueError("rotation_key_must_change")
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+        raise ValueError("invalid_identity_generation")
+    return (
+        _ROTATION_DOMAIN
+        + _identity_field(agent_id)
+        + generation.to_bytes(8, "big")
+        + old_public_key
+        + new_public_key
+    )
+
+
 class IdentityRegistry:
-    """Explicit trust-anchor registry mapping agent IDs to approved public keys."""
+    """Trust-anchor registry with monotonic, dual-proof identity key rotation."""
 
     def __init__(self):
         self._keys: dict[str, bytes] = {}
+        self._generations: dict[str, int] = {}
+        self._revoked: set[str] = set()
         self._lock = threading.RLock()
 
     def register(self, identity: AgentIdentity) -> None:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
         with self._lock:
+            if identity.agent_id in self._revoked:
+                raise PermissionError("agent_identity_permanently_revoked")
             if identity.agent_id in self._keys:
                 raise ValueError("agent_identity_already_registered")
             self._keys[identity.agent_id] = bytes(identity.public_key)
+            self._generations[identity.agent_id] = 1
 
     def revoke(self, agent_id: str) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
         with self._lock:
             self._keys.pop(agent_id, None)
+            self._revoked.add(agent_id)
+
+    def generation(self, agent_id: str) -> int:
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("invalid_agent_id")
+        with self._lock:
+            if agent_id in self._revoked or agent_id not in self._generations:
+                raise PermissionError("agent_identity_not_active")
+            return self._generations[agent_id]
+
+    def rotate_identity(
+        self,
+        identity: AgentIdentity,
+        *,
+        expected_generation: int,
+        old_key_signature: bytes,
+        new_key_signature: bytes,
+    ) -> int:
+        """Atomically replace a trusted key only with old-key and new-key proof.
+
+        Both signatures cover the same agent, current generation, old key and
+        proposed key. The generation compare-and-swap prevents stale rotations.
+        """
+        if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
+            raise ValueError("invalid_agent_identity")
+        if isinstance(expected_generation, bool) or not isinstance(expected_generation, int) or expected_generation < 1:
+            raise ValueError("invalid_identity_generation")
+        if not isinstance(old_key_signature, bytes) or len(old_key_signature) != SIGNATURE_SIZE:
+            raise ValueError("invalid_old_key_signature")
+        if not isinstance(new_key_signature, bytes) or len(new_key_signature) != SIGNATURE_SIZE:
+            raise ValueError("invalid_new_key_signature")
+
+        with self._lock:
+            agent_id = identity.agent_id
+            current_key = self._keys.get(agent_id)
+            current_generation = self._generations.get(agent_id)
+            if agent_id in self._revoked or current_key is None:
+                raise PermissionError("agent_identity_not_active")
+            if current_generation != expected_generation:
+                raise PermissionError("identity_generation_conflict")
+            if current_key == identity.public_key:
+                raise ValueError("rotation_key_must_change")
+
+            message = identity_rotation_message(
+                agent_id, current_key, identity.public_key, expected_generation
+            )
+            try:
+                Ed25519PublicKey.from_public_bytes(current_key).verify(old_key_signature, message)
+                Ed25519PublicKey.from_public_bytes(identity.public_key).verify(new_key_signature, message)
+            except (InvalidSignature, ValueError, TypeError):
+                raise PermissionError("identity_rotation_proof_invalid") from None
+
+            next_generation = current_generation + 1
+            self._keys[agent_id] = bytes(identity.public_key)
+            self._generations[agent_id] = next_generation
+            return next_generation
 
     def is_trusted(self, identity: AgentIdentity) -> bool:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
