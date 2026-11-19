@@ -70,7 +70,7 @@ def test_federated_action_requires_both_grants_and_local_policy(tmp_path):
     dispatched = []
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search",
+        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
         executor=lambda: dispatched.append("queued") or "queued",
     )
     assert decision.allowed is True
@@ -97,7 +97,7 @@ def test_federated_action_rejects_revoked_agent_before_dispatch(tmp_path):
     dispatched = []
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search",
+        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
         executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
@@ -111,7 +111,7 @@ def test_federated_action_rejects_revoked_principal_before_dispatch(tmp_path):
     dispatched = []
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search",
+        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
         executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
@@ -124,15 +124,30 @@ def test_federated_action_rejects_replay_of_either_grant(tmp_path):
     dispatched = []
     first, _ = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search",
+        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
         executor=lambda: dispatched.append("first"),
     )
     second, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search",
+        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
         executor=lambda: dispatched.append("replay"),
     )
     assert first.allowed is True
     assert second.allowed is False
     assert result is None
     assert dispatched == ["first"]
+
+
+
+def test_federated_action_rejects_stale_policy_version(tmp_path):
+    gate, _, _, agent, action, admission, agent_grant, principal_grant = _setup(tmp_path)
+    dispatched = []
+    decision, result = gate.authorize_and_dispatch(
+        admission, action, agent_identity=agent, agent_grant=agent_grant,
+        principal_grant=principal_grant, required_capability="search",
+        local_policy_version="local-v2",
+        executor=lambda: dispatched.append("unsafe"),
+    )
+    assert decision.allowed is False
+    assert result is None
+    assert dispatched == []
