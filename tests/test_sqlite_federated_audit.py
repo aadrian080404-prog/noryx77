@@ -66,3 +66,18 @@ def test_sqlite_audit_requires_a_file_backed_database_and_valid_clock(tmp_path):
         audit.record("test")
     assert audit.snapshot() == ()
     audit.close()
+
+
+def test_sqlite_audit_bounds_record_size_and_rejects_unrepresentable_clock(tmp_path):
+    audit = SQLiteFederatedAuditLog(tmp_path / "bounded.sqlite")
+    with pytest.raises(ValueError, match="audit_record_too_large"):
+        audit.record("oversized", payload="x" * 70_000)
+    audit.close()
+
+    huge_clock = SQLiteFederatedAuditLog(
+        tmp_path / "huge-clock.sqlite", clock=lambda: 10 ** 10000
+    )
+    with pytest.raises(RuntimeError, match="audit_clock_invalid"):
+        huge_clock.record("clock_overflow")
+    assert huge_clock.snapshot() == ()
+    huge_clock.close()
