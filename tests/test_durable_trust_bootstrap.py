@@ -319,6 +319,7 @@ def test_bootstrap_uses_live_durable_principal_agent_binding_registry(tmp_path):
         agent_registry=agent_registry,
     )
     bindings.bind(principal.principal_id, identity.agent_id)
+    assert bindings.is_agent_owned_by_principal(principal.principal_id, identity.agent_id)
 
     base = dict(
         identity_registry=agent_registry,
@@ -345,7 +346,8 @@ def test_bootstrap_uses_live_durable_principal_agent_binding_registry(tmp_path):
     finally:
         replay.close()
         agent_registry.close()
-        principal_registry.close()
+        if callable(getattr(principal_registry, "close", None)):
+            principal_registry.close()
 
 
 def test_bootstrap_rejects_ambiguous_binding_sources_before_witness(tmp_path):
