@@ -258,15 +258,15 @@ def _with_active_binding(
     """Run callback while both live identities and the durable binding are locked.
 
     Lock order is agent registry -> principal registry -> binding SQLite write
-    transaction. The IMMEDIATE transaction is held across callback execution,
-    so a concurrent binding revocation cannot commit between the check and the
-    local dispatch. The callback must be bounded and must not perform network I/O.
+    transaction. The transaction remains open during the bounded local callback,
+    so a concurrent binding revocation cannot commit between check and dispatch.
+    The callback must not perform network I/O or mutate trust registries.
     """
     self._validate_ids(principal_id, agent_id)
     if not callable(callback):
         raise TypeError("binding_callback_required")
 
-    def with_principal(_principal_identity):
+    def with_binding_transaction() -> object:
         with self._lock:
             connection = self._connect()
             try:
@@ -299,9 +299,10 @@ def _with_active_binding(
         return self._agent_registry.with_trusted_identity(
             agent_id,
             lambda identity: (
-                with_principal(self._principal_registry.with_trusted_principal(
-                    principal_id, lambda principal: principal
-                ))
+                self._principal_registry.with_trusted_principal(
+                    principal_id,
+                    lambda _principal: with_binding_transaction(),
+                )
                 if (
                     identity.agent_id == agent_id
                     and isinstance(identity.public_key, bytes)
