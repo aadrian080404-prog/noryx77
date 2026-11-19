@@ -77,12 +77,13 @@ class FederatedActionAuditRecorder:
             timestamp = self._clock()
         except Exception:
             raise RuntimeError("audit_clock_unavailable") from None
-        if (
-            isinstance(timestamp, bool)
-            or not isinstance(timestamp, (int, float))
-            or not math.isfinite(float(timestamp))
-            or timestamp < 0
-        ):
+        if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)) or timestamp < 0:
+            raise RuntimeError("audit_clock_invalid")
+        try:
+            finite_timestamp = math.isfinite(float(timestamp))
+        except (OverflowError, ValueError):
+            finite_timestamp = False
+        if not finite_timestamp:
             raise RuntimeError("audit_clock_invalid")
         return self._audit.record(
             "federated_action_decision",
