@@ -1,4 +1,4 @@
-""""Final federated action boundary requiring principal, agent and audit controls.
+"""Final federated action boundary requiring principal, agent and audit controls.
 
 Envelope capability claims are request constraints, never local permissions.
 Local policy and security decide whether the ActionSpec is allowed. When
