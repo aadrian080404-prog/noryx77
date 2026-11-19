@@ -3,6 +3,7 @@ import sqlite3
 import pytest
 
 from core.federated_audit_anchor import (
+    AnchoredFederatedAuditSink,
     FederatedAuditCheckpoint,
     FederatedAuditSynchronizer,
 )
@@ -109,3 +110,65 @@ def test_federated_audit_external_anchor_fails_closed_on_outage(tmp_path):
     )
     with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
         sync.synchronize()
+
+
+
+def test_anchored_sink_advances_external_checkpoint_for_every_record(tmp_path):
+    log = _log(tmp_path / "automatic-anchor.db")
+    anchor = FakeAnchor(log.checkpoint())
+    sync = FederatedAuditSynchronizer(log, anchor, namespace="noryx7/federation-a")
+    sink = AnchoredFederatedAuditSink(log, sync)
+
+    first = sink.record("decision", allowed=True)
+    assert first["event"] == "decision"
+    assert anchor.checkpoint.sequence == 1
+    second = sink.record("outcome", outcome="dispatched")
+    assert second["event"] == "outcome"
+    assert anchor.checkpoint.sequence == 2
+    assert log.checkpoint() == anchor.checkpoint
+
+
+def test_anchored_sink_recovers_interrupted_commit_before_next_write(tmp_path):
+    class FailFirstAdvance(FakeAnchor):
+        def __init__(self, checkpoint):
+            super().__init__(checkpoint)
+            self.fail = True
+
+        def compare_and_advance(self, namespace, expected, next_checkpoint):
+            if self.fail:
+                self.fail = False
+                raise OSError("temporary anchor outage")
+            return super().compare_and_advance(namespace, expected, next_checkpoint)
+
+    log = _log(tmp_path / "automatic-anchor-recovery.db")
+    anchor = FailFirstAdvance(log.checkpoint())
+    sync = FederatedAuditSynchronizer(log, anchor, namespace="noryx7/federation-a")
+    sink = AnchoredFederatedAuditSink(log, sync)
+
+    with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
+        sink.record("decision", allowed=True)
+    assert len(log.snapshot()) == 1
+    assert anchor.checkpoint.sequence == 0
+
+    # The next call reconciles the already committed row before appending.
+    sink.record("outcome", outcome="dispatched")
+    assert len(log.snapshot()) == 2
+    assert anchor.checkpoint.sequence == 2
+    assert log.checkpoint() == anchor.checkpoint
+
+
+def test_anchored_sink_does_not_append_when_anchor_is_unavailable_before_write(tmp_path):
+    class OfflineAnchor:
+        def read_checkpoint(self, namespace):
+            raise OSError("offline")
+        def compare_and_advance(self, namespace, expected, next_checkpoint):
+            raise OSError("offline")
+
+    log = _log(tmp_path / "automatic-anchor-offline.db")
+    sync = FederatedAuditSynchronizer(
+        log, OfflineAnchor(), namespace="noryx7/federation-a"
+    )
+    sink = AnchoredFederatedAuditSink(log, sync)
+    with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
+        sink.record("decision", allowed=True)
+    assert log.snapshot() == ()

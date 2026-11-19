@@ -83,3 +83,35 @@ class FederatedAuditSynchronizer:
         if advanced is not True:
             raise PermissionError("external_federated_audit_anchor_conflict")
         return local
+
+
+
+class AnchoredFederatedAuditSink:
+    """Serialize audit appends with an external checkpoint advance.
+
+    Each write verifies the external head before appending and advances it
+    immediately afterwards. If the process stops between those operations,
+    the next write first recovers the single pending append. Multiple writers
+    in different processes may cause a safe gap rejection; production
+    deployments should use one writer per namespace or an external lease.
+    """
+
+    def __init__(self, audit_log, synchronizer: FederatedAuditSynchronizer):
+        if not callable(getattr(audit_log, "record", None)):
+            raise TypeError("federated_audit_record_sink_required")
+        if not isinstance(synchronizer, FederatedAuditSynchronizer):
+            raise TypeError("federated_audit_synchronizer_required")
+        self._audit_log = audit_log
+        self._synchronizer = synchronizer
+        import threading
+        self._lock = threading.RLock()
+
+    def record(self, event: str, **data):
+        with self._lock:
+            # Reconcile a possible commit left behind by a prior interrupted call.
+            self._synchronizer.synchronize()
+            stored = self._audit_log.record(event, **data)
+            # The caller only sees a successful write after the independent
+            # checkpoint confirms the exact resulting local chain head.
+            self._synchronizer.synchronize()
+            return stored
