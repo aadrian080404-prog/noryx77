@@ -272,3 +272,53 @@ def test_encrypted_transfer_rejects_tampered_identity_binding(tmp_path):
             )
     finally:
         registry.close()
+
+
+
+def test_encrypted_transfer_rejects_modified_ciphertext_even_when_resigned(tmp_path):
+    recipient_private = X25519PrivateKey.generate()
+    recipient_private_raw = recipient_private.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    recipient_public_raw = recipient_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    metadata = {
+        "schema_version": 1, "transfer_id": "aead-tamper-transfer",
+        "source_principal_id": "principal-a", "recipient_principal_id": "principal-b",
+        "source_agent_id": "", "recipient_agent_id": "",
+        "execution_id": "execution-1", "recipient_key_id": "recipient-key-b",
+        "issued_at": 100, "expires_at": 200, "nonce": "aead-tamper-nonce",
+        "issuer_key_id": "issuer-key-a",
+    }
+    envelope = seal_memory_transfer(b"confidential payload", metadata, recipient_public_raw)
+    ciphertext = bytearray(base64.b64decode(envelope["ciphertext_b64"]))
+    ciphertext[0] ^= 0x01
+    envelope["ciphertext_b64"] = base64.b64encode(ciphertext).decode("ascii")
+    envelope["ciphertext_sha256"] = hashlib.sha256(ciphertext).hexdigest()
+
+    issuer_private = Ed25519PrivateKey.generate()
+    issuer_public = issuer_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    envelope["signature"] = base64.b64encode(
+        issuer_private.sign(canonical_unsigned_envelope(envelope))
+    ).decode("ascii")
+    registry = SQLiteNonceRegistry(str(tmp_path / "aead-tamper-nonces.db"))
+    try:
+        with pytest.raises(MemoryTransferRejected, match="memory_decryption_failed"):
+            open_memory_transfer(
+                envelope,
+                recipient_private_key=recipient_private_raw,
+                expected_recipient_principal_id="principal-b",
+                expected_recipient_key_id="recipient-key-b",
+                verify_signature=ed25519_signature_verifier(lambda _key_id: issuer_public),
+                reserve_nonce=registry.reserve,
+                now=150,
+            )
+    finally:
+        registry.close()
