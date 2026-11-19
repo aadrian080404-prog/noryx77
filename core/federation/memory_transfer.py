@@ -11,6 +11,7 @@ import base64
 import binascii
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -29,7 +30,7 @@ _REQUIRED = frozenset({
     "recipient_principal_id", "source_agent_id", "recipient_agent_id",
     "execution_id", "recipient_key_id", "ciphertext_b64",
     "ciphertext_sha256", "issued_at", "expires_at", "nonce",
-    "issuer_key_id", "signature",
+    "issuer_key_id", "ephemeral_public_key_b64", "aead_nonce_b64", "signature",
 })
 
 
@@ -125,8 +126,15 @@ def validate_memory_transfer(
         ciphertext = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError) as exc:
         raise MemoryTransferRejected("invalid_ciphertext") from exc
-    if not ciphertext or len(ciphertext) > _MAX_CIPHERTEXT:
+    if len(ciphertext) < 16 or len(ciphertext) > _MAX_CIPHERTEXT:
         raise MemoryTransferRejected("invalid_ciphertext")
+    try:
+        ephemeral_public = base64.b64decode(envelope["ephemeral_public_key_b64"], validate=True)
+        aead_nonce = base64.b64decode(envelope["aead_nonce_b64"], validate=True)
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise MemoryTransferRejected("invalid_encryption_metadata") from exc
+    if len(ephemeral_public) != 32 or len(aead_nonce) != 12:
+        raise MemoryTransferRejected("invalid_encryption_metadata")
     if not hashlib.sha256(ciphertext).hexdigest() == digest:
         raise MemoryTransferRejected("ciphertext_digest_mismatch")
 
@@ -236,3 +244,134 @@ class SQLiteNonceRegistry:
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+
+
+_AAD_FIELDS = (
+    "schema_version", "transfer_id", "source_principal_id",
+    "recipient_principal_id", "source_agent_id", "recipient_agent_id",
+    "execution_id", "recipient_key_id", "issued_at", "expires_at",
+    "nonce", "issuer_key_id", "ephemeral_public_key_b64", "aead_nonce_b64",
+)
+
+
+def memory_transfer_aad(envelope: Mapping[str, Any]) -> bytes:
+    """Canonical authenticated metadata bound to the encrypted plaintext."""
+    try:
+        metadata = {field: envelope[field] for field in _AAD_FIELDS}
+        return json.dumps(
+            metadata, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8")
+    except (KeyError, TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise MemoryTransferRejected("invalid_encryption_metadata") from exc
+
+
+def seal_memory_transfer(
+    plaintext: bytes,
+    metadata: Mapping[str, Any],
+    recipient_public_key: bytes,
+) -> dict[str, Any]:
+    """Encrypt memory to a recipient X25519 key with ChaCha20-Poly1305.
+
+    The returned envelope has a placeholder signature; the trusted issuer must
+    sign canonical_unsigned_envelope(envelope) after sealing.
+    """
+    if not isinstance(plaintext, bytes) or not plaintext or len(plaintext) > _MAX_CIPHERTEXT - 16:
+        raise MemoryTransferRejected("invalid_plaintext")
+    if not isinstance(recipient_public_key, bytes) or len(recipient_public_key) != 32:
+        raise MemoryTransferRejected("invalid_recipient_public_key")
+    base_fields = {
+        "schema_version", "transfer_id", "source_principal_id",
+        "recipient_principal_id", "source_agent_id", "recipient_agent_id",
+        "execution_id", "recipient_key_id", "issued_at", "expires_at",
+        "nonce", "issuer_key_id",
+    }
+    if not isinstance(metadata, Mapping) or set(metadata) != base_fields:
+        raise MemoryTransferRejected("invalid_transfer_metadata")
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric.x25519 import (
+            X25519PrivateKey, X25519PublicKey,
+        )
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+        ephemeral_private = X25519PrivateKey.generate()
+        ephemeral_public = ephemeral_private.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        nonce = os.urandom(12)
+        envelope = dict(metadata)
+        envelope.update({
+            "ephemeral_public_key_b64": base64.b64encode(ephemeral_public).decode("ascii"),
+            "aead_nonce_b64": base64.b64encode(nonce).decode("ascii"),
+        })
+        aad = memory_transfer_aad(envelope)
+        shared_secret = ephemeral_private.exchange(
+            X25519PublicKey.from_public_bytes(recipient_public_key)
+        )
+        key = HKDF(
+            algorithm=hashes.SHA256(), length=32,
+            salt=hashlib.sha256(aad).digest(),
+            info=b"NORYX7/federated-memory-transfer/v1",
+        ).derive(shared_secret)
+        ciphertext = ChaCha20Poly1305(key).encrypt(nonce, plaintext, aad)
+    except MemoryTransferRejected:
+        raise
+    except Exception as exc:
+        raise MemoryTransferRejected("memory_encryption_failed") from exc
+
+    envelope.update({
+        "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
+        "ciphertext_sha256": hashlib.sha256(ciphertext).hexdigest(),
+        "signature": "pending",
+    })
+    return envelope
+
+
+def open_memory_transfer(
+    envelope: Mapping[str, Any],
+    *,
+    recipient_private_key: bytes,
+    expected_recipient_principal_id: str,
+    expected_recipient_key_id: str,
+    verify_signature: Callable[[str, bytes, str], bool],
+    reserve_nonce: Callable[[str, str, int], bool],
+    now: int | None = None,
+    max_ttl_seconds: int = 86_400,
+) -> bytes:
+    """Authenticate, atomically consume the nonce, then decrypt for the recipient."""
+    ciphertext = validate_memory_transfer(
+        envelope,
+        expected_recipient_principal_id=expected_recipient_principal_id,
+        expected_recipient_key_id=expected_recipient_key_id,
+        verify_signature=verify_signature,
+        reserve_nonce=reserve_nonce,
+        now=now,
+        max_ttl_seconds=max_ttl_seconds,
+    )
+    if not isinstance(recipient_private_key, bytes) or len(recipient_private_key) != 32:
+        raise MemoryTransferRejected("invalid_recipient_private_key")
+    try:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric.x25519 import (
+            X25519PrivateKey, X25519PublicKey,
+        )
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+        ephemeral_public = base64.b64decode(envelope["ephemeral_public_key_b64"], validate=True)
+        nonce = base64.b64decode(envelope["aead_nonce_b64"], validate=True)
+        private_key = X25519PrivateKey.from_private_bytes(recipient_private_key)
+        shared_secret = private_key.exchange(X25519PublicKey.from_public_bytes(ephemeral_public))
+        aad = memory_transfer_aad(envelope)
+        key = HKDF(
+            algorithm=hashes.SHA256(), length=32,
+            salt=hashlib.sha256(aad).digest(),
+            info=b"NORYX7/federated-memory-transfer/v1",
+        ).derive(shared_secret)
+        return ChaCha20Poly1305(key).decrypt(nonce, ciphertext, aad)
+    except Exception as exc:
+        raise MemoryTransferRejected("memory_decryption_failed") from exc
