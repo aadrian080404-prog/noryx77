@@ -260,3 +260,44 @@ def test_bootstrap_rejects_non_utf8_surrogate_identifiers_before_witness_or_sign
     finally:
         replay.close()
         registry.close()
+
+
+
+def test_bootstrap_rejects_non_utf8_agent_id_before_identity_check_or_witness(tmp_path):
+    from dataclasses import replace
+
+    identity, private_key, registry, replay = _setup(tmp_path)
+
+    class RecordingWitness(TestWitness):
+        def __init__(self):
+            super().__init__(4)
+            self.calls = 0
+
+        def read_epoch(self, namespace):
+            self.calls += 1
+            return super().read_epoch(namespace)
+
+    witness = RecordingWitness()
+    invalid_identity = replace(identity, agent_id="bad\\ud800")
+    try:
+        try:
+            build_durable_trust_runtime(
+                identity_registry=registry,
+                replay_guard=replay,
+                key_provider=TestKeyProvider(private_key),
+                key_id="kms://agent/key-1",
+                agent_identity=invalid_identity,
+                witness=witness,
+                witness_namespace="noryx7/trust",
+                local_epoch=4,
+                principal_id="principal-1",
+                principal_agent_binding_verifier=lambda principal, agent: True,
+            )
+        except ValueError as exc:
+            assert str(exc) == "invalid_agent_identity_encoding"
+        else:
+            raise AssertionError("invalid agent ID encoding accepted")
+        assert witness.calls == 0
+    finally:
+        replay.close()
+        registry.close()
