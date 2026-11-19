@@ -70,6 +70,15 @@ def build_durable_trust_runtime(
         raise TypeError("principal_agent_binding_verifier_required")
     if not isinstance(witness_namespace, str) or not witness_namespace.strip():
         raise ValueError("witness_namespace_required")
+    if len(witness_namespace.encode("utf-8")) > 512:
+        raise ValueError("witness_namespace_too_long")
+    if len(principal_id.encode("utf-8")) > 256:
+        raise ValueError("principal_id_too_long")
+    if len(key_id.encode("utf-8")) > 512:
+        raise ValueError("key_id_too_long")
+    if (isinstance(local_epoch, bool) or not isinstance(local_epoch, int)
+            or not 0 <= local_epoch <= 0xFFFFFFFFFFFFFFFF):
+        raise ValueError("invalid_local_witness_epoch")
 
     # Check external freshness before exposing a privileged trust chain.
     require_witness_epoch(
