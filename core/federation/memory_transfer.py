@@ -12,6 +12,8 @@ import binascii
 import hashlib
 import json
 import re
+import sqlite3
+import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -143,3 +145,94 @@ def validate_memory_transfer(
     if not reserved:
         raise MemoryTransferRejected("replay_or_nonce_store_unavailable")
     return ciphertext
+
+
+def ed25519_signature_verifier(
+    key_resolver: Callable[[str], bytes | None],
+) -> Callable[[str, bytes, str], bool]:
+    """Build a fail-closed Ed25519 verifier from a trusted issuer-key resolver.
+
+    The resolver must read keys from the runtime's authenticated trust store.
+    The envelope never supplies its own verification key.
+    """
+    if not callable(key_resolver):
+        raise TypeError("key_resolver_must_be_callable")
+
+    def verify(issuer_key_id: str, payload: bytes, signature_b64: str) -> bool:
+        try:
+            from cryptography.exceptions import InvalidSignature
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+            public_key = key_resolver(issuer_key_id)
+            if not isinstance(public_key, bytes) or len(public_key) != 32:
+                return False
+            signature = base64.b64decode(signature_b64, validate=True)
+            if len(signature) != 64:
+                return False
+            Ed25519PublicKey.from_public_bytes(public_key).verify(signature, payload)
+            return True
+        except Exception:
+            return False
+
+    return verify
+
+
+class SQLiteNonceRegistry:
+    """Durable, atomic single-database replay registry for one shared SQLite store.
+
+    For multiple hosts, all verifiers must use the same strongly consistent
+    database or a dedicated atomic nonce service; independent local files
+    do not provide cluster-wide replay protection.
+    """
+
+    def __init__(self, db_path: str) -> None:
+        if not isinstance(db_path, str) or not db_path.strip():
+            raise ValueError("invalid_nonce_database_path")
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(
+            db_path, timeout=5.0, isolation_level=None, check_same_thread=False
+        )
+        with self._lock:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=FULL")
+            self._conn.execute("PRAGMA busy_timeout=5000")
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS consumed_memory_transfer_nonces ("
+                "issuer_key_id TEXT NOT NULL, nonce TEXT NOT NULL, "
+                "expires_at INTEGER NOT NULL, PRIMARY KEY (issuer_key_id, nonce))"
+            )
+
+    def reserve(self, issuer_key_id: str, nonce: str, expires_at: int) -> bool:
+        if (not isinstance(issuer_key_id, str) or not issuer_key_id
+                or not isinstance(nonce, str) or not nonce
+                or isinstance(expires_at, bool) or not isinstance(expires_at, int)):
+            return False
+        now = int(time.time())
+        try:
+            with self._lock:
+                self._conn.execute("BEGIN IMMEDIATE")
+                self._conn.execute(
+                    "DELETE FROM consumed_memory_transfer_nonces WHERE expires_at <= ?",
+                    (now,),
+                )
+                self._conn.execute(
+                    "INSERT INTO consumed_memory_transfer_nonces "
+                    "(issuer_key_id, nonce, expires_at) VALUES (?, ?, ?)",
+                    (issuer_key_id, nonce, expires_at),
+                )
+                self._conn.execute("COMMIT")
+            return True
+        except sqlite3.IntegrityError:
+            with self._lock:
+                if self._conn.in_transaction:
+                    self._conn.execute("ROLLBACK")
+            return False
+        except sqlite3.Error:
+            with self._lock:
+                if self._conn.in_transaction:
+                    self._conn.execute("ROLLBACK")
+            return False
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
