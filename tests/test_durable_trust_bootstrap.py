@@ -305,7 +305,6 @@ def test_bootstrap_rejects_non_utf8_agent_id_before_identity_check_or_witness(tm
 
 
 def test_bootstrap_uses_live_durable_principal_agent_binding_registry(tmp_path):
-    from core.identity import AgentIdentityAuthority
     from core.principal_identity import PrincipalIdentityAuthority
     from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
     from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
