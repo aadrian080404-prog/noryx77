@@ -122,7 +122,7 @@ class PrincipalAuthorizationAuthority:
             },
             sort_keys=True, separators=(",", ":"), ensure_ascii=False,
         ).encode("utf-8")
-        return hmac.new(self._secret, b"NORYX7/PRINCIPAL_ACTION_GRANT/v1\\x00" + payload,
+        return hmac.new(self._secret, b"NORYX7/PRINCIPAL_ACTION_GRANT/v1\x00" + payload,
                         hashlib.sha256).hexdigest()
 
     def issue(
@@ -208,6 +208,13 @@ class PrincipalAuthorizationAuthority:
                 return False, None
 
             def dispatch(identity: PrincipalIdentity):
+                # Re-read time only after entering the trusted-principal critical section.
+                # The earlier check is an optimization; it must not authorize a grant
+                # that expired while waiting for registry/SQLite locks.
+                dispatch_now = self._clock()
+                if (isinstance(dispatch_now, bool) or not isinstance(dispatch_now, int)
+                        or dispatch_now < 0 or grant.expires_at <= dispatch_now):
+                    raise PermissionError("grant_expired")
                 key_fp = self._fingerprint(identity)
                 if not hmac.compare_digest(key_fp, grant.principal_key_fingerprint):
                     raise PermissionError("principal_key_changed")
@@ -221,7 +228,7 @@ class PrincipalAuthorizationAuthority:
                         "AND signature=? AND consumed=0 AND expires_at>?",
                         (self._nonce_hash(grant.nonce), grant.principal_id,
                          grant.principal_key_fingerprint, grant.action_fingerprint,
-                         grant.execution_id, grant.expires_at, grant.signature, now),
+                         grant.execution_id, grant.expires_at, grant.signature, dispatch_now),
                     )
                     if cursor.rowcount != 1:
                         connection.execute("ROLLBACK")
