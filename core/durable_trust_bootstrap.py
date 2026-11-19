@@ -62,20 +62,26 @@ def build_durable_trust_runtime(
         raise TypeError("durable_replay_guard_required")
     if not isinstance(agent_identity, AgentIdentity) or not agent_identity.is_well_formed():
         raise ValueError("valid_agent_identity_required")
-    if not isinstance(key_id, str) or not key_id.strip():
-        raise ValueError("key_id_required")
-    if not isinstance(principal_id, str) or not principal_id.strip():
-        raise ValueError("principal_id_required")
     if not callable(principal_agent_binding_verifier):
         raise TypeError("principal_agent_binding_verifier_required")
-    if not isinstance(witness_namespace, str) or not witness_namespace.strip():
-        raise ValueError("witness_namespace_required")
-    if len(witness_namespace.encode("utf-8")) > 512:
-        raise ValueError("witness_namespace_too_long")
-    if len(principal_id.encode("utf-8")) > 256:
-        raise ValueError("principal_id_too_long")
-    if len(key_id.encode("utf-8")) > 512:
-        raise ValueError("key_id_too_long")
+
+    def _encode_bounded(value: str, label: str, limit: int) -> bytes:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label}_required")
+        try:
+            encoded = value.encode("utf-8", errors="strict")
+        except UnicodeEncodeError:
+            raise ValueError(f"{label}_invalid_encoding") from None
+        if len(encoded) > limit:
+            raise ValueError(f"{label}_too_long")
+        return encoded
+
+    # Validate every externally supplied identity string before the first
+    # witness read, binding lookup, or key-provider challenge.
+    witness_namespace_bytes = _encode_bounded(witness_namespace, "witness_namespace", 512)
+    principal_id_bytes = _encode_bounded(principal_id, "principal_id", 256)
+    key_id_bytes = _encode_bounded(key_id, "key_id", 512)
+    agent_id_bytes = _encode_bounded(agent_identity.agent_id, "agent_id", 256)
     if (isinstance(local_epoch, bool) or not isinstance(local_epoch, int)
             or not 0 <= local_epoch <= 0xFFFFFFFFFFFFFFFF):
         raise ValueError("invalid_local_witness_epoch")
@@ -100,10 +106,10 @@ def build_durable_trust_runtime(
     # key ownership and signature correctness without exporting private bytes.
     challenge = (
         _BOOTSTRAP_DOMAIN
-        + len(principal_id.encode("utf-8")).to_bytes(4, "big")
-        + principal_id.encode("utf-8")
-        + len(agent_identity.agent_id.encode("utf-8")).to_bytes(4, "big")
-        + agent_identity.agent_id.encode("utf-8")
+        + len(principal_id_bytes).to_bytes(4, "big")
+        + principal_id_bytes
+        + len(agent_id_bytes).to_bytes(4, "big")
+        + agent_id_bytes
         + local_epoch.to_bytes(8, "big")
     )
     sign_for_identity(
