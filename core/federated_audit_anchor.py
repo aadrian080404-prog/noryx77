@@ -6,7 +6,10 @@ append that committed before a process crashed prior to anchor advancement.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
+import math
+import sqlite3
 from typing import Protocol
 
 
@@ -86,32 +89,87 @@ class FederatedAuditSynchronizer:
 
 
 
+class SQLiteFederatedAuditWriterLease:
+    """Cross-process writer serialization on a shared local SQLite filesystem.
+
+    Every process writing one audit namespace must use the same lease database.
+    This coordinates processes on a shared filesystem; it is not a distributed
+    cross-host lease service.
+    """
+
+    def __init__(self, db_path, *, timeout: float = 10.0):
+        if not str(db_path).strip() or str(db_path) == ":memory:":
+            raise ValueError("durable_audit_writer_lease_required")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(float(timeout))
+            or not 0.001 <= timeout <= 300
+        ):
+            raise ValueError("invalid_audit_writer_lease_timeout")
+        self._db_path = str(db_path)
+        self._timeout = float(timeout)
+
+    @contextmanager
+    def hold(self):
+        connection = sqlite3.connect(
+            self._db_path, isolation_level=None, timeout=self._timeout
+        )
+        try:
+            connection.execute(
+                f"PRAGMA busy_timeout={int(self._timeout * 1000)}"
+            )
+            connection.execute("BEGIN IMMEDIATE")
+            yield
+            connection.execute("COMMIT")
+        except sqlite3.Error:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise PermissionError("federated_audit_writer_lease_unavailable") from None
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.close()
+
+
 class AnchoredFederatedAuditSink:
     """Serialize audit appends with an external checkpoint advance.
 
     Each write verifies the external head before appending and advances it
     immediately afterwards. If the process stops between those operations,
     the next write first recovers the single pending append. Multiple writers
-    in different processes may cause a safe gap rejection; production
-    deployments should use one writer per namespace or an external lease.
+    across processes are serialized by a shared writer lease. The SQLite lease
+    is suitable only for processes sharing a local filesystem; cross-host
+    deployments need an independent distributed lease service.
     """
 
-    def __init__(self, audit_log, synchronizer: FederatedAuditSynchronizer):
+    def __init__(
+        self, audit_log, synchronizer: FederatedAuditSynchronizer,
+        writer_lease: SQLiteFederatedAuditWriterLease,
+    ):
         if not callable(getattr(audit_log, "record", None)):
             raise TypeError("federated_audit_record_sink_required")
         if not isinstance(synchronizer, FederatedAuditSynchronizer):
             raise TypeError("federated_audit_synchronizer_required")
+        if not callable(getattr(writer_lease, "hold", None)):
+            raise TypeError("federated_audit_writer_lease_required")
+        if synchronizer._audit_log is not audit_log:
+            raise ValueError("federated_audit_synchronizer_log_mismatch")
         self._audit_log = audit_log
         self._synchronizer = synchronizer
+        self._writer_lease = writer_lease
         import threading
         self._lock = threading.RLock()
 
     def record(self, event: str, **data):
-        with self._lock:
-            # Reconcile a possible commit left behind by a prior interrupted call.
-            self._synchronizer.synchronize()
-            stored = self._audit_log.record(event, **data)
-            # The caller only sees a successful write after the independent
-            # checkpoint confirms the exact resulting local chain head.
-            self._synchronizer.synchronize()
-            return stored
+        with self._writer_lease.hold():
+            with self._lock:
+                # Reconcile a possible commit left behind by a prior interrupted call.
+                self._synchronizer.synchronize()
+                stored = self._audit_log.record(event, **data)
+                # The caller only sees a successful write after the independent
+                # checkpoint confirms the exact resulting local chain head.
+                self._synchronizer.synchronize()
+                return stored
