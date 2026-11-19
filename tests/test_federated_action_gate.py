@@ -107,10 +107,12 @@ def test_federated_action_requires_both_grants_local_policy_and_audit(tmp_path):
     assert result == "queued"
     assert dispatched == ["queued"]
     events = log.snapshot()
-    assert len(events) == 1
+    assert len(events) == 2
     assert events[0]["event"] == "federated_action_decision"
-    assert events[0]["principal_id"] == "tenant-1"
-    assert events[0]["action_fingerprint"]
+    assert events[1]["event"] == "federated_action_outcome"
+    assert events[1]["outcome"] == "dispatched"
+    assert events[0]["principal_id"] == events[1]["principal_id"] == "tenant-1"
+    assert events[0]["action_fingerprint"] == events[1]["action_fingerprint"]
     assert log.verify_integrity()
 
 
@@ -205,3 +207,64 @@ def test_federated_action_rejects_caller_fabricated_or_modified_admission(tmp_pa
     assert decision.allowed is False
     assert decision.reason == "unverified_or_modified_federated_admission"
     assert result is None and dispatched == []
+
+
+
+def test_federated_action_records_executor_failure_outcome(tmp_path):
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, log = _setup(tmp_path)
+
+    def broken_executor():
+        raise OSError("private executor detail must not enter audit")
+
+    decision, result = _dispatch(
+        gate, agent, action, admission, agent_grant, principal_grant,
+        broken_executor,
+    )
+    assert decision.allowed is False
+    assert decision.reason == "federated_dispatch_failed"
+    assert result is None
+    events = log.snapshot()
+    assert events[-1]["event"] == "federated_action_outcome"
+    assert events[-1]["outcome"] == "executor_failed"
+    assert "private executor detail" not in str(events)
+
+
+def test_federated_action_records_agent_grant_rejection(tmp_path):
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, log = _setup(tmp_path)
+    dispatched = []
+    from dataclasses import replace
+    invalid_grant = replace(agent_grant, signature=b"x" * len(agent_grant.signature))
+    decision, result = _dispatch(
+        gate, agent, action, admission, invalid_grant, principal_grant,
+        lambda: dispatched.append("unsafe"),
+    )
+    assert decision.allowed is False
+    assert result is None and dispatched == []
+    assert log.snapshot()[-1]["outcome"] == "agent_grant_rejected"
+
+
+def test_federated_action_surfaces_missing_final_audit_after_dispatch(tmp_path):
+    class FailSecondRecord:
+        def __init__(self):
+            self.log = AuditLog()
+            self.calls = 0
+
+        def record(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 2:
+                raise OSError("final audit unavailable")
+            return self.log.record(*args, **kwargs)
+
+    sink = FailSecondRecord()
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, _ = _setup(
+        tmp_path, audit_log=sink
+    )
+    dispatched = []
+    decision, result = _dispatch(
+        gate, agent, action, admission, agent_grant, principal_grant,
+        lambda: dispatched.append("queued") or "queued",
+    )
+    assert dispatched == ["queued"]
+    assert decision.allowed is False
+    assert decision.reason == "federated_outcome_audit_unavailable_after_dispatch"
+    assert result is None
