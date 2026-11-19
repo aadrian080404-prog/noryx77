@@ -1,5 +1,7 @@
 from dataclasses import replace
 
+from dataclasses import replace
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -43,7 +45,7 @@ def _setup(tmp_path):
         policy, security, RuntimeLimits(),
         authorization=agent_authority,
     )
-    federated_gate = FederatedActionGate(gate, principal_authority)
+    federated_gate = FederatedActionGate(gate, principal_authority, local_policy_version="local-v1")
     action = ActionSpec(
         action_id="search-1", action_type="search", target="local-index",
         parameters={"query": "bounded"}, risk_class="sensitive",
@@ -112,8 +114,9 @@ def test_federated_action_rejects_revoked_principal_before_dispatch(tmp_path):
     gate, _, principals, agent, action, admission, agent_grant, principal_grant = _setup(tmp_path)
     principals.revoke("tenant-1")
     dispatched = []
+    stale_admission = replace(admission, policy_version="local-v2")
     decision, result = gate.authorize_and_dispatch(
-        admission, action, agent_identity=agent, agent_grant=agent_grant,
+        stale_admission, action, agent_identity=agent, agent_grant=agent_grant,
         principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("unsafe"),
     )
