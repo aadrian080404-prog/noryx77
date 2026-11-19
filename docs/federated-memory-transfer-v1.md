@@ -37,7 +37,7 @@ Unknown and missing fields are rejected. Plaintext is never an accepted envelope
 
 `SQLiteNonceRegistry` uses a unique key on issuer key ID plus nonce and an immediate SQLite transaction. The reservation survives process restart when the same database is reused. It is a single-database primitive, not distributed consensus: multiple hosts must share one strongly consistent database or use a dedicated atomic nonce service. Separate host-local SQLite files are not sufficient for cluster-wide replay protection.
 
-Expired nonce records may be pruned only after their expiry. A nonce is reserved before decryption, so an authenticated but undecryptable envelope cannot be retried with the same nonce.
+Expired nonce records may be pruned only after their expiry. Expiry validation and nonce cleanup must use the same trusted UTC clock domain; injected test clocks must be aligned with the nonce backend clock. Production deployments need reliable time synchronization because this protocol does not define a clock-skew tolerance. A nonce is reserved before decryption, so an authenticated but undecryptable envelope cannot be retried with the same nonce.
 
 ## Fail-closed receiver sequence
 
