@@ -215,3 +215,49 @@ def test_bootstrap_rejects_overlong_namespace_principal_and_key_handle(tmp_path)
     finally:
         replay.close()
         registry.close()
+
+
+def test_invalid_epoch_is_rejected_before_witness_key_or_binding_calls(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+
+    class CountingWitness(TestWitness):
+        def __init__(self):
+            super().__init__(4)
+            self.read_calls = 0
+
+        def read_epoch(self, namespace):
+            self.read_calls += 1
+            return super().read_epoch(namespace)
+
+    class CountingKeyProvider(TestKeyProvider):
+        def __init__(self, key):
+            super().__init__(key)
+            self.sign_calls = 0
+
+        def sign(self, key_id, message):
+            self.sign_calls += 1
+            return super().sign(key_id, message)
+
+    witness = CountingWitness()
+    key_provider = CountingKeyProvider(private_key)
+    binding_calls = []
+    try:
+        with pytest.raises(ValueError, match="invalid_local_witness_epoch"):
+            build_durable_trust_runtime(
+                identity_registry=registry,
+                replay_guard=replay,
+                key_provider=key_provider,
+                key_id="kms://agent/key-1",
+                agent_identity=identity,
+                witness=witness,
+                witness_namespace="noryx7/trust",
+                local_epoch=True,
+                principal_id="principal-1",
+                principal_agent_binding_verifier=lambda *args: binding_calls.append(args) or True,
+            )
+        assert witness.read_calls == 0
+        assert key_provider.sign_calls == 0
+        assert binding_calls == []
+    finally:
+        replay.close()
+        registry.close()
