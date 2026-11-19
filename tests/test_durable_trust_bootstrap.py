@@ -215,3 +215,48 @@ def test_bootstrap_rejects_overlong_namespace_principal_and_key_handle(tmp_path)
     finally:
         replay.close()
         registry.close()
+
+
+
+def test_bootstrap_rejects_non_utf8_surrogate_identifiers_before_witness_or_signing(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+
+    class RecordingWitness(TestWitness):
+        def __init__(self):
+            super().__init__(4)
+            self.calls = 0
+
+        def read_epoch(self, namespace):
+            self.calls += 1
+            return super().read_epoch(namespace)
+
+    witness = RecordingWitness()
+    provider = TestKeyProvider(private_key)
+    base = dict(
+        identity_registry=registry,
+        replay_guard=replay,
+        key_provider=provider,
+        key_id="kms://agent/key-1",
+        agent_identity=identity,
+        witness=witness,
+        witness_namespace="noryx7/trust",
+        local_epoch=4,
+        principal_id="principal-1",
+        principal_agent_binding_verifier=lambda principal, agent: True,
+    )
+    try:
+        for override, expected in (
+            ({"witness_namespace": "bad\\ud800"}, "invalid_witness_namespace_encoding"),
+            ({"principal_id": "bad\\ud800"}, "invalid_principal_id_encoding"),
+            ({"key_id": "bad\\ud800"}, "invalid_key_id_encoding"),
+        ):
+            try:
+                build_durable_trust_runtime(**{**base, **override})
+            except ValueError as exc:
+                assert str(exc) == expected
+            else:
+                raise AssertionError(f"invalid identifier encoding accepted: {expected}")
+        assert witness.calls == 0
+    finally:
+        replay.close()
+        registry.close()
