@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import threading
+from typing import Protocol
 
 MAX_TOKENS = 4096
 TOKEN_SIZE = 32
+
+
+class ReplayGuard(Protocol):
+    def consume(self, token: bytes) -> bool: ...
 
 
 class AuthorizationReplayGuard:

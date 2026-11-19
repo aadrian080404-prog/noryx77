@@ -6,6 +6,7 @@ from core.authorization_replay import AuthorizationReplayGuard
 from core.device import CapabilityGrant, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceTrust
 from core.identity import AgentIdentityAuthority, IdentityRegistry
 from core.sqlite_agent_identity_registry import SQLiteAgentIdentityRegistry
+from core.sqlite_authorization_replay import SQLiteAuthorizationReplayGuard
 from core.trust_chain import TrustChain, channel_binding_digest
 
 
@@ -195,3 +196,42 @@ def test_trust_chain_accepts_durable_identity_registry_and_live_revocation(tmp_p
         )
     finally:
         registry.close()
+
+
+
+def test_trust_chain_replay_protection_survives_process_restart(tmp_path):
+    evidence, agent, _private, peer, _registry, device, attestation, _digest = _evidence()
+    identity_registry = SQLiteAgentIdentityRegistry(tmp_path / "trust-replay-identities.db")
+    replay_db = tmp_path / "trust-replay-tokens.db"
+    first_guard = SQLiteAuthorizationReplayGuard(replay_db)
+    try:
+        identity_registry.register(agent)
+        identity_registry.register(peer)
+        first_chain = TrustChain(identity_registry, first_guard)
+        assert first_chain.verify(
+            evidence,
+            attestation=attestation,
+            expected_device=device,
+            expected_peer=peer,
+            session_id="session-1",
+            direction="send",
+            expected_epoch=7,
+        )
+    finally:
+        first_guard.close()
+
+    second_guard = SQLiteAuthorizationReplayGuard(replay_db)
+    try:
+        second_chain = TrustChain(identity_registry, second_guard)
+        assert not second_chain.verify(
+            evidence,
+            attestation=attestation,
+            expected_device=device,
+            expected_peer=peer,
+            session_id="session-1",
+            direction="send",
+            expected_epoch=7,
+        )
+    finally:
+        second_guard.close()
+        identity_registry.close()

@@ -16,7 +16,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
-from .authorization_replay import AuthorizationReplayGuard
+from .authorization_replay import AuthorizationReplayGuard, ReplayGuard
 from .device import DeviceCapabilityGate, DeviceIdentity, DeviceTrust
 from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityTrustRegistry
 
@@ -92,7 +92,7 @@ class TrustEvidence:
 class TrustChain:
     """Verifies identity, attestation, channel, live device capability and replay state."""
 
-    def __init__(self, registry: IdentityTrustRegistry, replay_guard: AuthorizationReplayGuard | None = None) -> None:
+    def __init__(self, registry: IdentityTrustRegistry, replay_guard: ReplayGuard | None = None) -> None:
         if (
             not callable(getattr(registry, "is_trusted", None))
             or not callable(getattr(registry, "with_trusted_identity", None))
