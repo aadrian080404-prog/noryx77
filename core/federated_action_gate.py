@@ -1,10 +1,9 @@
-"""Final federated action boundary requiring both principal and agent grants.
+"""Final federated action boundary requiring principal, agent and audit controls.
 
-Envelope capability claims are treated as request constraints, never as local
-permissions. Local policy and security still decide whether the ActionSpec is
-allowed. The executor must be a bounded local dispatch/enqueue callback: both
-identity registries remain locked through one-shot consumption and dispatch so
-revocation cannot race the final boundary.
+Envelope capability claims are request constraints, never local permissions.
+Local policy and security decide whether the ActionSpec is allowed. When
+authorization is allowed, a verified audit record must be committed before
+one-shot grants are consumed or the local dispatcher is invoked.
 """
 from __future__ import annotations
 
@@ -14,6 +13,7 @@ from typing import Callable
 from .actions import ActionDecision, ActionGate, AuthorizationGrant
 from .contracts import ActionSpec
 from .federation_admission import FederatedAdmission
+from .federated_action_audit import FederatedActionAuditRecorder
 from .identity import AgentIdentity
 from .principal_authorization import (
     PrincipalAuthorizationAuthority,
@@ -22,7 +22,7 @@ from .principal_authorization import (
 
 
 class FederatedActionGate:
-    """Compose local ActionGate, agent grant and durable principal grant."""
+    """Compose local ActionGate, agent grant, principal grant and audit."""
 
     def __init__(
         self,
@@ -30,6 +30,7 @@ class FederatedActionGate:
         principal_authority: PrincipalAuthorizationAuthority,
         *,
         local_policy_version: str,
+        audit_recorder: FederatedActionAuditRecorder,
     ) -> None:
         if not isinstance(action_gate, ActionGate):
             raise TypeError("action_gate_required")
@@ -39,10 +40,13 @@ class FederatedActionGate:
             raise TypeError("agent_authorization_authority_required")
         if not isinstance(local_policy_version, str) or not local_policy_version.strip():
             raise ValueError("local_policy_version_required")
+        if not isinstance(audit_recorder, FederatedActionAuditRecorder):
+            raise TypeError("federated_audit_recorder_required")
         self._gate = action_gate
         self._principals = principal_authority
         self._agents = action_gate.authorization
         self._policy_version = local_policy_version
+        self._audit = audit_recorder
 
     @staticmethod
     def _denied(reason: str) -> ActionDecision:
@@ -63,12 +67,12 @@ class FederatedActionGate:
         executor: Callable[[], object],
         calls_used: int = 0,
     ) -> tuple[ActionDecision, object | None]:
-        """Authorize a single action and invoke a bounded local dispatcher.
+        """Authorize one action and call a bounded local dispatcher.
 
-        Lock order is always agent registry -> principal registry. Do not call
-        this from a callback that already holds either registry in reverse order.
-        The dispatcher must not perform network I/O or mutate either trust store;
-        enqueue work locally and return. External work belongs after this gate.
+        Lock order is agent registry -> principal registry. The dispatcher must
+        not perform network I/O or mutate trust stores; enqueue locally and return.
+        The audit decision is durably appended to the configured AuditLog before
+        grant consumption. Audit failure is fail-closed and prevents dispatch.
         """
         if not isinstance(admission, FederatedAdmission):
             return self._denied("invalid_federated_admission"), None
@@ -103,13 +107,16 @@ class FederatedActionGate:
         if not action.requires_authorization:
             return self._denied("explicit_authorization_required"), None
 
-        # First run the existing ActionGate's local budget, policy and security
-        # checks without consuming either grant. The two grants are consumed only
-        # in the final nested critical section below.
+        # Local policy/budget/security checks run before either one-shot grant.
         local_action = replace(action, requires_authorization=False)
         decision = self._gate.authorize(
             local_action, calls_used, execution_id=admission.execution_id
         )
+        try:
+            self._audit.record_decision(admission, action, decision)
+        except Exception:
+            # No grant has been consumed and the executor has not been called.
+            return self._denied("federated_audit_unavailable"), None
         if not decision.allowed:
             return decision, None
 
