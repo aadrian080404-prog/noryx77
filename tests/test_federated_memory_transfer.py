@@ -75,7 +75,7 @@ def test_rejects_scope_and_lifecycle_mismatches(field, value, error):
 
 def test_rejects_modified_ciphertext_even_with_stale_digest():
     envelope = make_envelope()
-    envelope["ciphertext_b64"] = base64.b64encode(b"tampered").decode("ascii")
+    envelope["ciphertext_b64"] = base64.b64encode(b"tampered-ciphertext-long-enough").decode("ascii")
     with pytest.raises(MemoryTransferRejected, match="ciphertext_digest_mismatch"):
         accept(envelope)
 
