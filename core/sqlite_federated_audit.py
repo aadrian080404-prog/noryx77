@@ -182,6 +182,28 @@ class SQLiteFederatedAuditLog:
             ).fetchone()
             return (0, _GENESIS) if row is None else (row[0], row[1])
 
+    def verify_against_anchor(self, anchor_sequence: int, anchor_digest: str) -> tuple[int, str]:
+        """Fail closed if the local journal is behind or diverges from an anchor.
+
+        The anchor must be read from an independently protected monotonic
+        service. This method only compares observations; it does not contact,
+        authenticate, or update that service. A local checkpoint ahead of the
+        anchor is returned so the caller can request an anchor advance.
+        """
+        if (isinstance(anchor_sequence, bool)
+                or not isinstance(anchor_sequence, int)
+                or not 0 <= anchor_sequence <= 0x7FFFFFFFFFFFFFFF):
+            raise ValueError("invalid_external_audit_checkpoint_sequence")
+        if (not isinstance(anchor_digest, str)
+                or len(anchor_digest) != 64
+                or any(ch not in "0123456789abcdef" for ch in anchor_digest)):
+            raise ValueError("invalid_external_audit_checkpoint_digest")
+        local_sequence, local_digest = self.checkpoint()
+        if local_sequence < anchor_sequence:
+            raise RuntimeError("federated_audit_rollback_detected")
+        if local_sequence == anchor_sequence and local_digest != anchor_digest:
+            raise RuntimeError("federated_audit_anchor_divergence")
+        return local_sequence, local_digest
     def digest(self) -> str:
         """Return the current digest only after verifying the complete chain."""
         return self.checkpoint()[1]
