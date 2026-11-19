@@ -81,3 +81,58 @@ def test_sqlite_audit_bounds_record_size_and_rejects_unrepresentable_clock(tmp_p
         huge_clock.record("clock_overflow")
     assert huge_clock.snapshot() == ()
     huge_clock.close()
+
+
+def test_checkpoint_is_verified_before_external_anchor_can_observe_it(tmp_path):
+    path = tmp_path / "checkpoint.sqlite"
+    audit = SQLiteFederatedAuditLog(path)
+    audit.record("federated_action_outcome", outcome="dispatched")
+    sequence, digest = audit.checkpoint()
+    assert sequence == 1
+    assert digest == audit.digest()
+
+    tamper = sqlite3.connect(path)
+    tamper.execute("DROP TRIGGER federated_audit_no_update")
+    tamper.execute(
+        "UPDATE federated_audit_events SET event_json='{}' WHERE sequence=1"
+    )
+    tamper.commit()
+    tamper.close()
+
+    assert audit.verify_integrity() is False
+    with pytest.raises(RuntimeError, match="federated_audit_integrity_failed"):
+        audit.checkpoint()
+    with pytest.raises(RuntimeError, match="federated_audit_integrity_failed"):
+        audit.digest()
+    audit.close()
+
+
+def test_empty_checkpoint_uses_genesis_and_zero_sequence(tmp_path):
+    audit = SQLiteFederatedAuditLog(tmp_path / "empty-checkpoint.sqlite")
+    sequence, digest = audit.checkpoint()
+    assert sequence == 0
+    assert digest == audit.digest()
+    audit.close()
+
+
+def test_independent_audit_connections_serialize_concurrent_process_style_appends(tmp_path):
+    path = tmp_path / "independent-writers.sqlite"
+    first = SQLiteFederatedAuditLog(path)
+    second = SQLiteFederatedAuditLog(path)
+    writers = (first, second)
+    try:
+        def append(index):
+            return writers[index % 2].record("independent_writer", worker=index)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(append, range(48)))
+
+        assert len(first.snapshot()) == 48
+        assert first.verify_integrity()
+        assert second.verify_integrity()
+        sequence, digest = first.checkpoint()
+        assert sequence == 48
+        assert digest == second.checkpoint()[1]
+    finally:
+        first.close()
+        second.close()

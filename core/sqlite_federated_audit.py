@@ -166,12 +166,25 @@ class SQLiteFederatedAuditLog:
         with self._lock:
             return self._verify_locked()
 
-    def digest(self) -> str:
+    def checkpoint(self) -> tuple[int, str]:
+        """Return a verified (sequence, digest) checkpoint for external anchoring.
+
+        A checkpoint is never exported from a chain that fails local integrity
+        verification. The tuple is a local observation, not proof against
+        whole-file rollback; callers must compare it with an independent anchor.
+        """
         with self._lock:
+            if not self._verify_locked():
+                raise RuntimeError("federated_audit_integrity_failed")
             row = self._conn.execute(
-                "SELECT digest FROM federated_audit_events ORDER BY sequence DESC LIMIT 1"
+                "SELECT sequence, digest FROM federated_audit_events "
+                "ORDER BY sequence DESC LIMIT 1"
             ).fetchone()
-            return _GENESIS if row is None else row[0]
+            return (0, _GENESIS) if row is None else (row[0], row[1])
+
+    def digest(self) -> str:
+        """Return the current digest only after verifying the complete chain."""
+        return self.checkpoint()[1]
 
     def close(self) -> None:
         with self._lock:
