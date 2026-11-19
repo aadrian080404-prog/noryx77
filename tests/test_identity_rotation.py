@@ -91,7 +91,7 @@ def test_revoked_identity_is_a_tombstone_and_cannot_be_re_registered():
     old, _private, _new, _old_proof, _new_proof = _rotation()
     registry = IdentityRegistry()
     registry.register(old)
-    registry.revoke(old.agent_id)
+    registry.permanently_revoke(old.agent_id)
 
     with pytest.raises(PermissionError, match="agent_identity_permanently_revoked"):
         registry.register(old)
