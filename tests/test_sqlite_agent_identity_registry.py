@@ -12,11 +12,11 @@ def _signed_rotation(agent_id="durable-agent"):
     message = identity_rotation_message(
         agent_id, old.public_key, new.public_key, 1
     )
-    return old, new, old_private.sign(message), new_private.sign(message)
+    return old, new, old_private, old_private.sign(message), new_private.sign(message)
 
 
 def test_durable_registry_persists_identity_generation_and_rotation(tmp_path):
-    old, new, old_proof, new_proof = _signed_rotation()
+    old, new, _old_private, old_proof, new_proof = _signed_rotation()
     db = tmp_path / "identity-registry.db"
     registry = SQLiteAgentIdentityRegistry(db)
     try:
@@ -42,7 +42,7 @@ def test_durable_registry_persists_identity_generation_and_rotation(tmp_path):
 
 
 def test_durable_registry_rejects_invalid_proof_without_mutating_state(tmp_path):
-    old, new, _old_proof, new_proof = _signed_rotation()
+    old, new, _old_private, _old_proof, new_proof = _signed_rotation()
     registry = SQLiteAgentIdentityRegistry(tmp_path / "identity-invalid-proof.db")
     try:
         registry.register(old)
@@ -58,7 +58,7 @@ def test_durable_registry_rejects_invalid_proof_without_mutating_state(tmp_path)
 
 
 def test_durable_registry_revocation_survives_restart_and_is_terminal(tmp_path):
-    old, new, _old_proof, _new_proof = _signed_rotation()
+    old, new, _old_private, _old_proof, _new_proof = _signed_rotation()
     db = tmp_path / "identity-revoked.db"
     registry = SQLiteAgentIdentityRegistry(db)
     registry.register(old)
@@ -77,11 +77,12 @@ def test_durable_registry_revocation_survives_restart_and_is_terminal(tmp_path):
 
 
 def test_two_registry_instances_allow_only_one_competing_rotation(tmp_path):
-    old, new_a, old_proof, new_proof_a = _signed_rotation("race-agent")
+    old, new_a, old_private, old_proof_a, new_proof_a = _signed_rotation("race-agent")
     new_b, new_b_private = AgentIdentityAuthority.generate("race-agent")
     message_b = identity_rotation_message(
         "race-agent", old.public_key, new_b.public_key, 1
     )
+    old_proof_b = old_private.sign(message_b)
     new_proof_b = new_b_private.sign(message_b)
     db = tmp_path / "identity-race.db"
     first = SQLiteAgentIdentityRegistry(db)
@@ -92,7 +93,7 @@ def test_two_registry_instances_allow_only_one_competing_rotation(tmp_path):
         outcomes = []
         outcome_lock = threading.Lock()
 
-        def rotate(registry, candidate, new_proof):
+        def rotate(registry, candidate, old_proof, new_proof):
             barrier.wait()
             try:
                 result = registry.rotate_identity(
@@ -106,8 +107,8 @@ def test_two_registry_instances_allow_only_one_competing_rotation(tmp_path):
                 outcomes.append(value)
 
         threads = [
-            threading.Thread(target=rotate, args=(first, new_a, new_proof_a)),
-            threading.Thread(target=rotate, args=(second, new_b, new_proof_b)),
+            threading.Thread(target=rotate, args=(first, new_a, old_proof_a, new_proof_a)),
+            threading.Thread(target=rotate, args=(second, new_b, old_proof_b, new_proof_b)),
         ]
         for thread in threads:
             thread.start()
