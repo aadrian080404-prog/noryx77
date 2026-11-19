@@ -27,7 +27,8 @@ def build_memory_transfer_trust(
     *,
     principal_registry: object,
     agent_registry: object,
-    is_agent_owned_by_principal: Callable[[str, str], bool],
+    is_agent_owned_by_principal: Callable[[str, str], bool] | None = None,
+    binding_registry: object | None = None,
 ) -> MemoryTransferTrust:
     """Bind transfer verification to live, durable principal and agent stores.
 
@@ -47,6 +48,12 @@ def build_memory_transfer_trust(
         raise TypeError("durable_principal_trust_registry_required")
     if not callable(with_agent):
         raise TypeError("durable_agent_trust_registry_required")
+    if binding_registry is not None:
+        if is_agent_owned_by_principal is not None:
+            raise TypeError("ambiguous_principal_agent_binding_source")
+        is_agent_owned_by_principal = getattr(
+            binding_registry, "is_agent_owned_by_principal", None
+        )
     if not callable(is_agent_owned_by_principal):
         raise TypeError("principal_agent_binding_verifier_required")
 
@@ -77,6 +84,8 @@ def build_memory_transfer_trust(
         except Exception:
             return False
 
+    binding_registry_backed = binding_registry is not None
+
     def verify_agent_owner(principal_id: str, agent_id: str) -> bool:
         if (
             not isinstance(principal_id, str) or not principal_id.strip()
@@ -84,7 +93,7 @@ def build_memory_transfer_trust(
         ):
             return False
         try:
-            def verify_agent(_principal_identity):
+            def verify_agent(_principal_identity=None):
                 owner_matches = is_agent_owned_by_principal(principal_id, agent_id) is True
                 if not owner_matches:
                     return False
@@ -94,8 +103,12 @@ def build_memory_transfer_trust(
                     and len(identity.public_key) == 32
                 )) is True
 
-            # Both sides of the relationship must still be trusted. A valid
-            # agent key cannot outlive revocation of its owning principal.
+            # The durable binding registry already performs live principal
+            # and agent checks under its own transactions. Do not nest a second
+            # principal-registry transaction around that call (SQLite lock).
+            # For a plain callback, the adapter itself enforces principal trust.
+            if binding_registry_backed:
+                return verify_agent() is True
             return with_principal(principal_id, verify_agent) is True
         except Exception:
             return False

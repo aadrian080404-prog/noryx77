@@ -127,3 +127,34 @@ def test_source_agent_trust_fails_after_owner_principal_revocation(tmp_path):
         assert not trust.verify_source_agent("principal-source", "agent-source")
     finally:
         agents.close() if callable(getattr(agents, "close", None)) else None
+
+
+def test_transfer_trust_wires_durable_principal_agent_binding_registry(tmp_path):
+    from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
+
+    principals = SQLitePrincipalIdentityRegistry(tmp_path / "principals-bound.db")
+    agents = SQLiteIdentityRegistry(tmp_path / "agents-bound.db")
+    try:
+        _register_principal(principals, "principal-source")
+        _register_principal(principals, "principal-recipient")
+        _register_agent(agents, "agent-source")
+        _register_agent(agents, "agent-recipient")
+        bindings = SQLitePrincipalAgentBindingRegistry(
+            tmp_path / "principal-agent-bindings.db",
+            principal_registry=principals,
+            agent_registry=agents,
+        )
+        bindings.bind("principal-source", "agent-source")
+        bindings.bind("principal-recipient", "agent-recipient")
+        trust = build_memory_transfer_trust(
+            principal_registry=principals,
+            agent_registry=agents,
+            binding_registry=bindings,
+        )
+        assert trust.verify_source_agent("principal-source", "agent-source")
+        assert trust.verify_recipient_agent("principal-recipient", "agent-recipient")
+        assert not trust.verify_source_agent("principal-recipient", "agent-source")
+        bindings.revoke_binding("principal-source", "agent-source")
+        assert not trust.verify_source_agent("principal-source", "agent-source")
+    finally:
+        agents.close() if callable(getattr(agents, "close", None)) else None
