@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from .authorization_replay import AuthorizationReplayGuard, ReplayGuard
 from .device import DeviceCapabilityGate, DeviceIdentity, DeviceTrust
 from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityTrustRegistry
+from .trust_providers import SigningKeyProvider, sign_for_identity
 
 VERSION: Final[int] = 1
 MAX_TEXT: Final[int] = 1024
@@ -124,6 +125,40 @@ class TrustChain:
         attestation_digest = TrustChain.attest_digest(attestation)
         message = _evidence_message(agent, device, attestation_digest, channel_digest, epoch, action_digest)
         return TrustEvidence(agent, device, attestation_digest, channel_digest, epoch, bytes(action_digest), private_key.sign(message))
+
+    @staticmethod
+    def sign_with_provider(
+        agent: AgentIdentity,
+        provider: SigningKeyProvider,
+        key_id: str,
+        device: DeviceIdentity,
+        attestation: AgentAttestation,
+        *,
+        session_id: str,
+        peer: AgentIdentity,
+        direction: str,
+        epoch: int,
+        action_digest: bytes,
+    ) -> TrustEvidence:
+        """Create TrustEvidence through an external key handle, never exporting its key."""
+        if not isinstance(attestation, AgentAttestation) or not attestation.is_well_formed():
+            raise ValueError("invalid_attestation")
+        if agent.agent_id != attestation.identity.agent_id or agent.public_key != attestation.identity.public_key:
+            raise ValueError("attestation_identity_mismatch")
+        if not AgentIdentityAuthority.verify(attestation):
+            raise ValueError("attestation_invalid")
+        channel_digest = channel_binding_digest(agent, peer, session_id, direction)
+        attestation_digest = TrustChain.attest_digest(attestation)
+        message = _evidence_message(
+            agent, device, attestation_digest, channel_digest, epoch, action_digest
+        )
+        signature = sign_for_identity(
+            provider, key_id=key_id, identity=agent, message=message
+        )
+        return TrustEvidence(
+            agent, device, attestation_digest, channel_digest, epoch,
+            bytes(action_digest), signature,
+        )
 
     def verify(self, evidence: TrustEvidence, *, attestation: AgentAttestation,
                expected_device: DeviceIdentity, expected_peer: AgentIdentity,
