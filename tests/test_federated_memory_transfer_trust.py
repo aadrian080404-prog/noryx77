@@ -109,3 +109,21 @@ def test_transfer_trust_requires_explicit_principal_agent_binding_store(tmp_path
             )
     finally:
         agents.close() if callable(getattr(agents, "close", None)) else None
+
+
+def test_source_agent_trust_fails_after_owner_principal_revocation(tmp_path):
+    principals = SQLitePrincipalIdentityRegistry(tmp_path / "principals-owner-revoked.db")
+    agents = SQLiteIdentityRegistry(tmp_path / "agents-owner-revoked.db")
+    try:
+        _register_principal(principals, "principal-source")
+        _register_agent(agents, "agent-source")
+        trust = build_memory_transfer_trust(
+            principal_registry=principals,
+            agent_registry=agents,
+            is_agent_owned_by_principal=lambda principal, agent: True,
+        )
+        assert trust.verify_source_agent("principal-source", "agent-source")
+        principals.revoke("principal-source")
+        assert not trust.verify_source_agent("principal-source", "agent-source")
+    finally:
+        agents.close() if callable(getattr(agents, "close", None)) else None
