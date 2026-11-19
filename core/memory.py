@@ -21,9 +21,8 @@ class MemoryStore:
     """Bounded memory store with exact principal/agent/execution namespaces.
 
     Empty scope values identify legacy system-global records. Scoped records are
-    never returned by an unscoped read. A principal namespace may contain
-    principal-wide records (agent_id="") and agent-specific records; reads use
-    exact scope matching so an agent cannot implicitly widen its namespace.
+    never returned by an unscoped read. Principal-wide and agent-specific
+    records occupy distinct namespaces; callers must request the exact scope.
     """
 
     VALID_KINDS = {"working", "local", "edge", "cloud", "long_term", "suspended"}
@@ -45,33 +44,31 @@ class MemoryStore:
             return False
         if not allow_empty and not value.strip():
             return False
-        return len(value.encode("utf-8")) <= maximum
+        try:
+            return len(value.encode("utf-8")) <= maximum
+        except UnicodeEncodeError:
+            return False
 
     @classmethod
     def _valid_execution_id(cls, execution_id: str, *, allow_empty: bool = True) -> bool:
-        return cls._valid_scope_id(
-            execution_id, cls.MAX_EXECUTION_ID_BYTES, allow_empty=allow_empty
-        )
+        return cls._valid_scope_id(execution_id, cls.MAX_EXECUTION_ID_BYTES, allow_empty=allow_empty)
 
     @classmethod
     def _valid_principal_id(cls, principal_id: str, *, allow_empty: bool = True) -> bool:
-        return cls._valid_scope_id(
-            principal_id, cls.MAX_PRINCIPAL_ID_BYTES, allow_empty=allow_empty
-        )
+        return cls._valid_scope_id(principal_id, cls.MAX_PRINCIPAL_ID_BYTES, allow_empty=allow_empty)
 
     @classmethod
     def _valid_agent_id(cls, agent_id: str, *, allow_empty: bool = True) -> bool:
-        return cls._valid_scope_id(
-            agent_id, cls.MAX_AGENT_ID_BYTES, allow_empty=allow_empty
-        )
+        return cls._valid_scope_id(agent_id, cls.MAX_AGENT_ID_BYTES, allow_empty=allow_empty)
 
     @classmethod
     def _valid_memory_id(cls, memory_id: str) -> bool:
-        return (
-            isinstance(memory_id, str)
-            and bool(memory_id)
-            and len(memory_id.encode("utf-8")) <= cls.MAX_MEMORY_ID_BYTES
-        )
+        if not isinstance(memory_id, str) or not memory_id:
+            return False
+        try:
+            return len(memory_id.encode("utf-8")) <= cls.MAX_MEMORY_ID_BYTES
+        except UnicodeEncodeError:
+            return False
 
     @staticmethod
     def _key(memory_id: str, principal_id: str, agent_id: str, execution_id: str):
@@ -79,26 +76,20 @@ class MemoryStore:
 
     @classmethod
     def _valid_query_scope(cls, principal_id, agent_id, execution_id) -> bool:
-        if principal_id is not None and not cls._valid_principal_id(
-            principal_id, allow_empty=False
-        ):
+        if principal_id is not None and not cls._valid_principal_id(principal_id, allow_empty=False):
             return False
-        if agent_id is not None and not cls._valid_agent_id(
-            agent_id, allow_empty=False
-        ):
+        if agent_id is not None and not cls._valid_agent_id(agent_id, allow_empty=False):
             return False
         if agent_id is not None and principal_id is None:
             return False
-        if execution_id is not None and not cls._valid_execution_id(
-            execution_id, allow_empty=False
-        ):
+        if execution_id is not None and not cls._valid_execution_id(execution_id, allow_empty=False):
             return False
         return True
 
     def put(self, item: MemoryItem) -> None:
         if not isinstance(item, MemoryItem) or not self._valid_memory_id(item.memory_id):
             raise ValueError("valid memory item with memory_id required")
-        if item.kind not in self.VALID_KINDS:
+        if not isinstance(item.kind, str) or item.kind not in self.VALID_KINDS:
             raise ValueError("unsupported memory kind")
         if not isinstance(item.source, str):
             raise ValueError("memory source must be text")
@@ -136,14 +127,9 @@ class MemoryStore:
             principal_id, agent_id, execution_id
         ):
             return None
-        scope = (
-            principal_id or "",
-            agent_id or "",
-            execution_id or "",
-            memory_id,
-        )
+        key = (principal_id or "", agent_id or "", execution_id or "", memory_id)
         with self._lock:
-            item = self._items.get(scope)
+            item = self._items.get(key)
             if item is None:
                 return None
             try:
@@ -159,7 +145,7 @@ class MemoryStore:
         agent_id: str | None = None,
         execution_id: str | None = None,
     ):
-        if kind is not None and kind not in self.VALID_KINDS:
+        if kind is not None and (not isinstance(kind, str) or kind not in self.VALID_KINDS):
             return ()
         if not self._valid_query_scope(principal_id, agent_id, execution_id):
             return ()
@@ -187,9 +173,7 @@ class MemoryStore:
             principal_id, agent_id, execution_id
         ):
             return False
-        key = self._key(
-            memory_id, principal_id or "", agent_id or "", execution_id or ""
-        )
+        key = self._key(memory_id, principal_id or "", agent_id or "", execution_id or "")
         with self._lock:
             return self._items.pop(key, None) is not None
 
