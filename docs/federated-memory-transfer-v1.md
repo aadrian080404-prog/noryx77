@@ -13,7 +13,8 @@ The envelope is not a capability grant. The receiving runtime must independently
 3. HKDF-SHA256 derives a 32-byte key using the canonical transfer metadata hash as salt and the protocol-specific info string.
 4. ChaCha20-Poly1305 encrypts the memory payload. The authenticated associated data binds schema version, transfer ID, source and recipient principals, source and recipient agents, execution ID, recipient key ID, issuer key ID, issue/expiry times, replay nonce, ephemeral public key, and AEAD nonce.
 5. The sender computes the ciphertext SHA-256 digest and signs the canonical JSON envelope (all fields except the signature) with its Ed25519 issuer key.
-6. The receiver resolves the issuer key ID from its trusted local federation trust store. A key supplied by the envelope is never trusted.
+6. The receiver resolves the issuer key ID from its trusted local federation trust store and independently verifies that this issuer key is bound to the claimed source principal. A key supplied by the envelope is never trusted.
+7. For agent-scoped transfers, the receiver independently verifies both the source principal/agent pair against federation identity trust and the recipient principal/agent pair against its local AgentIdentity registry. Both callbacks are mandatory; otherwise the transfer is rejected.
 
 The payload is encrypted to the recipient's key. The receiver decrypts only after schema, destination identity, time window, ciphertext digest, and issuer signature have been validated and the replay nonce has been atomically reserved.
 
@@ -45,13 +46,14 @@ Expired nonce records may be pruned only after their expiry. A nonce is reserved
 3. Enforce timestamp and maximum TTL constraints.
 4. Validate base64, ciphertext size, encryption metadata, and ciphertext digest.
 5. Verify Ed25519 signature using a locally resolved issuer key.
-6. Atomically reserve the nonce in durable storage.
-7. Decrypt with the local recipient private key and verify the AEAD tag.
-8. Apply local agent-memory scope policy and append a redacted audit event.
-9. Keep all subsequent operations subject to local authorization and ActionGate checks.
+6. Verify issuer-key-to-source-principal binding. For agent scope, verify both source and recipient principal/agent bindings.
+7. Atomically reserve the nonce in durable storage.
+8. Decrypt with the local recipient private key and verify the AEAD tag.
+9. Apply local agent-memory scope policy and append a redacted audit event.
+10. Keep all subsequent operations subject to local authorization and ActionGate checks.
 
 Any failed step rejects the transfer. Transport acceptance never bypasses policy or authorizes an action.
 
 ## Current implementation boundary
 
-The primary runtime provides the v1 envelope, Ed25519 verifier adapter, X25519/ChaCha20-Poly1305 sealing and opening helpers, and SQLite nonce registry. The secondary runtime has begun adding authenticated agent-scoped persistence. Production federation still requires wiring these helpers to the real identity/trust stores, durable audit sink, recipient key lifecycle, and a shared cluster-grade nonce service where more than one host participates.
+The primary runtime provides the v1 envelope, Ed25519 verifier adapter, X25519/ChaCha20-Poly1305 sealing and opening helpers, issuer/principal and agent-binding callback gates, and SQLite nonce registry. The secondary runtime has begun adding authenticated agent-scoped persistence. Production federation still requires wiring these helpers to the real identity/trust stores, durable audit sink, recipient key lifecycle, and a shared cluster-grade nonce service where more than one host participates.
