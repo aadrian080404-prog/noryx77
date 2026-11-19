@@ -3,10 +3,14 @@ import hashlib
 import json
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from core.federation.memory_transfer import (
     MemoryTransferRejected,
+    SQLiteNonceRegistry,
     canonical_unsigned_envelope,
+    ed25519_signature_verifier,
     validate_memory_transfer,
 )
 
@@ -104,3 +108,61 @@ def test_rejects_unknown_or_missing_fields():
     envelope["plaintext"] = "must-never-be-carried"
     with pytest.raises(MemoryTransferRejected, match="invalid_envelope_fields"):
         accept(envelope)
+
+
+
+def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    envelope = make_envelope()
+    payload = canonical_unsigned_envelope(envelope)
+    envelope["signature"] = base64.b64encode(private_key.sign(payload)).decode("ascii")
+    verifier = ed25519_signature_verifier(
+        lambda key_id: public_key if key_id == "issuer-key-a" else None
+    )
+    nonce_db = tmp_path / "transfer-nonces.db"
+    registry = SQLiteNonceRegistry(str(nonce_db))
+    try:
+        accepted = validate_memory_transfer(
+            envelope,
+            expected_recipient_principal_id="principal-b",
+            expected_recipient_key_id="recipient-key-b",
+            verify_signature=verifier,
+            reserve_nonce=registry.reserve,
+            now=150,
+        )
+        assert accepted == base64.b64decode(envelope["ciphertext_b64"])
+        with pytest.raises(MemoryTransferRejected, match="replay_or_nonce_store_unavailable"):
+            validate_memory_transfer(
+                envelope,
+                expected_recipient_principal_id="principal-b",
+                expected_recipient_key_id="recipient-key-b",
+                verify_signature=verifier,
+                reserve_nonce=registry.reserve,
+                now=150,
+            )
+    finally:
+        registry.close()
+
+    # A fresh connection to the same database must still reject the nonce.
+    restarted = SQLiteNonceRegistry(str(nonce_db))
+    try:
+        assert restarted.reserve("issuer-key-a", "unique-nonce", 200) is False
+    finally:
+        restarted.close()
+
+
+def test_ed25519_verifier_rejects_unknown_keys_and_malformed_signatures():
+    verifier = ed25519_signature_verifier(lambda _key_id: None)
+    assert verifier("unknown-key", b"payload", "c2ln") is False
+
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    verifier = ed25519_signature_verifier(lambda _key_id: public_key)
+    assert verifier("issuer-key-a", b"payload", "not-base64!") is False
