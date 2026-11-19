@@ -295,3 +295,50 @@ def test_federated_gate_can_use_restart_durable_sqlite_audit_sink(tmp_path):
     assert events[-1]["outcome"] == "dispatched"
     assert restarted.verify_integrity()
     restarted.close()
+
+
+
+def test_federated_action_gate_anchors_decision_and_outcome_before_return(tmp_path):
+    from core.federated_audit_anchor import (
+        AnchoredFederatedAuditSink,
+        FederatedAuditSynchronizer,
+    )
+    from core.federated_audit_anchor import FederatedAuditCheckpoint
+    from core.sqlite_federated_audit import SQLiteFederatedAuditLog
+
+    class FakeExternalAnchor:
+        def __init__(self, checkpoint):
+            self.checkpoint = checkpoint
+
+        def read_checkpoint(self, namespace):
+            return self.checkpoint
+
+        def compare_and_advance(self, namespace, expected, next_checkpoint):
+            if self.checkpoint != expected:
+                return False
+            self.checkpoint = next_checkpoint
+            return True
+
+    path = tmp_path / "gate-external-anchored.sqlite"
+    durable_log = SQLiteFederatedAuditLog(path, clock=lambda: 987.0)
+    external = FakeExternalAnchor(durable_log.checkpoint())
+    synchronizer = FederatedAuditSynchronizer(
+        durable_log, external, namespace="noryx7/runtime-gate"
+    )
+    anchored_sink = AnchoredFederatedAuditSink(durable_log, synchronizer)
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, _ = _setup(
+        tmp_path, audit_log=anchored_sink
+    )
+
+    decision, result = _dispatch(
+        gate, agent, action, admission, agent_grant, principal_grant,
+        lambda: "locally-queued",
+    )
+    assert decision.allowed is True
+    assert result == "locally-queued"
+    assert [event["event"] for event in durable_log.snapshot()] == [
+        "federated_action_decision", "federated_action_outcome"
+    ]
+    assert durable_log.checkpoint() == external.checkpoint
+    assert external.checkpoint.sequence == 2
+    durable_log.close()
