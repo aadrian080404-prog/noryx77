@@ -348,6 +348,21 @@
       "integration_tests": [
         "tests/test_federated_memory_transfer_trust.py"
       ]
+    },
+    {
+      "id": "principal_agent_binding_registry",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/sqlite_principal_agent_binding.py",
+        "docs/principal-agent-binding-registry-v1.md"
+      ],
+      "depends_on": [
+        "identity_registry"
+      ],
+      "integration_tests": [
+        "tests/test_sqlite_principal_agent_binding.py"
+      ]
     }
   ]
 }
