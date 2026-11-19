@@ -60,11 +60,13 @@ def test_contradiction_is_visible_not_silently_outvoted():
 
 
 def test_expired_traces_do_not_contribute():
+    current_time = [1000.0]
     field = StigmergicDiagnosticField(
-        lambda trace: True, clock=lambda: 2000.0, minimum_principals=2
+        lambda trace: True, clock=lambda: current_time[0], minimum_principals=2
     )
     for principal in ("p1", "p2"):
         assert field.submit(make_trace(principal, "agent", now=1000.0, ttl=10.0))
+    current_time[0] = 2000.0
     result = field.evaluate("claim-a")
     assert result.status == "insufficient_evidence"
     assert result.active_traces == 0
