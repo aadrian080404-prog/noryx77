@@ -301,3 +301,85 @@ def test_bootstrap_rejects_non_utf8_agent_id_before_identity_check_or_witness(tm
     finally:
         replay.close()
         registry.close()
+
+
+
+def test_bootstrap_uses_live_durable_principal_agent_binding_registry(tmp_path):
+    from core.identity import AgentIdentityAuthority
+    from core.principal_identity import PrincipalIdentityAuthority
+    from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
+    from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
+
+    identity, private_key, agent_registry, replay = _setup(tmp_path)
+    principal, _ = PrincipalIdentityAuthority.generate("bootstrap-owner")
+    principal_registry = SQLitePrincipalIdentityRegistry(tmp_path / "principal.sqlite")
+    principal_registry.register(principal)
+    bindings = SQLitePrincipalAgentBindingRegistry(
+        tmp_path / "bindings.sqlite",
+        principal_registry=principal_registry,
+        agent_registry=agent_registry,
+    )
+    bindings.bind(principal.principal_id, identity.agent_id)
+
+    base = dict(
+        identity_registry=agent_registry,
+        replay_guard=replay,
+        key_provider=TestKeyProvider(private_key),
+        key_id="kms://agent/key-1",
+        agent_identity=identity,
+        witness=TestWitness(4),
+        witness_namespace="noryx7/trust",
+        local_epoch=4,
+        principal_id=principal.principal_id,
+        principal_agent_binding_registry=bindings,
+    )
+    try:
+        runtime = build_durable_trust_runtime(**base)
+        assert runtime.agent_identity.agent_id == identity.agent_id
+        bindings.revoke_binding(principal.principal_id, identity.agent_id)
+        try:
+            build_durable_trust_runtime(**base)
+        except PermissionError as exc:
+            assert str(exc) == "principal_agent_binding_not_active"
+        else:
+            raise AssertionError("revoked live binding must block bootstrap")
+    finally:
+        replay.close()
+        agent_registry.close()
+        principal_registry.close()
+
+
+def test_bootstrap_rejects_ambiguous_binding_sources_before_witness(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+    class RecordingWitness(TestWitness):
+        def __init__(self):
+            super().__init__(4)
+            self.calls = 0
+        def read_epoch(self, namespace):
+            self.calls += 1
+            return super().read_epoch(namespace)
+
+    witness = RecordingWitness()
+    try:
+        try:
+            build_durable_trust_runtime(
+                identity_registry=registry,
+                replay_guard=replay,
+                key_provider=TestKeyProvider(private_key),
+                key_id="kms://agent/key-1",
+                agent_identity=identity,
+                witness=witness,
+                witness_namespace="noryx7/trust",
+                local_epoch=4,
+                principal_id="principal-1",
+                principal_agent_binding_verifier=lambda *_: True,
+                principal_agent_binding_registry=object(),
+            )
+        except TypeError as exc:
+            assert str(exc) == "ambiguous_principal_agent_binding_source"
+        else:
+            raise AssertionError("ambiguous binding sources accepted")
+        assert witness.calls == 0
+    finally:
+        replay.close()
+        registry.close()
