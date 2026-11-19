@@ -95,7 +95,29 @@ class ContinuitySupervisor:
                     or not isinstance(record.state, NodeContinuityState)
                 ):
                     raise RuntimeError("continuity_state_store_invalid")
-                self._nodes[record.node_id] = record
+                if record.state is NodeContinuityState.ACTIVE:
+                    # Persisted ACTIVE is not sufficient proof after a process
+                    # restart: trust, revocation, and attestation freshness may
+                    # have changed while this process was offline. Fence every
+                    # restored active node until a fresh, higher-generation
+                    # attestation and explicit rejoin approval are supplied.
+                    isolated = NodeContinuityRecord(
+                        record.node_id, record.identity_fingerprint,
+                        record.generation, record.sequence, record.capabilities,
+                        NodeContinuityState.ISOLATED,
+                    )
+                    if state_store.replace_record(record, isolated) is not True:
+                        raise RuntimeError("continuity_restart_fence_persistence_failed")
+                    self._emit(
+                        "continuity_node_isolated",
+                        node_id=record.node_id,
+                        generation=record.generation,
+                        last_sequence=record.sequence,
+                        reason="restart_revalidation_required",
+                    )
+                    self._nodes[record.node_id] = isolated
+                else:
+                    self._nodes[record.node_id] = record
 
     def _persist_insert(self, record: NodeContinuityRecord) -> None:
         if self._state_store is not None:
