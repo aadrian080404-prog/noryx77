@@ -81,3 +81,35 @@ def test_sqlite_audit_bounds_record_size_and_rejects_unrepresentable_clock(tmp_p
         huge_clock.record("clock_overflow")
     assert huge_clock.snapshot() == ()
     huge_clock.close()
+
+
+def test_checkpoint_is_verified_before_external_anchor_can_observe_it(tmp_path):
+    path = tmp_path / "checkpoint.sqlite"
+    audit = SQLiteFederatedAuditLog(path)
+    audit.record("federated_action_outcome", outcome="dispatched")
+    sequence, digest = audit.checkpoint()
+    assert sequence == 1
+    assert digest == audit.digest()
+
+    tamper = sqlite3.connect(path)
+    tamper.execute("DROP TRIGGER federated_audit_no_update")
+    tamper.execute(
+        "UPDATE federated_audit_events SET event_json='{}' WHERE sequence=1"
+    )
+    tamper.commit()
+    tamper.close()
+
+    assert audit.verify_integrity() is False
+    with pytest.raises(RuntimeError, match="federated_audit_integrity_failed"):
+        audit.checkpoint()
+    with pytest.raises(RuntimeError, match="federated_audit_integrity_failed"):
+        audit.digest()
+    audit.close()
+
+
+def test_empty_checkpoint_uses_genesis_and_zero_sequence(tmp_path):
+    audit = SQLiteFederatedAuditLog(tmp_path / "empty-checkpoint.sqlite")
+    sequence, digest = audit.checkpoint()
+    assert sequence == 0
+    assert digest == audit.digest()
+    audit.close()
