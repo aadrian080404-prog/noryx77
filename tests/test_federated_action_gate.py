@@ -84,7 +84,7 @@ def test_federated_action_rejects_capability_claim_mismatch(tmp_path):
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
         principal_grant=principal_grant, required_capability="payments",
-        executor=lambda: dispatched.append("unsafe"),
+        local_policy_version="local-v1", executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
     assert result is None
