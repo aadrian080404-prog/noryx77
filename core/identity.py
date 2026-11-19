@@ -109,32 +109,39 @@ class IdentityRegistry:
     def __init__(self):
         self._keys: dict[str, bytes] = {}
         self._generations: dict[str, int] = {}
-        self._revoked: set[str] = set()
+        self._permanently_revoked: set[str] = set()
         self._lock = threading.RLock()
 
     def register(self, identity: AgentIdentity) -> None:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             raise ValueError("invalid_agent_identity")
         with self._lock:
-            if identity.agent_id in self._revoked:
+            if identity.agent_id in self._permanently_revoked:
                 raise PermissionError("agent_identity_permanently_revoked")
             if identity.agent_id in self._keys:
                 raise ValueError("agent_identity_already_registered")
             self._keys[identity.agent_id] = bytes(identity.public_key)
-            self._generations[identity.agent_id] = 1
+            self._generations[identity.agent_id] = self._generations.get(identity.agent_id, 0) + 1
 
     def revoke(self, agent_id: str) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
         with self._lock:
             self._keys.pop(agent_id, None)
-            self._revoked.add(agent_id)
+
+    def permanently_revoke(self, agent_id: str) -> None:
+        """Revoke an identity and permanently tombstone its identifier."""
+        if not isinstance(agent_id, str) or not agent_id.strip():
+            raise ValueError("invalid_agent_id")
+        with self._lock:
+            self._keys.pop(agent_id, None)
+            self._permanently_revoked.add(agent_id)
 
     def generation(self, agent_id: str) -> int:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("invalid_agent_id")
         with self._lock:
-            if agent_id in self._revoked or agent_id not in self._generations:
+            if agent_id in self._permanently_revoked or agent_id not in self._keys:
                 raise PermissionError("agent_identity_not_active")
             return self._generations[agent_id]
 
@@ -165,7 +172,7 @@ class IdentityRegistry:
             agent_id = identity.agent_id
             current_key = self._keys.get(agent_id)
             current_generation = self._generations.get(agent_id)
-            if agent_id in self._revoked or current_key is None:
+            if agent_id in self._permanently_revoked or current_key is None:
                 raise PermissionError("agent_identity_not_active")
             if current_generation != expected_generation:
                 raise PermissionError("identity_generation_conflict")
