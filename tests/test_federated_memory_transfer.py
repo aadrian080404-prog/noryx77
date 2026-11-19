@@ -150,7 +150,7 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
             verify_source_agent=lambda *_: True,
             verify_recipient_agent=lambda *_: True,
             reserve_nonce=registry.reserve,
-            now=150,
+            now=current,
         )
         assert accepted == base64.b64decode(envelope["ciphertext_b64"])
         with pytest.raises(MemoryTransferRejected, match="replay_or_nonce_store_unavailable"):
