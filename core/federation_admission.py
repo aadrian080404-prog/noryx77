@@ -8,7 +8,11 @@ capability against local policy immediately before execution.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
+import hmac
+import json
+import os
 from typing import Protocol
 
 from .federation_envelope import (
@@ -22,6 +26,10 @@ class MembershipRegistry(Protocol):
     def is_registered(self, identity_id: str) -> bool: ...
 
 
+_ADMISSION_PROOF_KEY = os.urandom(32)
+_ADMISSION_ISSUER_TOKEN = object()
+
+
 @dataclass(frozen=True)
 class FederatedAdmission:
     execution_id: str
@@ -32,6 +40,67 @@ class FederatedAdmission:
     policy_version: str
     state_version: str
     issuer_key_id: str
+    _proof: bytes = field(default=b"", repr=False, compare=False)
+
+    def _proof_payload(self) -> bytes:
+        return json.dumps(
+            {
+                "execution_id": self.execution_id,
+                "principal_id": self.principal_id,
+                "agent_id": self.agent_id,
+                "task_type": self.task_type,
+                "asserted_capabilities": list(self.asserted_capabilities),
+                "policy_version": self.policy_version,
+                "state_version": self.state_version,
+                "issuer_key_id": self.issuer_key_id,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+
+    def is_verified(self) -> bool:
+        if not isinstance(self._proof, bytes) or len(self._proof) != 32:
+            return False
+        try:
+            expected = hmac.new(
+                _ADMISSION_PROOF_KEY, self._proof_payload(), hashlib.sha256
+            ).digest()
+        except (TypeError, ValueError):
+            return False
+        return hmac.compare_digest(self._proof, expected)
+
+    @classmethod
+    def _from_verified_envelope(
+        cls, envelope: SignedExecutionEnvelope, *, _issuer_token: object
+    ) -> "FederatedAdmission":
+        if _issuer_token is not _ADMISSION_ISSUER_TOKEN:
+            raise PermissionError("federated_admission_issuer_only")
+        admission = cls(
+            execution_id=envelope.execution_id,
+            principal_id=envelope.principal_id,
+            agent_id=envelope.agent_id,
+            task_type=envelope.task_type,
+            asserted_capabilities=envelope.capabilities,
+            policy_version=envelope.policy_version,
+            state_version=envelope.state_version,
+            issuer_key_id=envelope.issuer_key_id,
+        )
+        proof = hmac.new(
+            _ADMISSION_PROOF_KEY, admission._proof_payload(), hashlib.sha256
+        ).digest()
+        return cls(
+            execution_id=admission.execution_id,
+            principal_id=admission.principal_id,
+            agent_id=admission.agent_id,
+            task_type=admission.task_type,
+            asserted_capabilities=admission.asserted_capabilities,
+            policy_version=admission.policy_version,
+            state_version=admission.state_version,
+            issuer_key_id=admission.issuer_key_id,
+            _proof=proof,
+        )
 
 
 class FederatedAdmissionBoundary:
@@ -79,13 +148,6 @@ class FederatedAdmissionBoundary:
         if verified != envelope:
             raise EnvelopeRejected("verified_envelope_mismatch")
 
-        return FederatedAdmission(
-            execution_id=envelope.execution_id,
-            principal_id=envelope.principal_id,
-            agent_id=envelope.agent_id,
-            task_type=envelope.task_type,
-            asserted_capabilities=envelope.capabilities,
-            policy_version=envelope.policy_version,
-            state_version=envelope.state_version,
-            issuer_key_id=envelope.issuer_key_id,
+        return FederatedAdmission._from_verified_envelope(
+            envelope, _issuer_token=_ADMISSION_ISSUER_TOKEN
         )
