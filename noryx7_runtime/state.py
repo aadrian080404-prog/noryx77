@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Protocol
 
-from core.identity import IdentityRegistry
+from core.identity import IdentityTrustRegistry
 from .attestation import attestation_digest
 from .contracts import Attestation
 
@@ -43,11 +43,14 @@ class StateJournal:
     """Append-only commit boundary with authenticity and pre-dispatch idempotency reservation."""
 
     def __init__(self, *, require_signatures: bool = True, verifier: AttestationVerifier | None = None,
-                 identity_registry: IdentityRegistry | None = None, runtime_id: str | None = None) -> None:
+                 identity_registry: IdentityTrustRegistry | None = None, runtime_id: str | None = None) -> None:
         if not isinstance(require_signatures, bool): raise TypeError("require_signatures must be bool")
         if require_signatures and verifier is None: raise ValueError("signed journal requires an attestation verifier")
         if verifier is not None and not callable(getattr(verifier, "verify", None)): raise TypeError("verifier must expose verify")
-        if identity_registry is not None and not isinstance(identity_registry, IdentityRegistry): raise TypeError("identity_registry must be an IdentityRegistry")
+        if identity_registry is not None and (
+            not callable(getattr(identity_registry, "is_trusted", None))
+            or not callable(getattr(identity_registry, "with_trusted_identity", None))
+        ): raise TypeError("identity_registry must expose live trust checks")
         if runtime_id is not None and (not isinstance(runtime_id, str) or not runtime_id): raise ValueError("runtime_id must be a non-empty string")
         self._lock = RLock(); self._entries = []; self._keys = set(); self._principals = {}; self._reservations = {}
         self._require_signatures = require_signatures; self._verifier = verifier; self._identity_registry = identity_registry; self._runtime_id = runtime_id
