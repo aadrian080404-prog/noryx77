@@ -174,13 +174,23 @@ class SQLiteFederatedAuditLog:
         whole-file rollback; callers must compare it with an independent anchor.
         """
         with self._lock:
-            if not self._verify_locked():
-                raise RuntimeError("federated_audit_integrity_failed")
-            row = self._conn.execute(
-                "SELECT sequence, digest FROM federated_audit_events "
-                "ORDER BY sequence DESC LIMIT 1"
-            ).fetchone()
-            return (0, _GENESIS) if row is None else (row[0], row[1])
+            try:
+                # Keep full-chain verification and head extraction in one
+                # SQLite read snapshot, even when another connection appends.
+                self._conn.execute("BEGIN")
+                if not self._verify_locked():
+                    raise RuntimeError("federated_audit_integrity_failed")
+                row = self._conn.execute(
+                    "SELECT sequence, digest FROM federated_audit_events "
+                    "ORDER BY sequence DESC LIMIT 1"
+                ).fetchone()
+                checkpoint = (0, _GENESIS) if row is None else (row[0], row[1])
+                self._conn.execute("COMMIT")
+                return checkpoint
+            except Exception:
+                if self._conn.in_transaction:
+                    self._conn.execute("ROLLBACK")
+                raise
 
     def verify_against_anchor(self, anchor_sequence: int, anchor_digest: str) -> tuple[int, str]:
         """Fail closed if the local journal is behind or diverges from an anchor.
