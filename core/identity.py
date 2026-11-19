@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import threading
-from typing import Callable, Final, TypeVar
+from typing import Callable, Final, Protocol, TypeVar
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -19,6 +19,16 @@ MAX_STATEMENT_SIZE: Final[int] = 16 * 1024 * 1024
 _DOMAIN: Final[bytes] = b"noryx7/agent-identity/v1/"
 _ROTATION_DOMAIN: Final[bytes] = b"noryx7/agent-identity-rotation/v1/"
 T = TypeVar("T")
+
+
+class IdentityTrustRegistry(Protocol):
+    """Structural interface shared by in-memory and durable trust registries."""
+
+    def is_trusted(self, identity: AgentIdentity) -> bool: ...
+
+    def with_trusted_identity(
+        self, agent_id: str, callback: Callable[[AgentIdentity], T]
+    ) -> T: ...
 
 
 def _identity_field(value: str) -> bytes:
@@ -249,7 +259,7 @@ class AgentIdentityAuthority:
         return AgentAttestation(identity, bytes(statement), signature)
 
     @staticmethod
-    def verify(attestation: AgentAttestation, registry: IdentityRegistry | None = None) -> bool:
+    def verify(attestation: AgentAttestation, registry: IdentityTrustRegistry | None = None) -> bool:
         if not isinstance(attestation, AgentAttestation) or not attestation.is_well_formed():
             return False
         if registry is not None and not registry.is_trusted(attestation.identity):
@@ -264,7 +274,7 @@ class AgentIdentityAuthority:
             return False
 
     @staticmethod
-    def verify_identity(identity: AgentIdentity, registry: IdentityRegistry | None = None) -> bool:
+    def verify_identity(identity: AgentIdentity, registry: IdentityTrustRegistry | None = None) -> bool:
         if not isinstance(identity, AgentIdentity) or not identity.is_well_formed():
             return False
         return registry is None or registry.is_trusted(identity)
