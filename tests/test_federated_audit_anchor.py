@@ -243,3 +243,131 @@ def test_anchored_sink_rejects_synchronizer_for_different_audit_log(tmp_path):
         )
     first.close()
     second.close()
+
+
+
+class SQLiteFakeAnchor:
+    """Process-safe test anchor with atomic compare-and-advance semantics."""
+
+    def __init__(self, database, namespace, genesis):
+        self._database = str(database)
+        self._namespace = namespace
+        connection = sqlite3.connect(self._database, timeout=10)
+        try:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS checkpoints ("
+                "namespace TEXT PRIMARY KEY, sequence INTEGER NOT NULL, digest BLOB NOT NULL)"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO checkpoints(namespace, sequence, digest) VALUES (?, ?, ?)",
+                (namespace, genesis.sequence, genesis.digest),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def read_checkpoint(self, namespace):
+        connection = sqlite3.connect(self._database, timeout=10)
+        try:
+            row = connection.execute(
+                "SELECT sequence, digest FROM checkpoints WHERE namespace = ?",
+                (namespace,),
+            ).fetchone()
+            if row is None:
+                return None
+            return FederatedAuditCheckpoint(int(row[0]), bytes(row[1]))
+        finally:
+            connection.close()
+
+    def compare_and_advance(self, namespace, expected, next_checkpoint):
+        connection = sqlite3.connect(self._database, timeout=10, isolation_level=None)
+        try:
+            connection.execute("PRAGMA busy_timeout=10000")
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT sequence, digest FROM checkpoints WHERE namespace = ?",
+                (namespace,),
+            ).fetchone()
+            current = (
+                None if row is None
+                else FederatedAuditCheckpoint(int(row[0]), bytes(row[1]))
+            )
+            if current != expected:
+                connection.execute("ROLLBACK")
+                return False
+            connection.execute(
+                "UPDATE checkpoints SET sequence = ?, digest = ? WHERE namespace = ?",
+                (next_checkpoint.sequence, next_checkpoint.digest, namespace),
+            )
+            connection.execute("COMMIT")
+            return True
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.close()
+
+
+def _multiprocess_anchored_audit_writer(audit_db, lease_db, anchor_db, writer_id, count):
+    log = SQLiteFederatedAuditLog(audit_db)
+    anchor = SQLiteFakeAnchor(
+        anchor_db, "noryx7/multiprocess-e2e", log.checkpoint_at(0)
+    )
+    synchronizer = FederatedAuditSynchronizer(
+        log, anchor, namespace="noryx7/multiprocess-e2e"
+    )
+    sink = AnchoredFederatedAuditSink(
+        log, synchronizer, SQLiteFederatedAuditWriterLease(lease_db, timeout=15)
+    )
+    try:
+        for index in range(count):
+            sink.record("multiprocess", writer=writer_id, index=index)
+    finally:
+        log.close()
+
+
+def test_anchored_sink_serializes_real_independent_processes(tmp_path):
+    import multiprocessing
+
+    audit_db = tmp_path / "multiprocess-audit.sqlite"
+    lease_db = tmp_path / "multiprocess-audit.lease"
+    anchor_db = tmp_path / "multiprocess-anchor.sqlite"
+    initial_log = SQLiteFederatedAuditLog(audit_db)
+    genesis = initial_log.checkpoint_at(0)
+    initial_log.close()
+    SQLiteFakeAnchor(anchor_db, "noryx7/multiprocess-e2e", genesis)
+
+    context = multiprocessing.get_context("spawn")
+    processes = [
+        context.Process(
+            target=_multiprocess_anchored_audit_writer,
+            args=(str(audit_db), str(lease_db), str(anchor_db), writer, 8),
+        )
+        for writer in range(2)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(40)
+    for process in processes:
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+            pytest.fail("multiprocess_audit_writer_timed_out")
+        assert process.exitcode == 0
+
+    final_log = SQLiteFederatedAuditLog(audit_db)
+    try:
+        events = final_log.snapshot()
+        local_head = final_log.checkpoint()
+        external_head = SQLiteFakeAnchor(
+            anchor_db, "noryx7/multiprocess-e2e", genesis
+        ).read_checkpoint("noryx7/multiprocess-e2e")
+        assert len(events) == 16
+        assert {event["writer"] for event in events} == {0, 1}
+        assert local_head.sequence == 16
+        assert local_head == external_head
+        assert final_log.verify_integrity()
+    finally:
+        final_log.close()
