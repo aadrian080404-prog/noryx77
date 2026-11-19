@@ -268,3 +268,30 @@ def test_federated_action_surfaces_missing_final_audit_after_dispatch(tmp_path):
     assert decision.allowed is False
     assert decision.reason == "federated_outcome_audit_unavailable_after_dispatch"
     assert result is None
+
+
+def test_federated_gate_can_use_restart_durable_sqlite_audit_sink(tmp_path):
+    from core.sqlite_federated_audit import SQLiteFederatedAuditLog
+
+    path = tmp_path / "runtime-audit.sqlite"
+    sink = SQLiteFederatedAuditLog(path, clock=lambda: 456.0)
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, _ = _setup(
+        tmp_path, audit_log=sink
+    )
+    decision, result = _dispatch(
+        gate, agent, action, admission, agent_grant, principal_grant,
+        lambda: "locally-queued",
+    )
+    assert decision.allowed is True
+    assert result == "locally-queued"
+    assert len(sink.snapshot()) == 2
+    sink.close()
+
+    restarted = SQLiteFederatedAuditLog(path, clock=lambda: 457.0)
+    events = restarted.snapshot()
+    assert [event["event"] for event in events] == [
+        "federated_action_decision", "federated_action_outcome"
+    ]
+    assert events[-1]["outcome"] == "dispatched"
+    assert restarted.verify_integrity()
+    restarted.close()
