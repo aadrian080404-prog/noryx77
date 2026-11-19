@@ -91,3 +91,23 @@ def test_concurrent_dispatch_consumes_grant_at_most_once(tmp_path):
 
     assert sum(1 for consumed, _ in results if consumed) == 1
     assert called == ["run"]
+
+
+def test_principal_grant_expires_while_waiting_for_registry_lock(tmp_path):
+    now = [100]
+    registry, authority, action = _setup(tmp_path, clock=lambda: now[0])
+    grant = authority.issue(action, "exec-1", "tenant-1", ttl_seconds=1)
+    original = registry.with_trusted_principal
+
+    def delayed_with_trusted_principal(principal_id, callback):
+        def advance_clock(identity):
+            now[0] = 101
+            return callback(identity)
+        return original(principal_id, advance_clock)
+
+    registry.with_trusted_principal = delayed_with_trusted_principal
+    called = []
+    assert authority.consume_and_execute(
+        action, "exec-1", grant, lambda: called.append("unsafe")
+    ) == (False, None)
+    assert called == []
