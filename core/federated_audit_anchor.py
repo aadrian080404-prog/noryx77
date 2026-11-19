@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import math
 import sqlite3
 from typing import Protocol
 
@@ -97,9 +98,14 @@ class SQLiteFederatedAuditWriterLease:
     """
 
     def __init__(self, db_path, *, timeout: float = 10.0):
-        if str(db_path) == ":memory:":
+        if not str(db_path).strip() or str(db_path) == ":memory:":
             raise ValueError("durable_audit_writer_lease_required")
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(float(timeout))
+            or not 0.001 <= timeout <= 300
+        ):
             raise ValueError("invalid_audit_writer_lease_timeout")
         self._db_path = str(db_path)
         self._timeout = float(timeout)
@@ -149,6 +155,8 @@ class AnchoredFederatedAuditSink:
             raise TypeError("federated_audit_synchronizer_required")
         if not callable(getattr(writer_lease, "hold", None)):
             raise TypeError("federated_audit_writer_lease_required")
+        if synchronizer._audit_log is not audit_log:
+            raise ValueError("federated_audit_synchronizer_log_mismatch")
         self._audit_log = audit_log
         self._synchronizer = synchronizer
         self._writer_lease = writer_lease
