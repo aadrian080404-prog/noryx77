@@ -278,7 +278,7 @@ def test_bootstrap_rejects_non_utf8_agent_id_before_identity_check_or_witness(tm
             return super().read_epoch(namespace)
 
     witness = RecordingWitness()
-    invalid_identity = replace(identity, agent_id="bad\\ud800")
+    invalid_identity = replace(identity, agent_id="bad\ud800")
     try:
         try:
             build_durable_trust_runtime(
