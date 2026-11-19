@@ -217,3 +217,29 @@ def test_anchored_sink_serializes_independent_process_writers(tmp_path):
     assert anchor.checkpoint.sequence == 32
     second_log.close()
     first_log.close()
+
+
+
+def test_writer_lease_rejects_invalid_paths_and_timeouts(tmp_path):
+    with pytest.raises(ValueError, match="durable_audit_writer_lease_required"):
+        SQLiteFederatedAuditWriterLease(":memory:")
+    with pytest.raises(ValueError, match="durable_audit_writer_lease_required"):
+        SQLiteFederatedAuditWriterLease(" ")
+    for timeout in (True, 0, -1, float("nan"), float("inf"), 301):
+        with pytest.raises(ValueError, match="invalid_audit_writer_lease_timeout"):
+            SQLiteFederatedAuditWriterLease(tmp_path / "invalid.lease", timeout=timeout)
+
+
+def test_anchored_sink_rejects_synchronizer_for_different_audit_log(tmp_path):
+    first = _log(tmp_path / "first.sqlite")
+    second = _log(tmp_path / "second.sqlite")
+    anchor = FakeAnchor(first.checkpoint())
+    sync = FederatedAuditSynchronizer(
+        first, anchor, namespace="noryx7/federation-mismatch"
+    )
+    with pytest.raises(ValueError, match="federated_audit_synchronizer_log_mismatch"):
+        AnchoredFederatedAuditSink(
+            second, sync, SQLiteFederatedAuditWriterLease(tmp_path / "mismatch.lease")
+        )
+    first.close()
+    second.close()
