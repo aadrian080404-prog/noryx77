@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from core.authorization_replay import ReplayGuard
 from core.identity import AgentIdentity
 from core.sqlite_agent_identity_registry import SQLiteAgentIdentityRegistry
+from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
 from core.sqlite_authorization_replay import SQLiteAuthorizationReplayGuard
 from core.trust_chain import TrustChain
 from core.trust_providers import (
@@ -47,7 +48,8 @@ def build_durable_trust_runtime(
     witness_namespace: str,
     local_epoch: int,
     principal_id: str,
-    principal_agent_binding_verifier,
+    principal_agent_binding_verifier=None,
+    principal_agent_binding_registry: SQLitePrincipalAgentBindingRegistry | None = None,
 ) -> DurableTrustRuntime:
     """Construct durable TrustChain only after all trust dependencies self-check.
 
@@ -72,6 +74,16 @@ def build_durable_trust_runtime(
         raise ValueError("key_id_required")
     if not isinstance(principal_id, str) or not principal_id.strip():
         raise ValueError("principal_id_required")
+    if principal_agent_binding_registry is not None:
+        if principal_agent_binding_verifier is not None:
+            raise TypeError("ambiguous_principal_agent_binding_source")
+        if not isinstance(
+            principal_agent_binding_registry, SQLitePrincipalAgentBindingRegistry
+        ):
+            raise TypeError("durable_principal_agent_binding_registry_required")
+        principal_agent_binding_verifier = (
+            principal_agent_binding_registry.is_agent_owned_by_principal
+        )
     if not callable(principal_agent_binding_verifier):
         raise TypeError("principal_agent_binding_verifier_required")
     if not isinstance(witness_namespace, str) or not witness_namespace.strip():
