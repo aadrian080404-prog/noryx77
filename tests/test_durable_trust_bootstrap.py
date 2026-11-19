@@ -382,3 +382,41 @@ def test_bootstrap_rejects_ambiguous_binding_sources_before_witness(tmp_path):
     finally:
         replay.close()
         registry.close()
+
+
+
+def test_bootstrap_rejects_non_durable_binding_registry_before_witness(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+
+    class RecordingWitness(TestWitness):
+        def __init__(self):
+            super().__init__(4)
+            self.calls = 0
+
+        def read_epoch(self, namespace):
+            self.calls += 1
+            return super().read_epoch(namespace)
+
+    witness = RecordingWitness()
+    try:
+        try:
+            build_durable_trust_runtime(
+                identity_registry=registry,
+                replay_guard=replay,
+                key_provider=TestKeyProvider(private_key),
+                key_id="kms://agent/key-1",
+                agent_identity=identity,
+                witness=witness,
+                witness_namespace="noryx7/trust",
+                local_epoch=4,
+                principal_id="principal-1",
+                principal_agent_binding_registry=object(),
+            )
+        except TypeError as exc:
+            assert str(exc) == "durable_principal_agent_binding_registry_required"
+        else:
+            raise AssertionError("non-durable binding registry accepted")
+        assert witness.calls == 0
+    finally:
+        replay.close()
+        registry.close()
