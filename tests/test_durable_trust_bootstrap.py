@@ -157,3 +157,61 @@ def test_bootstrap_rejects_ephemeral_replay_guard(tmp_path):
     else:
         raise AssertionError("ephemeral replay guard must be rejected")
     registry.close()
+
+
+def test_bootstrap_rejects_invalid_epoch_types_and_uint64_overflow(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+    base = dict(
+        identity_registry=registry,
+        replay_guard=replay,
+        key_provider=TestKeyProvider(private_key),
+        key_id="kms://agent/key-1",
+        agent_identity=identity,
+        witness=TestWitness(4),
+        witness_namespace="noryx7/trust",
+        principal_id="principal-1",
+        principal_agent_binding_verifier=lambda principal, agent: True,
+    )
+    try:
+        for invalid_epoch in (True, False, -1, "4", 1.5, 1 << 64):
+            try:
+                build_durable_trust_runtime(**base, local_epoch=invalid_epoch)
+            except ValueError as exc:
+                assert str(exc) == "invalid_local_witness_epoch"
+            else:
+                raise AssertionError(f"invalid epoch accepted: {invalid_epoch!r}")
+    finally:
+        replay.close()
+        registry.close()
+
+
+def test_bootstrap_rejects_overlong_namespace_principal_and_key_handle(tmp_path):
+    identity, private_key, registry, replay = _setup(tmp_path)
+    base = dict(
+        identity_registry=registry,
+        replay_guard=replay,
+        key_provider=TestKeyProvider(private_key),
+        key_id="kms://agent/key-1",
+        agent_identity=identity,
+        witness=TestWitness(4),
+        witness_namespace="noryx7/trust",
+        local_epoch=4,
+        principal_id="principal-1",
+        principal_agent_binding_verifier=lambda principal, agent: True,
+    )
+    try:
+        for override, expected in (
+            ({"witness_namespace": "x" * 513}, "witness_namespace_too_long"),
+            ({"principal_id": "p" * 257}, "principal_id_too_long"),
+            ({"key_id": "k" * 513}, "key_id_too_long"),
+        ):
+            values = {**base, **override}
+            try:
+                build_durable_trust_runtime(**values)
+            except ValueError as exc:
+                assert str(exc) == expected
+            else:
+                raise AssertionError(f"overlong identifier accepted: {expected}")
+    finally:
+        replay.close()
+        registry.close()
