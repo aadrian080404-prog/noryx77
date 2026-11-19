@@ -11,8 +11,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Callable
 
-from .actions import ActionGate, AuthorizationGrant
-from .contracts import ActionSpec, ActionDecision
+from .actions import ActionDecision, ActionGate, AuthorizationGrant
+from .contracts import ActionSpec
 from .federation_admission import FederatedAdmission
 from .identity import AgentIdentity
 from .principal_authorization import (
