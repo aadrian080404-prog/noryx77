@@ -95,3 +95,9 @@ def test_federated_audit_rejects_invalid_clock():
     recorder = FederatedActionAuditRecorder(AuditLog(), clock=lambda: float("nan"))
     with pytest.raises(RuntimeError, match="audit_clock_invalid"):
         recorder.record_decision(admission(), action(), decision())
+
+
+def test_federated_audit_rejects_overflowing_clock():
+    recorder = FederatedActionAuditRecorder(AuditLog(), clock=lambda: 10 ** 1000)
+    with pytest.raises(RuntimeError, match="audit_clock_invalid"):
+        recorder.record_decision(admission(), action(), decision())
