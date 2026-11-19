@@ -6,6 +6,7 @@ from core.federated_audit_anchor import (
     AnchoredFederatedAuditSink,
     FederatedAuditCheckpoint,
     FederatedAuditSynchronizer,
+    SQLiteFederatedAuditWriterLease,
 )
 from core.sqlite_federated_audit import SQLiteFederatedAuditLog
 
@@ -117,7 +118,9 @@ def test_anchored_sink_advances_external_checkpoint_for_every_record(tmp_path):
     log = _log(tmp_path / "automatic-anchor.db")
     anchor = FakeAnchor(log.checkpoint())
     sync = FederatedAuditSynchronizer(log, anchor, namespace="noryx7/federation-a")
-    sink = AnchoredFederatedAuditSink(log, sync)
+    sink = AnchoredFederatedAuditSink(
+        log, sync, SQLiteFederatedAuditWriterLease(tmp_path / "automatic-anchor.lease")
+    )
 
     first = sink.record("decision", allowed=True)
     assert first["event"] == "decision"
@@ -143,7 +146,9 @@ def test_anchored_sink_recovers_interrupted_commit_before_next_write(tmp_path):
     log = _log(tmp_path / "automatic-anchor-recovery.db")
     anchor = FailFirstAdvance(log.checkpoint())
     sync = FederatedAuditSynchronizer(log, anchor, namespace="noryx7/federation-a")
-    sink = AnchoredFederatedAuditSink(log, sync)
+    sink = AnchoredFederatedAuditSink(
+        log, sync, SQLiteFederatedAuditWriterLease(tmp_path / "automatic-anchor.lease")
+    )
 
     with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
         sink.record("decision", allowed=True)
@@ -172,3 +177,41 @@ def test_anchored_sink_does_not_append_when_anchor_is_unavailable_before_write(t
     with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
         sink.record("decision", allowed=True)
     assert log.snapshot() == ()
+
+
+
+def test_anchored_sink_serializes_independent_process_writers(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    database = tmp_path / "shared-audit.sqlite"
+    lease_database = tmp_path / "shared-audit-writer.lease"
+    first_log = _log(database)
+    anchor = FakeAnchor(first_log.checkpoint())
+    first_sync = FederatedAuditSynchronizer(
+        first_log, anchor, namespace="noryx7/federation-shared"
+    )
+    first_sink = AnchoredFederatedAuditSink(
+        first_log, first_sync, SQLiteFederatedAuditWriterLease(lease_database)
+    )
+
+    second_log = _log(database)
+    second_sync = FederatedAuditSynchronizer(
+        second_log, anchor, namespace="noryx7/federation-shared"
+    )
+    second_sink = AnchoredFederatedAuditSink(
+        second_log, second_sync, SQLiteFederatedAuditWriterLease(lease_database)
+    )
+
+    sinks = (first_sink, second_sink)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(
+            lambda index: sinks[index % 2].record("parallel", writer=index),
+            range(32),
+        ))
+
+    assert len(results) == 32
+    assert len(first_log.snapshot()) == 32
+    assert first_log.checkpoint() == anchor.checkpoint
+    assert anchor.checkpoint.sequence == 32
+    second_log.close()
+    first_log.close()
