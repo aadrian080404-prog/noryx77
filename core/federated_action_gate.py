@@ -72,6 +72,8 @@ class FederatedActionGate:
         """
         if not isinstance(admission, FederatedAdmission):
             return self._denied("invalid_federated_admission"), None
+        if not admission.is_verified():
+            return self._denied("unverified_or_modified_federated_admission"), None
         if not isinstance(action, ActionSpec) or not action.is_well_formed():
             return self._denied("invalid_action"), None
         if not isinstance(agent_identity, AgentIdentity) or not agent_identity.is_well_formed():
