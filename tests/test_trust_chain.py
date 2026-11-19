@@ -5,6 +5,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from core.authorization_replay import AuthorizationReplayGuard
 from core.device import CapabilityGrant, DeviceCapabilityGate, DeviceIdentity, DeviceRole, DeviceTrust
 from core.identity import AgentIdentityAuthority, IdentityRegistry
+from core.sqlite_agent_identity_registry import SQLiteAgentIdentityRegistry
 from core.trust_chain import TrustChain, channel_binding_digest
 
 
@@ -161,3 +162,36 @@ def test_live_device_epoch_and_identity_swaps_fail_closed():
     assert not chain.verify_live_device_capability(
         evidence, device_gate=other, capability="transfer", now=50, expected_epoch=7
     )
+
+
+
+def test_trust_chain_accepts_durable_identity_registry_and_live_revocation(tmp_path):
+    evidence, agent, _private, peer, _registry, device, attestation, _digest = _evidence()
+    registry = SQLiteAgentIdentityRegistry(tmp_path / "trust-chain-durable.db")
+    try:
+        registry.register(agent)
+        registry.register(peer)
+        chain = TrustChain(registry, AuthorizationReplayGuard())
+        assert chain.verify(
+            evidence,
+            attestation=attestation,
+            expected_device=device,
+            expected_peer=peer,
+            session_id="session-1",
+            direction="send",
+            expected_epoch=7,
+            consume_replay=False,
+        )
+        registry.revoke(agent.agent_id)
+        assert not chain.verify(
+            evidence,
+            attestation=attestation,
+            expected_device=device,
+            expected_peer=peer,
+            session_id="session-1",
+            direction="send",
+            expected_epoch=7,
+            consume_replay=False,
+        )
+    finally:
+        registry.close()

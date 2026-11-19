@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 from .authorization_replay import AuthorizationReplayGuard
 from .device import DeviceCapabilityGate, DeviceIdentity, DeviceTrust
-from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityRegistry
+from .identity import AgentAttestation, AgentIdentity, AgentIdentityAuthority, IdentityTrustRegistry
 
 VERSION: Final[int] = 1
 MAX_TEXT: Final[int] = 1024
@@ -92,8 +92,11 @@ class TrustEvidence:
 class TrustChain:
     """Verifies identity, attestation, channel, live device capability and replay state."""
 
-    def __init__(self, registry: IdentityRegistry, replay_guard: AuthorizationReplayGuard | None = None) -> None:
-        if not isinstance(registry, IdentityRegistry):
+    def __init__(self, registry: IdentityTrustRegistry, replay_guard: AuthorizationReplayGuard | None = None) -> None:
+        if (
+            not callable(getattr(registry, "is_trusted", None))
+            or not callable(getattr(registry, "with_trusted_identity", None))
+        ):
             raise ValueError("identity_registry_required")
         self.registry = registry
         self.replay_guard = replay_guard or AuthorizationReplayGuard()
