@@ -303,7 +303,6 @@ def test_federated_action_gate_anchors_decision_and_outcome_before_return(tmp_pa
         AnchoredFederatedAuditSink,
         FederatedAuditSynchronizer,
     )
-    from core.federated_audit_anchor import FederatedAuditCheckpoint
     from core.sqlite_federated_audit import SQLiteFederatedAuditLog
 
     class FakeExternalAnchor:
