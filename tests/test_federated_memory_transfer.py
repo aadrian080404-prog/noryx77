@@ -54,7 +54,7 @@ def test_accepts_only_opaque_ciphertext_after_signature_and_nonce_reservation():
 @pytest.mark.parametrize("field,value,error", [
     ("recipient_principal_id", "attacker", "recipient_principal_mismatch"),
     ("recipient_key_id", "wrong-key", "recipient_key_mismatch"),
-    ("expires_at", 151, "transfer_expired_or_invalid_ttl"),
+    ("expires_at", 150, "transfer_expired_or_invalid_ttl"),
     ("source_agent_id", "agent-a", "agent_scope_mapping_required"),
 ])
 def test_rejects_scope_and_lifecycle_mismatches(field, value, error):
