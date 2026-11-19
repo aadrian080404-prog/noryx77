@@ -1,4 +1,6 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 import hashlib
 import json
 import time
@@ -380,3 +382,23 @@ def test_agent_transfer_requires_both_verified_agent_bindings():
             reserve_nonce=lambda *_: True,
             now=150,
         )
+
+
+def test_shared_sqlite_nonce_registry_is_atomic_across_independent_connections(tmp_path):
+    database = tmp_path / "shared-replay-fence.sqlite3"
+    first = SQLiteNonceRegistry(str(database))
+    second = SQLiteNonceRegistry(str(database))
+    barrier = Barrier(2)
+    expires_at = int(time.time()) + 3600
+
+    def reserve(registry):
+        barrier.wait(timeout=5)
+        return registry.reserve("issuer-principal", "one-shot-shared-nonce", expires_at)
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(reserve, (first, second)))
+        assert sorted(results) == [False, True]
+    finally:
+        first.close()
+        second.close()
