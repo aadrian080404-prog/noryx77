@@ -121,3 +121,22 @@ def test_two_registry_instances_allow_only_one_competing_rotation(tmp_path):
     finally:
         first.close()
         second.close()
+
+
+def test_persistent_registry_implements_identity_authority_trust_contract(tmp_path):
+    identity, private_key = AgentIdentityAuthority.generate("protocol-agent")
+    registry = SQLiteAgentIdentityRegistry(tmp_path / "identity-protocol.db")
+    try:
+        attestation = AgentIdentityAuthority.sign(
+            identity, private_key, b"boot-state:v1"
+        )
+        assert not AgentIdentityAuthority.verify(attestation, registry)
+        registry.register(identity)
+        assert AgentIdentityAuthority.verify(attestation, registry)
+        assert AgentIdentityAuthority.verify_identity(identity, registry)
+        result = registry.with_trusted_identity(
+            identity.agent_id, lambda trusted: trusted.public_key
+        )
+        assert result == identity.public_key
+    finally:
+        registry.close()
