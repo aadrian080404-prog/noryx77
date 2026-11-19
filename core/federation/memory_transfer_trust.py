@@ -27,7 +27,8 @@ def build_memory_transfer_trust(
     *,
     principal_registry: object,
     agent_registry: object,
-    is_agent_owned_by_principal: Callable[[str, str], bool],
+    is_agent_owned_by_principal: Callable[[str, str], bool] | None = None,
+    binding_registry: object | None = None,
 ) -> MemoryTransferTrust:
     """Bind transfer verification to live, durable principal and agent stores.
 
@@ -47,6 +48,12 @@ def build_memory_transfer_trust(
         raise TypeError("durable_principal_trust_registry_required")
     if not callable(with_agent):
         raise TypeError("durable_agent_trust_registry_required")
+    if binding_registry is not None:
+        if is_agent_owned_by_principal is not None:
+            raise TypeError("ambiguous_principal_agent_binding_source")
+        is_agent_owned_by_principal = getattr(
+            binding_registry, "is_agent_owned_by_principal", None
+        )
     if not callable(is_agent_owned_by_principal):
         raise TypeError("principal_agent_binding_verifier_required")
 
