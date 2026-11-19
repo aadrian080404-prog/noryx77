@@ -46,6 +46,8 @@ class FederatedAuditSynchronizer:
             raise TypeError("historical_federated_audit_checkpoint_reader_required")
         if not callable(getattr(anchor, "read_checkpoint", None)):
             raise TypeError("external_federated_audit_anchor_required")
+        if not callable(getattr(anchor, "compare_and_advance", None)):
+            raise TypeError("external_federated_audit_compare_and_advance_required")
         self._audit_log = audit_log
         self._anchor = anchor
         self._namespace = namespace

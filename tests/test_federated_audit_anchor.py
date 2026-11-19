@@ -172,3 +172,20 @@ def test_anchored_sink_does_not_append_when_anchor_is_unavailable_before_write(t
     with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
         sink.record("decision", allowed=True)
     assert log.snapshot() == ()
+
+
+
+def test_federated_audit_anchor_requires_atomic_compare_and_advance(tmp_path):
+    class ReadOnlyAnchor:
+        def read_checkpoint(self, namespace):
+            return None
+
+    log = _log(tmp_path / "federated-anchor-readonly.db")
+    with pytest.raises(
+        TypeError,
+        match="external_federated_audit_compare_and_advance_required",
+    ):
+        FederatedAuditSynchronizer(
+            log, ReadOnlyAnchor(), namespace="noryx7/federation-a"
+        )
+    log.close()
