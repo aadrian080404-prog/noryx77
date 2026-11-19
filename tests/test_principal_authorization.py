@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
@@ -72,3 +74,20 @@ def test_principal_grant_survives_authority_restart_but_not_replay(tmp_path):
     )
     assert restarted.consume_and_execute(action, "exec-1", grant, lambda: "after-restart") == (True, "after-restart")
     assert authority.consume_and_execute(action, "exec-1", grant, lambda: "duplicate") == (False, None)
+
+
+def test_concurrent_dispatch_consumes_grant_at_most_once(tmp_path):
+    registry, authority, action = _setup(tmp_path)
+    grant = authority.issue(action, "exec-1", "tenant-1")
+    called = []
+
+    def dispatch():
+        return authority.consume_and_execute(
+            action, "exec-1", grant, lambda: called.append("run") or "ok"
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: dispatch(), range(2)))
+
+    assert sum(1 for consumed, _ in results if consumed) == 1
+    assert called == ["run"]
