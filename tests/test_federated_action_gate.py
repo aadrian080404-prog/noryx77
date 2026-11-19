@@ -5,7 +5,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from core.actions import ActionGate, AuthorizationAuthority
 from core.contracts import ActionSpec
-from core.federation_admission import FederatedAdmission
+from core.federation_admission import FederatedAdmissionBoundary
+from core.federation_envelope import SignedExecutionEnvelope
 from core.federated_action_gate import FederatedActionGate
 from core.identity import AgentIdentityAuthority
 from core.limits import RuntimeLimits
@@ -16,6 +17,31 @@ from core.security import SecurityBoundary
 from core.sqlite_identity import SQLiteIdentityRegistry
 from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
 from core.verification import VerificationEngine
+
+
+class _AdmissionRegistry:
+    def is_registered(self, identity_id):
+        return True
+
+
+class _AdmissionVerifier:
+    def verify_and_consume(self, envelope):
+        return envelope
+
+
+def _make_admission(policy_version="local-v1"):
+    envelope = SignedExecutionEnvelope(
+        schema_version=1, execution_id="exec-1", principal_id="tenant-1",
+        agent_id="agent-1", task_type="search", capabilities=("search",),
+        policy_version=policy_version, state_version="state-v1",
+        issued_at=100, expires_at=160, nonce=b"n" * 32,
+        issuer_key_id="issuer-1", signature=b"s" * 64,
+    )
+    boundary = FederatedAdmissionBoundary(
+        _AdmissionVerifier(), principal_registry=_AdmissionRegistry(),
+        agent_registry=_AdmissionRegistry(),
+    )
+    return boundary.admit(envelope)
 
 
 def _setup(tmp_path):
@@ -51,12 +77,7 @@ def _setup(tmp_path):
         parameters={"query": "bounded"}, risk_class="sensitive",
         requires_authorization=True, execution_id="exec-1",
     )
-    admission = FederatedAdmission(
-        execution_id="exec-1", principal_id="tenant-1", agent_id="agent-1",
-        task_type="search", asserted_capabilities=("search",),
-        policy_version="local-v1", state_version="state-v1",
-        issuer_key_id="issuer-1",
-    )
+    admission = _make_admission("local-v1")
     agent_grant = agent_authority.issue(
         action, "exec-1", principal=agent_identity
     )
@@ -152,5 +173,20 @@ def test_federated_action_rejects_stale_policy_version(tmp_path):
     )
     assert decision.allowed is False
     assert decision.reason == "federated_policy_version_mismatch"
+    assert result is None
+    assert dispatched == []
+
+
+def test_federated_action_rejects_caller_fabricated_or_modified_admission(tmp_path):
+    gate, _, _, agent, action, admission, agent_grant, principal_grant = _setup(tmp_path)
+    fabricated = replace(admission, policy_version="local-v1", _proof=b"")
+    dispatched = []
+    decision, result = gate.authorize_and_dispatch(
+        fabricated, action, agent_identity=agent, agent_grant=agent_grant,
+        principal_grant=principal_grant, required_capability="search",
+        executor=lambda: dispatched.append("unsafe"),
+    )
+    assert decision.allowed is False
+    assert decision.reason == "unverified_or_modified_federated_admission"
     assert result is None
     assert dispatched == []
