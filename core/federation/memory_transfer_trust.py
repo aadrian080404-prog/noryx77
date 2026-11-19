@@ -84,14 +84,19 @@ def build_memory_transfer_trust(
         ):
             return False
         try:
-            owner_matches = is_agent_owned_by_principal(principal_id, agent_id) is True
-            if not owner_matches:
-                return False
-            return with_agent(agent_id, lambda identity: (
-                identity.agent_id == agent_id
-                and isinstance(identity.public_key, bytes)
-                and len(identity.public_key) == 32
-            )) is True
+            def verify_agent(_principal_identity):
+                owner_matches = is_agent_owned_by_principal(principal_id, agent_id) is True
+                if not owner_matches:
+                    return False
+                return with_agent(agent_id, lambda identity: (
+                    identity.agent_id == agent_id
+                    and isinstance(identity.public_key, bytes)
+                    and len(identity.public_key) == 32
+                )) is True
+
+            # Both sides of the relationship must still be trusted. A valid
+            # agent key cannot outlive revocation of its owning principal.
+            return with_principal(principal_id, verify_agent) is True
         except Exception:
             return False
 
