@@ -173,7 +173,9 @@ def test_anchored_sink_does_not_append_when_anchor_is_unavailable_before_write(t
     sync = FederatedAuditSynchronizer(
         log, OfflineAnchor(), namespace="noryx7/federation-a"
     )
-    sink = AnchoredFederatedAuditSink(log, sync)
+    sink = AnchoredFederatedAuditSink(
+        log, sync, SQLiteFederatedAuditWriterLease(tmp_path / "offline-anchor.lease")
+    )
     with pytest.raises(PermissionError, match="external_federated_audit_anchor_unavailable"):
         sink.record("decision", allowed=True)
     assert log.snapshot() == ()
