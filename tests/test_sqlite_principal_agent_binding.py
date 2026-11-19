@@ -1,4 +1,6 @@
 import pytest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 from core.identity import AgentIdentityAuthority
 from core.principal_identity import PrincipalIdentityAuthority
@@ -74,3 +76,38 @@ def test_binding_registry_rejects_in_memory_database(tmp_path):
         SQLitePrincipalAgentBindingRegistry(
             ":memory:", principal_registry=principals, agent_registry=agents
         )
+
+
+def test_concurrent_binding_race_allows_exactly_one_owner(tmp_path):
+    principals, agents, _bindings, principal, agent = _trusted_stores(tmp_path)
+    other, _ = PrincipalIdentityAuthority.generate("principal-race-b")
+    principals.register(other)
+    database = tmp_path / "bindings-race.sqlite3"
+    first = SQLitePrincipalAgentBindingRegistry(
+        database, principal_registry=principals, agent_registry=agents
+    )
+    second = SQLitePrincipalAgentBindingRegistry(
+        database, principal_registry=principals, agent_registry=agents
+    )
+    barrier = Barrier(2)
+
+    def bind(registry, principal_id):
+        barrier.wait(timeout=5)
+        try:
+            registry.bind(principal_id, agent.agent_id)
+            return principal_id
+        except PermissionError as exc:
+            return str(exc)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda args: bind(*args),
+            ((first, principal.principal_id), (second, other.principal_id)),
+        ))
+
+    assert sum(result in {principal.principal_id, other.principal_id} for result in results) == 1
+    assert "agent_already_bound_to_another_principal" in results
+    assert (
+        first.is_agent_owned_by_principal(principal.principal_id, agent.agent_id)
+        != first.is_agent_owned_by_principal(other.principal_id, agent.agent_id)
+    )
