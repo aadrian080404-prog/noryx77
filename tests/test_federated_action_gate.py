@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -70,7 +72,7 @@ def test_federated_action_requires_both_grants_and_local_policy(tmp_path):
     dispatched = []
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
+        principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("queued") or "queued",
     )
     assert decision.allowed is True
@@ -84,7 +86,7 @@ def test_federated_action_rejects_capability_claim_mismatch(tmp_path):
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
         principal_grant=principal_grant, required_capability="payments",
-        local_policy_version="local-v1", executor=lambda: dispatched.append("unsafe"),
+        executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
     assert result is None
@@ -95,9 +97,10 @@ def test_federated_action_rejects_revoked_agent_before_dispatch(tmp_path):
     gate, agents, _, agent, action, admission, agent_grant, principal_grant = _setup(tmp_path)
     agents.revoke(agent.agent_id)
     dispatched = []
+    stale_admission = replace(admission, policy_version="local-v2")
     decision, result = gate.authorize_and_dispatch(
-        admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
+        stale_admission, action, agent_identity=agent, agent_grant=agent_grant,
+        principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
@@ -111,7 +114,7 @@ def test_federated_action_rejects_revoked_principal_before_dispatch(tmp_path):
     dispatched = []
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
+        principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
@@ -124,12 +127,12 @@ def test_federated_action_rejects_replay_of_either_grant(tmp_path):
     dispatched = []
     first, _ = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
+        principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("first"),
     )
     second, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
-        principal_grant=principal_grant, required_capability="search", local_policy_version="local-v1",
+        principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("replay"),
     )
     assert first.allowed is True
@@ -145,7 +148,6 @@ def test_federated_action_rejects_stale_policy_version(tmp_path):
     decision, result = gate.authorize_and_dispatch(
         admission, action, agent_identity=agent, agent_grant=agent_grant,
         principal_grant=principal_grant, required_capability="search",
-        local_policy_version="local-v2",
         executor=lambda: dispatched.append("unsafe"),
     )
     assert decision.allowed is False
