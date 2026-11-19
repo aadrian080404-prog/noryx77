@@ -113,3 +113,26 @@ def test_empty_checkpoint_uses_genesis_and_zero_sequence(tmp_path):
     assert sequence == 0
     assert digest == audit.digest()
     audit.close()
+
+
+def test_independent_audit_connections_serialize_concurrent_process_style_appends(tmp_path):
+    path = tmp_path / "independent-writers.sqlite"
+    first = SQLiteFederatedAuditLog(path)
+    second = SQLiteFederatedAuditLog(path)
+    writers = (first, second)
+    try:
+        def append(index):
+            return writers[index % 2].record("independent_writer", worker=index)
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(append, range(48)))
+
+        assert len(first.snapshot()) == 48
+        assert first.verify_integrity()
+        assert second.verify_integrity()
+        sequence, digest = first.checkpoint()
+        assert sequence == 48
+        assert digest == second.checkpoint()[1]
+    finally:
+        first.close()
+        second.close()
