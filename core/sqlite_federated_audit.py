@@ -65,7 +65,7 @@ class SQLiteFederatedAuditLog:
     @staticmethod
     def _encode(entry: dict[str, Any]) -> str:
         try:
-            return json.dumps(
+            encoded = json.dumps(
                 entry, sort_keys=True, separators=(",", ":"),
                 ensure_ascii=False, allow_nan=False,
             )
