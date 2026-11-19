@@ -27,6 +27,7 @@ class MembershipRegistry(Protocol):
 
 
 _ADMISSION_PROOF_KEY = os.urandom(32)
+_ADMISSION_ISSUER_TOKEN = object()
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,11 @@ class FederatedAdmission:
         return hmac.compare_digest(self._proof, expected)
 
     @classmethod
-    def _from_verified_envelope(cls, envelope: SignedExecutionEnvelope) -> "FederatedAdmission":
+    def _from_verified_envelope(
+        cls, envelope: SignedExecutionEnvelope, *, _issuer_token: object
+    ) -> "FederatedAdmission":
+        if _issuer_token is not _ADMISSION_ISSUER_TOKEN:
+            raise PermissionError("federated_admission_issuer_only")
         admission = cls(
             execution_id=envelope.execution_id,
             principal_id=envelope.principal_id,
@@ -143,4 +148,6 @@ class FederatedAdmissionBoundary:
         if verified != envelope:
             raise EnvelopeRejected("verified_envelope_mismatch")
 
-        return FederatedAdmission._from_verified_envelope(envelope)
+        return FederatedAdmission._from_verified_envelope(
+            envelope, _issuer_token=_ADMISSION_ISSUER_TOKEN
+        )
