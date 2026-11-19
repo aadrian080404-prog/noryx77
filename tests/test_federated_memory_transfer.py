@@ -48,6 +48,9 @@ def accept(envelope, *, reserve=None, verify=True, **overrides):
         expected_recipient_principal_id="principal-b",
         expected_recipient_key_id="recipient-key-b",
         verify_signature=lambda key, payload, signature: verify,
+        verify_source_principal=lambda *_: True,
+        verify_source_agent=lambda *_: True,
+        verify_recipient_agent=lambda *_: True,
         reserve_nonce=reserve or (lambda key, nonce, expiry: calls.append((key, nonce, expiry)) or True),
         now=150,
         **overrides,
@@ -89,6 +92,9 @@ def test_rejects_invalid_signature_before_nonce_reservation():
             expected_recipient_principal_id="principal-b",
             expected_recipient_key_id="recipient-key-b",
             verify_signature=lambda *_: False,
+            verify_source_principal=lambda *_: True,
+            verify_source_agent=lambda *_: True,
+            verify_recipient_agent=lambda *_: True,
             reserve_nonce=lambda *args: reservations.append(args) or True,
             now=150,
         )
@@ -136,6 +142,9 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
             expected_recipient_principal_id="principal-b",
             expected_recipient_key_id="recipient-key-b",
             verify_signature=verifier,
+            verify_source_principal=lambda *_: True,
+            verify_source_agent=lambda *_: True,
+            verify_recipient_agent=lambda *_: True,
             reserve_nonce=registry.reserve,
             now=150,
         )
@@ -146,6 +155,9 @@ def test_ed25519_verification_and_durable_nonce_replay_protection(tmp_path):
                 expected_recipient_principal_id="principal-b",
                 expected_recipient_key_id="recipient-key-b",
                 verify_signature=verifier,
+                verify_source_principal=lambda *_: True,
+                verify_source_agent=lambda *_: True,
+                verify_recipient_agent=lambda *_: True,
                 reserve_nonce=registry.reserve,
                 now=150,
             )
@@ -221,6 +233,9 @@ def test_x25519_chacha20poly1305_round_trip_binds_identity_metadata(tmp_path):
             expected_recipient_principal_id="principal-b",
             expected_recipient_key_id="recipient-key-b",
             verify_signature=verifier,
+            verify_source_principal=lambda *_: True,
+            verify_source_agent=lambda *_: True,
+            verify_recipient_agent=lambda *_: True,
             reserve_nonce=registry.reserve,
             now=150,
         )
@@ -267,6 +282,9 @@ def test_encrypted_transfer_rejects_tampered_identity_binding(tmp_path):
                 expected_recipient_principal_id="principal-b",
                 expected_recipient_key_id="recipient-key-b",
                 verify_signature=ed25519_signature_verifier(lambda _key_id: issuer_public),
+                verify_source_principal=lambda *_: True,
+                verify_source_agent=lambda *_: True,
+                verify_recipient_agent=lambda *_: True,
                 reserve_nonce=registry.reserve,
                 now=150,
             )
@@ -317,8 +335,44 @@ def test_encrypted_transfer_rejects_modified_ciphertext_even_when_resigned(tmp_p
                 expected_recipient_principal_id="principal-b",
                 expected_recipient_key_id="recipient-key-b",
                 verify_signature=ed25519_signature_verifier(lambda _key_id: issuer_public),
+                verify_source_principal=lambda *_: True,
+                verify_source_agent=lambda *_: True,
+                verify_recipient_agent=lambda *_: True,
                 reserve_nonce=registry.reserve,
                 now=150,
             )
     finally:
         registry.close()
+
+
+
+def test_rejects_unbound_source_principal_before_nonce_reservation():
+    envelope = make_envelope()
+    reservations = []
+    with pytest.raises(MemoryTransferRejected, match="source_principal_binding_failed"):
+        validate_memory_transfer(
+            envelope,
+            expected_recipient_principal_id="principal-b",
+            expected_recipient_key_id="recipient-key-b",
+            verify_signature=lambda *_: True,
+            verify_source_principal=lambda *_: False,
+            reserve_nonce=lambda *args: reservations.append(args) or True,
+            now=150,
+        )
+    assert reservations == []
+
+
+def test_agent_transfer_requires_both_verified_agent_bindings():
+    envelope = make_envelope()
+    envelope["source_agent_id"] = "agent-a"
+    envelope["recipient_agent_id"] = "agent-b"
+    with pytest.raises(MemoryTransferRejected, match="agent_identity_binding_unavailable"):
+        validate_memory_transfer(
+            envelope,
+            expected_recipient_principal_id="principal-b",
+            expected_recipient_key_id="recipient-key-b",
+            verify_signature=lambda *_: True,
+            verify_source_principal=lambda *_: True,
+            reserve_nonce=lambda *_: True,
+            now=150,
+        )
