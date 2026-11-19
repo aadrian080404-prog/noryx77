@@ -136,3 +136,26 @@ def test_independent_audit_connections_serialize_concurrent_process_style_append
     finally:
         first.close()
         second.close()
+
+
+def test_external_anchor_comparison_detects_rollback_and_divergence(tmp_path):
+    audit = SQLiteFederatedAuditLog(tmp_path / "anchor-check.sqlite")
+    audit.record("event", value=1)
+    sequence, digest = audit.checkpoint()
+    assert audit.verify_against_anchor(sequence, digest) == (sequence, digest)
+
+    with pytest.raises(RuntimeError, match="federated_audit_rollback_detected"):
+        audit.verify_against_anchor(sequence + 1, digest)
+    with pytest.raises(RuntimeError, match="federated_audit_anchor_divergence"):
+        audit.verify_against_anchor(sequence, "0" * 64)
+    with pytest.raises(ValueError, match="invalid_external_audit_checkpoint_sequence"):
+        audit.verify_against_anchor(True, digest)
+    with pytest.raises(ValueError, match="invalid_external_audit_checkpoint_digest"):
+        audit.verify_against_anchor(sequence, "not-a-digest")
+
+    # A locally newer journal is not rolled back; caller receives the newer
+    # checkpoint and must advance the independent anchor before claiming sync.
+    audit.record("event", value=2)
+    newer = audit.verify_against_anchor(sequence, digest)
+    assert newer[0] == sequence + 1
+    audit.close()
