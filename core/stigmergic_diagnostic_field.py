@@ -1,8 +1,7 @@
 """Stigmergic diagnostic field: proposals, evidence traces, and emergent review.
 
-This is a coordination primitive, not an authorization system. A corroborated
-claim is still only a hypothesis; callers must route every consequential action
-through NORYX7's ordinary local policy and ActionGate.
+This coordination primitive never authorizes actions. Its verifier must check
+both the cryptographic proof and current issuer/principal/agent trust state.
 """
 from __future__ import annotations
 
@@ -38,15 +37,17 @@ class DiagnosticConsensus:
     negative_weight: float
     confidence: float
     active_traces: int
+    equivocation_principals: int
     evaluated_at: float
 
 
 class StigmergicDiagnosticField:
-    """Append-only, expiring evidence field with principal-level independence.
+    """Bounded, expiring evidence field with principal-level independence.
 
-    The verifier must validate each trace's signature against the configured
-    federation trust/revocation state. Agents are not independent voters:
-    only one latest active trace per principal contributes to a claim.
+    Multiple agents under one principal cannot multiply quorum. Expired
+    records are pruned; signatures and current revocation are rechecked at
+    evaluation. Conflicting same-time signed positions from one principal are
+    treated as equivocation and excluded from the vote.
     """
 
     MAX_TEXT_BYTES = 256
@@ -82,7 +83,8 @@ class StigmergicDiagnosticField:
             if (isinstance(value, bool) or not isinstance(value, (int, float))
                     or not math.isfinite(float(value)) or not 0 < value <= 1):
                 raise ValueError(f"invalid_{name}")
-        if isinstance(max_traces, bool) or not isinstance(max_traces, int) or not 1 <= max_traces <= self.MAX_TRACES:
+        if (isinstance(max_traces, bool) or not isinstance(max_traces, int)
+                or not 1 <= max_traces <= self.MAX_TRACES):
             raise ValueError("invalid_max_traces")
         self._verifier = verifier
         self._clock = clock
@@ -98,8 +100,12 @@ class StigmergicDiagnosticField:
 
     @classmethod
     def _valid_text(cls, value: str) -> bool:
-        return (isinstance(value, str) and bool(value.strip())
-                and len(value.encode("utf-8")) <= cls.MAX_TEXT_BYTES)
+        if not isinstance(value, str) or not value.strip():
+            return False
+        try:
+            return len(value.encode("utf-8")) <= cls.MAX_TEXT_BYTES
+        except UnicodeEncodeError:
+            return False
 
     @staticmethod
     def _valid_fingerprint(value: str) -> bool:
@@ -111,15 +117,29 @@ class StigmergicDiagnosticField:
             return False
         return True
 
-    @staticmethod
-    def claim_fingerprint(namespace: str, subject: str) -> str:
-        """Return a stable opaque claim key; do not put raw secrets in a claim."""
-        if not isinstance(namespace, str) or not namespace.strip():
-            raise ValueError("claim_namespace_required")
-        if not isinstance(subject, str) or not subject.strip():
-            raise ValueError("claim_subject_required")
+    @classmethod
+    def claim_fingerprint(cls, namespace: str, subject: str) -> str:
+        """Return a stable opaque claim key; raw secrets must not be supplied."""
+        if not cls._valid_text(namespace) or not cls._valid_text(subject):
+            raise ValueError("valid_bounded_claim_fields_required")
         payload = (namespace.strip() + "\0" + subject.strip()).encode("utf-8")
         return sha256(payload).hexdigest()
+
+    def _prune_expired(self, now: float) -> None:
+        """Drop expired traces and their dedupe keys; expired signatures cannot re-enter."""
+        with self._lock:
+            retained_keys: set[tuple[str, str, str]] = set()
+            for claim, traces in tuple(self._traces.items()):
+                active = [trace for trace in traces if trace.expires_at > now]
+                if active:
+                    self._traces[claim] = active
+                    retained_keys.update(
+                        (trace.claim_id, trace.principal_id, trace.evidence_id)
+                        for trace in active
+                    )
+                else:
+                    self._traces.pop(claim, None)
+            self._seen_evidence = retained_keys
 
     def submit(self, trace: DiagnosticTrace) -> bool:
         if not isinstance(trace, DiagnosticTrace):
@@ -149,7 +169,8 @@ class StigmergicDiagnosticField:
             now = float(self._clock())
         except Exception:
             return False
-        if not math.isfinite(now) or trace.issued_at > now + 30 or trace.expires_at <= now:
+        if (not math.isfinite(now) or trace.issued_at > now + 30
+                or trace.expires_at <= now):
             return False
         try:
             verified = self._verifier(trace)
@@ -160,6 +181,7 @@ class StigmergicDiagnosticField:
 
         dedupe_key = (trace.claim_id, trace.principal_id, trace.evidence_id)
         with self._lock:
+            self._prune_expired(now)
             if dedupe_key in self._seen_evidence:
                 return False
             count = sum(len(items) for items in self._traces.values())
@@ -178,25 +200,44 @@ class StigmergicDiagnosticField:
             raise RuntimeError("diagnostic_clock_unavailable") from None
         if not math.isfinite(now):
             raise RuntimeError("diagnostic_clock_invalid")
-
+        self._prune_expired(now)
         with self._lock:
             history = tuple(self._traces.get(claim_id, ()))
 
-        # Keep the newest active observation per principal. Multiple agents
-        # under one principal cannot manufacture quorum by multiplying votes.
-        latest: dict[str, DiagnosticTrace] = {}
+        # Re-check live trust/revocation; a once-valid trace must stop counting
+        # immediately after its principal, agent, or issuer is revoked.
+        verified_history = []
         for trace in history:
+            try:
+                if self._verifier(trace) is True:
+                    verified_history.append(trace)
+            except Exception:
+                continue
+
+        by_principal: dict[str, list[DiagnosticTrace]] = {}
+        for trace in verified_history:
             if trace.issued_at <= now + 30 and trace.expires_at > now:
-                current = latest.get(trace.principal_id)
-                if current is None or trace.issued_at > current.issued_at:
-                    latest[trace.principal_id] = trace
+                by_principal.setdefault(trace.principal_id, []).append(trace)
+
+        latest: dict[str, DiagnosticTrace] = {}
+        equivocating: set[str] = set()
+        for principal, traces in by_principal.items():
+            newest_time = max(trace.issued_at for trace in traces)
+            newest = [trace for trace in traces if trace.issued_at == newest_time]
+            polarities = {trace.polarity for trace in newest}
+            if len(polarities) > 1:
+                equivocating.add(principal)
+                continue
+            # Deterministic tie-break for same-polarity observations.
+            latest[principal] = min(
+                newest, key=lambda trace: (trace.evidence_fingerprint, trace.evidence_id)
+            )
 
         positive = negative = 0
         positive_weight = negative_weight = 0.0
         for trace in latest.values():
             age = max(0.0, now - float(trace.issued_at))
-            decay = math.pow(0.5, age / self._half_life)
-            weight = float(trace.strength) * decay
+            weight = float(trace.strength) * math.pow(0.5, age / self._half_life)
             if trace.polarity > 0:
                 positive += 1
                 positive_weight += weight
@@ -208,11 +249,15 @@ class StigmergicDiagnosticField:
         confidence = max(positive_weight, negative_weight) / total if total else 0.0
         status = "insufficient_evidence"
         enough_independent = len(latest) >= self._minimum_principals
-        if enough_independent and total > 0:
+        if equivocating:
+            status = "equivocation_detected"
+        elif enough_independent and total > 0:
             margin = abs(positive_weight - negative_weight) / total
-            if positive_weight / total >= self._corroboration_threshold and margin >= self._minimum_margin:
+            if (positive_weight / total >= self._corroboration_threshold
+                    and margin >= self._minimum_margin):
                 status = "corroborated"
-            elif negative_weight / total >= self._rejection_threshold and margin >= self._minimum_margin:
+            elif (negative_weight / total >= self._rejection_threshold
+                    and margin >= self._minimum_margin):
                 status = "challenged"
             elif positive_weight > 0 and negative_weight > 0:
                 status = "contested"
@@ -226,6 +271,7 @@ class StigmergicDiagnosticField:
             negative_weight=negative_weight,
             confidence=confidence,
             active_traces=len(latest),
+            equivocation_principals=len(equivocating),
             evaluated_at=now,
         )
 
