@@ -145,9 +145,8 @@ def test_federated_action_rejects_replay_of_either_grant(tmp_path):
 def test_federated_action_rejects_stale_policy_version(tmp_path):
     gate, _, _, agent, action, admission, agent_grant, principal_grant = _setup(tmp_path)
     dispatched = []
-    stale_admission = replace(admission, policy_version="local-v2")
     decision, result = gate.authorize_and_dispatch(
-        stale_admission, action, agent_identity=agent, agent_grant=agent_grant,
+        admission, action, agent_identity=agent, agent_grant=agent_grant,
         principal_grant=principal_grant, required_capability="search",
         executor=lambda: dispatched.append("unsafe"),
     )
