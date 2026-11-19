@@ -28,6 +28,8 @@ class FederatedActionGate:
         self,
         action_gate: ActionGate,
         principal_authority: PrincipalAuthorizationAuthority,
+        *,
+        local_policy_version: str,
     ) -> None:
         if not isinstance(action_gate, ActionGate):
             raise TypeError("action_gate_required")
@@ -35,9 +37,12 @@ class FederatedActionGate:
             raise TypeError("principal_authority_required")
         if not callable(getattr(action_gate.authorization, "consume_and_execute", None)):
             raise TypeError("agent_authorization_authority_required")
+        if not isinstance(local_policy_version, str) or not local_policy_version.strip():
+            raise ValueError("local_policy_version_required")
         self._gate = action_gate
         self._principals = principal_authority
         self._agents = action_gate.authorization
+        self._policy_version = local_policy_version
 
     @staticmethod
     def _denied(reason: str) -> ActionDecision:
@@ -55,7 +60,6 @@ class FederatedActionGate:
         agent_grant: AuthorizationGrant,
         principal_grant: PrincipalAuthorizationGrant,
         required_capability: str,
-        local_policy_version: str,
         executor: Callable[[], object],
         calls_used: int = 0,
     ) -> tuple[ActionDecision, object | None]:
@@ -78,11 +82,7 @@ class FederatedActionGate:
             return self._denied("principal_grant_required"), None
         if not callable(executor):
             return self._denied("dispatcher_required"), None
-        if (
-            not isinstance(local_policy_version, str)
-            or not local_policy_version.strip()
-            or admission.policy_version != local_policy_version
-        ):
+        if admission.policy_version != self._policy_version:
             return self._denied("federated_policy_version_mismatch"), None
         if (
             not isinstance(required_capability, str)
