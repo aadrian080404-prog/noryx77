@@ -173,6 +173,40 @@ class SQLiteFederatedAuditLog:
             ).fetchone()
             return _GENESIS if row is None else row[0]
 
+    def checkpoint(self):
+        """Return the verified current head for an independent external anchor."""
+        from core.federated_audit_anchor import FederatedAuditCheckpoint
+
+        with self._lock:
+            if not self._verify_locked():
+                raise RuntimeError("federated_audit_integrity_failed")
+            row = self._conn.execute(
+                "SELECT sequence, digest FROM federated_audit_events "
+                "ORDER BY sequence DESC LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return FederatedAuditCheckpoint(0, bytes.fromhex(_GENESIS))
+            return FederatedAuditCheckpoint(int(row[0]), bytes.fromhex(row[1]))
+
+    def checkpoint_at(self, sequence: int):
+        """Return one verified historical head, or the domain-separated genesis."""
+        from core.federated_audit_anchor import FederatedAuditCheckpoint
+
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0:
+            raise ValueError("invalid_federated_audit_checkpoint_sequence")
+        if sequence == 0:
+            return FederatedAuditCheckpoint(0, bytes.fromhex(_GENESIS))
+        with self._lock:
+            if not self._verify_locked():
+                raise RuntimeError("federated_audit_integrity_failed")
+            row = self._conn.execute(
+                "SELECT digest FROM federated_audit_events WHERE sequence = ?",
+                (sequence,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("federated_audit_checkpoint_sequence_missing")
+            return FederatedAuditCheckpoint(sequence, bytes.fromhex(row[0]))
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
