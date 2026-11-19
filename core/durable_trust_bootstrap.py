@@ -60,7 +60,13 @@ def build_durable_trust_runtime(
         raise TypeError("durable_identity_registry_required")
     if not isinstance(replay_guard, SQLiteAuthorizationReplayGuard):
         raise TypeError("durable_replay_guard_required")
-    if not isinstance(agent_identity, AgentIdentity) or not agent_identity.is_well_formed():
+    if not isinstance(agent_identity, AgentIdentity):
+        raise ValueError("valid_agent_identity_required")
+    try:
+        agent_id_bytes = agent_identity.agent_id.encode("utf-8", errors="strict")
+    except (AttributeError, UnicodeEncodeError):
+        raise ValueError("invalid_agent_identity_encoding") from None
+    if not agent_identity.is_well_formed():
         raise ValueError("valid_agent_identity_required")
     if not isinstance(key_id, str) or not key_id.strip():
         raise ValueError("key_id_required")
@@ -82,10 +88,6 @@ def build_durable_trust_runtime(
         key_id_bytes = key_id.encode("utf-8", errors="strict")
     except UnicodeEncodeError:
         raise ValueError("invalid_key_id_encoding") from None
-    try:
-        agent_id_bytes = agent_identity.agent_id.encode("utf-8", errors="strict")
-    except UnicodeEncodeError:
-        raise ValueError("invalid_agent_identity_encoding") from None
     if len(witness_namespace_bytes) > 512:
         raise ValueError("witness_namespace_too_long")
     if len(principal_id_bytes) > 256:
