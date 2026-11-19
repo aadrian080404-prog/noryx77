@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from core.authorization_replay import ReplayGuard
 from core.identity import AgentIdentity
 from core.sqlite_agent_identity_registry import SQLiteAgentIdentityRegistry
+from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
 from core.sqlite_authorization_replay import SQLiteAuthorizationReplayGuard
 from core.trust_chain import TrustChain
 from core.trust_providers import (
@@ -47,7 +48,8 @@ def build_durable_trust_runtime(
     witness_namespace: str,
     local_epoch: int,
     principal_id: str,
-    principal_agent_binding_verifier,
+    principal_agent_binding_verifier=None,
+    principal_agent_binding_registry: SQLitePrincipalAgentBindingRegistry | None = None,
 ) -> DurableTrustRuntime:
     """Construct durable TrustChain only after all trust dependencies self-check.
 
@@ -60,21 +62,49 @@ def build_durable_trust_runtime(
         raise TypeError("durable_identity_registry_required")
     if not isinstance(replay_guard, SQLiteAuthorizationReplayGuard):
         raise TypeError("durable_replay_guard_required")
-    if not isinstance(agent_identity, AgentIdentity) or not agent_identity.is_well_formed():
+    if not isinstance(agent_identity, AgentIdentity):
+        raise ValueError("valid_agent_identity_required")
+    try:
+        agent_id_bytes = agent_identity.agent_id.encode("utf-8", errors="strict")
+    except (AttributeError, UnicodeEncodeError):
+        raise ValueError("invalid_agent_identity_encoding") from None
+    if not agent_identity.is_well_formed():
         raise ValueError("valid_agent_identity_required")
     if not isinstance(key_id, str) or not key_id.strip():
         raise ValueError("key_id_required")
     if not isinstance(principal_id, str) or not principal_id.strip():
         raise ValueError("principal_id_required")
+    if principal_agent_binding_registry is not None:
+        if principal_agent_binding_verifier is not None:
+            raise TypeError("ambiguous_principal_agent_binding_source")
+        if not isinstance(
+            principal_agent_binding_registry, SQLitePrincipalAgentBindingRegistry
+        ):
+            raise TypeError("durable_principal_agent_binding_registry_required")
+        principal_agent_binding_verifier = (
+            principal_agent_binding_registry.is_agent_owned_by_principal
+        )
     if not callable(principal_agent_binding_verifier):
         raise TypeError("principal_agent_binding_verifier_required")
     if not isinstance(witness_namespace, str) or not witness_namespace.strip():
         raise ValueError("witness_namespace_required")
-    if len(witness_namespace.encode("utf-8")) > 512:
+    try:
+        witness_namespace_bytes = witness_namespace.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        raise ValueError("invalid_witness_namespace_encoding") from None
+    try:
+        principal_id_bytes = principal_id.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        raise ValueError("invalid_principal_id_encoding") from None
+    try:
+        key_id_bytes = key_id.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        raise ValueError("invalid_key_id_encoding") from None
+    if len(witness_namespace_bytes) > 512:
         raise ValueError("witness_namespace_too_long")
-    if len(principal_id.encode("utf-8")) > 256:
+    if len(principal_id_bytes) > 256:
         raise ValueError("principal_id_too_long")
-    if len(key_id.encode("utf-8")) > 512:
+    if len(key_id_bytes) > 512:
         raise ValueError("key_id_too_long")
     if (isinstance(local_epoch, bool) or not isinstance(local_epoch, int)
             or not 0 <= local_epoch <= 0xFFFFFFFFFFFFFFFF):
@@ -100,10 +130,10 @@ def build_durable_trust_runtime(
     # key ownership and signature correctness without exporting private bytes.
     challenge = (
         _BOOTSTRAP_DOMAIN
-        + len(principal_id.encode("utf-8")).to_bytes(4, "big")
-        + principal_id.encode("utf-8")
-        + len(agent_identity.agent_id.encode("utf-8")).to_bytes(4, "big")
-        + agent_identity.agent_id.encode("utf-8")
+        + len(principal_id_bytes).to_bytes(4, "big")
+        + principal_id_bytes
+        + len(agent_id_bytes).to_bytes(4, "big")
+        + agent_id_bytes
         + local_epoch.to_bytes(8, "big")
     )
     sign_for_identity(
