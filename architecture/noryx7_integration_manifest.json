@@ -315,6 +315,23 @@
         "distributed_memory"
       ],
       "integration_tests": []
+    },
+    {
+      "id": "federated_memory_transfer",
+      "plane": "distribution",
+      "status": "implemented_partial",
+      "paths": [
+        "core/federation/memory_transfer.py",
+        "docs/federated-memory-transfer-v1.md"
+      ],
+      "depends_on": [
+        "contracts",
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": [
+        "tests/test_federated_memory_transfer.py"
+      ]
     }
   ]
 }
