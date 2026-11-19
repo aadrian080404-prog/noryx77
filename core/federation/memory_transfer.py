@@ -39,7 +39,7 @@ class MemoryTransferRejected(ValueError):
 
 
 def _text(value: Any, field: str, *, optional: bool = False, maximum: int = _MAX_ID) -> str:
-    if not isinstance(value, str) or (not optional and not value.strip()):
+    if not isinstance(value, str) or (not optional and not value.strip()) or (optional and value and not value.strip()):
         raise MemoryTransferRejected(f"invalid_{field}")
     try:
         size = len(value.encode("utf-8"))
@@ -168,7 +168,6 @@ def ed25519_signature_verifier(
 
     def verify(issuer_key_id: str, payload: bytes, signature_b64: str) -> bool:
         try:
-            from cryptography.exceptions import InvalidSignature
             from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
             public_key = key_resolver(issuer_key_id)
@@ -343,6 +342,8 @@ def open_memory_transfer(
     max_ttl_seconds: int = 86_400,
 ) -> bytes:
     """Authenticate, atomically consume the nonce, then decrypt for the recipient."""
+    if not isinstance(recipient_private_key, bytes) or len(recipient_private_key) != 32:
+        raise MemoryTransferRejected("invalid_recipient_private_key")
     ciphertext = validate_memory_transfer(
         envelope,
         expected_recipient_principal_id=expected_recipient_principal_id,
@@ -352,8 +353,6 @@ def open_memory_transfer(
         now=now,
         max_ttl_seconds=max_ttl_seconds,
     )
-    if not isinstance(recipient_private_key, bytes) or len(recipient_private_key) != 32:
-        raise MemoryTransferRejected("invalid_recipient_private_key")
     try:
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric.x25519 import (
