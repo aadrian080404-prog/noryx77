@@ -35,6 +35,22 @@ class SQLiteAuthorizationReplayGuard:
                 "token BLOB PRIMARY KEY, consumed_at REAL NOT NULL, "
                 "CHECK(length(token)=32))"
             )
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS authorization_replay_guard_config ("
+                "singleton INTEGER PRIMARY KEY CHECK(singleton=1), "
+                "max_tokens INTEGER NOT NULL CHECK(max_tokens BETWEEN 1 AND 4096))"
+            )
+            self._conn.execute(
+                "INSERT OR IGNORE INTO authorization_replay_guard_config(singleton, max_tokens) "
+                "VALUES (1, ?)",
+                (max_tokens,),
+            )
+            configured = self._conn.execute(
+                "SELECT max_tokens FROM authorization_replay_guard_config WHERE singleton=1"
+            ).fetchone()
+            if configured is None or int(configured[0]) != max_tokens:
+                self._conn.close()
+                raise ValueError("replay_guard_capacity_mismatch")
 
     @property
     def max_tokens(self) -> int:
