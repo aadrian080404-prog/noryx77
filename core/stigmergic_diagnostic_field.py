@@ -151,7 +151,8 @@ class StigmergicDiagnosticField:
             return False
         if not self._valid_fingerprint(trace.evidence_fingerprint):
             return False
-        if (isinstance(trace.polarity, bool) or not isinstance(trace.polarity, int)\n                or trace.polarity not in (-1, 1)):
+        if (isinstance(trace.polarity, bool) or not isinstance(trace.polarity, int)
+                or trace.polarity not in (-1, 1)):
             return False
         if (isinstance(trace.strength, bool)
                 or not isinstance(trace.strength, (int, float))
