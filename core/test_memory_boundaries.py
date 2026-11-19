@@ -75,5 +75,21 @@ class MemoryBoundaryTests(unittest.TestCase):
             store.put(MemoryItem("b", "B", agent_id="x" * 1025))
 
 
+    def test_surrogate_code_points_are_rejected_without_encoding_exceptions(self):
+        store = MemoryStore()
+        invalid = "\ud800"
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem("valid-id", "x", principal_id=invalid))
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem("valid-id", "x", agent_id=invalid))
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem("valid-id", "x", execution_id=invalid))
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem(invalid, "x"))
+        self.assertIsNone(store.get(invalid))
+        self.assertIsNone(store.get("valid-id", principal_id=invalid))
+        self.assertEqual(store.list(agent_id=invalid), ())
+
+
 if __name__ == "__main__":
     unittest.main()

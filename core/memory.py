@@ -44,7 +44,10 @@ class MemoryStore:
             return False
         if not allow_empty and not value.strip():
             return False
-        return len(value.encode("utf-8")) <= max_bytes
+        try:
+            return len(value.encode("utf-8")) <= max_bytes
+        except UnicodeEncodeError:
+            return False
 
     @classmethod
     def _valid_execution_id(cls, execution_id: str, *, allow_empty: bool = True) -> bool:
@@ -66,7 +69,12 @@ class MemoryStore:
 
     @classmethod
     def _valid_memory_id(cls, memory_id: str) -> bool:
-        return isinstance(memory_id, str) and bool(memory_id) and len(memory_id.encode("utf-8")) <= cls.MAX_MEMORY_ID_BYTES
+        if not isinstance(memory_id, str) or not memory_id:
+            return False
+        try:
+            return len(memory_id.encode("utf-8")) <= cls.MAX_MEMORY_ID_BYTES
+        except UnicodeEncodeError:
+            return False
 
     @staticmethod
     def _key(memory_id: str, principal_id: str, agent_id: str, execution_id: str):
