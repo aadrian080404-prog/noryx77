@@ -55,6 +55,7 @@ class FederatedActionGate:
         agent_grant: AuthorizationGrant,
         principal_grant: PrincipalAuthorizationGrant,
         required_capability: str,
+        local_policy_version: str,
         executor: Callable[[], object],
         calls_used: int = 0,
     ) -> tuple[ActionDecision, object | None]:
@@ -77,6 +78,12 @@ class FederatedActionGate:
             return self._denied("principal_grant_required"), None
         if not callable(executor):
             return self._denied("dispatcher_required"), None
+        if (
+            not isinstance(local_policy_version, str)
+            or not local_policy_version.strip()
+            or admission.policy_version != local_policy_version
+        ):
+            return self._denied("federated_policy_version_mismatch"), None
         if (
             not isinstance(required_capability, str)
             or not required_capability.strip()
