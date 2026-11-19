@@ -2,7 +2,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from core.agent_identity import AgentIdentity, AgentIdentityAuthority
+from core.identity import AgentIdentityAuthority
 from core.federation.memory_transfer_trust import build_memory_transfer_trust
 from core.principal_identity import PrincipalIdentityAuthority
 from core.sqlite_identity import SQLiteIdentityRegistry
