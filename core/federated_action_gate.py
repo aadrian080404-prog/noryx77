@@ -120,9 +120,33 @@ class FederatedActionGate:
         if not decision.allowed:
             return decision, None
 
+        dispatch_state = {
+            "executor_started": False,
+            "executor_failed": False,
+            "principal_grant_attempted": False,
+        }
+
+        def audited_executor() -> object:
+            dispatch_state["executor_started"] = True
+            try:
+                return executor()
+            except Exception:
+                dispatch_state["executor_failed"] = True
+                raise
+
+        def record_outcome(outcome: str, reason: str = "") -> bool:
+            try:
+                self._audit.record_outcome(
+                    admission, action, outcome=outcome, reason=reason
+                )
+                return True
+            except Exception:
+                return False
+
         def consume_principal_and_dispatch() -> object | None:
+            dispatch_state["principal_grant_attempted"] = True
             consumed, result = self._principals.consume_and_execute(
-                action, admission.execution_id, principal_grant, executor
+                action, admission.execution_id, principal_grant, audited_executor
             )
             if not consumed:
                 raise PermissionError("principal_grant_rejected")
@@ -134,7 +158,38 @@ class FederatedActionGate:
                 agent_identity, consume_principal_and_dispatch,
             )
         except Exception:
+            if dispatch_state["executor_started"]:
+                outcome = (
+                    "executor_failed"
+                    if dispatch_state["executor_failed"] else "dispatch_failed"
+                )
+            elif dispatch_state["principal_grant_attempted"]:
+                outcome = "principal_grant_rejected"
+            else:
+                outcome = "dispatch_failed"
+            if not record_outcome(outcome, "federated_dispatch_exception"):
+                return self._denied("federated_outcome_audit_unavailable"), None
             return self._denied("federated_dispatch_failed"), None
+
         if not agent_consumed:
-            return self._denied("agent_grant_rejected"), None
+            if dispatch_state["executor_started"]:
+                outcome = (
+                    "executor_failed"
+                    if dispatch_state["executor_failed"] else "dispatch_failed"
+                )
+            elif dispatch_state["principal_grant_attempted"]:
+                outcome = "principal_grant_rejected"
+            else:
+                outcome = "agent_grant_rejected"
+            if not record_outcome(outcome, outcome):
+                return self._denied("federated_outcome_audit_unavailable"), None
+            return self._denied(
+                "federated_dispatch_failed"
+                if dispatch_state["executor_started"] else outcome
+            ), None
+
+        if not record_outcome("dispatched"):
+            # The local dispatcher may already have enqueued work. Do not claim
+            # it was rolled back; surface that its final audit receipt is missing.
+            return self._denied("federated_outcome_audit_unavailable_after_dispatch"), None
         return decision, result
