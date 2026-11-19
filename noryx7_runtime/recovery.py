@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from core.identity import IdentityRegistry
+from core.identity import IdentityTrustRegistry
 from .attestation import AttestationVerifier, attestation_digest
 from .contracts import Attestation
 from .state import JournalEntry, StateJournal
@@ -12,11 +12,14 @@ class RecoveryError(ValueError):
 
 
 class RuntimeRecovery:
-    def __init__(self, journal: StateJournal, verifier: AttestationVerifier | None = None, identity_registry: IdentityRegistry | None = None):
+    def __init__(self, journal: StateJournal, verifier: AttestationVerifier | None = None, identity_registry: IdentityTrustRegistry | None = None):
         if not isinstance(journal, StateJournal): raise TypeError("journal must be a StateJournal")
         effective_verifier = verifier if verifier is not None else journal.verifier
         effective_registry = identity_registry if identity_registry is not None else journal.identity_registry
-        if effective_registry is not None and not isinstance(effective_registry, IdentityRegistry): raise TypeError("identity_registry must be an IdentityRegistry")
+        if effective_registry is not None and (
+            not callable(getattr(effective_registry, "is_trusted", None))
+            or not callable(getattr(effective_registry, "with_trusted_identity", None))
+        ): raise TypeError("identity_registry must expose live trust checks")
         if journal.require_signatures and effective_verifier is None: raise ValueError("signed journal recovery requires an attestation verifier")
         if effective_verifier is not None and not callable(getattr(effective_verifier, "verify", None)): raise TypeError("verifier must expose verify")
         self._journal, self._verifier, self._identity_registry = journal, effective_verifier, effective_registry
