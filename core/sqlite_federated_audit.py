@@ -19,6 +19,7 @@ from typing import Any
 
 _GENESIS = hashlib.sha256(b"noryx7/sqlite-federated-audit/genesis/v1").hexdigest()
 _DOMAIN = b"noryx7/sqlite-federated-audit/event/v1/"
+_MAX_AUDIT_RECORD_BYTES = 65_536
 
 
 class SQLiteFederatedAuditLog:
@@ -70,6 +71,9 @@ class SQLiteFederatedAuditLog:
             )
         except (TypeError, ValueError, UnicodeError):
             raise ValueError("audit_data_not_canonicalizable") from None
+        if len(encoded.encode("utf-8")) > _MAX_AUDIT_RECORD_BYTES:
+            raise ValueError("audit_record_too_large")
+        return encoded
 
     @staticmethod
     def _event_digest(previous_digest: str, encoded: str) -> str:
@@ -113,8 +117,16 @@ class SQLiteFederatedAuditLog:
             timestamp = self._clock()
         except Exception:
             raise RuntimeError("audit_clock_unavailable") from None
-        if (isinstance(timestamp, bool) or not isinstance(timestamp, (int, float))
-                or not math.isfinite(float(timestamp)) or timestamp < 0):
+        try:
+            valid_timestamp = (
+                not isinstance(timestamp, bool)
+                and isinstance(timestamp, (int, float))
+                and math.isfinite(float(timestamp))
+                and timestamp >= 0
+            )
+        except (OverflowError, TypeError, ValueError):
+            valid_timestamp = False
+        if not valid_timestamp:
             raise RuntimeError("audit_clock_invalid")
         with self._lock:
             try:
