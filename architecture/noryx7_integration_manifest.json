@@ -332,6 +332,22 @@
       "integration_tests": [
         "tests/test_federated_memory_transfer.py"
       ]
+    },
+    {
+      "id": "federated_memory_trust_wiring",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/federation/memory_transfer_trust.py",
+        "docs/federated-memory-trust-wiring-v1.md"
+      ],
+      "depends_on": [
+        "federated_memory_transfer",
+        "identity_registry"
+      ],
+      "integration_tests": [
+        "tests/test_federated_memory_transfer_trust.py"
+      ]
     }
   ]
 }
