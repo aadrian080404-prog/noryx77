@@ -34,6 +34,46 @@ class MemoryBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             store.put(MemoryItem("a", "A", execution_id="x" * 257))
 
+    def test_principal_and_agent_scopes_are_independent(self):
+        store = MemoryStore()
+        store.put(MemoryItem("same", "A", principal_id="principal-A", agent_id="agent-A"))
+        store.put(MemoryItem("same", "B", principal_id="principal-B", agent_id="agent-A"))
+        store.put(MemoryItem("same", "C", principal_id="principal-A", agent_id="agent-B"))
+        self.assertEqual(store.get("same", principal_id="principal-A", agent_id="agent-A").content, "A")
+        self.assertEqual(store.get("same", principal_id="principal-B", agent_id="agent-A").content, "B")
+        self.assertEqual(store.get("same", principal_id="principal-A", agent_id="agent-B").content, "C")
+        self.assertIsNone(store.get("same", principal_id="principal-B", agent_id="agent-B"))
+
+    def test_unscoped_reads_only_return_explicit_global_memory(self):
+        store = MemoryStore()
+        store.put(MemoryItem("global", "shared"))
+        store.put(MemoryItem("private", "secret", principal_id="principal-A"))
+        self.assertEqual(store.get("global").content, "shared")
+        self.assertIsNone(store.get("private"))
+        self.assertEqual([x.memory_id for x in store.list()], ["global"])
+
+    def test_scope_dimensions_must_match_exactly(self):
+        store = MemoryStore()
+        store.put(MemoryItem("bound", "secret", principal_id="p", execution_id="e"))
+        self.assertIsNone(store.get("bound", principal_id="p"))
+        self.assertIsNone(store.get("bound", execution_id="e"))
+        self.assertEqual(store.get("bound", principal_id="p", execution_id="e").content, "secret")
+
+    def test_delete_is_scope_bound(self):
+        store = MemoryStore()
+        store.put(MemoryItem("same", "A", principal_id="p1"))
+        store.put(MemoryItem("same", "B", principal_id="p2"))
+        self.assertFalse(store.delete("same"))
+        self.assertTrue(store.delete("same", principal_id="p1"))
+        self.assertEqual(store.get("same", principal_id="p2").content, "B")
+
+    def test_invalid_identity_scope_is_rejected(self):
+        store = MemoryStore()
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem("a", "A", principal_id="x" * 1025))
+        with self.assertRaises(ValueError):
+            store.put(MemoryItem("b", "B", agent_id="x" * 1025))
+
 
 if __name__ == "__main__":
     unittest.main()
