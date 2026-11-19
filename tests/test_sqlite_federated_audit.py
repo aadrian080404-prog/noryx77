@@ -37,6 +37,7 @@ def test_sqlite_audit_rejects_mutation_and_detects_out_of_band_corruption(tmp_pa
     audit.close()
 
     tamper = sqlite3.connect(path)
+    tamper.execute("DROP TRIGGER federated_audit_no_update")
     tamper.execute(
         "UPDATE federated_audit_events SET event_json='{}' WHERE sequence=1"
     )
