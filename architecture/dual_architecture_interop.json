@@ -195,6 +195,28 @@
       },
       "compatibility": "adapter_required",
       "reason": "The secondary API is intentionally closed without a configured principal resolver; it must remain closed until a real trust adapter exists."
+    },
+    {
+      "id": "federated_action_authorization",
+      "primary": {
+        "implementation": "core/actions.py ActionGate and AuthorizationAuthority",
+        "properties": [
+          "deny-by-default action policy and security checks",
+          "one-shot authorization grants bound to an exact ActionSpec and execution ID",
+          "current authorization grant identity binding currently uses AgentIdentity and IdentityRegistry",
+          "high-risk action classes remain denied unless a local authorization grant is configured"
+        ]
+      },
+      "federation": {
+        "implementation": "core/federation_envelope.py and core/federation_admission.py",
+        "properties": [
+          "signed envelope capabilities are authenticated assertions only",
+          "admission checks principal and agent membership and revocation",
+          "no conversion from remote capability strings to local ActionGate grants"
+        ]
+      },
+      "compatibility": "blocked_pending_principal_authorization_adapter",
+      "reason": "The existing ActionGate AuthorizationAuthority binds grants to AgentIdentity, while federation correctly distinguishes human/tenant PrincipalIdentity from executable AgentIdentity. Treating either identity as the other would create an authorization-boundary violation. A principal-aware local grant issuer and atomic durable consumption path are required before federated execution can enter ActionGate."
     }
   ],
   "required_shared_contracts": [
@@ -269,6 +291,18 @@
         "schema migration",
         "explicit retention and deletion semantics"
       ]
+    },
+    {
+      "id": "principal_bound_action_authorization",
+      "requirements": [
+        "never substitute AgentIdentity for PrincipalIdentity or infer a principal from client_label",
+        "map each signed capability to a locally registered ActionSpec and local policy decision",
+        "bind the grant to principal ID, principal public-key fingerprint, exact action fingerprint, execution ID, nonce and expiry",
+        "consume each grant atomically and durably before dispatch",
+        "re-check principal and agent revocation at the final execution boundary",
+        "keep high-risk actions denied when the local grant issuer or durable replay store is unavailable",
+        "record issuer, principal, selected agent, policy version and decision in the audit event"
+      ]
     }
   ],
   "integration_gates": [
@@ -277,7 +311,8 @@
     "Implement one-way adapters first; prohibit implicit cross-runtime authority escalation.",
     "Verify signed envelope, key revocation, replay, principal isolation and audit attribution in cross-repository tests.",
     "Test partial outages, stale epochs, duplicate delivery and restart recovery.",
-    "Only then consider a bidirectional runtime bridge."
+    "Only then consider a bidirectional runtime bridge.",
+    "Do not pass federated envelope capability strings directly into ActionGate. First implement a principal-aware local grant authority with durable one-shot consumption and tests for revocation races, replay, action substitution and restart."
   ],
   "non_goals": [
     "No merge of the two repositories.",

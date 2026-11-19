@@ -47,7 +47,22 @@ jobs:
           python -m pytest core noryx7_runtime ecosystem jarvis tests -q 2>&1 | tee test-output.txt
       - name: Verify NORYX Browser
         working-directory: noryx-browser
-        run: gradle test assembleDebug --no-daemon
+        shell: bash
+        run: |
+          # Dependency metadata can be transiently unavailable on hosted runners.
+          # Refresh once, then retry the same deterministic build with bounded backoff.
+          for attempt in 1 2 3; do
+            if [[ "$attempt" -eq 1 ]]; then
+              gradle --refresh-dependencies test assembleDebug --no-daemon && exit 0
+            else
+              gradle test assembleDebug --no-daemon && exit 0
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "NORYX Browser dependency/build verification failed after 3 attempts" >&2
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
       - name: Publish verification summary
         if: always()
         shell: bash
