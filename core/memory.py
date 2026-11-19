@@ -113,8 +113,10 @@ class MemoryStore:
         *,
         principal_id: str = "",
         agent_id: str = "",
-        execution_id: str = "",
+        execution_id: str | None = None,
     ):
+        if execution_id is None:
+            execution_id = ""
         if not self._valid_memory_id(memory_id):
             return None
         if (
@@ -141,8 +143,10 @@ class MemoryStore:
         *,
         principal_id: str = "",
         agent_id: str = "",
-        execution_id: str = "",
+        execution_id: str | None = None,
     ):
+        if execution_id is None:
+            execution_id = ""
         if kind is not None and kind not in self.VALID_KINDS:
             return ()
         if (
