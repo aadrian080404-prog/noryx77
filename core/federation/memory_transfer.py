@@ -73,7 +73,10 @@ def validate_memory_transfer(
     expected_recipient_principal_id: str,
     expected_recipient_key_id: str,
     verify_signature: Callable[[str, bytes, str], bool],
+    verify_source_principal: Callable[[str, str], bool],
     reserve_nonce: Callable[[str, str, int], bool],
+    verify_source_agent: Callable[[str, str], bool] | None = None,
+    verify_recipient_agent: Callable[[str, str], bool] | None = None,
     now: int | None = None,
     max_ttl_seconds: int = 86_400,
 ) -> bytes:
@@ -145,6 +148,33 @@ def validate_memory_transfer(
         verified = False
     if not verified:
         raise MemoryTransferRejected("signature_verification_failed")
+
+    try:
+        source_principal_valid = (
+            callable(verify_source_principal)
+            and verify_source_principal(
+                envelope["issuer_key_id"], envelope["source_principal_id"]
+            ) is True
+        )
+    except Exception:
+        source_principal_valid = False
+    if not source_principal_valid:
+        raise MemoryTransferRejected("source_principal_binding_failed")
+
+    if envelope["source_agent_id"]:
+        if not callable(verify_source_agent) or not callable(verify_recipient_agent):
+            raise MemoryTransferRejected("agent_identity_binding_unavailable")
+        try:
+            source_agent_valid = verify_source_agent(
+                envelope["source_principal_id"], envelope["source_agent_id"]
+            ) is True
+            recipient_agent_valid = verify_recipient_agent(
+                envelope["recipient_principal_id"], envelope["recipient_agent_id"]
+            ) is True
+        except Exception:
+            source_agent_valid = recipient_agent_valid = False
+        if not source_agent_valid or not recipient_agent_valid:
+            raise MemoryTransferRejected("agent_identity_binding_failed")
 
     try:
         reserved = reserve_nonce(envelope["issuer_key_id"], envelope["nonce"], expires_at) is True
@@ -337,7 +367,10 @@ def open_memory_transfer(
     expected_recipient_principal_id: str,
     expected_recipient_key_id: str,
     verify_signature: Callable[[str, bytes, str], bool],
+    verify_source_principal: Callable[[str, str], bool],
     reserve_nonce: Callable[[str, str, int], bool],
+    verify_source_agent: Callable[[str, str], bool] | None = None,
+    verify_recipient_agent: Callable[[str, str], bool] | None = None,
     now: int | None = None,
     max_ttl_seconds: int = 86_400,
 ) -> bytes:
@@ -349,7 +382,10 @@ def open_memory_transfer(
         expected_recipient_principal_id=expected_recipient_principal_id,
         expected_recipient_key_id=expected_recipient_key_id,
         verify_signature=verify_signature,
+        verify_source_principal=verify_source_principal,
         reserve_nonce=reserve_nonce,
+        verify_source_agent=verify_source_agent,
+        verify_recipient_agent=verify_recipient_agent,
         now=now,
         max_ttl_seconds=max_ttl_seconds,
     )
