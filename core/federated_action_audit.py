@@ -100,3 +100,50 @@ class FederatedActionAuditRecorder:
             reason=decision.reason,
             timestamp=timestamp,
         )
+
+
+    def record_outcome(
+        self,
+        admission: FederatedAdmission,
+        action: ActionSpec,
+        *,
+        outcome: str,
+        reason: str = "",
+    ) -> dict:
+        """Record the final local dispatch outcome without storing its result."""
+        allowed_outcomes = {
+            "dispatched",
+            "executor_failed",
+            "agent_grant_rejected",
+            "principal_grant_rejected",
+            "dispatch_failed",
+        }
+        if not isinstance(admission, FederatedAdmission) or not admission.is_verified():
+            raise ValueError("verified_federated_admission_required")
+        if not isinstance(action, ActionSpec) or not action.is_well_formed():
+            raise ValueError("valid_action_required")
+        if outcome not in allowed_outcomes:
+            raise ValueError("invalid_federated_dispatch_outcome")
+        if not isinstance(reason, str) or len(reason) > 128:
+            raise ValueError("invalid_federated_dispatch_reason")
+        try:
+            timestamp = self._clock()
+        except Exception:
+            raise RuntimeError("audit_clock_unavailable") from None
+        if (isinstance(timestamp, bool) or not isinstance(timestamp, (int, float))
+                or not math.isfinite(float(timestamp)) or timestamp < 0):
+            raise RuntimeError("audit_clock_invalid")
+        return self._audit.record(
+            "federated_action_outcome",
+            principal_id=admission.principal_id,
+            agent_id=admission.agent_id,
+            execution_id=admission.execution_id,
+            issuer_key_id=admission.issuer_key_id,
+            policy_version=admission.policy_version,
+            action_id=action.action_id,
+            action_type=action.action_type,
+            action_fingerprint=self._action_fingerprint(action),
+            outcome=outcome,
+            reason=reason,
+            timestamp=timestamp,
+        )
