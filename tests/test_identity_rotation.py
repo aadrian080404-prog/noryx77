@@ -97,3 +97,16 @@ def test_revoked_identity_is_a_tombstone_and_cannot_be_re_registered():
         registry.register(old)
     with pytest.raises(PermissionError, match="agent_identity_not_active"):
         registry.generation(old.agent_id)
+
+
+def test_rotation_generation_is_bounded_to_unsigned_64_bit_range():
+    old, _old_private, new, _old_proof, _new_proof = _rotation()
+    registry = IdentityRegistry()
+    registry.register(old)
+    with pytest.raises(ValueError, match="invalid_identity_generation"):
+        registry.rotate_identity(
+            new,
+            expected_generation=2**64,
+            old_key_signature=b"x" * 64,
+            new_key_signature=b"x" * 64,
+        )
