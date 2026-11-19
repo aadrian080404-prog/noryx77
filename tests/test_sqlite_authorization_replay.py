@@ -78,3 +78,15 @@ def test_replay_guard_rejects_malformed_tokens(tmp_path):
         assert guard.consumed_count == 0
     finally:
         guard.close()
+
+
+def test_replay_guard_rejects_capacity_configuration_drift(tmp_path):
+    db = tmp_path / "authorization-replay-config.db"
+    first = SQLiteAuthorizationReplayGuard(db, max_tokens=3)
+    first.close()
+    try:
+        SQLiteAuthorizationReplayGuard(db, max_tokens=4)
+    except ValueError as exc:
+        assert str(exc) == "replay_guard_capacity_mismatch"
+    else:
+        raise AssertionError("capacity drift must fail closed")
