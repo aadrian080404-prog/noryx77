@@ -5,12 +5,15 @@ import json
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
 from core.federation.memory_transfer import (
     MemoryTransferRejected,
     SQLiteNonceRegistry,
     canonical_unsigned_envelope,
     ed25519_signature_verifier,
+    open_memory_transfer,
+    seal_memory_transfer,
     validate_memory_transfer,
 )
 
@@ -28,6 +31,8 @@ def make_envelope():
         "recipient_key_id": "recipient-key-b",
         "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
         "ciphertext_sha256": hashlib.sha256(ciphertext).hexdigest(),
+        "ephemeral_public_key_b64": base64.b64encode(b"e" * 32).decode("ascii"),
+        "aead_nonce_b64": base64.b64encode(b"n" * 12).decode("ascii"),
         "issued_at": 100,
         "expires_at": 200,
         "nonce": "unique-nonce",
@@ -166,3 +171,104 @@ def test_ed25519_verifier_rejects_unknown_keys_and_malformed_signatures():
     )
     verifier = ed25519_signature_verifier(lambda _key_id: public_key)
     assert verifier("issuer-key-a", b"payload", "not-base64!") is False
+
+
+
+def test_x25519_chacha20poly1305_round_trip_binds_identity_metadata(tmp_path):
+    recipient_private = X25519PrivateKey.generate()
+    recipient_private_raw = recipient_private.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    recipient_public_raw = recipient_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    metadata = {
+        "schema_version": 1,
+        "transfer_id": "encrypted-transfer-1",
+        "source_principal_id": "principal-a",
+        "recipient_principal_id": "principal-b",
+        "source_agent_id": "agent-a",
+        "recipient_agent_id": "agent-a",
+        "execution_id": "execution-1",
+        "recipient_key_id": "recipient-key-b",
+        "issued_at": 100,
+        "expires_at": 200,
+        "nonce": "encrypted-nonce-1",
+        "issuer_key_id": "issuer-key-a",
+    }
+    envelope = seal_memory_transfer(
+        b"private memory payload",
+        metadata,
+        recipient_public_raw,
+    )
+    issuer_private = Ed25519PrivateKey.generate()
+    issuer_public = issuer_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    envelope["signature"] = base64.b64encode(
+        issuer_private.sign(canonical_unsigned_envelope(envelope))
+    ).decode("ascii")
+    verifier = ed25519_signature_verifier(lambda _key_id: issuer_public)
+    registry = SQLiteNonceRegistry(str(tmp_path / "encrypted-transfer-nonces.db"))
+    try:
+        plaintext = open_memory_transfer(
+            envelope,
+            recipient_private_key=recipient_private_raw,
+            expected_recipient_principal_id="principal-b",
+            expected_recipient_key_id="recipient-key-b",
+            verify_signature=verifier,
+            reserve_nonce=registry.reserve,
+            now=150,
+        )
+        assert plaintext == b"private memory payload"
+    finally:
+        registry.close()
+
+
+def test_encrypted_transfer_rejects_tampered_identity_binding(tmp_path):
+    recipient_private = X25519PrivateKey.generate()
+    recipient_private_raw = recipient_private.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    recipient_public_raw = recipient_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    metadata = {
+        "schema_version": 1, "transfer_id": "tamper-transfer",
+        "source_principal_id": "principal-a", "recipient_principal_id": "principal-b",
+        "source_agent_id": "", "recipient_agent_id": "",
+        "execution_id": "execution-1", "recipient_key_id": "recipient-key-b",
+        "issued_at": 100, "expires_at": 200, "nonce": "tamper-nonce",
+        "issuer_key_id": "issuer-key-a",
+    }
+    envelope = seal_memory_transfer(b"private", metadata, recipient_public_raw)
+    issuer_private = Ed25519PrivateKey.generate()
+    issuer_public = issuer_private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    envelope["signature"] = base64.b64encode(
+        issuer_private.sign(canonical_unsigned_envelope(envelope))
+    ).decode("ascii")
+    envelope["recipient_principal_id"] = "attacker"
+    registry = SQLiteNonceRegistry(str(tmp_path / "tamper-nonces.db"))
+    try:
+        with pytest.raises(MemoryTransferRejected, match="recipient_principal_mismatch"):
+            open_memory_transfer(
+                envelope,
+                recipient_private_key=recipient_private_raw,
+                expected_recipient_principal_id="principal-b",
+                expected_recipient_key_id="recipient-key-b",
+                verify_signature=ed25519_signature_verifier(lambda _key_id: issuer_public),
+                reserve_nonce=registry.reserve,
+                now=150,
+            )
+    finally:
+        registry.close()
