@@ -585,3 +585,70 @@ def test_independent_process_revocation_waits_for_active_binding_callback(tmp_pa
     assert dispatch_process.exitcode == 0
     assert revoke_process.exitcode == 0
     assert registry.is_agent_owned_by_principal("tenant-1", "agent-1") is False
+
+def _provision_binding_in_child(registry, principal_id, start, results):
+    try:
+        start.wait(timeout=10)
+        registry.bind(principal_id, "agent-2")
+        results.put(("bound", principal_id))
+    except PermissionError:
+        results.put(("rejected", principal_id))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__))
+
+
+def test_independent_processes_cannot_provision_one_agent_to_two_principals(tmp_path):
+    from multiprocessing import get_all_start_methods, get_context
+
+    if "fork" not in get_all_start_methods():
+        pytest.skip("requires POSIX fork for independent process SQLite test")
+
+    gate, agents, principals, _agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    second_agent, _ = AgentIdentityAuthority.generate("agent-2")
+    agents.register(second_agent)
+
+    second_key = Ed25519PrivateKey.generate()
+    second_public = second_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    principals.register(PrincipalIdentity("tenant-2", second_public))
+
+    first_registry = gate._bindings
+    second_registry = SQLitePrincipalAgentBindingRegistry(
+        first_registry.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    context = get_context("fork")
+    start = context.Barrier(2)
+    results = context.Queue()
+    processes = (
+        context.Process(target=_provision_binding_in_child,
+                        args=(first_registry, "tenant-1", start, results)),
+        context.Process(target=_provision_binding_in_child,
+                        args=(second_registry, "tenant-2", start, results)),
+    )
+    for process in processes:
+        process.start()
+    try:
+        outcomes = (results.get(timeout=15), results.get(timeout=15))
+        for process in processes:
+            process.join(timeout=15)
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        results.close()
+
+    assert sorted(status for status, _principal in outcomes) == ["bound", "rejected"]
+    assert all(process.exitcode == 0 for process in processes)
+    owners = [
+        principal_id for principal_id in ("tenant-1", "tenant-2")
+        if first_registry.is_agent_owned_by_principal(principal_id, "agent-2")
+    ]
+    assert len(owners) == 1
+    assert owners[0] == next(
+        principal_id for status, principal_id in outcomes if status == "bound"
+    )
+
