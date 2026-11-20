@@ -125,19 +125,25 @@ class SQLitePrincipalAgentBindingRegistry:
         """Create a permanent one-owner binding after live identity checks."""
         self._validate_ids(principal_id, agent_id)
 
-        def with_agent(_principal_identity):
-            return self._agent_registry.with_trusted_identity(
-                agent_id,
-                lambda agent_identity: (
-                    agent_identity.agent_id == agent_id
-                    and isinstance(agent_identity.public_key, bytes)
-                    and len(agent_identity.public_key) == 32
+        def with_principal(agent_identity):
+            if not (
+                agent_identity.agent_id == agent_id
+                and isinstance(agent_identity.public_key, bytes)
+                and len(agent_identity.public_key) == 32
+            ):
+                return False
+            return self._principal_registry.with_trusted_principal(
+                principal_id,
+                lambda principal_identity: (
+                    principal_identity.principal_id == principal_id
                 ),
             ) is True
 
         try:
-            trusted = self._principal_registry.with_trusted_principal(
-                principal_id, with_agent
+            # Keep the same agent -> principal lock order used by live dispatch
+            # and ownership checks; never invert it during provisioning.
+            trusted = self._agent_registry.with_trusted_identity(
+                agent_id, with_principal
             ) is True
         except Exception as exc:
             raise PermissionError("binding_identity_not_trusted") from exc
