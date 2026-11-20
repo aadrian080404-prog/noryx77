@@ -205,22 +205,22 @@ class SQLitePrincipalAgentBindingRegistry:
                 connection.close()
 
     def is_agent_owned_by_principal(self, principal_id: str, agent_id: str) -> bool:
-        """Return true only for an active binding and two currently trusted IDs."""
+        """Return true only for an active binding and two currently trusted IDs.
+
+        Registry lock order matches action dispatch: agent registry, then
+        principal registry. The binding database is read only after both
+        identity checks have completed.
+        """
         try:
             self._validate_ids(principal_id, agent_id)
 
-            def with_agent(_principal_identity):
-                return self._agent_registry.with_trusted_identity(
-                    agent_id,
-                    lambda identity: (
-                        identity.agent_id == agent_id
-                        and isinstance(identity.public_key, bytes)
-                        and len(identity.public_key) == 32
-                    ),
+            def with_principal(_agent_identity):
+                return self._principal_registry.with_trusted_principal(
+                    principal_id, lambda _principal_identity: True
                 ) is True
 
-            if self._principal_registry.with_trusted_principal(
-                principal_id, with_agent
+            if self._agent_registry.with_trusted_identity(
+                agent_id, with_principal
             ) is not True:
                 return False
             with self._lock:
@@ -243,7 +243,6 @@ class SQLitePrincipalAgentBindingRegistry:
                     connection.close()
         except Exception:
             return False
-
 
 class PrincipalAgentBindingRejected(PermissionError):
     """Raised when an action boundary cannot prove a live ownership binding."""
