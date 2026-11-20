@@ -396,3 +396,49 @@ def test_identity_revocation_waits_for_inflight_federated_dispatch(tmp_path):
         assert principals.is_revoked("tenant-1") is True
     finally:
         release.set()
+
+
+
+def test_binding_revocation_waits_for_inflight_federated_dispatch(tmp_path):
+    gate, agents, principals, agent, action, admission, agent_grant, principal_grant, _log = _setup(tmp_path)
+    second_registry = SQLitePrincipalAgentBindingRegistry(
+        gate._bindings.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    entered = Event()
+    release = Event()
+    revoke_started = Event()
+
+    def bounded_executor():
+        entered.set()
+        assert release.wait(timeout=5)
+        return "federated-dispatch-linearized-before-binding-revocation"
+
+    def revoke_binding():
+        revoke_started.set()
+        second_registry.revoke_binding("tenant-1", agent.agent_id)
+        return "revoked"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            dispatch_future = pool.submit(
+                _dispatch, gate, agent, action, admission,
+                agent_grant, principal_grant, bounded_executor,
+            )
+            assert entered.wait(timeout=5)
+            revoke_future = pool.submit(revoke_binding)
+            assert revoke_started.wait(timeout=5)
+            assert revoke_future.done() is False
+
+            release.set()
+            decision, result = dispatch_future.result(timeout=5)
+            assert decision.allowed is True
+            assert result == "federated-dispatch-linearized-before-binding-revocation"
+            assert revoke_future.result(timeout=5) == "revoked"
+
+        assert gate._bindings.is_agent_owned_by_principal("tenant-1", agent.agent_id) is False
+        assert agents.is_revoked(agent.agent_id) is False
+        assert principals.is_revoked("tenant-1") is False
+    finally:
+        release.set()
