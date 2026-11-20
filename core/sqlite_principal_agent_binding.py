@@ -255,70 +255,52 @@ def _with_active_binding(
     agent_id: str,
     callback: Callable[[], object],
 ) -> object:
-    """Run callback while both live identities and the durable binding are locked.
+    """Run a bounded callback while serializing it against binding revocation.
 
-    Lock order is agent registry -> principal registry -> binding SQLite write
-    transaction. The transaction remains open during the bounded local callback,
-    so a concurrent binding revocation cannot commit between check and dispatch.
-    The callback must not perform network I/O or mutate trust registries.
+    Live principal/agent identity is checked before entering this transaction;
+    the one-shot grant authorities recheck those identities at their own
+    dispatch boundary. BEGIN IMMEDIATE holds the binding row and revocation
+    tombstone stable until callback completion. Lock order therefore avoids
+    nesting the identity registries' independent SQLite write transactions.
+    The callback must not perform network I/O or mutate trust stores.
     """
     self._validate_ids(principal_id, agent_id)
     if not callable(callback):
         raise TypeError("binding_callback_required")
+    if not self.is_agent_owned_by_principal(principal_id, agent_id):
+        raise PrincipalAgentBindingRejected("principal_agent_binding_not_active")
 
-    def with_binding_transaction() -> object:
-        with self._lock:
-            connection = self._connect()
-            try:
-                connection.execute("BEGIN IMMEDIATE")
-                revoked = connection.execute(
-                    "SELECT 1 FROM noryx7_revoked_principal_agent_bindings "
-                    "WHERE principal_id=? AND agent_id=?",
-                    (principal_id, agent_id),
-                ).fetchone()
-                active = connection.execute(
-                    "SELECT 1 FROM noryx7_principal_agent_bindings "
-                    "WHERE principal_id=? AND agent_id=?",
-                    (principal_id, agent_id),
-                ).fetchone()
-                if revoked is not None or active is None:
-                    raise PrincipalAgentBindingRejected(
-                        "principal_agent_binding_not_active"
-                    )
-                result = callback()
-                connection.execute("COMMIT")
-                return result
-            except Exception:
-                if connection.in_transaction:
-                    connection.execute("ROLLBACK")
-                raise
-            finally:
-                connection.close()
-
-    try:
-        return self._agent_registry.with_trusted_identity(
-            agent_id,
-            lambda identity: (
-                self._principal_registry.with_trusted_principal(
-                    principal_id,
-                    lambda _principal: with_binding_transaction(),
+    with self._lock:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            revoked = connection.execute(
+                "SELECT 1 FROM noryx7_revoked_principal_agent_bindings "
+                "WHERE principal_id=? AND agent_id=?",
+                (principal_id, agent_id),
+            ).fetchone()
+            active = connection.execute(
+                "SELECT 1 FROM noryx7_principal_agent_bindings "
+                "WHERE principal_id=? AND agent_id=?",
+                (principal_id, agent_id),
+            ).fetchone()
+            if revoked is not None or active is None:
+                raise PrincipalAgentBindingRejected(
+                    "principal_agent_binding_not_active"
                 )
-                if (
-                    identity.agent_id == agent_id
-                    and isinstance(identity.public_key, bytes)
-                    and len(identity.public_key) == 32
-                )
-                else (_ for _ in ()).throw(
-                    PrincipalAgentBindingRejected("principal_agent_binding_not_active")
-                )
-            ),
-        )
-    except PrincipalAgentBindingRejected:
-        raise
-    except Exception as exc:
-        raise PrincipalAgentBindingRejected(
-            "principal_agent_binding_not_active"
-        ) from exc
+            result = callback()
+            connection.execute("COMMIT")
+            return result
+        except PrincipalAgentBindingRejected:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.close()
 
 
 SQLitePrincipalAgentBindingRegistry.with_active_binding = _with_active_binding
