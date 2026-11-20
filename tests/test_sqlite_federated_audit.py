@@ -320,10 +320,7 @@ def test_external_anchor_rejects_non_boolean_compare_and_advance_result(tmp_path
         def read_checkpoint(self):
             return self.sequence, self.digest
 
-        def compare_and_advance(self, _expected_sequence, _expected_digest,
-                                next_sequence, next_digest):
-            self.sequence = next_sequence
-            self.digest = next_digest
+        def compare_and_advance(self, *_args):
             return 1
 
     audit = SQLiteFederatedAuditLog(tmp_path / "invalid-cas-result.sqlite")
