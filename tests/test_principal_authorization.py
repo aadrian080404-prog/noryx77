@@ -165,3 +165,13 @@ def test_independent_processes_consume_persisted_grant_at_most_once(tmp_path):
     assert sum(1 for accepted, _value in outcomes if accepted is False) == 1
     assert all(process.exitcode == 0 for process in processes)
 
+
+    # The successful return value is produced only by the executor. Checking
+    # it closes the gap between "one grant accepted" and "one dispatch ran".
+    assert sum(
+        accepted is True and value in ("first", "second")
+        for accepted, value in outcomes
+    ) == 1
+    assert all(
+        value is None for accepted, value in outcomes if accepted is False
+    )
