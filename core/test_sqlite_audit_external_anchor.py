@@ -80,6 +80,7 @@ def test_external_anchor_rejects_same_sequence_divergent_chain(tmp_path):
     with pytest.raises(ValueError, match="audit_integrity_failed"):
         SQLiteAuditLog(path)
 
+
 def test_external_anchor_rejects_noncanonical_sha256_encoding(tmp_path):
     audit = SQLiteAuditLog(str(tmp_path / "malformed-anchor.sqlite"))
 
@@ -144,3 +145,44 @@ def test_external_anchor_fails_closed_when_cas_readback_is_unavailable(tmp_path)
             audit.verify_and_advance_anchor(UncertainAnchor())
     finally:
         audit.close()
+
+
+def test_external_anchor_outage_after_restart_preserves_tail_for_retry(tmp_path):
+    path = str(tmp_path / "restart-anchor-outage.sqlite")
+
+    class TemporarilyUnavailableAnchor:
+        def __init__(self):
+            self.inner = InMemoryMonotonicAnchor()
+            self.unavailable = False
+
+        def read(self):
+            if self.unavailable:
+                raise OSError("simulated_anchor_unavailable_after_restart")
+            return self.inner.read()
+
+        def compare_and_swap(self, expected, replacement):
+            return self.inner.compare_and_swap(expected, replacement)
+
+    anchor = TemporarilyUnavailableAnchor()
+    audit = SQLiteAuditLog(path)
+    audit.record("already-anchored")
+    first_head = audit.verify_and_advance_anchor(anchor)
+    audit.record("durable-unanchored-tail")
+    audit.close()
+
+    reopened = SQLiteAuditLog(path)
+    anchor.unavailable = True
+    with pytest.raises(OSError, match="simulated_anchor_unavailable_after_restart"):
+        reopened.verify_and_advance_anchor(anchor)
+    assert reopened.verify_integrity()
+    assert reopened.snapshot() == [
+        {"event": "already-anchored"},
+        {"event": "durable-unanchored-tail"},
+    ]
+
+    anchor.unavailable = False
+    recovered = reopened.verify_and_advance_anchor(anchor)
+    assert recovered.sequence == first_head.sequence + 1
+    assert anchor.read() == recovered
+    assert reopened.verify_integrity()
+    reopened.close()
