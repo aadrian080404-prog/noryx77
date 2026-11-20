@@ -196,3 +196,64 @@ def test_checkpoint_verification_and_head_share_one_sqlite_read_snapshot(tmp_pat
     finally:
         reader.close()
         writer.close()
+
+
+def test_external_anchor_sync_advances_monotonically_with_compare_and_swap(tmp_path):
+    import hashlib
+
+    class MemoryAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+
+        def read_checkpoint(self):
+            return self.sequence, self.digest
+
+        def compare_and_advance(self, expected_sequence, expected_digest,
+                                next_sequence, next_digest):
+            if (self.sequence, self.digest) != (expected_sequence, expected_digest):
+                return False
+            if next_sequence <= expected_sequence:
+                return False
+            self.sequence, self.digest = next_sequence, next_digest
+            return True
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "anchor-sync.sqlite")
+    anchor = MemoryAnchor()
+    audit.record("event", value="first")
+    checkpoint = audit.synchronize_external_anchor(anchor)
+    assert checkpoint == anchor.read_checkpoint()
+    assert audit.synchronize_external_anchor(anchor) == checkpoint
+    audit.close()
+
+
+def test_external_anchor_sync_fails_closed_on_conflict_or_unavailable_service(tmp_path):
+    import hashlib
+
+    genesis = hashlib.sha256(
+        b"noryx7/sqlite-federated-audit/genesis/v1"
+    ).hexdigest()
+
+    class ConflictingAnchor:
+        def read_checkpoint(self):
+            return 0, genesis
+
+        def compare_and_advance(self, *_args):
+            return False
+
+    class UnavailableAnchor:
+        def read_checkpoint(self):
+            raise OSError("anchor offline")
+
+        def compare_and_advance(self, *_args):
+            return False
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "anchor-fail-closed.sqlite")
+    audit.record("event", value="pending")
+    with pytest.raises(RuntimeError, match="external_audit_anchor_advance_conflict"):
+        audit.synchronize_external_anchor(ConflictingAnchor())
+    with pytest.raises(RuntimeError, match="external_audit_anchor_unavailable"):
+        audit.synchronize_external_anchor(UnavailableAnchor())
+    audit.close()

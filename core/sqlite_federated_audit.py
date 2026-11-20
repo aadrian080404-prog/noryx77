@@ -14,12 +14,28 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 
 _GENESIS = hashlib.sha256(b"noryx7/sqlite-federated-audit/genesis/v1").hexdigest()
 _DOMAIN = b"noryx7/sqlite-federated-audit/event/v1/"
 _MAX_AUDIT_RECORD_BYTES = 65_536
+
+
+class ExternalAuditAnchor(Protocol):
+    """Independently protected monotonic checkpoint service contract."""
+
+    def read_checkpoint(self) -> tuple[int, str]:
+        ...
+
+    def compare_and_advance(
+        self,
+        expected_sequence: int,
+        expected_digest: str,
+        next_sequence: int,
+        next_digest: str,
+    ) -> bool:
+        ...
 
 
 class SQLiteFederatedAuditLog:
@@ -214,6 +230,55 @@ class SQLiteFederatedAuditLog:
         if local_sequence == anchor_sequence and local_digest != anchor_digest:
             raise RuntimeError("federated_audit_anchor_divergence")
         return local_sequence, local_digest
+    def synchronize_external_anchor(
+        self, anchor: ExternalAuditAnchor
+    ) -> tuple[int, str]:
+        """Verify the local chain against an independent anchor and CAS-advance it.
+
+        The anchor implementation must provide durable, monotonic storage outside
+        this SQLite journal. This method defines the protocol and fail-closed
+        synchronization; it does not itself provide a remote anchor service.
+        """
+        if (
+            not callable(getattr(anchor, "read_checkpoint", None))
+            or not callable(getattr(anchor, "compare_and_advance", None))
+        ):
+            raise TypeError("external_audit_anchor_required")
+        def read_anchor_checkpoint() -> tuple[int, str]:
+            try:
+                observed = anchor.read_checkpoint()
+            except Exception:
+                raise RuntimeError("external_audit_anchor_unavailable") from None
+            if not isinstance(observed, tuple) or len(observed) != 2:
+                raise RuntimeError("external_audit_anchor_invalid_checkpoint")
+            return observed
+
+        anchor_sequence, anchor_digest = read_anchor_checkpoint()
+
+        # Detect local rollback or same-sequence divergence before any advance.
+        self.verify_against_anchor(anchor_sequence, anchor_digest)
+        local_sequence, local_digest = self.checkpoint()
+        if local_sequence == anchor_sequence:
+            return local_sequence, local_digest
+
+        try:
+            advanced = anchor.compare_and_advance(
+                anchor_sequence, anchor_digest, local_sequence, local_digest
+            )
+        except Exception:
+            raise RuntimeError("external_audit_anchor_unavailable") from None
+        if advanced is not True:
+            # Another writer may have advanced the anchor concurrently.
+            observed_sequence, observed_digest = read_anchor_checkpoint()
+            if (observed_sequence, observed_digest) != (local_sequence, local_digest):
+                self.verify_against_anchor(observed_sequence, observed_digest)
+                raise RuntimeError("external_audit_anchor_advance_conflict")
+        confirmed = read_anchor_checkpoint()
+        if confirmed != (local_sequence, local_digest):
+            self.verify_against_anchor(*confirmed)
+            raise RuntimeError("external_audit_anchor_confirmation_mismatch")
+        return local_sequence, local_digest
+
     def digest(self) -> str:
         """Return the current digest only after verifying the complete chain."""
         return self.checkpoint()[1]
