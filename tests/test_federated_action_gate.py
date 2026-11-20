@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from threading import Event
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -18,6 +20,7 @@ from core.principal_identity import PrincipalIdentity
 from core.security import SecurityBoundary
 from core.sqlite_identity import SQLiteIdentityRegistry
 from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
+from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
 from core.verification import VerificationEngine
 
 
@@ -62,6 +65,12 @@ def _setup(tmp_path, audit_log=None):
     principal_authority = PrincipalAuthorizationAuthority(
         b"p" * 32, tmp_path / "principal-grants.sqlite", principals
     )
+    binding_registry = SQLitePrincipalAgentBindingRegistry(
+        tmp_path / "principal-agent-bindings.sqlite",
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    binding_registry.bind("tenant-1", "agent-1")
 
     policy = PolicyEngine()
     security = SecurityBoundary(policy, VerificationEngine())
@@ -71,8 +80,8 @@ def _setup(tmp_path, audit_log=None):
     audit_log = audit_log or AuditLog()
     recorder = FederatedActionAuditRecorder(audit_log, clock=lambda: 123.0)
     federated_gate = FederatedActionGate(
-        gate, principal_authority, local_policy_version="local-v1",
-        audit_recorder=recorder,
+        gate, principal_authority, binding_registry,
+        local_policy_version="local-v1", audit_recorder=recorder,
     )
     action = ActionSpec(
         action_id="search-1", action_type="search", target="local-index",
@@ -268,3 +277,74 @@ def test_federated_action_surfaces_missing_final_audit_after_dispatch(tmp_path):
     assert decision.allowed is False
     assert decision.reason == "federated_outcome_audit_unavailable_after_dispatch"
     assert result is None
+
+
+def test_federated_action_rechecks_live_principal_agent_binding_at_dispatch(tmp_path):
+    gate, _, _, agent, action, admission, agent_grant, principal_grant, log = _setup(tmp_path)
+    gate._bindings.revoke_binding("tenant-1", agent.agent_id)
+    dispatched = []
+    decision, result = _dispatch(
+        gate, agent, action, admission, agent_grant, principal_grant,
+        lambda: dispatched.append("unsafe"),
+    )
+    assert decision.allowed is False
+    assert decision.reason == "principal_agent_binding_not_active"
+    assert result is None
+    assert dispatched == []
+    assert log.snapshot()[-1]["event"] == "federated_action_outcome"
+    assert log.snapshot()[-1]["outcome"] == "principal_agent_binding_rejected"
+
+
+def test_federated_action_requires_binding_registry_dependency(tmp_path):
+    from core.federated_action_gate import FederatedActionGate
+
+    gate, _, _, _, _, _, _, _, _ = _setup(tmp_path)
+    try:
+        FederatedActionGate(
+            gate._gate, gate._principals, binding_registry=object(),
+            local_policy_version="local-v1", audit_recorder=gate._audit,
+        )
+    except TypeError as exc:
+        assert str(exc) == "principal_agent_binding_registry_required"
+    else:
+        raise AssertionError("missing binding enforcement must fail closed")
+
+
+def test_binding_revocation_waits_for_inflight_local_dispatch_boundary(tmp_path):
+    gate, agents, principals, agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    second_registry = SQLitePrincipalAgentBindingRegistry(
+        gate._bindings.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    entered = Event()
+    release = Event()
+    revoke_started = Event()
+
+    def bounded_dispatch():
+        entered.set()
+        assert release.wait(timeout=5)
+        return "dispatch-linearized-before-revocation"
+
+    def revoke():
+        revoke_started.set()
+        second_registry.revoke_binding("tenant-1", agent.agent_id)
+        return "revoked"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            dispatch_future = pool.submit(
+                gate._bindings.with_active_binding,
+                "tenant-1", agent.agent_id, bounded_dispatch,
+            )
+            assert entered.wait(timeout=5)
+            revoke_future = pool.submit(revoke)
+            assert revoke_started.wait(timeout=5)
+            assert revoke_future.done() is False
+            release.set()
+            assert dispatch_future.result(timeout=5) == "dispatch-linearized-before-revocation"
+            assert revoke_future.result(timeout=5) == "revoked"
+        assert gate._bindings.is_agent_owned_by_principal("tenant-1", agent.agent_id) is False
+    finally:
+        release.set()
+        second_registry = None

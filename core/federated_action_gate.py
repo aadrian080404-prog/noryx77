@@ -15,6 +15,7 @@ from .contracts import ActionSpec
 from .federation_admission import FederatedAdmission
 from .federated_action_audit import FederatedActionAuditRecorder
 from .identity import AgentIdentity
+from .sqlite_principal_agent_binding import PrincipalAgentBindingRejected
 from .principal_authorization import (
     PrincipalAuthorizationAuthority,
     PrincipalAuthorizationGrant,
@@ -28,6 +29,7 @@ class FederatedActionGate:
         self,
         action_gate: ActionGate,
         principal_authority: PrincipalAuthorizationAuthority,
+        binding_registry: object,
         *,
         local_policy_version: str,
         audit_recorder: FederatedActionAuditRecorder,
@@ -36,6 +38,8 @@ class FederatedActionGate:
             raise TypeError("action_gate_required")
         if not callable(getattr(principal_authority, "consume_and_execute", None)):
             raise TypeError("principal_authority_required")
+        if not callable(getattr(binding_registry, "with_active_binding", None)):
+            raise TypeError("principal_agent_binding_registry_required")
         if not callable(getattr(action_gate.authorization, "consume_and_execute", None)):
             raise TypeError("agent_authorization_authority_required")
         if not isinstance(local_policy_version, str) or not local_policy_version.strip():
@@ -44,6 +48,7 @@ class FederatedActionGate:
             raise TypeError("federated_audit_recorder_required")
         self._gate = action_gate
         self._principals = principal_authority
+        self._bindings = binding_registry
         self._agents = action_gate.authorization
         self._policy_version = local_policy_version
         self._audit = audit_recorder
@@ -69,8 +74,10 @@ class FederatedActionGate:
     ) -> tuple[ActionDecision, object | None]:
         """Authorize one action and call a bounded local dispatcher.
 
-        Lock order is agent registry -> principal registry. The dispatcher must
-        not perform network I/O or mutate trust stores; enqueue locally and return.
+        Lock order is agent registry -> principal registry -> binding SQLite.
+        The live principal-agent binding remains locked through grant consumption
+        and bounded local dispatch. The dispatcher must not perform network I/O
+        or mutate trust stores; enqueue locally and return.
         The audit decision is durably appended to the configured AuditLog before
         grant consumption. Audit failure is fail-closed and prevents dispatch.
         """
@@ -153,10 +160,21 @@ class FederatedActionGate:
             return result
 
         try:
-            agent_consumed, result = self._agents.consume_and_execute(
-                action, admission.execution_id, agent_grant,
-                agent_identity, consume_principal_and_dispatch,
+            agent_consumed, result = self._bindings.with_active_binding(
+                principal_grant.principal_id,
+                agent_identity.agent_id,
+                lambda: self._agents.consume_and_execute(
+                    action, admission.execution_id, agent_grant,
+                    agent_identity, consume_principal_and_dispatch,
+                ),
             )
+        except PrincipalAgentBindingRejected:
+            if not record_outcome(
+                "principal_agent_binding_rejected",
+                "principal_agent_binding_not_active",
+            ):
+                return self._denied("federated_outcome_audit_unavailable"), None
+            return self._denied("principal_agent_binding_not_active"), None
         except Exception:
             if dispatch_state["executor_started"]:
                 outcome = (
