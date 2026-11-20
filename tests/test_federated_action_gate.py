@@ -1,3 +1,4 @@
+import pytest
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from threading import Event
@@ -442,3 +443,26 @@ def test_binding_revocation_waits_for_inflight_federated_dispatch(tmp_path):
         assert principals.is_revoked("tenant-1") is False
     finally:
         release.set()
+
+
+
+def test_binding_revocation_tombstone_survives_registry_reopen(tmp_path):
+    gate, agents, principals, agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    database_path = gate._bindings.database_path
+    gate._bindings.revoke_binding("tenant-1", agent.agent_id)
+
+    reopened = SQLitePrincipalAgentBindingRegistry(
+        database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    assert reopened.is_agent_owned_by_principal("tenant-1", agent.agent_id) is False
+    try:
+        reopened.bind("tenant-1", agent.agent_id)
+    except PermissionError as exc:
+        assert str(exc) == "principal_agent_binding_permanently_revoked"
+    else:
+        raise AssertionError("revoked principal-agent binding must not be recreated")
+
+    assert agents.is_revoked(agent.agent_id) is False
+    assert principals.is_revoked("tenant-1") is False
