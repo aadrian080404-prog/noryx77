@@ -244,10 +244,16 @@ class SQLiteFederatedAuditLog:
             or not callable(getattr(anchor, "compare_and_advance", None))
         ):
             raise TypeError("external_audit_anchor_required")
-        try:
-            anchor_sequence, anchor_digest = anchor.read_checkpoint()
-        except Exception:
-            raise RuntimeError("external_audit_anchor_unavailable") from None
+        def read_anchor_checkpoint() -> tuple[int, str]:
+            try:
+                observed = anchor.read_checkpoint()
+            except Exception:
+                raise RuntimeError("external_audit_anchor_unavailable") from None
+            if not isinstance(observed, tuple) or len(observed) != 2:
+                raise RuntimeError("external_audit_anchor_invalid_checkpoint")
+            return observed
+
+        anchor_sequence, anchor_digest = read_anchor_checkpoint()
 
         # Detect local rollback or same-sequence divergence before any advance.
         self.verify_against_anchor(anchor_sequence, anchor_digest)
@@ -263,17 +269,11 @@ class SQLiteFederatedAuditLog:
             raise RuntimeError("external_audit_anchor_unavailable") from None
         if advanced is not True:
             # Another writer may have advanced the anchor concurrently.
-            try:
-                observed_sequence, observed_digest = anchor.read_checkpoint()
-            except Exception:
-                raise RuntimeError("external_audit_anchor_unavailable") from None
+            observed_sequence, observed_digest = read_anchor_checkpoint()
             if (observed_sequence, observed_digest) != (local_sequence, local_digest):
                 self.verify_against_anchor(observed_sequence, observed_digest)
                 raise RuntimeError("external_audit_anchor_advance_conflict")
-        try:
-            confirmed = anchor.read_checkpoint()
-        except Exception:
-            raise RuntimeError("external_audit_anchor_unavailable") from None
+        confirmed = read_anchor_checkpoint()
         if confirmed != (local_sequence, local_digest):
             self.verify_against_anchor(*confirmed)
             raise RuntimeError("external_audit_anchor_confirmation_mismatch")
