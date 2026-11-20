@@ -116,6 +116,7 @@ class FederatedActionAuditRecorder:
             "executor_failed",
             "agent_grant_rejected",
             "principal_grant_rejected",
+            "principal_agent_binding_rejected",
             "dispatch_failed",
         }
         if not isinstance(admission, FederatedAdmission) or not admission.is_verified():
