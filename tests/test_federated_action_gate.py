@@ -515,3 +515,73 @@ def test_concurrent_provisioning_cannot_assign_one_agent_to_two_principals(tmp_p
     assert active_owners[0] == next(
         principal_id for status, principal_id in results if status == "bound"
     )
+
+
+def _hold_active_binding_in_child(registry, entered, release, results):
+    try:
+        outcome = registry.with_active_binding(
+            "tenant-1", "agent-1",
+            lambda: (entered.set(), release.wait(10), "dispatch-completed")[-1],
+        )
+        results.put(("dispatch", outcome))
+    except Exception as exc:
+        results.put(("dispatch-error", type(exc).__name__))
+
+
+def _revoke_binding_in_child(registry, attempting, results):
+    attempting.set()
+    try:
+        registry.revoke_binding("tenant-1", "agent-1")
+        results.put(("revoke", "completed"))
+    except Exception as exc:
+        results.put(("revoke-error", type(exc).__name__))
+
+
+def test_independent_process_revocation_waits_for_active_binding_callback(tmp_path):
+    from multiprocessing import get_all_start_methods, get_context
+    from queue import Empty
+
+    if "fork" not in get_all_start_methods():
+        pytest.skip("requires POSIX fork for independent process SQLite test")
+
+    gate, _agents, _principals, _agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    registry = gate._bindings
+    context = get_context("fork")
+    entered = context.Event()
+    release = context.Event()
+    attempting = context.Event()
+    results = context.Queue()
+    dispatch_process = context.Process(
+        target=_hold_active_binding_in_child,
+        args=(registry, entered, release, results),
+    )
+    revoke_process = context.Process(
+        target=_revoke_binding_in_child,
+        args=(registry, attempting, results),
+    )
+    dispatch_process.start()
+    try:
+        assert entered.wait(10), "dispatch callback did not acquire active binding"
+        revoke_process.start()
+        assert attempting.wait(10), "revocation process did not begin"
+        with pytest.raises(Empty):
+            results.get(timeout=0.2)
+        release.set()
+        first = results.get(timeout=10)
+        second = results.get(timeout=10)
+        dispatch_process.join(timeout=10)
+        revoke_process.join(timeout=10)
+    finally:
+        release.set()
+        for process in (dispatch_process, revoke_process):
+            if process.pid is not None and process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        results.close()
+
+    assert {first[0], second[0]} == {"dispatch", "revoke"}
+    assert ("dispatch", "dispatch-completed") in (first, second)
+    assert ("revoke", "completed") in (first, second)
+    assert dispatch_process.exitcode == 0
+    assert revoke_process.exitcode == 0
+    assert registry.is_agent_owned_by_principal("tenant-1", "agent-1") is False
