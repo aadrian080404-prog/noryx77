@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from threading import Event
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -306,3 +308,43 @@ def test_federated_action_requires_binding_registry_dependency(tmp_path):
         assert str(exc) == "principal_agent_binding_registry_required"
     else:
         raise AssertionError("missing binding enforcement must fail closed")
+
+
+def test_binding_revocation_waits_for_inflight_local_dispatch_boundary(tmp_path):
+    gate, agents, principals, agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    second_registry = SQLitePrincipalAgentBindingRegistry(
+        gate._bindings.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    entered = Event()
+    release = Event()
+    revoke_started = Event()
+
+    def bounded_dispatch():
+        entered.set()
+        assert release.wait(timeout=5)
+        return "dispatch-linearized-before-revocation"
+
+    def revoke():
+        revoke_started.set()
+        second_registry.revoke_binding("tenant-1", agent.agent_id)
+        return "revoked"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            dispatch_future = pool.submit(
+                gate._bindings.with_active_binding,
+                "tenant-1", agent.agent_id, bounded_dispatch,
+            )
+            assert entered.wait(timeout=5)
+            revoke_future = pool.submit(revoke)
+            assert revoke_started.wait(timeout=5)
+            assert revoke_future.done() is False
+            release.set()
+            assert dispatch_future.result(timeout=5) == "dispatch-linearized-before-revocation"
+            assert revoke_future.result(timeout=5) == "revoked"
+        assert gate._bindings.is_agent_owned_by_principal("tenant-1", agent.agent_id) is False
+    finally:
+        release.set()
+        second_registry = None
