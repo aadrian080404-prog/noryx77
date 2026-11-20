@@ -408,3 +408,43 @@ def test_independent_audit_clients_converge_on_concurrent_anchor_sync(tmp_path):
         first.close()
         second.close()
 
+
+
+def test_external_anchor_sync_recovers_when_cas_acknowledgement_is_lost(tmp_path):
+    class LostAcknowledgementAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+            self.drop_first_acknowledgement = True
+
+        def read_checkpoint(self):
+            return self.sequence, self.digest
+
+        def compare_and_advance(
+            self, expected_sequence, expected_digest, next_sequence, next_digest
+        ):
+            if (self.sequence, self.digest) != (
+                expected_sequence, expected_digest
+            ):
+                return False
+            self.sequence, self.digest = next_sequence, next_digest
+            if self.drop_first_acknowledgement:
+                self.drop_first_acknowledgement = False
+                return False
+            return True
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "lost-anchor-ack.sqlite")
+    audit.record("event", value="durable-before-anchor")
+    anchor = LostAcknowledgementAnchor()
+    try:
+        # The CAS has committed remotely, but its acknowledgement was lost.
+        # Re-reading the exact desired checkpoint must make retry idempotent.
+        expected = audit.checkpoint()
+        assert audit.synchronize_external_anchor(anchor) == expected
+        assert anchor.read_checkpoint() == expected
+        assert audit.synchronize_external_anchor(anchor) == expected
+        assert audit.verify_integrity()
+    finally:
+        audit.close()
