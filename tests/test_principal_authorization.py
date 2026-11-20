@@ -213,3 +213,44 @@ def test_revocation_is_observed_by_an_independent_registry_instance(tmp_path):
     ) == (False, None)
     assert called == []
     assert independent_registry.is_revoked("tenant-1")
+
+
+def _revoke_principal_in_process(database_path, principal_id, ready):
+    registry = SQLitePrincipalIdentityRegistry(database_path)
+    registry.revoke(principal_id)
+    ready.put(registry.is_revoked(principal_id))
+
+
+def test_principal_revocation_is_visible_across_process_boundary(tmp_path):
+    from multiprocessing import get_all_start_methods, get_context
+
+    import pytest
+
+    if "fork" not in get_all_start_methods():
+        pytest.skip("requires POSIX fork for independent process SQLite test")
+
+    registry, authority, action = _setup(tmp_path)
+    grant = authority.issue(action, "exec-1", "tenant-1")
+    context = get_context("fork")
+    ready = context.Queue()
+    process = context.Process(
+        target=_revoke_principal_in_process,
+        args=(tmp_path / "principals.sqlite", "tenant-1", ready),
+    )
+    process.start()
+    try:
+        assert ready.get(timeout=15) is True
+        process.join(timeout=15)
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+        ready.close()
+
+    called = []
+    assert process.exitcode == 0
+    assert authority.consume_and_execute(
+        action, "exec-1", grant, lambda: called.append("unsafe")
+    ) == (False, None)
+    assert called == []
+    assert registry.is_revoked("tenant-1")
