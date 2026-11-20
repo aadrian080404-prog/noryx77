@@ -121,19 +121,24 @@ class SQLitePrincipalAgentBindingRegistry:
         """Create a permanent one-owner binding after live identity checks."""
         self._validate_ids(principal_id, agent_id)
 
-        def with_agent(_principal_identity):
-            return self._agent_registry.with_trusted_identity(
-                agent_id,
-                lambda agent_identity: (
-                    agent_identity.agent_id == agent_id
-                    and isinstance(agent_identity.public_key, bytes)
-                    and len(agent_identity.public_key) == 32
+        def with_principal(agent_identity):
+            if not (
+                agent_identity.agent_id == agent_id
+                and isinstance(agent_identity.public_key, bytes)
+                and len(agent_identity.public_key) == 32
+            ):
+                return False
+            return self._principal_registry.with_trusted_principal(
+                principal_id,
+                lambda principal_identity: (
+                    principal_identity.principal_id == principal_id
                 ),
             ) is True
 
         try:
-            trusted = self._principal_registry.with_trusted_principal(
-                principal_id, with_agent
+            # Match ActionGate's global lock order: agent registry, then principal.
+            trusted = self._agent_registry.with_trusted_identity(
+                agent_id, with_principal
             ) is True
         except Exception as exc:
             raise PermissionError("binding_identity_not_trusted") from exc
@@ -209,18 +214,13 @@ class SQLitePrincipalAgentBindingRegistry:
         try:
             self._validate_ids(principal_id, agent_id)
 
-            def with_agent(_principal_identity):
-                return self._agent_registry.with_trusted_identity(
-                    agent_id,
-                    lambda identity: (
-                        identity.agent_id == agent_id
-                        and isinstance(identity.public_key, bytes)
-                        and len(identity.public_key) == 32
-                    ),
+            def with_principal(_agent_identity):
+                return self._principal_registry.with_trusted_principal(
+                    principal_id, lambda _principal_identity: True
                 ) is True
 
-            if self._principal_registry.with_trusted_principal(
-                principal_id, with_agent
+            if self._agent_registry.with_trusted_identity(
+                agent_id, with_principal
             ) is not True:
                 return False
             with self._lock:
