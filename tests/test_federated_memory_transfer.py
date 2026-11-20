@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -380,3 +381,37 @@ def test_agent_transfer_requires_both_verified_agent_bindings():
             reserve_nonce=lambda *_: True,
             now=150,
         )
+
+
+def test_nonce_reservation_is_atomic_across_independent_registry_instances(tmp_path):
+    path = str(tmp_path / "shared-nonce-registry.sqlite")
+    first = SQLiteNonceRegistry(path)
+    second = SQLiteNonceRegistry(path)
+    reopened = None
+    try:
+        registries = (first, second)
+        expires_at = int(time.time()) + 600
+
+        def reserve(index):
+            return registries[index % 2].reserve(
+                "issuer-shared", "single-use-nonce", expires_at
+            )
+
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            outcomes = list(pool.map(reserve, range(48)))
+
+        assert outcomes.count(True) == 1
+        assert outcomes.count(False) == 47
+
+        first.close()
+        second.close()
+        reopened = SQLiteNonceRegistry(path)
+        assert reopened.reserve(
+            "issuer-shared", "single-use-nonce", expires_at
+        ) is False
+    finally:
+        if reopened is not None:
+            reopened.close()
+        else:
+            first.close()
+            second.close()
