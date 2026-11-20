@@ -29,12 +29,8 @@ def test_binding_provisioning_uses_dispatch_agent_then_principal_lock_order(tmp_
         principal_registry=RecordingPrincipalStore(),
         agent_registry=RecordingAgentStore(),
     )
-    try:
-        bindings.bind(principal.principal_id, agent.agent_id)
-        assert calls == ["agent", "principal"]
-        assert bindings.is_agent_owned_by_principal(
-            principal.principal_id, agent.agent_id
-        )
-    finally:
-        principal_store.close()
-        agent_store.close()
+    bindings.bind(principal.principal_id, agent.agent_id)
+    assert calls == ["agent", "principal"]
+    assert bindings.is_agent_owned_by_principal(
+        principal.principal_id, agent.agent_id
+    )
