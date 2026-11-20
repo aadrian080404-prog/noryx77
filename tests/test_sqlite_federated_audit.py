@@ -540,3 +540,24 @@ def test_sqlite_external_anchor_integrates_with_journal_sync(tmp_path):
         assert journal.synchronize_external_anchor(anchor) == expected
     finally:
         journal.close()
+
+
+def test_sqlite_external_anchor_rejects_stale_writer_after_independent_advance(tmp_path):
+    witness_path = tmp_path / "stale-writer-witness.sqlite"
+    first = SQLiteExternalAuditAnchor(witness_path)
+    stale = SQLiteExternalAuditAnchor(witness_path)
+    genesis = hashlib.sha256(
+        b"noryx7/sqlite-federated-audit/genesis/v1"
+    ).hexdigest()
+    checkpoint_one = (1, hashlib.sha256(b"checkpoint-one").hexdigest())
+    checkpoint_two = (2, hashlib.sha256(b"checkpoint-two").hexdigest())
+
+    assert first.read_checkpoint() == (0, genesis)
+    assert stale.read_checkpoint() == (0, genesis)
+    assert first.compare_and_advance(0, genesis, *checkpoint_one) is True
+
+    # A client holding the old genesis observation cannot overwrite a newer
+    # checkpoint, even if it proposes a numerically larger sequence.
+    assert stale.compare_and_advance(0, genesis, *checkpoint_two) is False
+    assert first.read_checkpoint() == checkpoint_one
+    assert stale.read_checkpoint() == checkpoint_one
