@@ -175,3 +175,26 @@ def test_independent_processes_consume_persisted_grant_at_most_once(tmp_path):
     assert all(
         value is None for accepted, value in outcomes if accepted is False
     )
+
+
+def test_principal_grant_rejects_tampering_with_signed_fields(tmp_path):
+    from dataclasses import replace
+
+    registry, authority, action = _setup(tmp_path)
+    grant = authority.issue(action, "exec-1", "tenant-1")
+    attempted = (
+        replace(grant, signature="0" * 64),
+        replace(grant, expires_at=grant.expires_at + 1),
+        replace(grant, principal_key_fingerprint="f" * 64),
+        replace(grant, nonce=bytes(32)),
+    )
+    calls = []
+    for altered in attempted:
+        assert authority.consume_and_execute(
+            action, "exec-1", altered, lambda: calls.append("executed")
+        ) == (False, None)
+    assert calls == []
+    # The authentic grant remains usable: rejected tampering must not consume it.
+    assert authority.consume_and_execute(
+        action, "exec-1", grant, lambda: "authentic"
+    ) == (True, "authentic")
