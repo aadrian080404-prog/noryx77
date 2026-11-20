@@ -38,6 +38,96 @@ class ExternalAuditAnchor(Protocol):
         ...
 
 
+class SQLiteExternalAuditAnchor:
+    """File-backed monotonic checkpoint witness using atomic SQLite CAS.
+
+    Keep this database outside the journal database. It is a durable local
+    witness, not a remote or independently administered trust service.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        raw_path = str(db_path)
+        if not raw_path.strip() or raw_path == ":memory:":
+            raise ValueError("durable_external_audit_anchor_required")
+        self.database_path = raw_path
+        connection = self._connect()
+        try:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS external_audit_checkpoint ("
+                "singleton INTEGER PRIMARY KEY CHECK(singleton=1), "
+                "sequence INTEGER NOT NULL CHECK(sequence>=0), "
+                "digest TEXT NOT NULL)"
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO external_audit_checkpoint "
+                "(singleton, sequence, digest) VALUES (1, 0, ?)", (_GENESIS,)
+            )
+        finally:
+            connection.close()
+        try:
+            import os
+            os.chmod(self.database_path, 0o600)
+        except OSError as exc:
+            raise RuntimeError("external_audit_anchor_permissions_unavailable") from exc
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(
+            self.database_path, timeout=10, isolation_level=None
+        )
+        connection.execute("PRAGMA busy_timeout=10000")
+        connection.execute("PRAGMA synchronous=FULL")
+        connection.execute("PRAGMA journal_mode=WAL")
+        return connection
+
+    @staticmethod
+    def _valid_checkpoint(sequence: int, digest: str) -> bool:
+        return (
+            not isinstance(sequence, bool)
+            and isinstance(sequence, int)
+            and 0 <= sequence <= 0x7FFFFFFFFFFFFFFF
+            and isinstance(digest, str)
+            and len(digest) == 64
+            and all(ch in "0123456789abcdef" for ch in digest)
+        )
+
+    def read_checkpoint(self) -> tuple[int, str]:
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT sequence, digest FROM external_audit_checkpoint WHERE singleton=1"
+            ).fetchone()
+            if row is None or not self._valid_checkpoint(row[0], row[1]):
+                raise RuntimeError("external_audit_anchor_invalid_checkpoint")
+            return row[0], row[1]
+        finally:
+            connection.close()
+
+    def compare_and_advance(
+        self, expected_sequence: int, expected_digest: str,
+        next_sequence: int, next_digest: str,
+    ) -> bool:
+        if (not self._valid_checkpoint(expected_sequence, expected_digest)
+                or not self._valid_checkpoint(next_sequence, next_digest)
+                or next_sequence <= expected_sequence):
+            return False
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                "UPDATE external_audit_checkpoint SET sequence=?, digest=? "
+                "WHERE singleton=1 AND sequence=? AND digest=?",
+                (next_sequence, next_digest, expected_sequence, expected_digest),
+            )
+            connection.execute("COMMIT")
+            return cursor.rowcount == 1
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.close()
+
+
 class SQLiteFederatedAuditLog:
     """Append-only, transactionally persisted audit sink compatible with recorder."""
 
