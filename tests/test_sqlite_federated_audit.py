@@ -357,3 +357,54 @@ def test_historical_anchor_prefix_verifies_after_restart_with_unanchored_tail(tm
     finally:
         reopened.close()
 
+def test_independent_audit_clients_converge_on_concurrent_anchor_sync(tmp_path):
+    from threading import Barrier, Lock
+
+    class ThreadSafeAnchor:
+        def __init__(self):
+            self._lock = Lock()
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+
+        def read_checkpoint(self):
+            with self._lock:
+                return self.sequence, self.digest
+
+        def compare_and_advance(
+            self, expected_sequence, expected_digest, next_sequence, next_digest
+        ):
+            with self._lock:
+                if (self.sequence, self.digest) != (
+                    expected_sequence, expected_digest
+                ):
+                    return False
+                if next_sequence <= expected_sequence:
+                    return False
+                self.sequence, self.digest = next_sequence, next_digest
+                return True
+
+    path = tmp_path / "concurrent-anchor-sync.sqlite"
+    first = SQLiteFederatedAuditLog(path)
+    second = SQLiteFederatedAuditLog(path)
+    first.record("event", value="shared-prefix")
+    anchor = ThreadSafeAnchor()
+    barrier = Barrier(2)
+    try:
+        def synchronize(audit):
+            barrier.wait(timeout=10)
+            return audit.synchronize_external_anchor(anchor)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(synchronize, (first, second)))
+
+        assert results[0] == results[1]
+        assert results[0] == anchor.read_checkpoint()
+        assert results[0][0] == 1
+        assert first.verify_integrity()
+        assert second.verify_integrity()
+    finally:
+        first.close()
+        second.close()
+
