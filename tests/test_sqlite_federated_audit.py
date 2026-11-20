@@ -304,3 +304,27 @@ def test_external_anchor_sync_is_idempotent_across_concurrent_audit_instances(tm
     finally:
         first.close()
         second.close()
+
+
+@pytest.mark.parametrize("checkpoint", [
+    None,
+    [0, "0" * 64],
+    (True, "0" * 64),
+    (-1, "0" * 64),
+    (0, "not-a-digest"),
+    (0, "A" * 64),
+])
+def test_external_anchor_sync_rejects_malformed_checkpoint_values(tmp_path, checkpoint):
+    class MalformedAnchor:
+        def read_checkpoint(self):
+            return checkpoint
+
+        def compare_and_advance(self, *_args):
+            raise AssertionError("must not advance an invalid anchor")
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "malformed-anchor.sqlite")
+    audit.record("event", value="pending")
+    with pytest.raises(RuntimeError, match="external_audit_anchor_invalid_checkpoint"):
+        audit.synchronize_external_anchor(MalformedAnchor())
+    assert audit.checkpoint()[0] == 1
+    audit.close()
