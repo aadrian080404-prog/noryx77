@@ -348,3 +348,51 @@ def test_binding_revocation_waits_for_inflight_local_dispatch_boundary(tmp_path)
     finally:
         release.set()
         second_registry = None
+
+
+
+def test_identity_revocation_waits_for_inflight_federated_dispatch(tmp_path):
+    gate, agents, principals, agent, action, admission, agent_grant, principal_grant, _log = _setup(tmp_path)
+    entered = Event()
+    release = Event()
+    agent_revoke_started = Event()
+    principal_revoke_started = Event()
+
+    def bounded_executor():
+        entered.set()
+        assert release.wait(timeout=5)
+        return "dispatch-linearized-before-identity-revocation"
+
+    def revoke_agent():
+        agent_revoke_started.set()
+        agents.revoke(agent.agent_id)
+
+    def revoke_principal():
+        principal_revoke_started.set()
+        principals.revoke("tenant-1")
+
+    try:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            dispatch_future = pool.submit(
+                _dispatch, gate, agent, action, admission,
+                agent_grant, principal_grant, bounded_executor,
+            )
+            assert entered.wait(timeout=5)
+            agent_revoke_future = pool.submit(revoke_agent)
+            principal_revoke_future = pool.submit(revoke_principal)
+            assert agent_revoke_started.wait(timeout=5)
+            assert principal_revoke_started.wait(timeout=5)
+            assert agent_revoke_future.done() is False
+            assert principal_revoke_future.done() is False
+
+            release.set()
+            decision, result = dispatch_future.result(timeout=5)
+            assert decision.allowed is True
+            assert result == "dispatch-linearized-before-identity-revocation"
+            agent_revoke_future.result(timeout=5)
+            principal_revoke_future.result(timeout=5)
+
+        assert agents.is_revoked(agent.agent_id) is True
+        assert principals.is_revoked("tenant-1") is True
+    finally:
+        release.set()
