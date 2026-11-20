@@ -198,3 +198,18 @@ def test_principal_grant_rejects_tampering_with_signed_fields(tmp_path):
     assert authority.consume_and_execute(
         action, "exec-1", grant, lambda: "authentic"
     ) == (True, "authentic")
+
+
+def test_revocation_is_observed_by_an_independent_registry_instance(tmp_path):
+    registry, authority, action = _setup(tmp_path)
+    grant = authority.issue(action, "exec-1", "tenant-1")
+    independent_registry = SQLitePrincipalIdentityRegistry(
+        tmp_path / "principals.sqlite"
+    )
+    independent_registry.revoke("tenant-1")
+    called = []
+    assert authority.consume_and_execute(
+        action, "exec-1", grant, lambda: called.append("unsafe")
+    ) == (False, None)
+    assert called == []
+    assert independent_registry.is_revoked("tenant-1")
