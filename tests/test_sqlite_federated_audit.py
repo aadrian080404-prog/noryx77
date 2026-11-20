@@ -272,7 +272,8 @@ def test_external_anchor_rejects_malformed_checkpoint_shapes_and_values(tmp_path
             raise AssertionError("must_not_advance_malformed_checkpoint")
 
     audit = SQLiteFederatedAuditLog(tmp_path / "malformed-external-anchor.sqlite")
-    audit.record("pending")
+    audit.record("anchored-prefix")
+    audit.record("unanchored-tail")
     for checkpoint in (
         None,
         [0, "0" * 64],
@@ -280,6 +281,7 @@ def test_external_anchor_rejects_malformed_checkpoint_shapes_and_values(tmp_path
         (-1, "0" * 64),
         (0, "A" * 64),
         (0, "0" * 64),
+        (1, "0" * 64),
         (0, "not-a-digest"),
     ):
         with pytest.raises((RuntimeError, ValueError)):
