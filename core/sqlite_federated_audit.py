@@ -224,12 +224,39 @@ class SQLiteFederatedAuditLog:
                 or len(anchor_digest) != 64
                 or any(ch not in "0123456789abcdef" for ch in anchor_digest)):
             raise ValueError("invalid_external_audit_checkpoint_digest")
-        local_sequence, local_digest = self.checkpoint()
-        if local_sequence < anchor_sequence:
-            raise RuntimeError("federated_audit_rollback_detected")
-        if local_sequence == anchor_sequence and local_digest != anchor_digest:
-            raise RuntimeError("federated_audit_anchor_divergence")
-        return local_sequence, local_digest
+        with self._lock:
+            try:
+                # Compare the anchor with the exact historical prefix, not only
+                # the current head. Otherwise a forged old checkpoint digest
+                # could be accepted whenever the local journal has a longer tail.
+                self._conn.execute("BEGIN")
+                if not self._verify_locked():
+                    raise RuntimeError("federated_audit_integrity_failed")
+                head = self._conn.execute(
+                    "SELECT sequence, digest FROM federated_audit_events "
+                    "ORDER BY sequence DESC LIMIT 1"
+                ).fetchone()
+                local_sequence, local_digest = (
+                    (0, _GENESIS) if head is None else (head[0], head[1])
+                )
+                if local_sequence < anchor_sequence:
+                    raise RuntimeError("federated_audit_rollback_detected")
+                if anchor_sequence == 0:
+                    prefix_digest = _GENESIS
+                else:
+                    prefix = self._conn.execute(
+                        "SELECT digest FROM federated_audit_events WHERE sequence=?",
+                        (anchor_sequence,),
+                    ).fetchone()
+                    prefix_digest = None if prefix is None else prefix[0]
+                if prefix_digest != anchor_digest:
+                    raise RuntimeError("federated_audit_anchor_divergence")
+                self._conn.execute("COMMIT")
+                return local_sequence, local_digest
+            except Exception:
+                if self._conn.in_transaction:
+                    self._conn.execute("ROLLBACK")
+                raise
     def synchronize_external_anchor(
         self, anchor: ExternalAuditAnchor
     ) -> tuple[int, str]:
