@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
@@ -256,4 +257,79 @@ def test_external_anchor_sync_fails_closed_on_conflict_or_unavailable_service(tm
         audit.synchronize_external_anchor(ConflictingAnchor())
     with pytest.raises(RuntimeError, match="external_audit_anchor_unavailable"):
         audit.synchronize_external_anchor(UnavailableAnchor())
+    audit.close()
+
+
+def test_external_anchor_rejects_malformed_checkpoint_shapes_and_values(tmp_path):
+    class MalformedAnchor:
+        def __init__(self, checkpoint):
+            self.checkpoint = checkpoint
+
+        def read_checkpoint(self):
+            return self.checkpoint
+
+        def compare_and_advance(self, *_args):
+            raise AssertionError("must_not_advance_malformed_checkpoint")
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "malformed-external-anchor.sqlite")
+    audit.record("anchored-prefix")
+    audit.record("unanchored-tail")
+    for checkpoint in (
+        None,
+        [0, "0" * 64],
+        (True, "0" * 64),
+        (-1, "0" * 64),
+        (0, "A" * 64),
+        (0, "0" * 64),
+        (1, "0" * 64),
+        (0, "not-a-digest"),
+    ):
+        with pytest.raises((RuntimeError, ValueError)):
+            audit.synchronize_external_anchor(MalformedAnchor(checkpoint))
+    audit.close()
+
+
+def test_external_anchor_rejects_false_success_without_confirmed_advance(tmp_path):
+    class LyingAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+
+        def read_checkpoint(self):
+            return self.sequence, self.digest
+
+        def compare_and_advance(self, *_args):
+            return True
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "lying-external-anchor.sqlite")
+    audit.record("pending")
+    with pytest.raises(
+        RuntimeError, match="external_audit_anchor_confirmation_mismatch"
+    ):
+        audit.synchronize_external_anchor(LyingAnchor())
+    assert audit.verify_integrity()
+    audit.close()
+
+
+def test_external_anchor_rejects_non_boolean_compare_and_advance_result(tmp_path):
+    class InvalidCASResultAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+
+        def read_checkpoint(self):
+            return self.sequence, self.digest
+
+        def compare_and_advance(self, *_args):
+            return 1
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "invalid-cas-result.sqlite")
+    audit.record("pending")
+    with pytest.raises(RuntimeError, match="external_audit_anchor_advance_conflict"):
+        audit.synchronize_external_anchor(InvalidCASResultAnchor())
+    assert audit.verify_integrity()
     audit.close()
