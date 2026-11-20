@@ -111,3 +111,57 @@ def test_principal_grant_expires_while_waiting_for_registry_lock(tmp_path):
         action, "exec-1", grant, lambda: called.append("unsafe")
     ) == (False, None)
     assert called == []
+
+def _consume_grant_in_process(authority, action, grant, start, results, marker):
+    start.wait(timeout=10)
+    try:
+        accepted, value = authority.consume_and_execute(
+            action, "exec-1", grant, lambda: marker
+        )
+        results.put((accepted, value))
+    except Exception as exc:
+        results.put(("error", type(exc).__name__))
+
+
+def test_independent_processes_consume_persisted_grant_at_most_once(tmp_path):
+    from multiprocessing import get_all_start_methods, get_context
+    from queue import Empty
+
+    import pytest
+
+    if "fork" not in get_all_start_methods():
+        pytest.skip("requires POSIX fork for independent process SQLite test")
+
+    registry, authority, action = _setup(tmp_path)
+    grant = authority.issue(action, "exec-1", "tenant-1")
+    second_registry = SQLitePrincipalIdentityRegistry(tmp_path / "principals.sqlite")
+    second_authority = PrincipalAuthorizationAuthority(
+        b"s" * 32, tmp_path / "grants.sqlite", second_registry, clock=lambda: 100
+    )
+
+    context = get_context("fork")
+    start = context.Barrier(2)
+    results = context.Queue()
+    processes = (
+        context.Process(target=_consume_grant_in_process,
+                        args=(authority, action, grant, start, results, "first")),
+        context.Process(target=_consume_grant_in_process,
+                        args=(second_authority, action, grant, start, results, "second")),
+    )
+    for process in processes:
+        process.start()
+    try:
+        outcomes = (results.get(timeout=15), results.get(timeout=15))
+        for process in processes:
+            process.join(timeout=15)
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        results.close()
+
+    assert sum(1 for accepted, _value in outcomes if accepted is True) == 1
+    assert sum(1 for accepted, _value in outcomes if accepted is False) == 1
+    assert all(process.exitcode == 0 for process in processes)
+
