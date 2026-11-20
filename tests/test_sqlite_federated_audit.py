@@ -257,3 +257,50 @@ def test_external_anchor_sync_fails_closed_on_conflict_or_unavailable_service(tm
     with pytest.raises(RuntimeError, match="external_audit_anchor_unavailable"):
         audit.synchronize_external_anchor(UnavailableAnchor())
     audit.close()
+
+
+def test_external_anchor_sync_is_idempotent_across_concurrent_audit_instances(tmp_path):
+    import hashlib
+    from threading import Lock
+
+    genesis = hashlib.sha256(
+        b"noryx7/sqlite-federated-audit/genesis/v1"
+    ).hexdigest()
+
+    class ConcurrentAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = genesis
+            self.lock = Lock()
+
+        def read_checkpoint(self):
+            with self.lock:
+                return self.sequence, self.digest
+
+        def compare_and_advance(
+            self, expected_sequence, expected_digest, next_sequence, next_digest
+        ):
+            with self.lock:
+                if (self.sequence, self.digest) != (expected_sequence, expected_digest):
+                    return False
+                if next_sequence <= expected_sequence:
+                    return False
+                self.sequence, self.digest = next_sequence, next_digest
+                return True
+
+    path = tmp_path / "concurrent-anchor-sync.sqlite"
+    first = SQLiteFederatedAuditLog(path)
+    second = SQLiteFederatedAuditLog(path)
+    anchor = ConcurrentAnchor()
+    try:
+        first.record("event", value="shared-prefix")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda audit: audit.synchronize_external_anchor(anchor),
+                (first, second),
+            ))
+        assert results[0] == results[1] == anchor.read_checkpoint()
+        assert first.checkpoint() == second.checkpoint() == results[0]
+    finally:
+        first.close()
+        second.close()
