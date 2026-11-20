@@ -1,3 +1,4 @@
+import hashlib
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
@@ -278,6 +279,7 @@ def test_external_anchor_rejects_malformed_checkpoint_shapes_and_values(tmp_path
         (True, "0" * 64),
         (-1, "0" * 64),
         (0, "A" * 64),
+        (0, "0" * 64),
         (0, "not-a-digest"),
     ):
         with pytest.raises((RuntimeError, ValueError)):
