@@ -4,7 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from core.sqlite_federated_audit import SQLiteFederatedAuditLog
+from core.sqlite_federated_audit import (
+    SQLiteExternalAuditAnchor,
+    SQLiteFederatedAuditLog,
+)
 
 
 def test_sqlite_audit_survives_restart_and_verifies_hash_chain(tmp_path):
@@ -492,3 +495,48 @@ def test_external_anchor_sync_recovers_after_commit_then_timeout(tmp_path):
         assert audit.verify_integrity()
     finally:
         audit.close()
+
+
+def test_sqlite_external_anchor_persists_and_advances_monotonically(tmp_path):
+    journal = SQLiteFederatedAuditLog(tmp_path / "journal.sqlite")
+    witness_path = tmp_path / "separate-witness.sqlite"
+    witness = SQLiteExternalAuditAnchor(witness_path)
+    journal.record("anchored", value="durable")
+    expected = journal.checkpoint()
+    try:
+        assert witness.read_checkpoint()[0] == 0
+        assert witness.compare_and_advance(0, hashlib.sha256(
+            b"noryx7/sqlite-federated-audit/genesis/v1"
+        ).hexdigest(), *expected) is True
+        assert witness.read_checkpoint() == expected
+        assert witness.compare_and_advance(0, hashlib.sha256(
+            b"noryx7/sqlite-federated-audit/genesis/v1"
+        ).hexdigest(), *expected) is False
+    finally:
+        journal.close()
+
+    reopened = SQLiteExternalAuditAnchor(witness_path)
+    assert reopened.read_checkpoint() == expected
+
+
+def test_sqlite_external_anchor_rejects_invalid_or_non_monotonic_updates(tmp_path):
+    anchor = SQLiteExternalAuditAnchor(tmp_path / "invalid-witness.sqlite")
+    genesis = hashlib.sha256(
+        b"noryx7/sqlite-federated-audit/genesis/v1"
+    ).hexdigest()
+    assert anchor.compare_and_advance(0, genesis, 0, "0" * 64) is False
+    assert anchor.compare_and_advance(0, genesis, 1, "Z" * 64) is False
+    assert anchor.read_checkpoint() == (0, genesis)
+
+
+def test_sqlite_external_anchor_integrates_with_journal_sync(tmp_path):
+    journal = SQLiteFederatedAuditLog(tmp_path / "journal-sync.sqlite")
+    anchor = SQLiteExternalAuditAnchor(tmp_path / "independent-witness.sqlite")
+    try:
+        journal.record("federated_action", action_id="action-1")
+        expected = journal.checkpoint()
+        assert journal.synchronize_external_anchor(anchor) == expected
+        assert anchor.read_checkpoint() == expected
+        assert journal.synchronize_external_anchor(anchor) == expected
+    finally:
+        journal.close()
