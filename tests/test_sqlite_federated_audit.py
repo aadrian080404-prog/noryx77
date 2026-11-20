@@ -333,3 +333,27 @@ def test_external_anchor_rejects_non_boolean_compare_and_advance_result(tmp_path
         audit.synchronize_external_anchor(InvalidCASResultAnchor())
     assert audit.verify_integrity()
     audit.close()
+
+def test_historical_anchor_prefix_verifies_after_restart_with_unanchored_tail(tmp_path):
+    path = tmp_path / "historical-anchor-restart.sqlite"
+    first = SQLiteFederatedAuditLog(path)
+    first.record("anchored-event", value="stable")
+    anchor_sequence, anchor_digest = first.checkpoint()
+    first.record("unanchored-tail", value="later")
+    first.close()
+
+    reopened = SQLiteFederatedAuditLog(path)
+    try:
+        local_sequence, local_digest = reopened.verify_against_anchor(
+            anchor_sequence, anchor_digest
+        )
+        assert local_sequence == anchor_sequence + 1
+        assert local_digest == reopened.checkpoint()[1]
+        with pytest.raises(
+            RuntimeError, match="federated_audit_anchor_divergence"
+        ):
+            reopened.verify_against_anchor(anchor_sequence, "0" * 64)
+        assert reopened.verify_integrity()
+    finally:
+        reopened.close()
+
