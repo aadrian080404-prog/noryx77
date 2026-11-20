@@ -251,7 +251,13 @@ class SQLiteFederatedAuditLog:
                 raise RuntimeError("external_audit_anchor_unavailable") from None
             if not isinstance(observed, tuple) or len(observed) != 2:
                 raise RuntimeError("external_audit_anchor_invalid_checkpoint")
-            return observed
+            sequence, digest = observed
+            if (isinstance(sequence, bool) or not isinstance(sequence, int)
+                    or not 0 <= sequence <= 0x7FFFFFFFFFFFFFFF
+                    or not isinstance(digest, str) or len(digest) != 64
+                    or any(ch not in "0123456789abcdef" for ch in digest)):
+                raise RuntimeError("external_audit_anchor_invalid_checkpoint")
+            return sequence, digest
 
         anchor_sequence, anchor_digest = read_anchor_checkpoint()
 
