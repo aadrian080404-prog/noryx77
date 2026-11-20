@@ -448,3 +448,47 @@ def test_external_anchor_sync_recovers_when_cas_acknowledgement_is_lost(tmp_path
         assert audit.verify_integrity()
     finally:
         audit.close()
+
+
+def test_external_anchor_sync_recovers_after_commit_then_timeout(tmp_path):
+    class CommitThenTimeoutAnchor:
+        def __init__(self):
+            self.sequence = 0
+            self.digest = hashlib.sha256(
+                b"noryx7/sqlite-federated-audit/genesis/v1"
+            ).hexdigest()
+            self.applied = False
+
+        def read_checkpoint(self):
+            return self.sequence, self.digest
+
+        def compare_and_advance(
+            self, expected_sequence, expected_digest, next_sequence, next_digest
+        ):
+            if (self.sequence, self.digest) != (
+                expected_sequence, expected_digest
+            ):
+                return False
+            self.sequence, self.digest = next_sequence, next_digest
+            if not self.applied:
+                self.applied = True
+                raise TimeoutError("response lost after durable commit")
+            return True
+
+    audit = SQLiteFederatedAuditLog(tmp_path / "anchor-timeout-after-commit.sqlite")
+    audit.record("event", value="committed-once")
+    anchor = CommitThenTimeoutAnchor()
+    expected = audit.checkpoint()
+    try:
+        with pytest.raises(
+            RuntimeError, match="external_audit_anchor_unavailable"
+        ):
+            audit.synchronize_external_anchor(anchor)
+        assert anchor.read_checkpoint() == expected
+        # Retry observes the already-committed checkpoint and does not append twice.
+        assert audit.synchronize_external_anchor(anchor) == expected
+        assert anchor.read_checkpoint() == expected
+        assert audit.snapshot() == ({"event": "event", "value": "committed-once"},)
+        assert audit.verify_integrity()
+    finally:
+        audit.close()
