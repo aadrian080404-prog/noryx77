@@ -1,7 +1,7 @@
 import pytest
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from threading import Event
+from threading import Barrier, Event
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -466,3 +466,52 @@ def test_binding_revocation_tombstone_survives_registry_reopen(tmp_path):
 
     assert agents.is_revoked(agent.agent_id) is False
     assert principals.is_revoked("tenant-1") is False
+
+
+
+def test_concurrent_provisioning_cannot_assign_one_agent_to_two_principals(tmp_path):
+    gate, agents, principals, _agent, _action, _admission, _agent_grant, _principal_grant, _log = _setup(tmp_path)
+    second_agent, _ = AgentIdentityAuthority.generate("agent-2")
+    agents.register(second_agent)
+
+    second_key = Ed25519PrivateKey.generate()
+    second_public = second_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    principals.register(PrincipalIdentity("tenant-2", second_public))
+
+    first_registry = SQLitePrincipalAgentBindingRegistry(
+        gate._bindings.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    second_registry = SQLitePrincipalAgentBindingRegistry(
+        gate._bindings.database_path,
+        principal_registry=principals,
+        agent_registry=agents,
+    )
+    start = Barrier(2)
+
+    def attempt(registry, principal_id):
+        start.wait(timeout=5)
+        try:
+            registry.bind(principal_id, "agent-2")
+            return ("bound", principal_id)
+        except PermissionError:
+            return ("rejected", principal_id)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(
+            lambda args: attempt(*args),
+            ((first_registry, "tenant-1"), (second_registry, "tenant-2")),
+        ))
+
+    assert sorted(status for status, _principal in results) == ["bound", "rejected"]
+    active_owners = [
+        principal_id for principal_id in ("tenant-1", "tenant-2")
+        if first_registry.is_agent_owned_by_principal(principal_id, "agent-2")
+    ]
+    assert len(active_owners) == 1
+    assert active_owners[0] == next(
+        principal_id for status, principal_id in results if status == "bound"
+    )
