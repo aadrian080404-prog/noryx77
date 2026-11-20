@@ -6,7 +6,7 @@ from multiprocessing import get_all_start_methods, get_context
 import pytest
 
 from core.identity import AgentIdentityAuthority
-from core.principal_identity import PrincipalIdentity
+from core.principal_identity import PrincipalIdentity, PrincipalIdentityAuthority
 from core.sqlite_identity import SQLiteIdentityRegistry
 from core.sqlite_principal_identity import SQLitePrincipalIdentityRegistry
 from core.sqlite_principal_agent_binding import SQLitePrincipalAgentBindingRegistry
@@ -34,21 +34,14 @@ def test_two_processes_cannot_claim_the_same_agent_for_different_principals(tmp_
     agents = SQLiteIdentityRegistry(tmp_path / "agents.sqlite")
     agents.register(agent)
 
-    principal_one, _ = __import__(
-        "core.principal_identity", fromlist=["PrincipalIdentityAuthority"]
-    ).PrincipalIdentityAuthority.generate("process-tenant-one")
-    principal_two, _ = __import__(
-        "core.principal_identity", fromlist=["PrincipalIdentityAuthority"]
-    ).PrincipalIdentityAuthority.generate("process-tenant-two")
+    principal_one, _ = PrincipalIdentityAuthority.generate("process-tenant-one")
+    principal_two, _ = PrincipalIdentityAuthority.generate("process-tenant-two")
     principals = SQLitePrincipalIdentityRegistry(tmp_path / "principals.sqlite")
     principals.register(principal_one)
     principals.register(principal_two)
 
     binding_path = tmp_path / "bindings.sqlite"
     first = SQLitePrincipalAgentBindingRegistry(
-        binding_path, principal_registry=principals, agent_registry=agents,
-    )
-    second = SQLitePrincipalAgentBindingRegistry(
         binding_path, principal_registry=principals, agent_registry=agents,
     )
     context = get_context("fork")
