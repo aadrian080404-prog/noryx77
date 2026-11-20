@@ -1,0 +1,387 @@
+{
+  "schema_version": 1,
+  "purpose": "Machine-readable integration graph for the durable principal-agent binding and trust-bootstrap integration branch. implemented_partial preserves open production KMS/HSM, independent remote witness, and multi-process federation gates.",
+  "status_legend": {
+    "implemented_partial": "Source exists; at least one production-critical behavior or integration gate remains open.",
+    "implemented": "Source exists and local tests cover its declared contract; end-to-end/production proof may still be open.",
+    "candidate_only": "Implementation exists only on a separate unmerged PR/branch; not importable from this branch.",
+    "specification_only": "Architecture is documented but no complete implementation is present in this branch."
+  },
+  "modules": [
+    {
+      "id": "contracts",
+      "plane": "foundation",
+      "status": "implemented",
+      "paths": [
+        "core/contracts.py",
+        "core/limits.py"
+      ],
+      "depends_on": [],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "hypersynth",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "core/hypersynth.py",
+        "core/reasoning.py",
+        "core/metacognition.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "agent_fabric",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "core/agent_fabric.py",
+        "core/agent_runtime.py",
+        "core/agent_identity.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "model_fabric",
+      "plane": "intelligence",
+      "status": "implemented_partial",
+      "paths": [
+        "noryx7_runtime/model_fabric.py",
+        "noryx7_runtime/model_adapters/openrouter.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "operational_runtime",
+      "plane": "runtime",
+      "status": "implemented_partial",
+      "paths": [
+        "core/operational_runtime.py",
+        "core/hypersynth_runtime.py"
+      ],
+      "depends_on": [
+        "hypersynth",
+        "agent_fabric",
+        "model_fabric"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "gateway",
+      "plane": "interface",
+      "status": "implemented_partial",
+      "paths": [
+        "gateway/server.py",
+        "gateway/auth.py",
+        "gateway/runtime_adapter.py"
+      ],
+      "depends_on": [
+        "operational_runtime",
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests/gateway",
+        "tests/web"
+      ]
+    },
+    {
+      "id": "memory_local",
+      "plane": "memory",
+      "status": "implemented_partial",
+      "paths": [
+        "core/memory.py",
+        "core/memory_hierarchy.py",
+        "core/secure_memory.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests"
+      ]
+    },
+    {
+      "id": "audit",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/audit.py",
+        "core/sqlite_audit.py",
+        "core/journal_integrity.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "core/test_sqlite_audit_external_anchor.py",
+        "tests/test_runtime_audit_anchor.py",
+        "tests/test_runtime_full_durable_restart.py"
+      ]
+    },
+    {
+      "id": "durable_state_journal",
+      "plane": "memory",
+      "status": "implemented_partial",
+      "paths": [
+        "core/state_journal.py",
+        "core/journal_integrity.py"
+      ],
+      "depends_on": [
+        "contracts",
+        "memory_local"
+      ],
+      "integration_tests": [
+        "tests/test_runtime_state_journal_anchor.py",
+        "tests/test_runtime_full_durable_restart.py"
+      ]
+    },
+    {
+      "id": "node_continuity_fencing",
+      "plane": "distribution",
+      "status": "implemented_partial",
+      "paths": [
+        "core/continuity.py",
+        "core/sqlite_continuity.py"
+      ],
+      "depends_on": [
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": [
+        "tests/test_sqlite_continuity.py",
+        "tests/test_runtime_full_durable_restart.py"
+      ]
+    },
+    {
+      "id": "identity_registry",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/identity.py",
+        "core/sqlite_identity.py"
+      ],
+      "depends_on": [
+        "contracts"
+      ],
+      "integration_tests": [
+        "tests/test_runtime_persistent_agent_identity.py",
+        "tests/test_sqlite_identity_revocation_tombstones.py",
+        "tests/test_runtime_full_durable_restart.py",
+        "tests/test_runtime_revocation_restart.py"
+      ]
+    },
+    {
+      "id": "matrix_device_fabric",
+      "plane": "distribution",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "contracts",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #73/#83"
+    },
+    {
+      "id": "distributed_memory",
+      "plane": "memory",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "memory_local",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #70"
+    },
+    {
+      "id": "principal_memory",
+      "plane": "memory",
+      "status": "candidate_only",
+      "paths": [],
+      "depends_on": [
+        "memory_local",
+        "identity_registry"
+      ],
+      "integration_tests": [],
+      "candidate": "PR #84"
+    },
+    {
+      "id": "quorum_witness",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/quorum_witness.py",
+        "core/remote_witness.py",
+        "core/witness_authority.py"
+      ],
+      "depends_on": [
+        "audit",
+        "durable_state_journal"
+      ],
+      "integration_tests": [
+        "core/test_quorum_witness.py",
+        "tests/test_runtime_full_durable_restart.py"
+      ]
+    },
+    {
+      "id": "system_inspector_surf",
+      "plane": "systems",
+      "status": "implemented_partial",
+      "paths": [
+        "core/elf_inspector.py",
+        "core/system_inspector.py"
+      ],
+      "depends_on": [
+        "contracts",
+        "audit"
+      ],
+      "integration_tests": [
+        "core/test_elf_inspector.py",
+        "core/test_system_inspector_elf_integration.py"
+      ]
+    },
+    {
+      "id": "offline_durable_outbox",
+      "plane": "distribution",
+      "status": "implemented_partial",
+      "paths": [
+        "core/offline.py",
+        "core/offline_adapters.py"
+      ],
+      "depends_on": [
+        "contracts",
+        "memory_local",
+        "audit",
+        "identity_registry"
+      ],
+      "integration_tests": [
+        "tests/test_offline_sqlite_permissions.py",
+        "tests/test_runtime_offline_durable_queue.py",
+        "tests/test_runtime_full_durable_restart.py"
+      ]
+    },
+    {
+      "id": "android_browser",
+      "plane": "interface",
+      "status": "implemented_partial",
+      "paths": [
+        "noryx-browser"
+      ],
+      "depends_on": [
+        "gateway"
+      ],
+      "integration_tests": [
+        "android build verification"
+      ]
+    },
+    {
+      "id": "governance_economy_marketplace",
+      "plane": "ecosystem",
+      "status": "specification_only",
+      "paths": [],
+      "depends_on": [
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": []
+    },
+    {
+      "id": "global_edge_cloud_fabric",
+      "plane": "distribution",
+      "status": "specification_only",
+      "paths": [],
+      "depends_on": [
+        "matrix_device_fabric",
+        "distributed_memory"
+      ],
+      "integration_tests": []
+    },
+    {
+      "id": "federated_memory_transfer",
+      "plane": "distribution",
+      "status": "implemented_partial",
+      "paths": [
+        "core/federation/memory_transfer.py",
+        "docs/federated-memory-transfer-v1.md"
+      ],
+      "depends_on": [
+        "contracts",
+        "identity_registry",
+        "audit"
+      ],
+      "integration_tests": [
+        "tests/test_federated_memory_transfer.py"
+      ]
+    },
+    {
+      "id": "federated_memory_trust_wiring",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/federation/memory_transfer_trust.py",
+        "docs/federated-memory-trust-wiring-v1.md"
+      ],
+      "depends_on": [
+        "federated_memory_transfer",
+        "identity_registry"
+      ],
+      "integration_tests": [
+        "tests/test_federated_memory_transfer_trust.py"
+      ]
+    },
+    {
+      "id": "principal_agent_binding_registry",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/sqlite_principal_agent_binding.py",
+        "docs/principal-agent-binding-registry-v1.md"
+      ],
+      "depends_on": [
+        "identity_registry"
+      ],
+      "integration_tests": [
+        "tests/test_sqlite_principal_agent_binding.py"
+      ]
+    },
+    {
+      "id": "durable_trust_bootstrap",
+      "plane": "security",
+      "status": "implemented_partial",
+      "paths": [
+        "core/durable_trust_bootstrap.py",
+        "core/trust_providers.py",
+        "core/sqlite_agent_identity_registry.py",
+        "core/sqlite_authorization_replay.py"
+      ],
+      "depends_on": [
+        "identity_registry",
+        "principal_agent_binding_registry",
+        "federated_memory_trust_wiring"
+      ],
+      "integration_tests": [
+        "tests/test_durable_trust_bootstrap.py"
+      ]
+    }
+  ]
+}
