@@ -175,10 +175,10 @@ def test_external_anchor_outage_after_restart_preserves_tail_for_retry(tmp_path)
     with pytest.raises(OSError, match="simulated_anchor_unavailable_after_restart"):
         reopened.verify_and_advance_anchor(anchor)
     assert reopened.verify_integrity()
-    assert reopened.snapshot() == [
+    assert reopened.snapshot() == (
         {"event": "already-anchored"},
         {"event": "durable-unanchored-tail"},
-    ]
+    )
 
     anchor.unavailable = False
     recovered = reopened.verify_and_advance_anchor(anchor)
