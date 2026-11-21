@@ -57,3 +57,12 @@ These remain independent proposals. The closure cycle does not merge or replace 
 ## Phase boundary
 
 This document set defines architecture, contracts, dependency order and later acceptance criteria. It does not claim implementation, passing tests, production readiness or complete architecture freeze. The next architecture-only work should close unresolved contract cards and reconcile overlapping documents. Only after an explicit architecture-freeze decision should integration begin; full verification follows integration.
+
+
+## System-wide discovery and operational lifecycle expansion
+
+17. [System-wide Gap Discovery Register](NORYX7_SYSTEM_WIDE_GAP_DISCOVERY_REGISTER.md) — gap taxonomy, 12-workstream discovery obligations, cross-cutting capability checklist, source discovery protocol and freeze prohibition.
+18. [Operational Lifecycle and Trust Architecture](NORYX7_OPERATIONAL_LIFECYCLE_AND_TRUST_ARCHITECTURE.md) — trust zones, bootstrap, identity/key lifecycle, upgrades, offline/partition, backup/restore, incident response and service continuity.
+19. [Cryptographic Agility and Mathematical Intelligence](NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md) — maps existing cryptographic families, key lifecycle and algorithm agility; positions MIF within P18 rather than creating a new plane.
+
+These are proposed architecture additions. Source-level reconciliation and explicit decisions remain open; none is frozen or implementation evidence.
