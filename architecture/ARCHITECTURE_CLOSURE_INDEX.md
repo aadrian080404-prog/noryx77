@@ -21,6 +21,15 @@
 10. [Control Authority and Runtime Lifecycle](NORYX7_CONTROL_AUTHORITY_LIFECYCLE.md) — principal identity, policy, capability, ActionGate, agent delegation, runtime, result verification, state commit and recovery.
 11. [Data, Provenance, Semantic Versioning and Offline Trust](NORYX7_DATA_PROVENANCE_VERSIONING.md) — evidence lineage, NEXUS semantics, canonicalization, schema evolution, memory deletion, tenant isolation and offline revocation.
 
+
+## Runtime/state/agent/routing decision package
+
+12. [ADR-002 — Canonical Runtime Topology](ADR-002-CANONICAL-RUNTIME-TOPOLOGY.md) — System Runtime Coordinator, cognitive/action engines, state authority and compatibility facades.
+13. [ADR-003 — Canonical State, Journal and Recovery](ADR-003-CANONICAL-STATE-JOURNAL-AND-RECOVERY.md) — journal namespaces, idempotency, attestation, commit outcomes and recovery semantics.
+14. [ADR-004 — Agent Fabric, Delegation and Result Admission](ADR-004-AGENT-FABRIC-DELEGATION-AND-RESULT-ADMISSION.md) — unified agent contract, identity, leases, supervision and admission.
+15. [ADR-005 — Routing, Scheduling and Resource Placement](ADR-005-ROUTING-SCHEDULING-AND-RESOURCE-PLACEMENT.md) — separates provider routing, agent allocation, plan scheduling, placement and dispatch.
+16. [Parallel Architecture Workstreams](NORYX7_PARALLEL_ARCHITECTURE_WORKSTREAMS.md) — twelve parallel design streams, dependency rules and closure protocol.
+
 ## Existing authoritative architecture references
 
 - [Complete System Blueprint](COMPLETE_SYSTEM_BLUEPRINT.md)
