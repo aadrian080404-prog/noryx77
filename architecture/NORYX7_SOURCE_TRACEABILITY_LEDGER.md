@@ -126,3 +126,19 @@ No source module is declared complete by this inventory alone.
 | `core/device.py` / `core/egress.py` | W01, W05, W08, W09 | Device capability gate and explicit egress allowlist | Enforcement boundary and trust/epoch binding |
 | `core/architecture_registry.py` | all planes | Structural plane contract completeness | Difference from evidence-backed architecture freeze gate |
 | `.github/workflows/*.yml` | W11 | Seven CI workflow definitions | Release/deployment pipeline, production environment and DR ownership |
+
+
+## Polyglot source anchors added (2026-11-22)
+
+| Source path | Workstream(s) | Direct source role | Unresolved architecture question |
+|---|---|---|---|
+| `jarvis/core/runtime.py` | W01–W05, W09 | JARVIS composition of dual policy, workload identity, RuntimeEngine, SystemFabric, bridge, request state and audit | Single principal/policy authority and cross-store commit/recovery semantics |
+| `core/jarvis_runtime_bridge.py` | W02–W05 | JARVIS plan translation to RuntimeEngine and core ToolExecutor/ActionGate | Exact scope, retry, idempotency and correlation boundary |
+| `gateway/server.py` / `gateway/auth.py` | W01, W08, W09, W11 | HTTP boundary and HMAC bootstrap/session authority | Client-to-principal binding, TLS termination, multi-instance revocation and secret lifecycle |
+| `gateway/runtime_adapter.py` | W02, W08 | Authenticated browser request adapter to OperationalNORYXRuntime | Client ID trust and tenant/session mapping |
+| `services/jarvis-gateway-go/main.go` | W02, W08, W11 | Go health/digest service | Intended maturity and relationship to Python gateway |
+| `services/jarvis-runtime-rs/src/lib.rs` | W02, W05 | Rust envelope canonical digest and deny helper | Wire compatibility and authentication/authorization ownership |
+| `ios/NoryxIOSAdapter` | W01, W08, W09 | Local device/capability/epoch/replay adapter | Signed grants, durable replay, remote revocation and attestation |
+| `android/noryx7-jarvis-bridge` | W08 | Audio wake PCM interface | Concrete permission/audio lifecycle and privacy policy |
+| `noryx-browser/app/src/main` | W08, W09 | HTTPS navigation and gateway session client | Bootstrap secret provisioning, device binding, WebView threat model |
+| `render.yaml` / `noryx7_operational.py` | W02, W11 | Hosted Python service and model-provider runtime configuration | Multi-artifact release, key injection, scale, backup and DR |
