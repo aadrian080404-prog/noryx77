@@ -18,6 +18,9 @@
 8. [Repository Source Traceability Ledger](NORYX7_SOURCE_TRACEABILITY_LEDGER.md) — maps core, runtime, ecosystem, JARVIS, Browser and test paths to planes.
 9. [Architecture Decisions and Closure Backlog](NORYX7_ARCHITECTURE_DECISIONS_BACKLOG.md) — prioritizes blocking/high/medium/deferred decisions and defines the freeze gate.
 
+10. [Control Authority and Runtime Lifecycle](NORYX7_CONTROL_AUTHORITY_LIFECYCLE.md) — principal identity, policy, capability, ActionGate, agent delegation, runtime, result verification, state commit and recovery.
+11. [Data, Provenance, Semantic Versioning and Offline Trust](NORYX7_DATA_PROVENANCE_VERSIONING.md) — evidence lineage, NEXUS semantics, canonicalization, schema evolution, memory deletion, tenant isolation and offline revocation.
+
 ## Existing authoritative architecture references
 
 - [Complete System Blueprint](COMPLETE_SYSTEM_BLUEPRINT.md)
