@@ -109,3 +109,20 @@ This ledger becomes the source-to-contract traceability index for the architectu
 - required future verification and regression evidence.
 
 No source module is declared complete by this inventory alone.
+
+
+## Deep source anchors added (2026-11-22)
+
+| Source path | Workstream(s) | Direct source role | Unresolved architecture question |
+|---|---|---|---|
+| `core/system_fabric.py` | W02, W04, W09 | Shared JARVIS/NORYX execution substrate and object-consistency boundary | Composition root versus coordinator versus dependency container |
+| `core/execution_fabric.py` | W02, W05, W07 | Environment adapter observation/execute boundary with authorization callback | Relation to RuntimeEngine, ActionGate and MIRROR WORLD Reality Bridge |
+| `noryx7_runtime/engine.py` | W02–W05 | Data-plane execution lifecycle, scheduler, signer, identity, replay and optional journal | Canonical execution engine or compatibility/data-plane adapter |
+| `noryx7_runtime/state.py` | W03, W09 | Signed attestation journal and step reservation | In-memory versus durable reservation semantics and namespace |
+| `noryx7_runtime/recovery.py` | W03, W09 | Journal recovery and identity/attestation validation | Coordination with core RecoveryController and ControlPlane |
+| `core/recovery.py` / `core/control_plane.py` | W01, W03, W09, W11 | Recovery epoch, defense synchronization and artifact admission | One epoch authority and crash-consistent transition protocol |
+| `core/offline_adapters.py` / `core/offline_anchor.py` | W08, W09 | Policy/verification/cipher adapters and monotonic snapshot marker | Production anti-rollback anchor, durable outbox and revocation freshness |
+| `core/agent_mesh.py` / `core/agent_runtime.py` / `core/coordination.py` | W04 | Agent roles, liveness, assignment, execution and consensus | Relationship to native and operational agent fabrics |
+| `core/device.py` / `core/egress.py` | W01, W05, W08, W09 | Device capability gate and explicit egress allowlist | Enforcement boundary and trust/epoch binding |
+| `core/architecture_registry.py` | all planes | Structural plane contract completeness | Difference from evidence-backed architecture freeze gate |
+| `.github/workflows/*.yml` | W11 | Seven CI workflow definitions | Release/deployment pipeline, production environment and DR ownership |
