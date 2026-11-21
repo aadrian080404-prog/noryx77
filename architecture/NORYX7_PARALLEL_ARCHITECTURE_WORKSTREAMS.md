@@ -64,3 +64,22 @@ A workstream cannot jump from DRAFTED to FROZEN. IMPLEMENTED and VERIFIED are se
 - W05 routing/resource placement: ADR-005 proposed; provider-fabric boundary inventory incomplete.
 - W01, W06–W12: remain active and are tracked in the architecture decision backlog.
 - No implementation or verification is authorized by this coordination document.
+
+
+## Expanded discovery protocol — current cycle
+
+The three new governing documents now extend all twelve streams:
+- System-wide gap register: classifies missing, ambiguous, duplicate, conflicting, orphaned, unbounded, unverified, stale, unsupported, unsafe-fallback, hidden-coupling and governance gaps.
+- Operational lifecycle/trust architecture: makes bootstrap, enrollment, key custody, policy/configuration evolution, upgrade, offline/partition, recovery, incident and decommission first-class concerns.
+- Cryptographic agility/MIF architecture: treats cryptography as an existing cross-cutting source family requiring full caller/custody reconciliation; MIF remains within P18 and does not change the canonical 18-plane count.
+
+### Current disposition after this expansion
+
+- W01/W09: lifecycle and cryptographic trust contracts drafted; exact callers, custody providers, root recovery, algorithm inventory and revocation freshness remain un-reconciled.
+- W02/W03: runtime/state topology proposals exist; full entrypoint, persistence, journal namespace, migration and recovery-consumer inventories remain open.
+- W04/W05: agent-fabric and routing proposals exist; direct invocation, delegation, lease, result admission, budget and placement enforcement inventories remain open.
+- W06: NEXUS/FRL/MIF evidence architecture expanded; canonical schemas, source lineage, checker trust and semantic equivalence remain open.
+- W07/W08: MIRROR WORLD and surface/distribution architecture remains active; fidelity, bridge authorization, offline reconciliation and surface lifecycle require source review.
+- W10/W11/W12: domain, operations and ecosystem discovery continues; domain validity, SLO/capacity, tenant/billing/community governance require explicit manifests and owners.
+
+Discovery is concurrent; acceptance of dependent contracts remains ordered by authority and shared schema decisions. All new documents are proposals, not frozen decisions. No implementation, integration, test campaign, merge or deployment is authorized.
