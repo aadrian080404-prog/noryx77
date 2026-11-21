@@ -132,3 +132,20 @@ New bounded source record: `NORYX7_DEEP_SOURCE_RECONCILIATION_ALL_WORKSTREAMS.md
 - W12: marketplace, payment, internal ledger and community contribution governance must remain distinct from execution authority.
 
 All twelve remain PARTIAL. This pass does not authorize code changes, integration or test campaigns.
+
+
+## Polyglot surface reconciliation — 2026-11-22
+
+New bounded source record: `NORYX7_POLYGLOT_SURFACE_AND_JARVIS_AUTHORITY_RECONCILIATION.md`.
+
+- W01: map gateway client_id, JARVIS user principal, JARVIS workload/agent identity and iOS device identity into a single principal/device/workload taxonomy.
+- W02: JARVIS composes RuntimeEngine, CanonicalSystemFabric and JarvisRuntimeBridge; this is a concrete composition path that must be reconciled with the proposed SRC.
+- W03: JARVIS request-state reservation/commit and RuntimeEngine step-attestation journal are separate stores; cross-store atomicity/recovery remains open.
+- W04: JARVIS front-end/orchestrator/registry, NORYX operational agent fabric and provider adapters need a single call graph and ownership map.
+- W05: provider gateway/resilience and Go/Rust service boundaries need composed retry, digest, authorization and dispatch semantics.
+- W08: Python gateway, Android browser, Android audio bridge, iOS adapter and TypeScript UI are separate surfaces with distinct lifecycle/credential boundaries.
+- W09: gateway HMAC secret, workload signing key, device grants, TLS and artifact signatures need purpose-separated key custody and revocation contracts.
+- W11: Render Python service does not define release/deployment of Go/Rust/mobile/browser artifacts; multi-artifact lifecycle remains open.
+- W12: client enrollment, tenant identity, provider onboarding, billing and support require governance beyond gateway session creation.
+
+All affected workstreams remain partial. No source code, dependency, test, integration or deployment changed.
