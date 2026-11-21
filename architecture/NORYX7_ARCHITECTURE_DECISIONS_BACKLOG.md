@@ -1,0 +1,92 @@
+# NORYX7 — Architecture Open Decisions and Closure Backlog
+
+**Status:** architecture decision register; unresolved items are deliberately not guessed  
+**Parent:** System-Wide Architecture Closure Blueprint  
+**Rule:** this backlog is design work only. It does not authorize code integration, test campaigns, merge or deployment.
+
+## 1. Priority model
+
+- **B0 — Blocking:** must be resolved before architecture freeze because it affects authority, trust, state ownership or a shared schema.
+- **B1 — High:** must be resolved before the dependent workstream can freeze.
+- **B2 — Medium:** can be frozen with an explicit deferred capability and owner.
+- **B3 — Later:** product/domain expansion that does not block the common substrate.
+
+## 2. Blocking decisions
+
+| ID | Priority | Decision to resolve | Affected planes | Required evidence/output |
+|---|---|---|---|---|
+| ADR-B01 | B0 | Canonical authority map across Identity, Policy, Capability Broker, ActionGate and Runtime | P06–P13 | One authority sequence, issuer/consumer matrix and revocation semantics |
+| ADR-B02 | B0 | Canonical runtime/lifecycle ownership across core runtime, operational runtime, HYPERSYNTH runtime, JARVIS runtime and `noryx7_runtime` | P03–P10, P12 | Runtime ownership diagram, state machine, facade/adapter map, deprecation rules |
+| ADR-B03 | B0 | Canonical state, journal, attestation and commit ownership across core, runtime and JARVIS | P09–P16 | One state authority model, transaction boundaries, replay/rollback and recovery contract |
+| ADR-B04 | B0 | Canonical agent identity, delegation and supervisor lifecycle | P03, P05–P08, P10–P11 | Agent lifecycle, trust registration, delegation attenuation, revocation and result admission |
+| ADR-B05 | B0 | Shared provenance/evidence model across NEXUS, Universal Intelligence, memory, simulation and audit | P03, P09, P15, P18 | Claim/evidence/source schema, epistemic states, lineage and conflict model |
+| ADR-B06 | B0 | Tenant/principal/session/data-scope model across JARVIS, API, memory, tools and distributed nodes | P01–P14 | Identity graph, tenant isolation matrix, session binding and data-flow map |
+| ADR-B07 | B0 | One dependency and compatibility policy for schemas, vocabularies, contracts and runtime envelopes | P01–P18 | Versioning policy, compatibility classes, migration and unknown-field rules |
+| ADR-B08 | B0 | Offline revocation freshness and action restrictions during partition | P05, P07, P10–P13, P16 | Offline trust epoch, maximum staleness, forbidden action classes and reconciliation |
+
+## 3. High-priority architecture decisions
+
+| ID | Priority | Decision to resolve | Affected planes | Required evidence/output |
+|---|---|---|---|---|
+| ADR-H01 | B1 | NEXUS-IR semantic type/ontology ownership, canonicalization and vocabulary governance | P01–P06, P09, P18 | Normative schema model, canonicalization profile, ontology release lifecycle |
+| ADR-H02 | B1 | NEXUS-Wire message envelope, transport-independent framing, replay/expiry and compatibility | P06–P14 | Wire envelope, identity binding, version negotiation and transport matrix |
+| ADR-H03 | B1 | FRL proof artifact and checker trust model; distinction from empirical and simulation evidence | P03, P09, P15, P18 | Exact proposition/theory/checker identity and result semantics |
+| ADR-H04 | B1 | MIRROR WORLD common world graph, scenario lifecycle, simulation kernel interfaces and fidelity dimensions | P03–P05, P08–P10, P13, P18 | World/scenario schema, experiment manifest, kernel contract and calibration lifecycle |
+| ADR-H05 | B1 | Reality Bridge policy and safety case for any simulation-to-real operation | P07–P16 | Isolated trust zone, allow-list, approval, rollback and audit contract |
+| ADR-H06 | B1 | Browser-to-JARVIS/NORYX7 future bridge and Browser version boundary | P14 | User gesture, origin, target, capability, content exposure and revocation contract |
+| ADR-H07 | B1 | Model/provider routing versus node/resource placement responsibilities | P05, P10, P13, P17 | Two-stage route model and explicit handoff contract |
+| ADR-H08 | B1 | Memory tier ownership, source lineage, deletion, expiry and replica tombstones | P09, P12, P13, P15 | Memory lifecycle, retention/deletion matrix and restore behavior |
+| ADR-H09 | B1 | Key custody and root-of-trust bootstrap across device, edge, cloud and recovery | P11–P16 | Key hierarchy, platform KMS/keystore boundary, compromise/recovery model |
+| ADR-H10 | B1 | Audit chain versus diagnostic telemetry versus business ledger | P12, P15, P17 | Event classes, retention, integrity and independent access policies |
+| ADR-H11 | B1 | Shared result semantics for accepted, rejected, partial, indeterminate, unsupported, degraded, failed and quarantined | P03–P18 | Outcome schema and transition matrix |
+| ADR-H12 | B1 | Global resource budgets, scheduling fairness and high-risk workload priority | P05–P10, P13, P17 | Budget taxonomy, admission, preemption, backpressure and SLO model |
+
+## 4. Medium-priority decisions
+
+| ID | Priority | Decision to resolve | Affected planes | Required evidence/output |
+|---|---|---|---|---|
+| ADR-M01 | B2 | Multimodal source coordinate and temporal alignment schema | P01–P03, P09, P18 | Frame/sample/span addressing and transformation lineage |
+| ADR-M02 | B2 | Systems reverse-engineering scope, evidence sufficiency and authorization tiers | P06–P08, P11, P14, P18 | Asset authorization manifest, passive/active scope and report standard |
+| ADR-M03 | B2 | Controlled self-improvement proposal and staged release lifecycle | P03, P10–P12, P15–P16 | Immutable proposal, evaluation, approval, signed release and rollback |
+| ADR-M04 | B2 | Domain package manifest, validator API and domain-specific escalation policy | P18 | Domain contract, source classes, validity and review model |
+| ADR-M05 | B2 | Operator console and emergency stop separation | P14–P16 | Operator roles, break-glass, dual control and immutable audit |
+| ADR-M06 | B2 | Usage metering, tenant billing and financial ledger separation | P07, P10, P12, P14–P15, P17 | Metering schema, billing authority and reconciliation |
+| ADR-M07 | B2 | Localization, accessibility and consent UX requirements | P02, P14 | Surface acceptance and user-control matrix |
+
+## 5. Deferred product/domain decisions
+
+| ID | Priority | Decision to resolve | Affected domains |
+|---|---|---|---|
+| ADR-L01 | B3 | Initial Mirror World kernel sequence and supported fidelity profiles | Synthetic web, software, physical, environmental, socio-economic |
+| ADR-L02 | B3 | Domain rollout sequence and expert reviewer network | Health, legal, finance, science, engineering, agriculture, ecology, education, logistics, community |
+| ADR-L03 | B3 | Edge hardware profiles, accelerator support and power/thermal envelope | Device/Edge/Cloud |
+| ADR-L04 | B3 | Multi-region residency, disaster recovery objectives and capacity model | Distribution/Operations |
+| ADR-L05 | B3 | Product packaging, pricing, metering and commercial workflow scope | Business/Project Fabric |
+
+## 6. Closure sequence
+
+1. Resolve B0 decisions first; no dependent contract can be frozen while authority/state/identity semantics conflict.
+2. Resolve B1 in parallel after B0 owners and vocabulary are fixed.
+3. Mark B2 as either resolved or explicitly deferred with rationale and owner.
+4. Convert each decision into an ADR with alternatives, consequences, affected paths and migration notes.
+5. Update the architecture index and traceability ledger after each accepted decision.
+6. Freeze only when all B0 and B1 items are resolved and every B2/B3 item has an explicit disposition.
+
+## 7. Freeze gate checklist
+
+- [ ] All 18 canonical planes have contract cards and exact source traceability.
+- [ ] Cross-cutting domains map to canonical plane owners.
+- [ ] No conflicting authority, runtime, state or recovery owner remains.
+- [ ] Every external side effect has one authorization path and one result-admission path.
+- [ ] Every persistent data class has purpose, retention, deletion and replica rules.
+- [ ] Every distributed/offline mode has identity, revocation and replay semantics.
+- [ ] NEXUS, FRL and MIRROR WORLD schemas and trust boundaries are mutually consistent.
+- [ ] Browser v0.1 isolation and future bridge are explicitly separated.
+- [ ] Failure, cancellation, expiry, degradation and recovery semantics are complete.
+- [ ] Resource budgets and SLO measurement boundaries are defined.
+- [ ] Domain-specific escalation and human-control requirements are explicit.
+- [ ] Compatibility, migration, rollback and deprecation are documented.
+- [ ] Implementation and verification status are separate and evidence-backed.
+- [ ] All unresolved decisions have owners and explicit dispositions.
+
+**Current disposition:** architecture closure remains in progress. This register identifies the next design work and must not be interpreted as an approval to begin integration.
