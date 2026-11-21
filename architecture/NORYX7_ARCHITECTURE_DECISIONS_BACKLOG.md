@@ -126,3 +126,16 @@ No implementation, integration, test campaign, merge or deployment is authorized
 | ADR-B14 | B1 | Canonical approval semantics for structural vs signed multi-authorization | core/multiauth.py retains a legacy structural AuthorizationProof alongside SignedAuthorizationProof | Call-site inventory and proof-type acceptance matrix proving privileged paths require signed approvals |
 
 These are newly discovered decisions, not resolved findings. Do not interpret the presence of a source implementation as satisfying the decision.
+
+
+## 11. Source-reconciliation decisions discovered in W06–W12
+
+| ID | Priority | Decision | Source-grounded reason | Required closure evidence |
+|---|---|---|---|---|
+| ADR-B15 | B0 | Canonical evidence/provenance and semantic schema | Current typed Evidence/DomainAssessment and VerificationResult are not a complete shared semantic/provenance graph | NEXUS schema, source coordinates, temporal validity, independence, transformation lineage and conflict semantics |
+| ADR-B16 | B1 | Offline snapshot issuer, monotonic anchor and conflict authority | Offline module defines protocols/states but concrete implementations and caller wiring require mapping | Issuer/signature, policy epoch, anti-rollback, queue durability, idempotency and conflict/reconciliation contract |
+| ADR-B17 | B1 | MIRROR WORLD fidelity and Reality Bridge authority | CyberRange is synthetic/sandbox scoped; wider world models require independent calibration and bridge gates | World-type/fidelity manifest, calibration evidence, isolation and human authorization contract |
+| ADR-B18 | B1 | Supply-chain root and release provenance authority | SecureBootChain and SupplyChainVerifier exist as separate source components | Root provisioning, build attestation, dependency/model manifests, revocation and rollback contract |
+| ADR-B19 | B1 | Durable distributed memory and identity fabric boundary | GlobalMemoryFabric and GlobalIdentityAuthorizationFabric are explicitly in-memory indexes with adapters externalized | Durable store/transport/replication adapters, consistency, tenant isolation, deletion and canonical authority mapping |
+| ADR-B20 | B1 | Fleet operations, alert delivery and service-level objectives | Local event bus/alert router/runtime limits do not establish fleet-wide operational guarantees | SLO tiers, delivery/acknowledgement, telemetry retention, overload, incident and DR evidence |
+| ADR-B21 | B2 | Domain package manifest and expert governance per specialist domain | Domain routing exists but does not prove complete domain-specific validity controls | Ontology, accepted sources, jurisdiction, units, uncertainty, exclusions and escalation owner for each domain |
