@@ -123,3 +123,12 @@ A deeper source pass identified additional runtime/execution authorities:
 These sources introduce a material topology ambiguity. ADR-002's proposed System Runtime Coordinator, CanonicalSystemFabric, RuntimeEngine and ExecutionFabric may form composable layers, but the actual hierarchy is not established by class names. **ADR-002 remains open and must not be frozen** until the full constructor/call-site graph identifies one request-lifecycle owner, one privileged dispatch boundary and all compatibility facades.
 
 New source review: `NORYX7_DEEP_SOURCE_RECONCILIATION_ALL_WORKSTREAMS.md`. This is bounded inspection, not exhaustive caller inventory.
+
+
+## Polyglot composition and JARVIS source reconciliation — 2026-11-22
+
+The repository's JARVIS runtime is not a peer action engine by default: `jarvis/core/runtime.py` composes `RuntimeEngine`, `CanonicalSystemFabric`, `JarvisRuntimeBridge`, core `ActionGate`/`ToolExecutor`, a JARVIS Policy, JARVIS request state and a separate JARVIS audit log. The bridge explicitly maps JARVIS plans to RuntimeEngine steps. JARVIS user-level grants and core cryptographic agent authorization are layered checks and must be documented as separate scopes.
+
+The Go service currently exposes health and SHA-256 digest endpoints; the Rust library currently exposes an execution-envelope digest and deny-by-default helper. They are not equivalent to the Python runtime. The iOS actor has local expiring grants and a bounded consumed-action set; the Android audio bridge is an interface contract; the Android Browser uses HTTPS outside debug and authenticates to the Python gateway using bootstrap/session tokens. `render.yaml` describes one Python web service, not every artifact in the repository.
+
+The exact JARVIS composition path is evidence against treating ADR-002's SRC diagram as already implemented. ADR-002 remains proposed pending complete call-site and lifecycle mapping.
