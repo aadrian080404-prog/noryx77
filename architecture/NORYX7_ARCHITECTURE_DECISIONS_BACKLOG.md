@@ -112,3 +112,17 @@ Next architecture-only pass:
 5. Resolve W01 authority/identity and W06 semantic/evidence contracts before declaring dependent streams frozen.
 
 No implementation, integration, test campaign, merge or deployment is authorized by these records.
+
+
+## 10. Source-reconciliation decisions discovered in W01–W05
+
+| ID | Priority | Decision | Source-grounded reason | Required closure evidence |
+|---|---|---|---|---|
+| ADR-B09 | B0 | Canonical identity/trust-root authority across in-memory and durable registries | core/identity.py provides an in-memory agent-key registry; durable principal/agent binding work exists separately | Full registry inventory, issuer matrix, root bootstrap/recovery, rotation/revocation and offline freshness |
+| ADR-B10 | B0 | Canonical runtime entrypoint and facade ownership | NORYXRuntime, HypersynthRuntime and OperationalNORYXRuntime overlap in orchestration/lifecycle | Constructor/call-site graph, JARVIS/runtime adapters, startup/shutdown and migration contract |
+| ADR-B11 | B0 | State, audit and external witness namespace/recovery boundaries | StateStore/StateJournal provide local verified commits and a SQLite digest journal; audit/external witness are separate concerns | All journal consumers, namespace matrix, recovery-point and side-effect saga semantics |
+| ADR-B12 | B0 | Canonical agent dispatch and mandatory result admission | AgentFabric directly invokes AgentCore.run; OperationalAgentFabric routes through AgentSupervisor | All direct invocation paths, identity/lease checks, selected-agent binding and admission contract |
+| ADR-B13 | B1 | Composed provider retry/failover and placement policy | ProviderRouter retries on exceptions; ProviderExecutionGateway and ResilientProviderExecutor add separate layers; ResourceRouter is a separate tier heuristic | Unified retry/idempotency budget, provider trust/residency/cost constraints, capacity reservation and placement contract |
+| ADR-B14 | B1 | Canonical approval semantics for structural vs signed multi-authorization | core/multiauth.py retains a legacy structural AuthorizationProof alongside SignedAuthorizationProof | Call-site inventory and proof-type acceptance matrix proving privileged paths require signed approvals |
+
+These are newly discovered decisions, not resolved findings. Do not interpret the presence of a source implementation as satisfying the decision.
