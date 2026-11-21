@@ -66,3 +66,5 @@ This document set defines architecture, contracts, dependency order and later ac
 19. [Cryptographic Agility and Mathematical Intelligence](NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md) — maps existing cryptographic families, key lifecycle and algorithm agility; positions MIF within P18 rather than creating a new plane.
 
 These are proposed architecture additions. Source-level reconciliation and explicit decisions remain open; none is frozen or implementation evidence.
+
+20. [Source Reconciliation W01–W05](NORYX7_SOURCE_RECONCILIATION_W01_W05.md) — direct inspection of identity/policy, runtime facades, state journal, agent fabrics, provider routing and resource placement; records bounded findings and open decisions.
