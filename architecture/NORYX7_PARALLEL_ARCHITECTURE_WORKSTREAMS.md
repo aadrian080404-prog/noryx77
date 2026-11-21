@@ -97,3 +97,18 @@ A bounded inspection of main at 7d900bc75843ea968aa5886d251dbfac83a5d93c is reco
 - W06–W12: architecture documents and discovery obligations exist; source reconciliation is still open and must continue in parallel.
 
 The source review is bounded, not exhaustive. These streams cannot be marked DECIDED or FROZEN. No runtime changes, test campaigns, integration, merge or deployment are authorized.
+
+
+## Source-reconciliation status update — W06–W12
+
+A bounded inspection of main at 7d900bc75843ea968aa5886d251dbfac83a5d93c is recorded in NORYX7_SOURCE_RECONCILIATION_W06_W12.md.
+
+- W06: DISCOVERED/MAPPED in part. Typed task/result contracts, verification, Universal Intelligence evidence/domain assessments, context and in-memory memory store are confirmed. Canonical NEXUS ontology, source lineage, epistemic model and proof/empirical separation remain open.
+- W07: DISCOVERED/MAPPED in part. Synthetic sandbox-only CyberRange, sandbox lifecycle, seeded evaluation campaigns and adversarial scenarios are confirmed. Universal world models, calibration, holdout governance and Reality Bridge remain open.
+- W08: DISCOVERED/MAPPED in part. Offline states/snapshot protocols, distributed topology metadata, in-memory device fabric and JARVIS runtime bridge are confirmed. Concrete offline providers, monotonic/revocation freshness, conflict resolution and full surface call graph remain open.
+- W09: DISCOVERED/MAPPED in part. DefenseGate, secure boot chain and signed artifact manifest verification are confirmed. Root provisioning, build provenance, key rotation/revocation and single gate ownership remain open.
+- W10: DISCOVERED/MAPPED in part. Universal Intelligence declares domain routing and budgets; complete domain-specific manifests and expert governance are not established by this inspection.
+- W11: DISCOVERED/MAPPED in part. Runtime limits, bounded security event bus, alert routing and provider retry wrappers exist; fleet-wide SLO, telemetry, capacity, fairness and incident recovery remain open.
+- W12: DISCOVERED/MAPPED in part. Global memory and identity authorization indexes are in-memory structures; durable transport/storage, governance, billing and community/product lifecycle remain open.
+
+All W01–W12 now have bounded source-reconciliation records, but none is closed. Continue deeper call-site, adapter, deployment and domain-manifest discovery. No implementation, test campaign, integration, merge or deployment is authorized.
