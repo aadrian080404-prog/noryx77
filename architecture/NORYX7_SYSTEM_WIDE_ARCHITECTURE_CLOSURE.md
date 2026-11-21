@@ -84,7 +84,7 @@ Not every task traverses every stage. The orchestrator selects a bounded route. 
 
 ## 5. Architecture planes and closure register
 
-The 18 canonical planes already represented by `core/architecture_registry.py` remain the authoritative starting register. The closure documents must preserve their existing identifiers and expand their contracts rather than create competing registries.
+The executable enum in `core/architecture_gate.py` defines **19 canonical planes**; `core/architecture_registry.py` supplies the corresponding definitions. This supersedes the earlier 18-plane count in the first draft of this blueprint. Preserve the enum identifiers and ordering; do not create a competing registry. The complete contract cards are in `NORYX7_CANONICAL_PLANE_CONTRACTS.md`.
 
 | ID | Plane | Architecture scope to close | Existing architectural anchor |
 |---|---|---|---|
@@ -105,7 +105,7 @@ The 18 canonical planes already represented by `core/architecture_registry.py` r
 | P15 | Audit | Event provenance, observability, tamper evidence, metrics and trace correlation | `core/audit.py`, `core/observability.py` |
 | P16 | Recovery | Containment, lockdown, restore, re-attestation, failover and disaster recovery | `core/recovery.py`, `core/defense.py` |
 | P17 | Performance | Latency, throughput, concurrency, memory/CPU/GPU budgets, endurance and degradation | `core/limits.py`, `ecosystem/global_scale.py` |
-| P18 | Universal Intelligence | Domain schemas, evidence, uncertainty, contradiction, specialist pipelines | `core/universal_intelligence.py` |
+| P18 | Performance | Latency, throughput, concurrency, resource budgets, endurance and degradation | `core/limits.py`, `core/resource_router.py`, `ecosystem/global_scale.py` |\n| P19 | Universal Intelligence | Domain schemas, evidence, uncertainty, contradiction, specialist pipelines | `core/universal_intelligence.py` |
 
 ### 5.1 Additional cross-cutting architecture domains
 
@@ -123,7 +123,7 @@ These domains are not replacements for P01–P18. They are cross-cutting systems
 - **Human control and accountability:** approval tiers, escalation, emergency stop, review, explainable evidence and appeal paths.
 - **Operational economics and product surfaces:** pricing, metering, quotas, billing integrity, abuse prevention and tenant isolation; no business policy may weaken safety invariants.
 
-## 6. Contract card required for every component
+## 6. Contract card required for every component\n\nThe canonical plane-level contract cards are expanded in `NORYX7_CANONICAL_PLANE_CONTRACTS.md`. Surface/runtime/distribution boundaries are expanded in `NORYX7_SURFACE_RUNTIME_DISTRIBUTION.md`; domain and operational assurance are expanded in `NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`. The following common card remains mandatory for components nested within each plane.
 
 Every architecture component must be described with the same contract card. A component is not architecturally closed while any mandatory field is unspecified.
 
@@ -298,7 +298,7 @@ Not permitted in this cycle:
 The architecture set is ready for the next phase only when all of the following exist:
 
 - one canonical system blueprint and architecture ledger;
-- one contract card for every component in P01–P18 and every cross-cutting domain;
+- one contract card for every canonical plane P01–P19 and every cross-cutting domain;
 - one system context and trust-boundary model;
 - one data classification, provenance and retention model;
 - one state/lifecycle model across runtime, agents, simulations and recovery;
