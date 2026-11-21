@@ -83,3 +83,17 @@ The three new governing documents now extend all twelve streams:
 - W10/W11/W12: domain, operations and ecosystem discovery continues; domain validity, SLO/capacity, tenant/billing/community governance require explicit manifests and owners.
 
 Discovery is concurrent; acceptance of dependent contracts remains ordered by authority and shared schema decisions. All new documents are proposals, not frozen decisions. No implementation, integration, test campaign, merge or deployment is authorized.
+
+
+## Source-reconciliation status update — W01–W05
+
+A bounded inspection of main at 7d900bc75843ea968aa5886d251dbfac83a5d93c is recorded in NORYX7_SOURCE_RECONCILIATION_W01_W05.md. It inspected identity, policy, multi-authorization, replay guard, three runtime facades, state/store journal, native/operational agent fabrics, supervisor, agent router, provider router/gateway/resilience and resource-tier router.
+
+- W01: DISCOVERED/MAPPED in part. Local in-memory identity and signed-approval registries are confirmed; durable principal/agent/device authority, root recovery and global revocation freshness remain unresolved.
+- W02: DISCOVERED/MAPPED in part. NORYXRuntime, HypersynthRuntime and OperationalNORYXRuntime overlap; canonical entrypoint and complete constructor/call-site graph remain unresolved.
+- W03: DISCOVERED/MAPPED in part. StateStore/StateJournal local commit and recovery contracts are inspected; all journal namespaces, external witnesses, migrations and cross-store recovery remain unresolved.
+- W04: DISCOVERED/MAPPED in part. Native AgentFabric direct run path and OperationalAgentFabric supervisor/admission path are confirmed; complete call-site and authority graph remains unresolved.
+- W05: DISCOVERED/MAPPED in part. Agent selection, provider routing and device/edge/cloud tier routing are distinct source components; composed retry, idempotency, capacity, residency and cost rules remain unresolved.
+- W06–W12: architecture documents and discovery obligations exist; source reconciliation is still open and must continue in parallel.
+
+The source review is bounded, not exhaustive. These streams cannot be marked DECIDED or FROZEN. No runtime changes, test campaigns, integration, merge or deployment are authorized.
