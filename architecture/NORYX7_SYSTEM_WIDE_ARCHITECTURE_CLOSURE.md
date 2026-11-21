@@ -84,7 +84,7 @@ Not every task traverses every stage. The orchestrator selects a bounded route. 
 
 ## 5. Architecture planes and closure register
 
-The executable enum in `core/architecture_gate.py` defines **19 canonical planes**; `core/architecture_registry.py` supplies the corresponding definitions. This supersedes the earlier 18-plane count in the first draft of this blueprint. Preserve the enum identifiers and ordering; do not create a competing registry. The complete contract cards are in `NORYX7_CANONICAL_PLANE_CONTRACTS.md`.
+The executable enum in `core/architecture_gate.py` defines **18 canonical planes**; `core/architecture_registry.py` supplies the corresponding definitions. Preserve the enum identifiers and ordering; do not create a competing registry. The complete contract cards are in `NORYX7_CANONICAL_PLANE_CONTRACTS.md`.
 
 | ID | Plane | Architecture scope to close | Existing architectural anchor |
 |---|---|---|---|
@@ -298,7 +298,7 @@ Not permitted in this cycle:
 The architecture set is ready for the next phase only when all of the following exist:
 
 - one canonical system blueprint and architecture ledger;
-- one contract card for every canonical plane P01–P19 and every cross-cutting domain;
+- one contract card for every canonical plane P01–P18 and every cross-cutting domain;
 - one system context and trust-boundary model;
 - one data classification, provenance and retention model;
 - one state/lifecycle model across runtime, agents, simulations and recovery;
