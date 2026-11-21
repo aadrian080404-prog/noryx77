@@ -161,3 +161,16 @@ Initial repository discovery and architecture catalog have begun. The gaps above
 **Implementation wiring:** deferred.  
 **Runtime tests and verification:** deferred.  
 **Merge/deployment:** not performed.
+
+
+## 8. Additional architecture specifications added in the closure branch
+
+The following dedicated specifications have now been added on `architecture/global-closure-program-2026-11-21`:
+
+- `architecture/MIRROR_WORLD_ARCHITECTURE.md` — world registry, system models, digital twins, scenario composer, simulation engine profiles, synthetic web, calibration and isolation.
+- `architecture/SYSTEMS_REVERSE_ENGINEERING_ARCHITECTURE.md` — authorized system discovery, static/dynamic/protocol analysis, behavioral models, evidence and IP boundaries.
+- `architecture/DATA_KNOWLEDGE_FABRIC_ARCHITECTURE.md` — source registry, rights gate, ingestion, provenance, claim extraction, conflict/freshness graph and offline knowledge packs.
+- `architecture/PHYSICAL_WORLD_DEVICE_AUTONOMY_ARCHITECTURE.md` — device identity, sensor validation, twin state, safety envelopes, human approval, independent interlocks and actuation boundary.
+- `architecture/NORYX7_GLOBAL_ARCHITECTURE_CLOSURE.md` — global 18-plane inventory, component card template, dependency graph, parallel workstreams and closure gate.
+
+These documents are architecture proposals, not implementation evidence. Their component-level contract cards, domain-specific profiles and cross-plane ownership still require reconciliation during Pass A.
