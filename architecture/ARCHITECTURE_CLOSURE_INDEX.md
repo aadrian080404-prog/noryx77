@@ -70,3 +70,6 @@ These are proposed architecture additions. Source-level reconciliation and expli
 20. [Source Reconciliation W01–W05](NORYX7_SOURCE_RECONCILIATION_W01_W05.md) — direct inspection of identity/policy, runtime facades, state journal, agent fabrics, provider routing and resource placement; records bounded findings and open decisions.
 
 21. [Source Reconciliation W06–W12](NORYX7_SOURCE_RECONCILIATION_W06_W12.md) — bounded source inspection of NEXUS/evidence prerequisites, memory, cyber range, offline, distribution, supply chain, observability, domains and ecosystem fabrics.
+
+
+22. [Deep Source Reconciliation — All Workstreams](NORYX7_DEEP_SOURCE_RECONCILIATION_ALL_WORKSTREAMS.md) — additional source review of CanonicalSystemFabric, ExecutionFabric, RuntimeEngine, signed journal reservations, recovery epochs, offline anchor, agent mesh/coordination, device capabilities, egress and operational governance.
