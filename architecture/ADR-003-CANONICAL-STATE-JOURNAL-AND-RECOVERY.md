@@ -108,3 +108,16 @@ Fail closed for privileged replay if integrity, identity, sequence continuity or
 - Attestation trust, key rotation and revocation semantics.
 - Recovery matrix for restart, corruption, partition, restore and schema migration.
 - Explicit separation of audit, telemetry, evidence and business ledger.
+
+
+## Additional journal/recovery reconciliation (2026-11-22)
+
+The deeper source pass confirms materially different state implementations:
+- `noryx7_runtime/state.py` has an append-only signed-attestation journal with in-memory entries and pre-dispatch step reservations; `StateStore` aliases this journal.
+- `core/state_journal.py` is a separate SQLite WAL journal with durable sequence/digest checks.
+- `core/recovery.py` owns a recovery state/epoch machine; `core/control_plane.py` synchronizes recovery and defense states.
+- `core/offline_anchor.py` persists a monotonic snapshot marker in SQLite, while its own contract says production should use protected storage or hardware-backed TPM/HSM anchoring.
+
+Therefore “reserve before dispatch” is not sufficient as a global crash-safe guarantee until the reservation's actual durable backend, namespace, atomicity and recovery semantics are specified. Recovery state, defense mode, authorization epoch, journal sequence and offline snapshot epoch are distinct and require an explicit synchronization/restore protocol. Journal append rollback is not compensation for an external side effect.
+
+ADR-003 remains proposed. No journal is designated canonical by this update.
