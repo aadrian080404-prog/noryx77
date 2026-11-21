@@ -153,3 +153,15 @@ These are newly discovered decisions, not resolved findings. Do not interpret th
 | ADR-B27 | B1 | Production monotonic anchor and offline trust root | SQLite anchor explicitly requires protected storage or hardware-backed replacement in production | Hardware/storage trust model, issuer, anti-rollback, recovery and freshness policy |
 | ADR-B28 | B1 | Structural completeness versus architecture freeze acceptance | architecture_registry structural gate cannot prove complete callers/deployment/operational readiness | Evidence-backed freeze gate with separate architecture and implementation status axes |
 | ADR-B29 | B1 | Deployment and operations source of truth | CI workflow inventory exists, but deployment/infra root directories were not found in the inspected root | Explicit deployment inventory, runtime environments, secrets, artifact promotion, backup and DR |
+
+
+## 13. Polyglot/JARVIS/mobile/deployment decisions
+
+| ID | Priority | Decision | Source-grounded reason | Required closure evidence |
+|---|---|---|---|---|
+| ADR-B30 | B0 | JARVIS dual-policy and identity authority semantics | JarvisRuntime checks user grants in JARVIS Policy and then uses a generated JARVIS agent identity plus core ActionGate/AuthorizationAuthority | Principal/agent matrix, policy order, grant revocation and audit correlation |
+| ADR-B31 | B0 | Cross-store JARVIS/RuntimeEngine transaction semantics | JARVIS request reservation/commit and RuntimeEngine step reservations/attestation journal are distinct | Saga/recovery contract across request reservation, step reservation, attestation append and final commit |
+| ADR-B32 | B1 | JARVIS workload identity/key lifecycle | JarvisRuntime generates its JARVIS agent identity at construction | Durable identity issuer, key custody, restart, rotation, revocation and recovery |
+| ADR-B33 | B1 | Polyglot service maturity and canonical wire contracts | Go gateway and Rust runtime library currently provide health/digest and envelope digest/deny helper surfaces, not the full Python runtime | Role/maturity matrix, shared schemas, digest/signature semantics and compatibility rules |
+| ADR-B34 | B1 | Mobile/browser device trust and bootstrap credential lifecycle | iOS local grants/replay, Android audio interface and Browser bootstrap/session client are distinct local boundaries | Device enrollment, secret storage, session revocation, hardware trust and platform capability boundary |
+| ADR-B35 | B1 | Multi-artifact deployment and release authority | Render config describes one Python service while repository also contains Go/Rust/mobile/browser artifacts | Artifact catalog, build provenance, signed promotion, secrets, rollback, observability and DR |
