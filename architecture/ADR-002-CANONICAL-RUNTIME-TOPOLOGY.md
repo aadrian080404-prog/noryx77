@@ -110,3 +110,16 @@ No source code changes are authorized by this ADR.
 - Facade-to-canonical-contract compatibility matrix.
 - Failure and cancellation state-transition tables.
 - No unresolved path that can dispatch privileged work outside the canonical coordinator/action boundary.
+
+
+## Additional source reconciliation — composition-root conflict (2026-11-22)
+
+A deeper source pass identified additional runtime/execution authorities:
+- `core/system_fabric.py` defines `CanonicalSystemFabric`, described as a shared execution substrate for JARVIS and NORYX7 and binds RuntimeEngine, ToolExecutor, VerificationEngine, AuthorizationAuthority, principal and policy by object identity.
+- `core/execution_fabric.py` defines a separate environment adapter registry with its own mandatory authorization callback.
+- `noryx7_runtime/engine.py` defines RuntimeEngine as a data-plane kernel with scheduler, adapter, signer, identity registry, optional state journal, multi-authorization authority, authorization provider and replay guard.
+- `core/control_plane.py` composes recovery and defense state machines and artifact admission.
+
+These sources introduce a material topology ambiguity. ADR-002's proposed System Runtime Coordinator, CanonicalSystemFabric, RuntimeEngine and ExecutionFabric may form composable layers, but the actual hierarchy is not established by class names. **ADR-002 remains open and must not be frozen** until the full constructor/call-site graph identifies one request-lifecycle owner, one privileged dispatch boundary and all compatibility facades.
+
+New source review: `NORYX7_DEEP_SOURCE_RECONCILIATION_ALL_WORKSTREAMS.md`. This is bounded inspection, not exhaustive caller inventory.
