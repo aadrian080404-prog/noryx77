@@ -73,3 +73,6 @@ These are proposed architecture additions. Source-level reconciliation and expli
 
 
 22. [Deep Source Reconciliation — All Workstreams](NORYX7_DEEP_SOURCE_RECONCILIATION_ALL_WORKSTREAMS.md) — additional source review of CanonicalSystemFabric, ExecutionFabric, RuntimeEngine, signed journal reservations, recovery epochs, offline anchor, agent mesh/coordination, device capabilities, egress and operational governance.
+
+
+23. [Polyglot Surfaces and JARVIS Authority Reconciliation](NORYX7_POLYGLOT_SURFACE_AND_JARVIS_AUTHORITY_RECONCILIATION.md) — JARVIS dual-policy/runtime bridge, cross-store state, Python gateway, Go/Rust services, Android/iOS/browser boundaries and multi-artifact deployment.
