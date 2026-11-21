@@ -90,3 +90,25 @@
 - [ ] All unresolved decisions have owners and explicit dispositions.
 
 **Current disposition:** architecture closure remains in progress. This register identifies the next design work and must not be interpreted as an approval to begin integration.
+
+## 8. New architecture decision records — 2026-11-21
+
+| ADR | Decision area | Current state | Remaining evidence |
+|---|---|---|---|
+| ADR-002 | Canonical runtime topology and facade ownership | Proposed; source anchors inspected | Full call-site/constructor inventory; JARVIS lifecycle mapping; compatibility matrix |
+| ADR-003 | State/journal/commit/recovery authority | Proposed; core and operational journal anchors inspected | Complete persistence inventory; namespace and cross-journal saga rules; recovery matrix |
+| ADR-004 | Agent fabric, delegation and result admission | Proposed; native and operational fabric anchors inspected | All direct invocation paths; registry/key lifecycle; independent-review guarantees |
+| ADR-005 | Provider/agent/scheduler/placement separation | Proposed; router and deterministic scheduler anchors inspected | ResourceRouter and model-fabric responsibility map; budget enforcement locations |
+
+## 9. Workstream status and next closure pass
+
+The parallel workstream map is maintained in [NORYX7_PARALLEL_ARCHITECTURE_WORKSTREAMS.md](NORYX7_PARALLEL_ARCHITECTURE_WORKSTREAMS.md). Current work is **SOURCE-RECONCILED in part**, not DECIDED or FROZEN. ADR-002 through ADR-005 are proposals pending the acceptance evidence listed in each ADR.
+
+Next architecture-only pass:
+1. Complete the call-site inventory for all runtime entry points and JARVIS surfaces.
+2. Map every durable state/journal implementation, namespace and recovery consumer.
+3. Trace every direct agent invocation and result-admission path.
+4. Separate model/provider routing from resource placement in the actual source inventory.
+5. Resolve W01 authority/identity and W06 semantic/evidence contracts before declaring dependent streams frozen.
+
+No implementation, integration, test campaign, merge or deployment is authorized by these records.
