@@ -139,3 +139,17 @@ These are newly discovered decisions, not resolved findings. Do not interpret th
 | ADR-B19 | B1 | Durable distributed memory and identity fabric boundary | GlobalMemoryFabric and GlobalIdentityAuthorizationFabric are explicitly in-memory indexes with adapters externalized | Durable store/transport/replication adapters, consistency, tenant isolation, deletion and canonical authority mapping |
 | ADR-B20 | B1 | Fleet operations, alert delivery and service-level objectives | Local event bus/alert router/runtime limits do not establish fleet-wide operational guarantees | SLO tiers, delivery/acknowledgement, telemetry retention, overload, incident and DR evidence |
 | ADR-B21 | B2 | Domain package manifest and expert governance per specialist domain | Domain routing exists but does not prove complete domain-specific validity controls | Ontology, accepted sources, jurisdiction, units, uncertainty, exclusions and escalation owner for each domain |
+
+
+## 12. Additional source-grounded blocking decisions — deep reconciliation
+
+| ID | Priority | Decision | Source-grounded reason | Required closure evidence |
+|---|---|---|---|---|
+| ADR-B22 | B0 | Relationship between CanonicalSystemFabric, SRC, RuntimeEngine and ExecutionFabric | Separate composition/execution abstractions coexist; hierarchy not established | Complete constructor/call-site graph; one lifecycle owner and no shadow dispatch path |
+| ADR-B23 | B0 | Recovery/defense/authorization epoch coordination | RecoveryController, defense mode, authorization epoch and offline anchor are distinct | Transition matrix, epoch owner, crash consistency and rollback-resistant persistence |
+| ADR-B24 | B0 | Durable idempotency reservation at dispatch boundary | Runtime StateJournal reservations are in-memory; core SQLite journal is separate | Durable reservation backend, atomicity, retention, cross-process semantics and uncertain-side-effect handling |
+| ADR-B25 | B1 | AgentMesh/AgentRuntime/AgentCoordinator/AgentFabric responsibilities | Mesh, liveness, coordination, direct dispatch and operational supervision are separate components | Full invocation graph, role/skill/capability semantics, leases and independent consensus evidence |
+| ADR-B26 | B1 | Actual egress and execution-adapter enforcement point | EgressPolicy is an in-memory allowlist; ExecutionFabric has a separate authorization callback | Network-level enforcement, DNS/redirect handling, policy distribution and revocation |
+| ADR-B27 | B1 | Production monotonic anchor and offline trust root | SQLite anchor explicitly requires protected storage or hardware-backed replacement in production | Hardware/storage trust model, issuer, anti-rollback, recovery and freshness policy |
+| ADR-B28 | B1 | Structural completeness versus architecture freeze acceptance | architecture_registry structural gate cannot prove complete callers/deployment/operational readiness | Evidence-backed freeze gate with separate architecture and implementation status axes |
+| ADR-B29 | B1 | Deployment and operations source of truth | CI workflow inventory exists, but deployment/infra root directories were not found in the inspected root | Explicit deployment inventory, runtime environments, secrets, artifact promotion, backup and DR |
