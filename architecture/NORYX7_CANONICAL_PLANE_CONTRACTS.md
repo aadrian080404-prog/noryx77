@@ -2,7 +2,7 @@
 
 **Status:** architecture-only contract specification; not implementation or verification evidence  
 **Authority source:** `core/architecture_gate.py` and `core/architecture_registry.py`  
-**Important correction:** the executable enum defines **19 canonical planes**. Earlier system-wide summary material described 18; this document corrects the count. The canonical names and ordering below follow the executable enum.
+**Canonical count:** the inspected executable enum defines **18 canonical planes**. The contract cards below follow the enum names and order.
 
 ## 0. Contract model
 
