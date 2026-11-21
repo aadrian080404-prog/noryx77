@@ -307,7 +307,7 @@ Common invariants:
 
 ## 19. Cross-plane dependency constraints
 
-The canonical enum has 19 values. The architecture closure register must not create a second enum or reorder existing identifiers. Cross-cutting domains such as NEXUS, FRL, Mirror World, Knowledge, Privacy and Human Control map onto these planes; they are not additional canonical planes unless a separately reviewed ADR changes the registry.
+The canonical enum has 18 values. The architecture closure register must not create a second enum or reorder existing identifiers. Cross-cutting domains such as NEXUS, FRL, Mirror World, Knowledge, Privacy and Human Control map onto these planes; they are not additional canonical planes unless a separately reviewed ADR changes the registry.
 
 Mandatory dependency directions:
 - surfaces → ingress → identity/context → planning/cognition;
