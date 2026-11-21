@@ -9,6 +9,15 @@
 2. [MIRROR WORLD Architecture](NORYX7_MIRROR_WORLD_ARCHITECTURE.md) — synthetic web, software/cyber range, digital twins, physical, socio-economic and environmental worlds, experiment lifecycle, isolation and Reality Bridge.
 3. [Cross-Cutting Architecture Contracts](NORYX7_CROSS_CUTTING_ARCHITECTURE_CONTRACTS.md) — NEXUS, FRL, knowledge/research, multimodal, systems reverse engineering, self-improvement, privacy, human control, supply chain, resource economics and domain fabrics.
 
+## Expanded closure deliverables
+
+4. [Canonical Plane Contract Cards](NORYX7_CANONICAL_PLANE_CONTRACTS.md) — detailed contracts for all 18 canonical enum planes.
+5. [Surface, Runtime and Distribution](NORYX7_SURFACE_RUNTIME_DISTRIBUTION.md) — JARVIS, Browser, orchestration, terminal, device, edge, cloud and offline boundaries.
+6. [Domain and Operational Assurance](NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md) — 13 specialist domain families, evidence lifecycle and operations architecture.
+7. [ADR-001 — Canonical Plane Count](ADR-001-CANONICAL-PLANE-COUNT.md) — records the exact 18-member enum and plane ordering.
+8. [Repository Source Traceability Ledger](NORYX7_SOURCE_TRACEABILITY_LEDGER.md) — maps core, runtime, ecosystem, JARVIS, Browser and test paths to planes.
+9. [Architecture Decisions and Closure Backlog](NORYX7_ARCHITECTURE_DECISIONS_BACKLOG.md) — prioritizes blocking/high/medium/deferred decisions and defines the freeze gate.
+
 ## Existing authoritative architecture references
 
 - [Complete System Blueprint](COMPLETE_SYSTEM_BLUEPRINT.md)
