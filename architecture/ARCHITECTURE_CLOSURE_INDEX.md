@@ -68,3 +68,5 @@ This document set defines architecture, contracts, dependency order and later ac
 These are proposed architecture additions. Source-level reconciliation and explicit decisions remain open; none is frozen or implementation evidence.
 
 20. [Source Reconciliation W01–W05](NORYX7_SOURCE_RECONCILIATION_W01_W05.md) — direct inspection of identity/policy, runtime facades, state journal, agent fabrics, provider routing and resource placement; records bounded findings and open decisions.
+
+21. [Source Reconciliation W06–W12](NORYX7_SOURCE_RECONCILIATION_W06_W12.md) — bounded source inspection of NEXUS/evidence prerequisites, memory, cyber range, offline, distribution, supply chain, observability, domains and ecosystem fabrics.
