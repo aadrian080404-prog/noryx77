@@ -6,7 +6,7 @@
 
 ## Context
 
-The first draft of `NORYX7_SYSTEM_WIDE_ARCHITECTURE_CLOSURE.md` described 18 canonical planes. Inspection of the executable source `core/architecture_gate.py` shows that `ArchitecturePlane` defines 19 members:
+An interim review message incorrectly stated that `core/architecture_gate.py` contained 19 canonical planes. Direct inspection of the complete `ArchitecturePlane` enum shows exactly **18 members**:
 
 1. ingress
 2. understanding
@@ -27,17 +27,17 @@ The first draft of `NORYX7_SYSTEM_WIDE_ARCHITECTURE_CLOSURE.md` described 18 can
 17. performance
 18. universal_intelligence
 
-The count is 18? No: the list above enumerates 18 values. The enum source must be treated as authoritative; the actual source has 19 values only if an additional member is present. The fetched source text includes the following complete list: INGRESS, UNDERSTANDING, COGNITION, PLANNING, ROUTING, AGENTS, CAPABILITIES, TOOLS, MEMORY, RUNTIME, SECURITY, STATE, DISTRIBUTION, INTERFACES, AUDIT, RECOVERY, PERFORMANCE, UNIVERSAL_INTELLIGENCE. This is **18 enum members**.
+`core/architecture_registry.py` provides definitions for these enum members. Performance and Universal Intelligence are distinct planes, but their inclusion does not create a nineteenth plane.
 
 ## Decision
 
-The correct canonical count in the inspected `core/architecture_gate.py` is **18**, not 19. Performance and Universal Intelligence are distinct, but both are included within those 18. The earlier interim statement that the enum contained 19 was incorrect. The architecture register must therefore contain P01–P18, with Performance at P17 and Universal Intelligence at P18, matching the enum ordering.
+The canonical count is **18**, with P01–P18 matching the enum order. The first system-wide blueprint already used an 18-row inventory; the subsequent draft edits introduced an accidental duplicate Performance row and a spurious P19. Those documentation errors are corrected by this ADR and the aligned system blueprint.
 
-The plane contracts document must align its numbering to this corrected 18-member count. No new enum member is proposed.
+No runtime enum, registry, test or frozen baseline is changed. Cross-cutting domains such as NEXUS, FRL, MIRROR WORLD, Knowledge, Privacy and Human Control map onto the 18 canonical planes; they do not increase the enum count.
 
 ## Consequences
 
-- The system-wide blueprint and contract cards must use 18 canonical planes.
-- Cross-cutting systems such as NEXUS, FRL and MIRROR WORLD map onto the canonical planes; they do not increase the enum count.
-- Any future addition/removal/rename/reorder requires a separate reviewed ADR and a coordinated source/test/documentation migration.
-- This ADR does not change runtime code or claim the structural gate passes.
+- All architecture indexes and contract packs use 18 canonical planes.
+- Performance is P17; Universal Intelligence is P18.
+- Future addition, removal, rename or reorder requires a separate reviewed ADR and coordinated source/test/documentation migration.
+- This ADR does not claim that the architecture gate passes or that all plane implementations are complete.
