@@ -104,8 +104,8 @@ The executable enum in `core/architecture_gate.py` defines **19 canonical planes
 | P14 | Interfaces | JARVIS, Browser, Android/iOS/web/desktop, APIs and accessibility | `jarvis/`, `noryx-browser/`, `platform.py` |
 | P15 | Audit | Event provenance, observability, tamper evidence, metrics and trace correlation | `core/audit.py`, `core/observability.py` |
 | P16 | Recovery | Containment, lockdown, restore, re-attestation, failover and disaster recovery | `core/recovery.py`, `core/defense.py` |
-| P17 | Performance | Latency, throughput, concurrency, memory/CPU/GPU budgets, endurance and degradation | `core/limits.py`, `ecosystem/global_scale.py` |
-| P18 | Performance | Latency, throughput, concurrency, resource budgets, endurance and degradation | `core/limits.py`, `core/resource_router.py`, `ecosystem/global_scale.py` |\n| P19 | Universal Intelligence | Domain schemas, evidence, uncertainty, contradiction, specialist pipelines | `core/universal_intelligence.py` |
+| P17 | Performance | Latency, throughput, concurrency, memory/CPU/GPU budgets, endurance and degradation | `core/limits.py`, `core/resource_router.py`, `ecosystem/global_scale.py` |
+| P18 | Universal Intelligence | Domain schemas, evidence, uncertainty, contradiction, specialist pipelines | `core/universal_intelligence.py` |
 
 ### 5.1 Additional cross-cutting architecture domains
 
