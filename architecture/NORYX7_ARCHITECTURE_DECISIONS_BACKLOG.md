@@ -201,3 +201,18 @@ These are open decisions, not accepted ADRs. They do not authorize implementatio
 | ADR-B55 | B0 | Four-front dispatch ownership and canonical runtime lifecycle hierarchy | W01, W02, W04, W08 | One lifecycle owner and explicit compatibility adapters |
 
 These are open decisions, not accepted ADRs. They do not authorize implementation or integration.
+
+
+## 9. Runtime and repository inventory decisions — 2026-11-22
+
+| ID | Priority | Decision to resolve | Affected streams | Required output |
+|---|---|---|---|---|
+| ADR-B56 | B0 | RuntimeEngine lifecycle states for indeterminate side effects, partial results and compensation | W02, W03, W08, W09, W11 | Canonical outcome/state-transition matrix |
+| ADR-B57 | B0 | Topological ordering vs actual parallel execution and bounded scheduler ownership | W02, W04, W05, W11 | Concurrency, dependency and cancellation contract |
+| ADR-B58 | B1 | ModelFabric keyed attestation requirements and mandatory runtime binding | W01, W05, W06, W09 | Model result trust profile and key lifecycle |
+| ADR-B59 | B1 | Provider usage/cost/latency metering and stale metadata handling | W05, W11, W12 | Metering contract and provider reconciliation |
+| ADR-B60 | B0 | Route-level API authentication and equivalence between /api/chat and /v1 gateway routes | W01, W02, W08, W09 | Endpoint inventory, principal source and authorization matrix |
+| ADR-B61 | B1 | CI coverage for iOS adapter and explicit per-artifact release evidence | W08, W11 | Platform verification/release coverage matrix |
+| ADR-B62 | B1 | Architecture audit scripts: scope, completeness claims and machine-readable evidence schema | W02, W06, W11 | Audit evidence contract and limitations |
+
+These decisions remain open. They do not authorize implementation or tests.
