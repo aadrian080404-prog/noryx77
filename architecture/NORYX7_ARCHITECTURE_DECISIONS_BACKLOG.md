@@ -181,3 +181,23 @@ These are newly discovered decisions, not resolved findings. Do not interpret th
 | ADR-B43 | B1 | Tenant, marketplace, payment, contribution, governance and impact-ledger boundaries | W12, W01, W06, W09–W11 | Legal entity/jurisdiction model, ledger separation, dispute rights, safeguarding and impact assurance |
 
 These are open decisions, not accepted ADRs. They do not authorize implementation or integration.
+
+
+## 8. W01–W05 and shared cognitive substrate decisions — 2026-11-22
+
+| ID | Priority | Decision to resolve | Affected streams/planes | Required evidence/output |
+|---|---|---|---|---|
+| ADR-B44 | B0 | Human, tenant, workload, agent, device, session and execution identity taxonomy and issuer graph | W01–W04, W08, W09 | Canonical principal and grant contracts |
+| ADR-B45 | B0 | Cross-front request/task/step/execution/action/idempotency/correlation identity lifecycle | W01–W03, W08 | Versioned lifecycle envelope and state-transition owner |
+| ADR-B46 | B0 | Canonical agent topology, scheduler and parallel DAG execution semantics | W02, W04, W05, W11 | Ownership map, DAG, concurrency/failure/cancel contract |
+| ADR-B47 | B0 | Canonical memory classes, stores, retention, provenance and deletion/tombstone semantics | W03, W06, W08–W12 | Storage authority and memory record contract |
+| ADR-B48 | B1 | Provider selection, execution authorization, failover and indeterminate retry semantics | W02, W05, W08, W09, W11 | Route contract and retry state machine |
+| ADR-B49 | B1 | Device/edge/cloud placement with privacy, jurisdiction, capacity, cost and energy constraints | W05, W08, W11 | Placement request/result contract |
+| ADR-B50 | B0 | HYPERSYNTH evidence/verification semantics and calibration of confidence outputs | W06, W07, W09, W10 | Typed result/evidence classes and calibrated uncertainty policy |
+| ADR-B51 | B1 | Multimodal media locator, security, consent, retention and transformation lineage | W06, W08, W09, W10 | Media manifest and isolated processing contract |
+| ADR-B52 | B1 | User-understanding consent, profile lifecycle, correction and deletion | W03, W08, W09, W12 | Consent ledger, derived-data lineage and profile expiry |
+| ADR-B53 | B1 | Self-improvement external admission, protected zones and rollback authority | W07, W09, W11 | Signed proposal/release/rollback contract |
+| ADR-B54 | B0 | Offline outbox, durable dispatch reservation and commit/reconciliation atomicity | W02, W03, W08, W09, W11 | Transactional outbox/inbox and idempotency protocol |
+| ADR-B55 | B0 | Four-front dispatch ownership and canonical runtime lifecycle hierarchy | W01, W02, W04, W08 | One lifecycle owner and explicit compatibility adapters |
+
+These are open decisions, not accepted ADRs. They do not authorize implementation or integration.
