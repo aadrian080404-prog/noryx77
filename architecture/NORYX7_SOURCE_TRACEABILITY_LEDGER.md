@@ -195,3 +195,20 @@ No source module is declared complete by this inventory alone.
 | `ecosystem/global_closure.py` | W02, W09, W11 | Structural import/symbol/path/browser isolation gate | Structural closure does not establish operational readiness, source coverage or comprehensive assurance |
 | `core/architecture_gate.py` / `core/architecture_registry.py` | All | 18-plane canonical structural contracts and required acceptance metadata | Registry completeness is not evidence-backed architecture freeze |
 | `architecture/COMPLETE_SYSTEM_BLUEPRINT.md` | All | Four-front model, pipeline, memory, domain, business, recovery, security and verification-after-architecture direction | Source-of-truth status/version precedence relative to newer ADRs must be explicit |
+
+
+## Runtime, model and repository inventory anchors — 2026-11-22
+
+| Source path | Workstream(s) | Directly observed behavior | Contract gap / caution |
+|---|---|---|---|
+| `noryx7_runtime/contracts.py` / `lifecycle.py` | W02 | Intent, execution context, action envelope and terminal lifecycle values | No indeterminate/partial/compensation state in current enum |
+| `noryx7_runtime/scheduler.py` | W02, W04, W05 | Deterministic topological ordering and cycle/missing-dependency rejection | Scheduler returns an order; it does not itself execute steps concurrently |
+| `noryx7_runtime/engine.py` | W01–W05, W09 | Pre-dispatch authorization/replay checks, optional reservation, adapter dispatch, output verification, attestation and commit callback | Post-dispatch committer failure returns FAILED while reservation is retained; outcome may be externally indeterminate |
+| `noryx7_runtime/model_fabric.py` | W05, W06, W09, W11 | Capability/cost/latency candidate selection, bounded fan-out, request/result digest and optional keyed HMAC | Keyed MAC and runtime binding are optional; unkeyed result_mac is deterministic digest only |
+| `noryx7_runtime/model_adapters/openrouter.py` | W05, W08, W11 | Non-streaming text provider adapter with timeout and API key | Tools unsupported in current string-only adapter; cost/latency values are static metadata |
+| `web/app.py` | W01, W02, W08, W09 | /v1/session and /v1/execute use gateway session path; /api/chat invokes operational runtime directly | Route-level authentication equivalence/upstream enforcement not established by this file |
+| `devtools/test_lab/runner.py` | W11 | Fixed allowlist for compile, pytest, closure and completeness commands | Tool presence does not imply execution or successful evidence |
+| `devtools/audit_next_architecture_phase.py` | W02, W11 | AST inventory of configured directories, imports, classes and functions | No dynamic call graph or whole-repository semantic completeness |
+| `devtools/consolidate_architecture_phase.py` | W02, W11 | Expected-path and keyword-based capability resolution | Keyword/path resolution is not proof of runtime ownership or capability completeness |
+| `.github/workflows/*.yml` | W08, W11 | Seven workflows cover Python, Go, Rust and Android Browser build/test paths | Dedicated iOS workflow not found in this inventory; automatic PR workflows are separate from architecture closure |
+| `render.yaml` / `web/app.py` | W08, W11 | One Python web service/runtime entrypoint and web/API routes | Does not define release topology for all polyglot/mobile artifacts |
