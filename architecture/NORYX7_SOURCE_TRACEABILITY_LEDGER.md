@@ -212,3 +212,25 @@ No source module is declared complete by this inventory alone.
 | `devtools/consolidate_architecture_phase.py` | W02, W11 | Expected-path and keyword-based capability resolution | Keyword/path resolution is not proof of runtime ownership or capability completeness |
 | `.github/workflows/*.yml` | W08, W11 | Seven workflows cover Python, Go, Rust and Android Browser build/test paths | Dedicated iOS workflow not found in this inventory; automatic PR workflows are separate from architecture closure |
 | `render.yaml` / `web/app.py` | W08, W11 | One Python web service/runtime entrypoint and web/API routes | Does not define release topology for all polyglot/mobile artifacts |
+
+## Additional source mapping — 2026-11-22 ingress/observation/global-scale pass
+
+| Source path | Architectural responsibility | Workstreams | Reconciliation status / limitation |
+|---|---|---|---|
+| `web/app.py` | FastAPI ingress, direct chat and gateway API routes | W01/W02/W08/W09 | MAPPED; direct `/api/chat` differs from session-authenticated `/v1/execute`; upstream controls not established |
+| `gateway/auth.py` | Bootstrap exchange and HMAC session tokens | W01/W09 | MAPPED; stateless token expiry/integrity, no visible durable revocation registry or client attestation |
+| `gateway/server.py`, `gateway/runtime_adapter.py` | Authenticated gateway execution and request-to-task translation | W02/W08 | MAPPED; client ID is a label until resolved to a verified principal |
+| `core/llm/agent.py` | Model-backed primary/secondary reasoning agents | W04/W05/W06 | MAPPED; capability labels do not prove adapter availability or authorize actions |
+| `core/llm/model_fabric_bridge.py` | Single-model text generation bridge | W05/W06 | MAPPED; tools empty, no action authority |
+| `core/llm/self_knowledge.py` | Bounded system context for reasoning agents | W06 | MAPPED; not a signed/versioned manifest |
+| `jarvis/providers/base.py` | Minimal provider protocol | W05/W11 | MAPPED; lacks operational, privacy, usage, cancellation and structured tool contract |
+| `jarvis/context/authorized.py` | Callback-gated context acquisition | W01/W06/W08 | MAPPED; no field-level scope, tenant, consent receipt or source attestation |
+| `jarvis/observation/fabric.py` | Callback-gated observation wrapper | W01/W06/W08 | MAPPED; caller-supplied timestamp and descriptive provenance are not authenticated evidence |
+| `jarvis/perception/audio.py` | Audio frame and clap wake-pattern event | W08/W09 | MAPPED; wake event is not identity, permission or authorization |
+| `core/user_understanding.py` | Consent enum and heuristic profile extraction | W01/W06/W12 | MAPPED; confidence is heuristic; durable consent, correction/deletion and lineage remain open |
+| `core/cyber_range.py` | Synthetic-only symbolic cyber simulation | W06/W07/W09 | MAPPED; local owner record is not cryptographic authorization for Reality Bridge |
+| `core/device_fabric.py` | In-memory device capability registry | W05/W08/W09 | MAPPED; first online match, no attestation/lease/residency selection |
+| `core/distributed.py` | Node and shard placement descriptors | W03/W08/W09 | MAPPED; encrypted flag does not establish key custody, replication or consistency |
+| `ecosystem/global_scale.py` | Region/cell registry, capacity accounting, event queue and language envelope | W05/W08/W11 | MAPPED; in-memory primitives, no durable broker or atomic fleet reservation |
+
+All entries are source anchors only. They do not establish production deployment, trust assurance or acceptance of the corresponding ADRs.
