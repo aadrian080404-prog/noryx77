@@ -85,3 +85,7 @@ These are proposed architecture additions. Source-level reconciliation and expli
 
 
 26. [Repository Inventory and Execution-Path Reconciliation](NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIATION.md) — 426 tracked blobs/81 tree entries inventoried; RuntimeEngine lifecycle, topological-vs-parallel scheduling, model-fabric integrity, provider metadata, API route divergence, CI coverage and architecture-audit limitations documented. All related ADRs remain open.
+
+## Latest source reconciliation — 2026-11-22
+
+27. [Surface Ingress, Observation and Global-Scale Reconciliation](NORYX7_SURFACE_INGRESS_OBSERVATION_AND_GLOBAL_SCALE_RECONCILIATION.md) — FastAPI/gateway route parity, JARVIS context and observation, audio wake boundary, consent/profile lifecycle, synthetic cyber-range authorization, device trust, distributed shard descriptors, global capacity reservation and provider contract. ADR-B63–B69 remain open.
