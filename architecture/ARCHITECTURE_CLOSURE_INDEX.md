@@ -76,3 +76,6 @@ These are proposed architecture additions. Source-level reconciliation and expli
 
 
 23. [Polyglot Surfaces and JARVIS Authority Reconciliation](NORYX7_POLYGLOT_SURFACE_AND_JARVIS_AUTHORITY_RECONCILIATION.md) — JARVIS dual-policy/runtime bridge, cross-store state, Python gateway, Go/Rust services, Android/iOS/browser boundaries and multi-artifact deployment.
+
+
+24. [Parallel Architecture Expansion W06–W12](NORYX7_PARALLEL_ARCHITECTURE_EXPANSION_W06_W12.md) — normative proposals for NEXUS semantics/evidence, FRL, MIRROR WORLD/Reality Bridge, surfaces/offline, security/supply chain, domain manifests, operations/release and product/community/financial boundaries. All remain partial and unfrozen.
