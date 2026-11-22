@@ -216,3 +216,26 @@ These are open decisions, not accepted ADRs. They do not authorize implementatio
 | ADR-B62 | B1 | Architecture audit scripts: scope, completeness claims and machine-readable evidence schema | W02, W06, W11 | Audit evidence contract and limitations |
 
 These decisions remain open. They do not authorize implementation or tests.
+
+## Additional decisions — 2026-11-22
+
+### B63 — Canonical ingress and route authentication parity
+**Streams:** W01, W08, W09. Decide one explicit authentication/authorization boundary for every FastAPI, gateway, browser and future surface route. Record route-by-route enforcement, trusted proxy assumptions, principal resolution, rate limits and failure behavior. The direct `/api/chat` route and session-authenticated `/v1/execute` route are not equivalent in the inspected source; external middleware must be evidenced rather than assumed.
+
+### B64 — Context and observation evidence envelope
+**Streams:** W01, W06, W08. Define source/device identity, issuer, tenant, classification, purpose/consent, capture time, monotonic sequence, payload digest, calibration, freshness, signature/attestation, retention and revocation. Callback authorization and caller-supplied timestamps alone do not authenticate evidence.
+
+### B65 — Device enrollment, attestation and lease lifecycle
+**Streams:** W01, W08, W09. Decide hardware/workload identity, secure enrollment, attestation freshness, capability version, lease/fencing, disconnect behavior, remote revocation and recovery. An in-memory first-capable-device lookup is not a trusted fleet selector.
+
+### B66 — Cyber-range authorization and Reality Bridge gate
+**Streams:** W06, W07, W09. Define signed owner authorization bound to target, scenario, technique/action digest, expiry, policy epoch and revocation. Preserve synthetic-only simulation by default; any real-world bridge is a separate privileged, human-reviewable operation with independent policy and audit.
+
+### B67 — Global capacity reservation and durable delivery
+**Streams:** W05, W08, W11. Define atomic resource reservation, lease expiry, fencing token, idempotent release, capacity epoch, durable queue, delivery guarantees, deduplication, poison-message quarantine, retry/backpressure and reconciliation. In-memory registries and queues are not production global scheduling.
+
+### B68 — Consent, profile lineage and deletion propagation
+**Streams:** W01, W06, W12. Define purpose-specific consent receipts, raw/derived data separation, inference provenance, correction/supersession, retention, tenant isolation, deletion/tombstone propagation and audit. Personalization signals must not become authorization evidence by implication.
+
+### B69 — Canonical provider capability and usage contract
+**Streams:** W05, W09, W11. Define provider/model identity, typed capability schemas, structured proposal parsing, ActionGate handoff, privacy/residency, timeout/cancellation, idempotent retry, usage/cost/latency evidence, circuit state and external receipt verification. Model reasoning, adapter availability, authorization and execution remain separate authorities.
