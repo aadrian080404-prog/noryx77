@@ -165,3 +165,19 @@ These are newly discovered decisions, not resolved findings. Do not interpret th
 | ADR-B33 | B1 | Polyglot service maturity and canonical wire contracts | Go gateway and Rust runtime library currently provide health/digest and envelope digest/deny helper surfaces, not the full Python runtime | Role/maturity matrix, shared schemas, digest/signature semantics and compatibility rules |
 | ADR-B34 | B1 | Mobile/browser device trust and bootstrap credential lifecycle | iOS local grants/replay, Android audio interface and Browser bootstrap/session client are distinct local boundaries | Device enrollment, secret storage, session revocation, hardware trust and platform capability boundary |
 | ADR-B35 | B1 | Multi-artifact deployment and release authority | Render config describes one Python service while repository also contains Go/Rust/mobile/browser artifacts | Artifact catalog, build provenance, signed promotion, secrets, rollback, observability and DR |
+
+
+## 7. New decisions from parallel W06–W12 expansion — 2026-11-22
+
+| ID | Priority | Decision to resolve | Affected streams/planes | Required evidence/output |
+|---|---|---|---|---|
+| ADR-B36 | B0 | NEXUS-IR/Wire canonical schema, canonicalization and cross-language semantic compatibility | W06, W01–W05, W08 | Normative schemas, canonicalization profile, compatibility and migration matrix |
+| ADR-B37 | B0 | Evidence ontology and epistemic-state transitions across source, observation, inference, proof, empirical and simulation results | W06, W07, W09, W10 | Typed evidence registry, lineage, validity scope, contradiction and expiry rules |
+| ADR-B38 | B1 | FRL checker trust, proof replay and formal/empirical/simulation separation | W06, W07, W09 | Trusted checker/kernel model, artifact contract and bounded verification semantics |
+| ADR-B39 | B1 | MIRROR WORLD world/scenario/model registry, calibration, holdout and fidelity governance | W07, W06, W10, W11 | Domain world manifests, calibration evidence, holdout custodian and drift policy |
+| ADR-B40 | B0 | Reality Bridge separation and real-world actuation safety case | W07, W01–W05, W09 | Independent real authority, approved action taxonomy, human approval, rollback and audit |
+| ADR-B41 | B1 | Domain Manifest governance and qualified human escalation | W10, W06, W09, W12 | Per-domain source standards, jurisdiction, review qualifications, prohibited use and appeal |
+| ADR-B42 | B1 | Multi-artifact release, SLO, observability, backup/restore and incident source of truth | W11, W02, W08, W09 | Signed artifact catalog, deployment topology, measured SLOs, DR and incident runbooks |
+| ADR-B43 | B1 | Tenant, marketplace, payment, contribution, governance and impact-ledger boundaries | W12, W01, W06, W09–W11 | Legal entity/jurisdiction model, ledger separation, dispute rights, safeguarding and impact assurance |
+
+These are open decisions, not accepted ADRs. They do not authorize implementation or integration.
