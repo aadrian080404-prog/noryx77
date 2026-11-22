@@ -149,3 +149,18 @@ New bounded source record: `NORYX7_POLYGLOT_SURFACE_AND_JARVIS_AUTHORITY_RECONCI
 - W12: client enrollment, tenant identity, provider onboarding, billing and support require governance beyond gateway session creation.
 
 All affected workstreams remain partial. No source code, dependency, test, integration or deployment changed.
+
+
+## Parallel architecture expansion — W06–W12 — 2026-11-22
+
+New governing design record: `NORYX7_PARALLEL_ARCHITECTURE_EXPANSION_W06_W12.md`.
+
+- W06: NEXUS-IR/Wire/Surface/Ontology/Canonicalization split; evidence ontology and proof-vs-empirical-vs-simulation states specified. Canonical schemas and checker trust remain open.
+- W07: MIRROR WORLD world/scenario/model/experiment/calibration/holdout registry specified; Reality Bridge defaults to simulation-only and requires independent real-world authority. Calibration and bridge owner remain open.
+- W08: surface non-authority, client/device manifests and offline action classes specified. Credential provisioning, device trust, durable outbox and revocation freshness remain open.
+- W09: identity/authentication/authorization/policy/capability/ActionGate/egress/adapter/attestation/audit decomposition and supply-chain lifecycle specified. End-to-end trust-root and production custody remain open.
+- W10: Domain Manifest required fields and high-consequence human-review boundaries specified. Domain-by-domain source standards, jurisdiction and qualified reviewers remain open.
+- W11: build/release/control/execution/observability/reliability/incident planes and multi-artifact release manifest specified. Deployment source of truth, SLO targets, secret manager and DR remain open.
+- W12: usage/payment/contribution/marketplace/governance/impact/security ledgers separated; community project evidence and safeguarding specified. Legal entity, jurisdiction, payment and governance choices remain open.
+
+All W01–W12 continue as PARTIAL. This expansion is a proposal and source reconciliation aid, not an implementation or verification claim. No code, dependencies, tests, integration, merge or deployment changed.
