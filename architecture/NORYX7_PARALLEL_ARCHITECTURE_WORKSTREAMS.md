@@ -182,3 +182,18 @@ Source reconciliation found multiple overlapping agent fabrics and memory stores
 New open decisions ADR-B44–B55 cover identity taxonomy, canonical lifecycle IDs, agent scheduler, memory authority, provider retry, resource placement, cognitive evidence, multimodal lifecycle, user-understanding consent, self-improvement admission, offline transactional outbox and four-front lifecycle ownership.
 
 All W01–W12 remain PARTIAL. No code, tests, dependencies, integration, merge or deployment changed.
+
+
+## Repository inventory and runtime execution-path reconciliation — 2026-11-22
+
+New source baseline: `NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIATION.md`. The recursive `main` tree inventory recorded 507 entries (426 blobs, 81 directory entries), including 150 core blobs, 29 noryx7_runtime blobs, 37 JARVIS blobs, 69 tests blobs, 25 devtools blobs and seven GitHub workflow files.
+
+- W02: RuntimeEngine has explicit lifecycle transitions but no indeterminate/partial/compensation states; dispatch reservation is made before action dispatch, while a later committer failure may return FAILED even though the side effect may have occurred.
+- W04/W05: RuntimeEngine scheduler computes deterministic topological order; execution loop is sequential. It is not yet a concurrent DAG executor.
+- W05/W09: ModelFabric result authentication is keyed only when a binding key is configured; unkeyed result_mac is a digest. OpenRouter adapter currently rejects tool lists and reports static cost/latency metadata.
+- W08/W09: web surface contains separate /api/chat direct-runtime and /v1 session-authenticated gateway paths; route-level security equivalence and upstream controls need explicit decision.
+- W08/W11: inspected workflow inventory covers Python, Go, Rust and Browser Gradle paths; a dedicated iOS workflow was not found.
+- W11: developer architecture-audit scripts are AST/path/keyword inventory tools, not complete dynamic call-graph or semantic assurance.
+- ADR-B56–B62 added as open decisions.
+
+All workstreams remain PARTIAL. This is bounded source discovery; no code, tests, workflow configuration, dependencies, integration, merge or deployment changed.
