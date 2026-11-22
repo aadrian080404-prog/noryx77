@@ -160,3 +160,38 @@ No source module is declared complete by this inventory alone.
 | `ecosystem/runtime_dispatch.py` | W01, W02, W04, W08 | Principal authorization callback, front topology check and handler dispatch | Authorizer trust, durable idempotency, action-level capability and canonical ActionGate relation remain open |
 | `gateway/server.py` / `gateway/auth.py` | W01, W08, W09, W11 | Bootstrap token and HMAC short-lived client session; bounded HTTP body | Client ID is not verified principal; secret custody, TLS termination and distributed revocation remain external |
 | `ecosystem/global_scale.py` | W11, W12 | Usage/resource and regional control primitives | No commercial payment ledger, tenant billing, community governance or impact audit exists in these primitives |
+
+
+## W01–W05 and shared cognitive substrate source anchors — 2026-11-22
+
+| Source path | Workstream(s) | Directly observed behavior | Contract gap / caution |
+|---|---|---|---|
+| `core/contracts.py` | W02, W06 | TaskSpec/ActionSpec/AgentResult/VerificationResult typed records | Execution/task identity fields are distinct from JARVIS request/step identities |
+| `core/hypersynth.py` | W02, W04, W05, W06 | End-to-end bounded cognitive pipeline, task binding, UIF routes, plan/hypothesis/simulation, agent allocation and ActionGate/tool path | Inspected assignment execution loop is sequential; lifecycle ownership and shared journal/dispatch transaction remain open |
+| `core/reasoning.py` | W06, W07 | Hypothesis generation from plan steps; structural verification; bounded internal feasibility simulator | Not a domain-calibrated causal/physical simulator |
+| `core/metacognition.py` | W06 | Stage/count/identity checks and pipeline-check ratio | Confidence is not calibrated truth probability |
+| `core/universal_intelligence.py` | W06, W10 | Bounded specialist domain routing and evidence/risk/contradiction assessment | Routing vocabulary and evidence strength do not certify specialist competence or factual truth |
+| `core/memory.py` | W03 | Bounded in-memory store, deep-copy isolation, execution filter and delete | No durable provenance/tenant/consent/retention/tombstone contract in this store |
+| `core/memory_hierarchy.py` | W03 | Bounded L0–L5 key/value records and explicit promotion | Records lack source/consent/tenant/expiry/lineage metadata |
+| `core/context.py` | W02, W03 | Versioned task context and optional prior memory hydration | Memory-list exceptions are treated as empty memory; requires explicit degraded-context state |
+| `jarvis/memory/store.py` | W03, W08 | Separate bounded in-memory key/value store | No execution isolation, provenance, deep-copy, retention or deletion protocol |
+| `jarvis/core/contracts.py` / `jarvis/core/orchestrator.py` | W01, W02, W04 | Request principal/request ID, immutable plan steps/dependencies, per-step policy authorization and ordered execution | Separate request lifecycle and policy semantics require explicit bridge contract |
+| `jarvis/tools/registry.py` | W02, W04, W09 | Optional adapter from JARVIS capability registry to core ToolExecutor registry | Step reconstruction and result mapping need canonical schema/version and lifecycle owner |
+| `jarvis/security/authorization.py` | W01, W09 | In-memory principal/capability/target grants | No issuer lineage, expiry, signed grant or durable revocation contract in this abstraction |
+| `core/agent_mesh.py` | W04 | Role-based registry, deterministic first matching node | Selection is not health/capacity/authorization or independent consensus |
+| `core/coordination.py` | W04, W02 | Bounded assignment, ActionGate execution, live identity recheck, output/result verification and equality consensus | Assignment is capped to max_agents; plan truncation/partial completion semantics must be explicit |
+| `core/agent_fabric.py` | W01, W04 | Skill/identity/principal-gated bounded agent dispatch | Overlaps with coordinator/supervisor/operational fabric; precedence remains open |
+| `core/agent_runtime.py` | W04, W11 | Agent lifecycle/heartbeat and live identity trust state | Heartbeat registry is local process state, not distributed fleet liveness |
+| `core/operational_fabric.py` | W04 | Router/supervisor selection, dispatch and result admission | Overlapping dispatch owner; shared scheduler contract not established |
+| `core/provider_router.py` | W05 | Deterministic capability selection and exception-based failover | Does not itself evaluate data residency, privacy, capacity, cost or semantic equivalence |
+| `core/provider_execution.py` | W05, W09 | Provider handler adapted to ExecutionFabric with per-call authorizer callback | Current gateway resolution and retry semantics differ from ProviderRouter.execute |
+| `core/resource_router.py` | W05, W11 | Tier choice from complexity/privacy/latency flags | No live capacity, region, cost, energy or queue telemetry in the selector |
+| `core/multimodal.py` | W06, W08, W09 | Modality enum and digest/locator media references | Locator trust, encryption, consent, retention and safe resolution remain open |
+| `core/self_improvement.py` | W07, W09, W11 | Proposal-only staged improvement and external admission boundary | Production release signer, reviewer authority, protected-zone inventory and rollback owner remain external/open |
+| `core/offline.py` / `core/offline_anchor.py` | W03, W08, W09 | Authenticated snapshot callback, bounded encrypted queue, recovery guard and SQLite monotonic anchor adapter | Durable outbox, production hardware anchor and cross-store commit atomicity remain open |
+| `core/supply_chain.py` | W09, W11 | Ed25519 signed artifact manifest and digest verification against trusted key set | Trusted key lifecycle, release approval, SBOM, reproducible build and deployment promotion remain separate |
+| `core/observability.py` | W09, W11 | Bounded append-only in-memory security event buffer | Not durable centralized telemetry or an incident-response system |
+| `ecosystem/front_runtime.py` / `ecosystem/runtime_dispatch.py` | W01, W02, W08 | Four-front dispatch adapters and principal authorization callback | One lifecycle owner, canonical principal mapping and cross-front transaction semantics remain open |
+| `ecosystem/global_closure.py` | W02, W09, W11 | Structural import/symbol/path/browser isolation gate | Structural closure does not establish operational readiness, source coverage or comprehensive assurance |
+| `core/architecture_gate.py` / `core/architecture_registry.py` | All | 18-plane canonical structural contracts and required acceptance metadata | Registry completeness is not evidence-backed architecture freeze |
+| `architecture/COMPLETE_SYSTEM_BLUEPRINT.md` | All | Four-front model, pipeline, memory, domain, business, recovery, security and verification-after-architecture direction | Source-of-truth status/version precedence relative to newer ADRs must be explicit |
