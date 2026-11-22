@@ -164,3 +164,21 @@ New governing design record: `NORYX7_PARALLEL_ARCHITECTURE_EXPANSION_W06_W12.md`
 - W12: usage/payment/contribution/marketplace/governance/impact/security ledgers separated; community project evidence and safeguarding specified. Legal entity, jurisdiction, payment and governance choices remain open.
 
 All W01–W12 continue as PARTIAL. This expansion is a proposal and source reconciliation aid, not an implementation or verification claim. No code, dependencies, tests, integration, merge or deployment changed.
+
+
+## W01–W05 and shared cognitive substrate expansion — 2026-11-22
+
+New governing proposal: `NORYX7_ARCHITECTURE_CLOSURE_EXPANSION_W01_W05_COGNITIVE_SUBSTRATE.md`.
+
+- W01: human/tenant/workload/agent/device/session/execution/artifact/evidence identities separated; authority graph and revocation lifecycle specified.
+- W02: interaction/request/task/execution/step/action/authorization/idempotency/correlation IDs separated; canonical lifecycle and indeterminate side-effect states specified.
+- W03: L0–L5 reclassified by semantics; memory stores, provenance, consent, retention, deletion/tombstones, poisoning and context-degraded behavior specified.
+- W04: registry, liveness, delegation, DAG scheduler, allocator, executor, result admission, consensus and supervisor responsibilities separated.
+- W05: provider/model routing, agent allocation, resource placement and privileged action dispatch separated; safe fallback and indeterminate retry states specified.
+- Shared cognitive substrate: HYPERSYNTH proposal/evidence boundary, FRL, multimodal locator lifecycle, calibrated uncertainty and user-understanding/self-improvement governance specified.
+
+Source reconciliation found multiple overlapping agent fabrics and memory stores, sequential execution in the inspected HYPERSYNTH run path, provider failover semantics that differ between routing and execution gateway, a resource router that selects tiers without live capacity/residency telemetry, and context hydration that can treat memory-list exceptions as empty context. These are recorded as architecture risks/open decisions, not code defects proven by tests.
+
+New open decisions ADR-B44–B55 cover identity taxonomy, canonical lifecycle IDs, agent scheduler, memory authority, provider retry, resource placement, cognitive evidence, multimodal lifecycle, user-understanding consent, self-improvement admission, offline transactional outbox and four-front lifecycle ownership.
+
+All W01–W12 remain PARTIAL. No code, tests, dependencies, integration, merge or deployment changed.
