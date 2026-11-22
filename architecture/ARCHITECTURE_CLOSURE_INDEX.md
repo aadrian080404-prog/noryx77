@@ -82,3 +82,6 @@ These are proposed architecture additions. Source-level reconciliation and expli
 
 
 25. [Architecture Closure Expansion W01–W05 and Shared Cognitive Substrate](NORYX7_ARCHITECTURE_CLOSURE_EXPANSION_W01_W05_COGNITIVE_SUBSTRATE.md) — source-reconciled identity/authority, request lifecycle, memory/state, agent topology, provider/resource routing, HYPERSYNTH evidence semantics, FRL and multimodal data contracts. All decisions remain open pending architecture review.
+
+
+26. [Repository Inventory and Execution-Path Reconciliation](NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIATION.md) — 426 tracked blobs/81 tree entries inventoried; RuntimeEngine lifecycle, topological-vs-parallel scheduling, model-fabric integrity, provider metadata, API route divergence, CI coverage and architecture-audit limitations documented. All related ADRs remain open.
