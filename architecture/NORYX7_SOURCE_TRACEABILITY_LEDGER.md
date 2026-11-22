@@ -142,3 +142,21 @@ No source module is declared complete by this inventory alone.
 | `android/noryx7-jarvis-bridge` | W08 | Audio wake PCM interface | Concrete permission/audio lifecycle and privacy policy |
 | `noryx-browser/app/src/main` | W08, W09 | HTTPS navigation and gateway session client | Bootstrap secret provisioning, device binding, WebView threat model |
 | `render.yaml` / `noryx7_operational.py` | W02, W11 | Hosted Python service and model-provider runtime configuration | Multi-artifact release, key injection, scale, backup and DR |
+
+
+## W06–W12 parallel expansion source anchors — 2026-11-22
+
+| Source path | Workstream(s) | Directly observed behavior | Contract gap / caution |
+|---|---|---|---|
+| `core/universal_intelligence.py` | W06, W10 | Evidence/DomainAssessment structures, deterministic keyword/risk routing, evidence-strength average, contradiction/uncertainty checks | Domain vocabulary is limited; confidence is not calibrated truth; no canonical cross-language ontology |
+| `core/verification.py` | W06, W09 | Task/result/state shape and identity checks | Output-presence checks do not prove semantic correctness or domain validity |
+| `core/cyber_range.py` | W07, W09 | Sandbox-only synthetic target, owner authorization and bounded symbolic phases | No evidence of general digital twin, real-world bridge or calibrated simulator |
+| `core/sandbox.py` | W07, W09 | Fail-closed sandbox state machine and denied privileged profile flags | Actual OS/container/network isolation is external to this source abstraction |
+| `core/evaluation_campaign.py` / `core/adversarial.py` | W07, W09, W11 | Deterministic generated scenarios, holdout selection and bounded campaign manifest | Holdout leakage governance, external validation and evidence independence remain open |
+| `ecosystem/boundaries.py` | W06, W08, W12 | Four-front intent envelope with front, operation, payload digest and principal | Digest/ID construction is not authentication, authorization or complete NEXUS wire |
+| `ecosystem/global_fabric.py` | W03, W08, W12 | In-memory memory metadata/replica IDs and identity/session/device/capability index | No durable distributed store, cryptographic authority or deletion/tombstone propagation established |
+| `ecosystem/global_scale.py` | W05, W08, W11 | In-memory region/cell registries, capacity selection, bounded queue, budgets, degradation, metrics, DR and staged self-healing | Not a production cloud, durable broker, fleet telemetry or measured SLO implementation |
+| `ecosystem/closure_contract.py` / `ecosystem/completeness.py` | W02, W08, W09, W11 | Four-front structural boundary contract and fail-closed structural gate | Structural completeness is not evidence-backed architecture freeze or runtime assurance |
+| `ecosystem/runtime_dispatch.py` | W01, W02, W04, W08 | Principal authorization callback, front topology check and handler dispatch | Authorizer trust, durable idempotency, action-level capability and canonical ActionGate relation remain open |
+| `gateway/server.py` / `gateway/auth.py` | W01, W08, W09, W11 | Bootstrap token and HMAC short-lived client session; bounded HTTP body | Client ID is not verified principal; secret custody, TLS termination and distributed revocation remain external |
+| `ecosystem/global_scale.py` | W11, W12 | Usage/resource and regional control primitives | No commercial payment ledger, tenant billing, community governance or impact audit exists in these primitives |
