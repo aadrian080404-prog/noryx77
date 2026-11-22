@@ -197,3 +197,19 @@ New source baseline: `NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIAT
 - ADR-B56–B62 added as open decisions.
 
 All workstreams remain PARTIAL. This is bounded source discovery; no code, tests, workflow configuration, dependencies, integration, merge or deployment changed.
+
+## Source-reconciliation status update — ingress, observation and global scale
+
+A further source review on 2026-11-22 is recorded in `NORYX7_SURFACE_INGRESS_OBSERVATION_AND_GLOBAL_SCALE_RECONCILIATION.md`.
+
+- W01: context acquisition, session subject and user-understanding consent surfaces are mapped; durable issuer graph, tenant binding, revocation and consent receipts remain open.
+- W02: FastAPI `/api/chat` direct-runtime path differs from `/v1/execute` session-authenticated gateway path; one ingress/lifecycle authority remains open.
+- W05: device selection and region/cell capacity are local selectors; atomic reservations, leases and resource-aware policy remain open.
+- W06: observation/context provenance and heuristic confidence limitations are recorded; signed, versioned evidence envelope remains open.
+- W07: synthetic CyberRange target restriction is present; cryptographic owner authorization and Reality Bridge approval remain open.
+- W08: JARVIS context/audio, browser gateway and API ingress surfaces are mapped; identity/capture/revocation parity remains open.
+- W09: callback authorization and HMAC session tokens are present; device/sensor trust, route-level enforcement and durable revocation remain open.
+- W11: global-scale code is explicitly an in-memory control-plane model; durable queue, capacity reservation, measured telemetry and SLO operations remain open.
+- W03, W04, W10 and W12 remain PARTIAL; this cycle does not upgrade their status.
+
+ADR-B63–B69 have been added as open decisions. All twelve streams continue concurrently; dependent authority/schema decisions remain ordered. Architecture-only scope is unchanged.
