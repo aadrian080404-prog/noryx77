@@ -79,3 +79,6 @@ These are proposed architecture additions. Source-level reconciliation and expli
 
 
 24. [Parallel Architecture Expansion W06–W12](NORYX7_PARALLEL_ARCHITECTURE_EXPANSION_W06_W12.md) — normative proposals for NEXUS semantics/evidence, FRL, MIRROR WORLD/Reality Bridge, surfaces/offline, security/supply chain, domain manifests, operations/release and product/community/financial boundaries. All remain partial and unfrozen.
+
+
+25. [Architecture Closure Expansion W01–W05 and Shared Cognitive Substrate](NORYX7_ARCHITECTURE_CLOSURE_EXPANSION_W01_W05_COGNITIVE_SUBSTRATE.md) — source-reconciled identity/authority, request lifecycle, memory/state, agent topology, provider/resource routing, HYPERSYNTH evidence semantics, FRL and multimodal data contracts. All decisions remain open pending architecture review.
