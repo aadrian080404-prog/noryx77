@@ -142,3 +142,20 @@ The next reconciliation cycle must treat W01/W09 cryptographic authority and tru
 Architecture freeze is prohibited while an in-scope plane or cross-cutting capability is UNKNOWN; a source family is unclassified; authority or state ownership is contradictory; a required failure/recovery path is undefined; a critical assumption has no owner/disposition; traceability is broken; or the architecture depends on unbounded or implicit behavior.
 
 This register does not authorize integration, implementation, testing, deployment or merge. Those phases begin only after explicit architecture-freeze approval.
+
+## Additional gaps discovered — 2026-11-22
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-INGRESS-01 | conflicting / ambiguous | `web/app.py`: direct `/api/chat` vs gateway-authenticated `/v1/execute` | Route-by-route canonical ingress/auth policy and upstream enforcement evidence |
+| G-CONTEXT-01 | unbounded trust / incomplete provenance | `jarvis/context/authorized.py` | Versioned source manifest, tenant/purpose scope, consent, classification, retention and attestation |
+| G-OBSERVATION-01 | unverified / stale evidence | `jarvis/observation/fabric.py` | Trusted capture time, monotonic sequence, digest/signature, freshness and anti-replay |
+| G-PERCEPTION-01 | authority ambiguity | `jarvis/perception/audio.py` | Keep wake event separate from identity, explicit user intent and ActionGate authorization |
+| G-CONSENT-01 | incomplete lifecycle | `core/user_understanding.py` | Durable purpose-specific consent, inference lineage, correction, deletion and tombstones |
+| G-CYBER-01 | weak authorization evidence | `core/cyber_range.py` | Signed owner authorization and independent Reality Bridge policy gate |
+| G-DEVICE-01 | local-only selection | `core/device_fabric.py` | Attested enrollment, leases, revocation, capacity/residency-aware selection |
+| G-DISTRIBUTED-01 | declared-not-proven security | `core/distributed.py` | Cryptographic shard manifest, key custody, replication and anti-rollback |
+| G-SCALE-01 | in-memory control-plane primitive | `ecosystem/global_scale.py` | Durable queue, atomic capacity lease, fencing, deduplication and reconciliation |
+| G-PROVIDER-01 | underspecified adapter contract | `jarvis/providers/base.py` | Versioned typed provider contract, usage, privacy, timeout, cancellation and idempotency |
+
+These are architecture discovery findings, not test-proven defects.
