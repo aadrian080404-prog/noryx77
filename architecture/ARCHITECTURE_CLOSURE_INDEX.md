@@ -89,3 +89,7 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest source reconciliation — 2026-11-22
 
 27. [Surface Ingress, Observation and Global-Scale Reconciliation](NORYX7_SURFACE_INGRESS_OBSERVATION_AND_GLOBAL_SCALE_RECONCILIATION.md) — FastAPI/gateway route parity, JARVIS context and observation, audio wake boundary, consent/profile lifecycle, synthetic cyber-range authorization, device trust, distributed shard descriptors, global capacity reservation and provider contract. ADR-B63–B69 remain open.
+
+## Latest assurance and semantic reconciliation — 2026-11-23
+
+28. [Assurance, Offline Continuity, Semantic Verification and Release Governance](NORYX7_ASSURANCE_OFFLINE_SEMANTICS_AND_RELEASE_RECONCILIATION.md) — security telemetry/containment, network egress enforcement, signed supply-chain limits, self-improvement admission, offline snapshot/outbox/anchor, semantic-vs-structural verification, calibrated simulation, domain governance and evidence-backed architecture freeze. ADR-B70–B78 remain open.
