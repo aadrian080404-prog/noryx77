@@ -234,3 +234,24 @@ No source module is declared complete by this inventory alone.
 | `ecosystem/global_scale.py` | Region/cell registry, capacity accounting, event queue and language envelope | W05/W08/W11 | MAPPED; in-memory primitives, no durable broker or atomic fleet reservation |
 
 All entries are source anchors only. They do not establish production deployment, trust assurance or acceptance of the corresponding ADRs.
+
+## Additional source mapping — 2026-11-23 assurance/offline/semantic pass
+
+| Source path | Architectural responsibility | Workstreams | Reconciliation status / limitation |
+|---|---|---|---|
+| `core/observability.py` | Bounded security event buffer | W09/W11 | MAPPED; in-memory local sequence, no durable authenticated telemetry or incident ownership |
+| `core/egress.py` | Component/host/port/protocol allowlist | W08/W09/W11 | MAPPED; local policy primitive, not proof of socket/DNS/redirect/proxy enforcement |
+| `core/supply_chain.py` | Ed25519 signed artifact manifest and digest verifier | W08/W09/W11 | MAPPED; trusted-key set provisioning, SBOM/build provenance/release approval/promotion remain open |
+| `core/self_improvement.py` | Proposal-stage state machine | W09/W11 | MAPPED; external admission is an abstract method boundary, no independent signer/reviewer or rollback |
+| `core/offline.py` | Snapshot, offline execution and encrypted sync queue | W03/W08/W09 | MAPPED; digest is not signature, queue is in-memory, durable outbox and uncertain outcome semantics open |
+| `core/offline_anchor.py` | SQLite monotonic snapshot marker | W03/W09 | MAPPED; source warns production protected storage/TPM/HSM needed |
+| `core/verification.py` | Structural task/result/output checks | W06/W10 | MAPPED; output presence is not semantic truth or domain correctness |
+| `core/reasoning.py` | Plan-derived hypotheses and bounded feasibility preflight | W06/W07 | MAPPED; simulator checks structure/non-empty statement, not calibrated physical/domain feasibility |
+| `core/metacognition.py` | Pipeline identity/count checks and challenge verification | W06 | MAPPED; confidence is ratio of passed checks, not calibrated truth probability |
+| `core/universal_intelligence.py` | Keyword/risk/length specialist routing and assessment contracts | W06/W10 | MAPPED; route labels do not certify specialist competence; assessment scores are not calibrated by shape validation |
+| `core/architecture_gate.py` | 18-plane structural contract/path-existence gate | W01/W02/W11 | MAPPED; existence/fields do not prove callers, semantics, deployment or evidence-backed freeze |
+| `core/architecture_registry.py` | Canonical plane definitions | W01/W02 | MAPPED; structural definitions need source/call-site and deployment evidence |
+| `core/device.py` | Device trust/capability gate and adapter boundary | W01/W08/W09 | MAPPED; local grant state and epoch; enrollment, signed grants and remote revocation remain open |
+| `ecosystem/front_runtime.py`, `ecosystem/runtime_dispatch.py` | Cross-front principal-gated dispatch wrapper | W01/W02/W08 | MAPPED; callback authorization and receipt semantics do not settle canonical lifecycle/cross-store transaction ownership |
+
+Source presence is not implementation acceptance or production assurance.
