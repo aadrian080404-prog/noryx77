@@ -239,3 +239,32 @@ These decisions remain open. They do not authorize implementation or tests.
 
 ### B69 — Canonical provider capability and usage contract
 **Streams:** W05, W09, W11. Define provider/model identity, typed capability schemas, structured proposal parsing, ActionGate handoff, privacy/residency, timeout/cancellation, idempotent retry, usage/cost/latency evidence, circuit state and external receipt verification. Model reasoning, adapter availability, authorization and execution remain separate authorities.
+
+## Additional decisions — 2026-11-23
+
+### B70 — Durable security event and incident response contract
+**Streams:** W09, W11. Define authenticated event producers, stable event/correlation IDs, trusted time/sequence, signed evidence references, durable append/ack/replay, retention, tenant partitioning, loss/backpressure and incident ownership. Separate detection, alerting, declaration, containment, evidence preservation, recovery authorization and post-incident review.
+
+### B71 — Enforced egress and bypass-path closure
+**Streams:** W09, W11, W08. Decide the mandatory mediation point for every network-capable adapter and platform process. Bind authorization to resolved destination/service identity; define DNS/CNAME/rebinding, redirects, proxies, TLS, IPv4/IPv6, rule distribution, emergency revocation and proof that no direct socket bypass remains.
+
+### B72 — End-to-end artifact and release attestation
+**Streams:** W09, W11, W08. Define source commit, SBOM, builder provenance, reproducibility evidence, artifact digest, platform compatibility, independent signer quorum, key custody/rotation/revocation, staged promotion, health gates, rollback and decommission for all Python/Go/Rust/mobile/browser/model/configuration artifacts.
+
+### B73 — Offline snapshot authenticity and trust root
+**Streams:** W03, W08, W09. Define signed/MACed snapshot, issuer, key ID, device/tenant binding, policy epoch, bounded capability lease, revocation freshness, hardware monotonic root, fallback assurance level and protected backup/restore.
+
+### B74 — Durable offline delivery and indeterminate reconciliation
+**Streams:** W03, W08, W11. Define persistent outbox/inbox, deduplication, delivery guarantee, receipt, fencing, retry budget, conflict/quarantine and unknown external outcome. No blind retry after a possibly completed external side effect.
+
+### B75 — Semantic evidence and simulation assurance levels
+**Streams:** W06, W07, W10. Separate structural checks, deterministic constraints, sandbox execution, calibrated physical/numerical simulation, empirical validation, causal inference and expert judgment. Define uncertainty, calibration, holdouts, OOD limits and permitted claim strength.
+
+### B76 — Domain specialist qualification and validity
+**Streams:** W06, W10. Define domain manifest, qualification basis, scope/jurisdiction, authoritative sources, methods, reviewer requirements, conflict/uncertainty escalation, prohibited autonomous decisions, incident/liability owner and withdrawal/update process.
+
+### B77 — Evidence-backed architecture freeze manifest
+**Streams:** W01, W02, W11. Define a freeze gate separate from path-existence/structural completeness. Require exact source symbols/call sites, entrypoints, authority ownership, deployment mapping, data lifecycle, failure/recovery, resource/SLO assumptions, acceptance evidence owner and explicit UNKNOWN/deferred classification.
+
+### B78 — Independent self-improvement admission and protected zones
+**Streams:** W09, W11. Define protected trust roots, policy, audit and recovery zones; immutable proposal evidence; independent reviewer/approver; signed release provenance; canary, rollback and separation of proposer/verifier/release authority.
