@@ -93,3 +93,7 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest assurance and semantic reconciliation — 2026-11-23
 
 28. [Assurance, Offline Continuity, Semantic Verification and Release Governance](NORYX7_ASSURANCE_OFFLINE_SEMANTICS_AND_RELEASE_RECONCILIATION.md) — security telemetry/containment, network egress enforcement, signed supply-chain limits, self-improvement admission, offline snapshot/outbox/anchor, semantic-vs-structural verification, calibrated simulation, domain governance and evidence-backed architecture freeze. ADR-B70–B78 remain open.
+
+## Latest four-front and ecosystem reconciliation — 2026-11-23
+
+29. [Four-Front Identity, Global Memory and Ecosystem Governance](NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYSTEM_GOVERNANCE.md) — four-front identity fallback, dispatch lifecycle/receipt semantics, global memory and authorization indexes, replica/tombstone consistency, and the boundary between business/product architecture intent and actual marketplace/financial/community implementation. ADR-B79–B84 remain open.
