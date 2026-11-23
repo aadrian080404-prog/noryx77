@@ -255,3 +255,19 @@ All entries are source anchors only. They do not establish production deployment
 | `ecosystem/front_runtime.py`, `ecosystem/runtime_dispatch.py` | Cross-front principal-gated dispatch wrapper | W01/W02/W08 | MAPPED; callback authorization and receipt semantics do not settle canonical lifecycle/cross-store transaction ownership |
 
 Source presence is not implementation acceptance or production assurance.
+
+## Additional source mapping — 2026-11-23 four-front/memory/ecosystem pass
+
+| Source path | Architectural responsibility | Workstreams | Reconciliation status / limitation |
+|---|---|---|---|
+| `ecosystem/boundaries.py` | Four-front intent envelope and deterministic ID | W01/W02/W08 | MAPPED; default principal label is front name, not authenticated identity |
+| `ecosystem/runtime_dispatch.py` | Principal callback, topology check and handler dispatch receipt | W01/W02/W08 | MAPPED; injected authorizer root external, receipt not inherently durable/signed, lifecycle outcome is coarse |
+| `ecosystem/front_runtime.py` | JARVIS/HYPERSYNTH front adapters | W02/W08 | MAPPED; thin wrappers do not settle canonical lifecycle/state transaction owner |
+| `ecosystem/closure_contract.py` | Required front boundaries/invariants | W02/W08 | MAPPED; validates structure, not invocation coverage |
+| `ecosystem/structural_manifest.py` | Required source paths per front | W02/W08 | MAPPED; path existence is not behavior or complete call graph |
+| `ecosystem/global_fabric.py` | L0–L5 memory metadata and session authorization index | W01/W03/W06/W09/W12 | MAPPED; in-memory metadata/index, no durable content, verified replica or issuer/revocation root |
+| `architecture/BUSINESS_PROJECT_FABRIC.md` | Business/project lifecycle, commissions and funds separation | W09/W12 | ARCHITECTURE INTENT; inspected ecosystem package has no dedicated payment/ledger/marketplace implementation modules |
+| `architecture/USER_UNDERSTANDING_FABRIC.md` | Consent-bound personalization and non-authority boundary | W01/W06/W12 | ARCHITECTURE INTENT; durable consent, correction and deletion lifecycle still open |
+| `architecture/EDGE_NODE_ZIMABOARD_FABRIC.md` | Vendor-independent edge-node role | W05/W08/W09/W11 | ARCHITECTURE INTENT; device trust, egress and fleet enforcement remain separately open |
+
+The absence of named product modules is limited to the inspected `ecosystem/` directory inventory; no global repository absence claim is made.
