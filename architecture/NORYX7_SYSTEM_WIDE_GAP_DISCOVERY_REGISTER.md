@@ -159,3 +159,21 @@ This register does not authorize integration, implementation, testing, deploymen
 | G-PROVIDER-01 | underspecified adapter contract | `jarvis/providers/base.py` | Versioned typed provider contract, usage, privacy, timeout, cancellation and idempotency |
 
 These are architecture discovery findings, not test-proven defects.
+
+## Additional assurance and operational gaps — 2026-11-23
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-SECOPS-01 | local-only / non-durable | `core/observability.py` | Authenticated durable events, trusted sequence, incident and containment owners |
+| G-EGRESS-01 | enforcement ambiguity | `core/egress.py` | Prove mandatory mediation and close DNS/redirect/proxy/socket bypasses |
+| G-SUPPLY-01 | incomplete provenance | `core/supply_chain.py` | SBOM, builder provenance, signer lifecycle, independent approvals and rollback |
+| G-SELF-01 | governance boundary unresolved | `core/self_improvement.py` | Independent external admission, protected zones and release signer separation |
+| G-OFFLINE-01 | digest mistaken for authenticity risk | `core/offline.py` | Signed snapshot, device/tenant binding, trust root and bounded revocation freshness |
+| G-OUTBOX-01 | in-memory / indeterminate effects | `core/offline.py` | Durable outbox, receipt, deduplication, delivery semantics and reconciliation |
+| G-ANCHOR-01 | hardware root absent | `core/offline_anchor.py` | Protected storage/TPM/HSM or explicit reduced-assurance mode |
+| G-SEMANTIC-01 | structural verification overclaim | `core/verification.py`, `core/reasoning.py` | Evidence-backed semantic and domain validation levels |
+| G-CONFIDENCE-01 | uncalibrated score | `core/metacognition.py`, `core/universal_intelligence.py` | Name score semantics and establish calibration/validation protocols |
+| G-FREEZE-01 | structural completeness conflated with closure | `core/architecture_gate.py` | Separate source/callsite/deployment/evidence-backed freeze manifest |
+| G-DOMAIN-01 | specialist qualification missing | `core/universal_intelligence.py` | Domain manifests, jurisdiction, qualified review and liability ownership |
+
+These are architecture discovery findings, not test-proven defects.
