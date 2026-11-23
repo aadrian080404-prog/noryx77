@@ -268,3 +268,23 @@ These decisions remain open. They do not authorize implementation or tests.
 
 ### B78 — Independent self-improvement admission and protected zones
 **Streams:** W09, W11. Define protected trust roots, policy, audit and recovery zones; immutable proposal evidence; independent reviewer/approver; signed release provenance; canary, rollback and separation of proposer/verifier/release authority.
+
+## Additional decisions — 2026-11-23 (four fronts, memory and ecosystem)
+
+### B79 — Canonical front-to-principal resolution
+**Streams:** W01, W02, W08. Define the trusted issuer path for user/workload/agent/device/session identity across JARVIS, Browser, HYPERSYNTH and Orchestration. Prohibit default front labels (for example `front.value`) from being accepted as authenticated principal identity.
+
+### B80 — Intent, idempotency and dispatch lifecycle identity
+**Streams:** W01, W02, W03, W08. Separate intent/request IDs from idempotency keys, execution IDs, action IDs and dispatch receipts. Define accepted/started/running/completed/rejected/failed-before-effect/failed-after-effect/indeterminate/partial/compensated outcomes and receipt durability/signature.
+
+### B81 — Global memory consistency and deletion semantics
+**Streams:** W03, W06, W09, W12. Define encrypted durable content storage, verified replica identity/failure domains, consistency and stale-read rules, tenant-before-retrieval isolation, lineage, retention, deletion tombstones, backup resurrection prevention and offline reconciliation.
+
+### B82 — Identity authorization issuer and cache freshness
+**Streams:** W01, W09, W12. Define signed issuer evidence, principal/tenant/device/session binding, capability audience, expiry, policy epoch, revocation and freshness. In-memory identity/session indexes remain caches, never independent trust roots.
+
+### B83 — Financial ledger, funds segregation and marketplace execution
+**Streams:** W09, W12. Define beneficial ownership and segregated ledgers for user, third-party, company, community/restricted-purpose, commission/refund/tax flows. Require regulated/authorized payment adapters, explicit authorization, double-entry reconciliation, settlement receipt, dispute and buyer protection. Model/agent cannot move funds.
+
+### B84 — Community governance and independently measured impact
+**Streams:** W10, W12. Define membership/decision rights, quorum/appeal, conflict of interest, safeguarding, worker safety, compensation, exit/refund, transparent pooled funds and independent audit. Environmental/social outcomes require baselines, system boundaries, net-impact accounting, uncertainty and independent evidence.
