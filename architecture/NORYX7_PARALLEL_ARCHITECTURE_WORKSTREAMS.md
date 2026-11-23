@@ -227,3 +227,17 @@ The 2026-11-23 source review is recorded in `NORYX7_ASSURANCE_OFFLINE_SEMANTICS_
 - W01/W02/W04/W05/W08/W12 remain PARTIAL; no status upgrade is implied.
 
 ADR-B70–B78 are open proposals. The structural 18-plane gate remains distinct from the evidence-backed architecture freeze gate. Architecture-only scope is unchanged.
+
+## Source-reconciliation status update — four fronts, memory and ecosystem governance
+
+The 2026-11-23 review is recorded in `NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYSTEM_GOVERNANCE.md`.
+
+- W01: `make_intent` may default principal label to front name; canonical authenticated issuer and cross-front identity resolution remain open.
+- W02: runtime dispatch and front adapters are thin wrappers; one request lifecycle owner, result verification and state transaction semantics remain open.
+- W03: GlobalMemoryFabric stores metadata/digests in memory and counts replica labels; durable encrypted content, verified replicas, consistency and tombstone propagation remain open.
+- W08: four front contracts and structural manifests are mapped; front identity/dispatch parity and route coverage remain open.
+- W09: GlobalIdentityAuthorizationFabric is a local session index, not issuer/revocation root; signed authorization and cache freshness remain open.
+- W12: business/project workflow is architecture intent; dedicated marketplace, finance, community and ledger modules were not found in the inspected `ecosystem/` package. This is bounded inventory evidence, not a repository-wide absence claim. Financial, community and impact governance contracts are now explicit.
+- W04/W05/W06/W07/W10/W11 remain PARTIAL; no status upgrade is implied.
+
+ADR-B79–B84 are open proposals. Product architecture intent is not reported as implemented capability.
