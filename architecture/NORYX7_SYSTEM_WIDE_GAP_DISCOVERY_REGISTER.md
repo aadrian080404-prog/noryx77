@@ -177,3 +177,19 @@ These are architecture discovery findings, not test-proven defects.
 | G-DOMAIN-01 | specialist qualification missing | `core/universal_intelligence.py` | Domain manifests, jurisdiction, qualified review and liability ownership |
 
 These are architecture discovery findings, not test-proven defects.
+
+## Additional four-front, memory and ecosystem gaps — 2026-11-23
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-FRONT-ID-01 | unsafe default / identity ambiguity | `ecosystem/boundaries.py` | Front labels cannot substitute for issuer-verified principals |
+| G-DISPATCH-01 | coarse lifecycle / idempotency ambiguity | `ecosystem/runtime_dispatch.py` | Separate intent/idempotency/execution/action/receipt and indeterminate outcomes |
+| G-MEMORY-REPLICA-01 | declared redundancy | `ecosystem/global_fabric.py` | Verify replica identity, health, independent failure domains and content digest |
+| G-MEMORY-DELETE-01 | incomplete data lifecycle | `ecosystem/global_fabric.py` | Tenant isolation, retention, tombstones and anti-resurrection across tiers/backups |
+| G-AUTH-INDEX-01 | local cache mistaken for authority | `ecosystem/global_fabric.py` | Signed issuer chain, expiry, epoch, revocation and cache freshness |
+| G-PRODUCT-IMPL-01 | architecture intent vs implementation ambiguity | `architecture/BUSINESS_PROJECT_FABRIC.md`; inspected `ecosystem/` inventory | Classify payment/ledger/marketplace/community as implemented, external, planned or unknown |
+| G-FUNDS-SEG-01 | ownership/ledger boundary | Business Project Fabric | Segregated beneficial ownership, regulated payment boundary, double-entry settlement and disputes |
+| G-COMMUNITY-GOV-01 | governance and safeguarding | Community architecture requirements | Membership/appeal/conflict/safety/compensation/exit and independent fund audit |
+| G-IMPACT-MEASURE-01 | impact measurement overclaim risk | Environmental/community architecture requirements | Baseline, boundary, net impact, uncertainty and independent measurement |
+
+These are architecture discovery findings, not test-proven defects.
