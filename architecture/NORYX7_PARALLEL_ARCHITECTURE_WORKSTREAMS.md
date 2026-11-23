@@ -213,3 +213,17 @@ A further source review on 2026-11-22 is recorded in `NORYX7_SURFACE_INGRESS_OBS
 - W03, W04, W10 and W12 remain PARTIAL; this cycle does not upgrade their status.
 
 ADR-B63–B69 have been added as open decisions. All twelve streams continue concurrently; dependent authority/schema decisions remain ordered. Architecture-only scope is unchanged.
+
+## Source-reconciliation status update — assurance, offline, semantics and release
+
+The 2026-11-23 source review is recorded in `NORYX7_ASSURANCE_OFFLINE_SEMANTICS_AND_RELEASE_RECONCILIATION.md`.
+
+- W03: offline snapshot digest, in-memory encrypted queue and SQLite monotonic anchor mapped; signature/root, durable delivery and indeterminate reconciliation remain open.
+- W06: structural output checks, heuristic confidence and bounded feasibility simulator distinguished from semantic truth and calibrated evidence; NEXUS/FRL schema remains open.
+- W07: sandbox/structural feasibility separated from empirical/physical simulation; fidelity and Reality Bridge remain open.
+- W09: event bus, egress allowlist, supply-chain manifest verifier and proposal-only self-improvement mapped; durable incident response, enforced egress, release root and independent admission remain open.
+- W10: specialist keyword routing and uncalibrated assessments mapped; domain qualification and expert governance remain open.
+- W11: operational evidence requirements for telemetry, release, queue, SLO and rollback expanded; no production/fleet readiness claimed.
+- W01/W02/W04/W05/W08/W12 remain PARTIAL; no status upgrade is implied.
+
+ADR-B70–B78 are open proposals. The structural 18-plane gate remains distinct from the evidence-backed architecture freeze gate. Architecture-only scope is unchanged.
