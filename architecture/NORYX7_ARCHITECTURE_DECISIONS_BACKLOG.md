@@ -436,3 +436,20 @@ Consolidate these requirements into existing open ADRs; do not create duplicate 
 | B104 | Durable offline memory/media outbox, tombstones and indeterminate delivery reconciliation | OPEN |
 
 Where a requirement crosses multiple ADRs, define one authoritative owner and reference the shared contract rather than duplicating it. W01–W12 remain PARTIAL.
+
+
+## Branching cognition, FRL, reverse engineering and domain operations — 2026-11-24
+
+| Existing ADR mapping | Consolidated decision question | Status |
+|---|---|---|
+| B75/B90/B97 | Distinguish structural, source-checked, empirical, formal-proof and operational evidence; define claim lineage and no silent promotion | OPEN |
+| B78/B91 | Bind campaign manifest, evaluator identity, executed cases, holdout custody, per-case results and independent admission | OPEN |
+| B85/B87 | Define bounded hypothesis-branch DAG, branch budget, lease/cancel/prune/merge and fair scheduling without implying concurrent execution prematurely | OPEN |
+| B88 | Define independence groups and correlated failure across models, providers, sources, tools, datasets and verifiers | OPEN |
+| B93/B100 | Bind domain model validity, calibration, uncertainty/OOD and non-actuating Reality Bridge | OPEN |
+| B96/B98 | Define authorized RE acquisition, parser isolation, target scope, safe egress and untrusted-content handling | OPEN |
+| B99 | Require specialist qualification, jurisdiction, calibration, validity/expiry, conflict disclosure and escalation | OPEN |
+| B101 | Separate activity/output from net environmental/community outcome; baseline, counterfactual, safeguards and independent verification | OPEN |
+| B102/B104 | Bind terminal and RE operations to issuer/session/device, durable intent, receipts and uncertain-effect reconciliation | OPEN |
+
+No new ADR identifiers are created in this pass. Existing proposals remain OPEN until separately reviewed and accepted. W01–W12 remain PARTIAL.
