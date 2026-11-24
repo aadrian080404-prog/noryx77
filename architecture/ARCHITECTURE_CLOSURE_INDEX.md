@@ -142,3 +142,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
 
 37. [Cognitive Branching, Formal Evidence, MIRROR WORLD and Systems Understanding Reconciliation](NORYX7_COGNITIVE_BRANCHING_FORMAL_EVIDENCE_MIRROR_WORLD_AND_SYSTEMS_UNDERSTANDING_RECONCILIATION.md) — bounded source review of HYPERSYNTH hypothesis generation and sequential execution, NEXUS/FRL evidence boundaries, model validity, authorized reverse engineering, terminal/surface contracts, specialist qualification, global placement and ecosystem impact. Maps requirements to existing B79–B104; all W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
+
+38. [Execution Semantics, Agent Scheduling, Provider Effects and Distributed Fabric Reconciliation](NORYX7_EXECUTION_SEMANTICS_AGENT_SCHEDULING_PROVIDER_EFFECTS_AND_DISTRIBUTED_FABRIC_RECONCILIATION.md) — source-backed review of HYPERSYNTH bounds, agent assignment/routing, provider retries, external-effect uncertainty, offline/state recovery, memory/media custody, egress, supply chain and global placement. Maps requirements to existing B71–B104; W01–W12 remain PARTIAL.
