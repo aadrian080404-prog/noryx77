@@ -209,3 +209,20 @@ These are architecture discovery findings, not test-proven defects.
 | G-PLANE-FREEZE-01 | path existence confused with architecture closure | `core/architecture_gate.py`, `core/architecture_registry.py` | Separate structural gate from evidence-backed source/callsite/boundary/test/deployment freeze manifest |
 
 These are architecture discovery findings, not test-proven defects.
+
+
+## Additional cognitive/evidence/global-scale gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-EVIDENCE-LADDER-01 | assurance levels conflated | `core/evaluation.py`, `core/metacognitive_challenge.py`, `core/verification.py` | Define explicit structural/synthetic/independent/empirical/operational evidence levels and promotion criteria |
+| G-EVAL-MANIFEST-01 | evaluation evidence lacks complete governance | `core/evaluation_campaign.py`, `core/evaluation.py` | Signed manifests, evaluator identity, result uniqueness, holdout controls, statistical power and durable approval |
+| G-FINCH-CALIBRATION-01 | heuristic forecast can be mistaken for probability | `core/finch.py` | Temporal backtest, base rates, calibration, confidence intervals, drift and provenance |
+| G-MIRROR-DOMAIN-01 | physical/domain simulation validity unproven | `core/reasoning.py`, `core/finch.py` | Domain-specific model validation, uncertainty, external holdout and Reality Bridge safety |
+| G-MEDIA-CUSTODY-01 | media digest/locator is not secure custody | `core/multimodal.py` | Authenticated locator, encryption, consent, tenant, retention/deletion and lineage |
+| G-GLOBAL-DURABILITY-01 | global fabric primitives are local/in-memory | `core/distributed.py`, `ecosystem/global_scale.py` | Durable queues, authenticated membership, leases, replication, autoscaling, quotas and DR |
+| G-RESEARCH-EGRESS-01 | HTTPS fetch not equivalent to safe egress | `core/frontier_capabilities.py` | DNS/IP and redirect policy, private-address denial, content isolation, source trust and provenance |
+| G-PROVIDER-ATTEST-01 | provider `verified` field is self-asserted | `core/frontier_capabilities.py` | Signed receipts, response/quote binding, replay/idempotency, human confirmation and reconciliation |
+| G-COLLAB-INDEPENDENCE-01 | agent diversity not equivalent to independent evidence | `core/collaboration.py` | Model/provider/evidence lineage, independent source policy and disagreement adjudication |
+
+These are architecture discovery findings, not test-proven defects.
