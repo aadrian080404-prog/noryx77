@@ -256,3 +256,18 @@ The bounded source review is recorded in `NORYX7_AGENT_DISPATCH_RUNTIME_LIFECYCL
 - Plane registry: all 18 implementation filename tokens resolve in the inspected recursive tree. This confirms path presence only, not semantic implementation, call-site coverage or freeze readiness.
 
 ADR-B85–B89 are OPEN. All W01–W12 remain PARTIAL. No runtime source, tests, dependencies, workflows, integration, deployment or baseline changed.
+
+
+## Source-reconciliation status update — cognitive/evidence/MIRROR WORLD/global-scale — 2026-11-24
+
+See `NORYX7_COGNITIVE_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_SCALE_RECONCILIATION.md`, reviewed against main snapshot `7d900bc75843ea968aa5886d251dbfac83a5d93c`.
+
+- W01/W09: provider identity/correlation and research egress contracts are present, but HTTPS alone does not establish safe egress or cryptographic provider attestation.
+- W02/W03: HypersynthRuntime composes bounded local safety dependencies; memory/context and external state custody still require durable provenance, retention, deletion and transaction rules.
+- W04/W05: HYPERSYNTH performs bounded specialist routing and sequential assignment/execution; collaboration is a Primary→Secondary→Primary critique protocol, not independent quorum or parallel DAG execution.
+- W06: EvaluationCampaign generates deterministic cases and holdout manifests; EvaluationMatrix aggregates externally supplied results. Neither alone executes an evaluation or authenticates the evidence producer.
+- W07/W10: FINCH currently ranks relevance from keywords/severity, detects batch severity deviations and averages severity into forecast likelihood. This is heuristic, not calibrated temporal forecasting. The inspected simulator does not establish domain-calibrated physics/climate/economic simulation.
+- W08/W11: multimodal envelopes retain payload references plus digest; distributed/global-scale classes provide local registry, capacity accounting and in-memory queue primitives, not production replication, durable brokers or autoscaling.
+- W12: external payment/flight/insurance adapters exist behind configured HTTPS endpoints and high-risk tool classification; provider-supplied `verified` flag is not a signed attestation, and regulated transaction/ledger/dispute governance remains separate.
+
+ADR-B90–B96 are OPEN. All W01–W12 remain PARTIAL. No runtime source, tests, dependencies, workflows, integration, deployment or baseline changed.
