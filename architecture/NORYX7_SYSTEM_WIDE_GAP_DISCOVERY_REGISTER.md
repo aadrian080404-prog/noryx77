@@ -339,3 +339,21 @@ These are architecture discovery gaps, not test-proven defects. W01–W12 remain
 | G-OPS-EVENT-DURABILITY-01 | security event bus is in-process and bounded | `core/observability.py` | Durable append, sequence authority, alert routing, retention and incident response |
 
 These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Branching cognition, FRL, reverse engineering and domain operations — 2026-11-24
+
+| Gap ID | Observed gap | Source anchor | Required architecture closure |
+|---|---|---|---|
+| G-HYP-BRANCH-01 | HypothesisEngine emits one plan-aligned hypothesis per step; no explicit alternative branch lifecycle | `core/hypersynth.py`, `core/reasoning.py`, `core/planning.py` | Branch identity/parentage, assumptions, evidence, budgets, pruning, contradiction and merge semantics |
+| G-HYP-SIM-02 | InternalSimulator is structural feasibility check, not calibrated domain simulation | `core/reasoning.py` | Typed domain models, units, parameter provenance, calibration, uncertainty and independent validation |
+| G-FRL-KERNEL-01 | MIF/FRL proof architecture is specified but dedicated general proof-kernel runtime is not established in reviewed source inventory | `architecture/NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md` | Formal language/theory, proof object, trusted kernel, independent replay and scoped result states |
+| G-EVAL-EXEC-02 | Campaign creates deterministic cases/manifests but does not execute cases or authenticate result producers | `core/evaluation_campaign.py`, `core/evaluation.py` | Signed campaign execution ledger, per-case uniqueness, evaluator identity, holdout custody and statistical plan |
+| G-CLAIM-LINEAGE-03 | Evidence source/claim strings and strength fields lack canonical source-span lineage | `core/universal_intelligence.py`, `core/subtask_verification.py` | Immutable source/version, claim spans, typed support/contradiction graph and correction/expiry |
+| G-RE-WORKBENCH-01 | Cyber range is synthetic/symbolic; no dedicated authorized reverse-engineering workbench evidenced | `core/cyber_range.py`, `core/sandbox.py` | Signed scope manifest, static/dynamic sandbox, protocol state models, artifact lineage and responsible disclosure |
+| G-TERMINAL-RUNTIME-01 | PowerShell/Cloud Terminal is target architecture, not evidenced dedicated runtime | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md` | Session broker, shell adapter, sandbox, policy, secret boundary, remote attestation and durable audit |
+| G-BROWSER-ASSURANCE-02 | Browser isolation scan is static marker check | `ecosystem/browser_isolation.py` | Runtime WebView/device/network threat model and independent platform assurance |
+| G-SPECIALIST-QUAL-03 | Domain route/skill label is not qualification or jurisdictional authorization | `core/universal_intelligence.py`, `core/agent_skills.py` | Signed domain manifests, qualification evidence, scope, calibration, expiry and expert escalation |
+| G-IMPACT-NET-04 | Activity/output metrics can be confused with verified environmental/community net outcomes | `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`, `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, leakage/rebound, independent sampling, uncertainty, safeguards and restricted funds |
+
+All findings remain architecture gaps; no runtime defect or test failure is inferred. W01–W12 remain PARTIAL.
