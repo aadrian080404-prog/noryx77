@@ -351,3 +351,23 @@ All workstreams remain PARTIAL; no integration or verification was performed.
 | W12 | Finance/community/environment documents remain target architecture | Segregated funds, double-entry ledger, governance, worker safeguards and net outcome measurement | PARTIAL |
 
 No integration or verification was performed in this architecture-only pass.
+
+
+## 2026-11-24 — tool protocol, provider failover and external-effect reconciliation
+
+| Stream | Additional source finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Tool authorization sees ToolSpec; provider executor receives a principal string | Resolve signed principal/tenant/session/device context and bind to exact target/action | PARTIAL |
+| W02 | Tool/provider attempts lack a durable operation/attempt/receipt lifecycle | Canonical operation IDs, durable intent, cancellation, effect certainty and recovery | PARTIAL |
+| W03 | Tool provenance is a short name/version label; trace hashes payloads without source lineage | Immutable input/output artifacts, consent/purpose, retention and derived-memory lineage | PARTIAL |
+| W04 | Agent tool/provider paths can enter distinct local dispatch abstractions | One delegated capability model and final ActionGate/dispatch owner | PARTIAL |
+| W05 | Provider failover is bounded but not effect-aware, residency-aware or semantically qualified | Provider qualification, capacity/cost/residency and retry-safety contract | PARTIAL |
+| W06 | ExecutionTrace verifies local hash-chain structure, not source authenticity or claim truth | Signed source/result receipts, external checkpoint and semantic evidence review | PARTIAL |
+| W07 | External provider/model output may influence simulation inputs | Provider provenance, deterministic replay and model-version/evidence binding | PARTIAL |
+| W08 | Gateway/device/browser tool calls need common idempotency and receipt semantics | Cross-surface request envelope, replay state and durable dispatch receipt | PARTIAL |
+| W09 | HTTP URL/TLS/redirect controls do not prove DNS/socket egress enforcement | DNS pinning, IP policy, socket mediation, key lifecycle and remote effect receipts | PARTIAL |
+| W10 | Tool/provider name and version do not establish specialist qualification | Signed qualified manifests, domain scope, validation and expiry | PARTIAL |
+| W11 | Execution trace and provider attempts are in-memory and incomplete for incident recovery | Durable telemetry/audit, provider SLOs, quota/cost, DR and incident workflows | PARTIAL |
+| W12 | Provider side effects may include payment, procurement or community project actions | Explicit consent, segregated funds, idempotency, receipts and independent reconciliation | PARTIAL |
+
+No integration or verification was performed in this architecture-only pass.
