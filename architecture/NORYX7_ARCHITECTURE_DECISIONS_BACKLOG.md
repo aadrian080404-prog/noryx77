@@ -288,3 +288,23 @@ These decisions remain open. They do not authorize implementation or tests.
 
 ### B84 — Community governance and independently measured impact
 **Streams:** W10, W12. Define membership/decision rights, quorum/appeal, conflict of interest, safeguarding, worker safety, compensation, exit/refund, transparent pooled funds and independent audit. Environmental/social outcomes require baselines, system boundaries, net-impact accounting, uncertainty and independent evidence.
+
+
+## Additional decisions — 2026-11-24 (agent dispatch, runtime lifecycle and DAG semantics)
+
+### B85 — Canonical Agent Dispatch Ownership
+**Streams:** W01, W02, W04, W05, W08, W09. Define the responsibility graph and compatibility-facade rules across AgentFabric, OperationalAgentFabric, AgentCoordinator, AgentMesh, AgentRuntime, routers and RuntimeEngine. Require call-site, authority, execution and admission ownership before selecting a canonical path.
+
+### B86 — External Side-Effect Certainty and Reconciliation
+**Streams:** W02, W03, W08, W09, W11. Define indeterminate/reconciliation/partial/compensation lifecycle states, durable adapter receipts, idempotency keys, external-effect reconciliation and human escalation. FAILED must not imply no side effect after dispatch.
+
+### B87 — DAG Execution and Capacity Semantics
+**Streams:** W04, W05, W11. Distinguish topological ordering from concurrent execution. Define bounded workers, dependency barriers, resource conflicts, fairness, retry, cancellation, deadlines, partial completion and over-capacity plan semantics.
+
+### B88 — Typed Consensus and Independence
+**Streams:** W04, W06, W10. Define comparison by output type and domain, evidence independence, calibrated uncertainty, disagreement retention and expert escalation. Agent count or equal outputs alone are not universal proof.
+
+### B89 — Structural Registry vs Evidence-Backed Freeze
+**Streams:** W01, W02, W04, W06, W09, W11. Preserve the 18-plane structural gate while requiring source symbols/call sites, authority ownership, boundary enforcement, test evidence, deployment mapping and operational acceptance for freeze.
+
+All B85–B89 are OPEN / PROPOSED, not approved or frozen.
