@@ -284,3 +284,22 @@ These are architecture discovery gaps, not test-proven defects. The context-scop
 | G-TERMINAL-IMPLEMENTATION-01 | target architecture not located as implementation in inspected tree | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md`, recursive tree snapshot | Classify as planned until source/runtime path exists; then trace sandbox, remote identity, cancellation, secret and audit lifecycle |
 
 These are architecture discovery gaps, not test-proven defects. No claim is made about code outside the inspected source snapshot.
+
+
+## Additional agent/evidence/MIRROR WORLD/global-impact gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-AGENT-DISPATCH-OWNER-02 | overlapping local dispatch authorities | `core/agent_core.py`, `core/agent_fabric.py`, `core/agent_mesh.py`, `core/coordination.py`, `core/operational_fabric.py` | Canonical lifecycle owner, adapters, request/attempt/lease IDs, cancellation/retry/effect and durable receipts |
+| G-AGENT-DAG-COVERAGE-01 | assignment truncation semantics | `core/coordination.py` | Explicit DAG scheduler, full step coverage, dependency semantics, concurrency, backpressure and fairness |
+| G-CONSENSUS-INDEPENDENCE-02 | distinct agent IDs mistaken for independent evidence | `core/coordination.py` | Independence groups for model/provider/data/team/failure domain and correlated-error policy |
+| G-SEMANTIC-EVIDENCE-02 | structural verification marker/output presence not semantic support | `core/verification.py`, `core/subtask_verification.py`, `core/universal_intelligence.py` | Claim-source anchoring, entailment, contradiction graph, calibrated uncertainty and reviewer admission |
+| G-EVAL-CAMPAIGN-EVIDENCE-01 | campaign manifest/approval predicate not executed campaign proof | `core/evaluation_campaign.py` | Immutable results, evaluator identity, holdout custody, execution provenance, reproducibility and independent sign-off |
+| G-MIRROR-WORLD-VALIDITY-02 | deterministic scenario execution not real-world validity | `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md`, `core/reasoning.py` | Domain model manifests, calibration, independent holdout, uncertainty, OOD envelope and Reality Bridge safety case |
+| G-FINCH-FORECAST-CALIBRATION-01 | forecast-shaped output without demonstrated calibration | `core/finch.py` | Fixed target/horizon, leakage-safe temporal holdout, proper scoring, calibration and drift monitoring |
+| G-GLOBAL-MEMORY-REPLICA-02 | replica labels counted without independent health/durability proof | `ecosystem/global_fabric.py` | Replica identity/health, failure-domain separation, payload durability, digest agreement and repair protocol |
+| G-GLOBAL-IDENTITY-AUTHORITY-02 | local identity/session index not canonical issuer/revocation service | `ecosystem/global_fabric.py` | Issuer chain, tenant/session/device scope, expiry, revocation epoch and freshness policy |
+| G-W12-LEDGER-OPERATIONS-01 | finance/community docs are target architecture not service proof | `architecture/BUSINESS_PROJECT_FABRIC.md`, ecosystem inventory | Regulated payment boundary, double-entry ledger, segregated funds, settlement/disputes and independent audit |
+| G-W12-IMPACT-OUTCOME-02 | activity counts can be mistaken for net impact | `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, lifecycle boundaries, leakage/rebound, uncertainty, independent verification and durability monitoring |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
