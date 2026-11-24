@@ -241,3 +241,18 @@ The 2026-11-23 review is recorded in `NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYS
 - W04/W05/W06/W07/W10/W11 remain PARTIAL; no status upgrade is implied.
 
 ADR-B79–B84 are open proposals. Product architecture intent is not reported as implemented capability.
+
+
+## Source-reconciliation status update — agent dispatch, runtime lifecycle and plane registry — 2026-11-24
+
+The bounded source review is recorded in `NORYX7_AGENT_DISPATCH_RUNTIME_LIFECYCLE_AND_PLANE_REGISTRY_RECONCILIATION.md` against main snapshot `7d900bc75843ea968aa5886d251dbfac83a5d93c`.
+
+- W01/W09: native AgentFabric binds local identity and principal authorization callback; callback issuer, delegation lease and revocation freshness remain open.
+- W02/W03: RuntimeEngine lifecycle, optional StateJournal reservation, attestation append and committer sequence mapped; external side-effect certainty and cross-store reconciliation remain open.
+- W04: AgentFabric, OperationalAgentFabric/Supervisor, AgentCoordinator and AgentMesh are distinct dispatch/selection/admission mechanisms; one ownership/call-site graph remains unresolved.
+- W05/W11: Scheduler creates deterministic topological order, while RuntimeEngine executes that order sequentially; concurrent DAG execution, resource conflicts, fairness and capacity semantics remain open.
+- W06/W10: AgentCoordinator consensus currently uses equality plus identity/task/execution checks; typed evidence and domain-aware consensus are required before generalizing it.
+- W07/W08/W12: no new physical-world, distributed deployment or business capability is inferred from these agent/runtime primitives; existing bridge, surface and governance obligations remain open.
+- Plane registry: all 18 implementation filename tokens resolve in the inspected recursive tree. This confirms path presence only, not semantic implementation, call-site coverage or freeze readiness.
+
+ADR-B85–B89 are OPEN. All W01–W12 remain PARTIAL. No runtime source, tests, dependencies, workflows, integration, deployment or baseline changed.
