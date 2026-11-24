@@ -271,3 +271,21 @@ Source presence is not implementation acceptance or production assurance.
 | `architecture/EDGE_NODE_ZIMABOARD_FABRIC.md` | Vendor-independent edge-node role | W05/W08/W09/W11 | ARCHITECTURE INTENT; device trust, egress and fleet enforcement remain separately open |
 
 The absence of named product modules is limited to the inspected `ecosystem/` directory inventory; no global repository absence claim is made.
+
+
+## Additional source mapping — 2026-11-24 agent dispatch/runtime pass
+
+| Source path | Architectural responsibility | Workstreams | Reconciliation status / limitation |
+|---|---|---|---|
+| `core/agent_fabric.py` | Native AgentCore binding, skill registry, identity trust and principal callback | W01/W04/W09 | MAPPED; first eligible candidate runs; callback issuer/revocation/audit lineage external |
+| `core/operational_fabric.py` | AgentSupervisor-backed selection, dispatch and AgentResult admission | W02/W04/W06 | MAPPED; local result admission, not durable commit or semantic truth proof |
+| `core/supervisor.py` | Task verification, selected-agent identity and output/result admission | W04/W06/W09 | MAPPED; no durable lifecycle or domain-specific truth contract |
+| `core/coordination.py` | Bounded assignments, ActionGate execution, identity recheck and equality consensus | W04/W06/W09/W10 | MAPPED; plan truncated to max_agents; equality consensus not universal for probabilistic/multimodal outputs |
+| `core/agent_mesh.py` | Deterministic role lookup | W04/W05 | MAPPED; no identity/capability/liveness/capacity enforcement in this class |
+| `core/agent_runtime.py` | Local agent status and heartbeat snapshots | W04/W08/W11 | MAPPED; not distributed signed heartbeat, lease or failure detector |
+| `noryx7_runtime/scheduler.py` | Deterministic topological ordering | W02/W04/W05 | MAPPED; no concurrent execution |
+| `noryx7_runtime/engine.py` | Sequential action dispatch, optional pre-dispatch reservation, verification, attestation and commit | W02/W03/W05/W09/W11 | MAPPED; post-dispatch failures can leave external effect uncertain; no INDETERMINATE lifecycle status |
+| `noryx7_runtime/contracts.py`, `lifecycle.py` | Execution identity/status contract | W02/W03 | MAPPED; current status vocabulary lacks partial/indeterminate/reconciliation/compensation states |
+| `core/architecture_gate.py`, `core/architecture_registry.py` | 18-plane structural field/path gate and definitions | W01/W02/W11 | MAPPED; all filename tokens exist in tree, but no semantic/call-site/deployment/freeze evidence |
+
+Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. Source presence is not implementation acceptance or production assurance.
