@@ -112,3 +112,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Additional reconciliation — 2026-11-24
 
 - [NEXUS, Research, Specialist Domains and Impact Reconciliation](NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md) — source-backed distinction between structural verification and semantic evidence; research egress/content custody; specialist qualification; MIRROR WORLD model validity; community/environmental outcome and funds governance. Proposes ADR-B97–B101; all remain OPEN. W01–W12 remain PARTIAL.
+
+
+## Latest ingress, memory, offline and operational trust reconciliation — 2026-11-24
+
+32. [Ingress Identity, Memory Isolation, Offline Delivery and Operational Trust Reconciliation](NORYX7_INGRESS_MEMORY_OFFLINE_AND_OPERATIONAL_TRUST_RECONCILIATION.md) — source review of gateway sessions/principal binding, memory/context isolation, offline outbox and uncertain side effects, egress/provider failover, state journal/recovery, supply chain, observability and Python/Go/Rust deployment boundaries. Proposes B102–B104; identifies B105/B106 as consolidation candidates with existing B70/B72/B78. All W01–W12 remain PARTIAL.
