@@ -152,3 +152,7 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
 
 39. [Domain Calibration, Specialist Qualification, Cyber-Range Assurance and Public-Impact Accounting Reconciliation](NORYX7_DOMAIN_CALIBRATION_SPECIALIST_QUALIFICATION_CYBER_RANGE_AND_PUBLIC_IMPACT_RECONCILIATION.md) — source-backed W06/W07/W09/W10/W11/W12 review of FINCH scoring vs calibrated probability, specialist routing vs qualification, collaboration independence, evaluation evidence, synthetic cyber authorization and independently verified community/environmental outcomes. W01–W12 remain PARTIAL.
+
+## System-wide cross-workstream ownership and dependency reconciliation — 2026-11-25
+
+28. [Cross-Workstream Dependency, Canonical Ownership and End-to-End Lifecycle Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md) — integrates W01–W12 into one dependency graph, responsibility map, end-to-end lifecycle, collision register and architecture acceptance matrix. Proposed only; W01–W12 remain partial and unfrozen.
