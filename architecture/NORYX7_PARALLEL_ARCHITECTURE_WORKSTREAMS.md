@@ -391,3 +391,23 @@ No integration or verification was performed in this architecture-only pass.
 | W12 | Resource placement affects project energy, cost and environmental impact | Transparent cost/energy/residency accounting and independent outcomes | PARTIAL |
 
 No runtime integration or verification was performed in this architecture-only pass.
+
+
+## 2026-11-24 — branching cognition, FRL, reverse engineering and domain operations
+
+| Stream | Additional source finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Evaluator, reviewer, RE operator, terminal session and domain specialist need scoped principal context | Bind issuer/tenant/device/session, role, qualification and revocation to every decision and operation | PARTIAL |
+| W02 | HYPERSYNTH currently uses bounded plan-aligned hypotheses; terminal/RE lifecycle is largely specified architecturally | Branch/operation state machine, cancellation, budget exhaustion, recovery and effect certainty | PARTIAL |
+| W03 | NEXUS/FRL needs immutable source versions, claim spans and correction lineage | Scoped evidence custody, consent, retention, deletion/tombstones and legal hold | PARTIAL |
+| W04 | One hypothesis per plan step does not establish lateral alternatives; agent count does not establish independence | Branch lineage, qualified delegation, independent failure domains and dissent-preserving merge | PARTIAL |
+| W05 | Branch expansion, proof checking and simulation compete for bounded resources | Fair scheduling, live capacity, energy/cost/residency and reserved verifier capacity | PARTIAL |
+| W06 | Evidence strength and verified markers are shape/structure checks; campaign manifests do not prove execution | Claim graph, source-span anchoring, FRL proof package and signed evaluation execution records | PARTIAL |
+| W07 | InternalSimulator is structural feasibility, not domain-calibrated simulation | Model manifest, calibration, independent validation, uncertainty/OOD and Reality Bridge safety | PARTIAL |
+| W08 | PowerShell terminal is architecture specification; browser isolation is static scan; cyber range uses synthetic targets | Shared surface contract, sandbox attestation, consent, durable receipts and cross-language conformance | PARTIAL |
+| W09 | Sandbox denies privileged flags, but authorized RE scope, terminal grants and egress remain separate seams | Signed scope/grants, socket-level egress, secret isolation and durable audit custody | PARTIAL |
+| W10 | Domain routing/labels do not establish specialist qualification or jurisdiction | Qualified manifests, expert review, calibration, scope and expiry | PARTIAL |
+| W11 | Campaign generation is not campaign execution; no dedicated Cloud Terminal runtime was evidenced in reviewed tree | Durable evaluation records, release/incident/DR ownership, SLOs and reproducibility | PARTIAL |
+| W12 | Environmental/community architecture must distinguish outputs from independently measured net outcomes | Restricted funds, double-entry ledger, worker safeguards, grievance and independent impact verification | PARTIAL |
+
+No runtime integration or verification was performed in this architecture-only pass.
