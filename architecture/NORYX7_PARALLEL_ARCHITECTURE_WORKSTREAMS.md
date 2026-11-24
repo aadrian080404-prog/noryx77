@@ -271,3 +271,23 @@ See `NORYX7_COGNITIVE_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_SCALE_RECONCILIATION.md`,
 - W12: external payment/flight/insurance adapters exist behind configured HTTPS endpoints and high-risk tool classification; provider-supplied `verified` flag is not a signed attestation, and regulated transaction/ledger/dispute governance remains separate.
 
 ADR-B90–B96 are OPEN. All W01–W12 remain PARTIAL. No runtime source, tests, dependencies, workflows, integration, deployment or baseline changed.
+
+
+## 2026-11-24 — NEXUS, research, domain and impact reconciliation
+
+| Stream | New architecture findings | Remaining work | Status |
+|---|---|---|---|
+| W01 | Evaluator, source reviewer, domain expert, project operator and provider receipt require scoped principals; UIF route is not authority | Map issuer, reviewer qualifications, approval and revocation across call sites | PARTIAL |
+| W02 | Research acquisition/extraction/review/admission need explicit lifecycle owners and cancellation semantics | Trace constructor, route, worker and shutdown paths | PARTIAL |
+| W03 | Evidence needs immutable source artifacts, claim lineage, correction, expiry and deletion/tombstones | Reconcile memory, source artifact store, audit and backup deletion | PARTIAL |
+| W04 | Specialist role labels are not qualification; preserve source lineage and dissent | Inventory specialist agents, delegation and evidence independence | PARTIAL |
+| W05 | Crawl, parse, inference, simulation and independent review need separate budgets | Reconcile provider, scheduler, queue and capacity enforcement | PARTIAL |
+| W06 | Structural checks do not establish semantic entailment, source authority or calibrated confidence | Define claim graph, source-span anchoring, contradiction and promotion criteria | PARTIAL |
+| W07 | Structural simulator/FINCH heuristics do not establish calibrated domain forecasts | Inventory models, calibration, external validation and Reality Bridge | PARTIAL |
+| W08 | Source custody and consent must persist across browser/mobile/offline surfaces | Trace capture, upload, transfer, local storage and synchronization | PARTIAL |
+| W09 | HTTPS alone is not safe egress; provider booleans are not signed receipts | Define DNS/IP/redirect controls, content isolation, attestation and key custody | PARTIAL |
+| W10 | UIF keyword routing is not qualified specialist competence | Inventory domain packages and independent qualification evidence | PARTIAL |
+| W11 | Research/evidence pipelines need SLOs, reproducibility, incident and cost observability | Map deployment, provider health, queueing and operational ownership | PARTIAL |
+| W12 | Activity counts differ from net environmental outcomes; restricted funds and safeguards need explicit ledgers | Trace actual project, marketplace, fund, contributor and measurement paths | PARTIAL |
+
+No stream is closed by this reconciliation.
