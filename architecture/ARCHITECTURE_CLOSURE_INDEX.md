@@ -97,3 +97,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest four-front and ecosystem reconciliation — 2026-11-23
 
 29. [Four-Front Identity, Global Memory and Ecosystem Governance](NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYSTEM_GOVERNANCE.md) — four-front identity fallback, dispatch lifecycle/receipt semantics, global memory and authorization indexes, replica/tombstone consistency, and the boundary between business/product architecture intent and actual marketplace/financial/community implementation. ADR-B79–B84 remain open.
+
+
+## Latest agent/runtime reconciliation — 2026-11-24
+
+30. [Agent Dispatch, Runtime Lifecycle and Plane-Registry Reconciliation](NORYX7_AGENT_DISPATCH_RUNTIME_LIFECYCLE_AND_PLANE_REGISTRY_RECONCILIATION.md) — distinguishes native AgentFabric, OperationalAgentFabric, AgentCoordinator, AgentMesh/AgentRuntime and RuntimeEngine; records sequential execution semantics, uncertain external side effects, typed consensus requirements and the boundary between the 18-plane structural gate and evidence-backed freeze. ADR-B85–B89 remain open.
