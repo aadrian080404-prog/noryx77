@@ -497,3 +497,18 @@ Consolidate into existing decision authorities; do not create duplicate ADRs:
 | B83/B84/B101 | Financial custody, governance and independent outcome evidence | OPEN |
 
 No ADR is closed by this documentation pass. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
+
+| Existing ADR | Reconciliation detail | Status |
+|---|---|---|
+| B76/B99 | Specialist competence, jurisdiction, conflict, expiry and suspension must be scheduler-verifiable | OPEN |
+| B88/B90/B97 | Source-anchored claims, evidence independence groups and semantic admission | OPEN |
+| B91 | Evaluation campaign exact-artifact binding, holdout custody and independent assessors | OPEN |
+| B92/B93/B100 | FINCH/MIRROR WORLD target definition, temporal calibration, drift and model validity | OPEN |
+| B94 | Observation/media/cyber artifact custody and transformation lineage | OPEN |
+| B71/B96/B98 | Cyber authorization manifest and acquisition enforcement boundaries | OPEN |
+| B83/B84/B101 | Funds segregation, double-entry accounting, community governance and independently verified impact | OPEN |
+
+No new ADRs created; reconcile any B105/B106 references into canonical existing decisions only after owner/source review. W01–W12 remain PARTIAL.
