@@ -267,3 +267,20 @@ These are architecture discovery gaps, not test-proven defects. The inspected `e
 | G-POLYGLOT-DEPLOYMENT-01 | polyglot source presence mistaken for integrated deployment | `render.yaml`, Go/Rust service entry points | Authoritative service inventory, service identity, API compatibility, health, secrets, rollout and DR contracts |
 
 These are architecture discovery gaps, not test-proven defects. The context-scope finding is a source-level observation; no runtime behavior was changed or tested in this architecture-only phase.
+
+
+## Additional structural gate, secure memory, audit and platform assurance gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-PLANE-GATE-SCOPE-02 | structural predicate overclaimed risk | `core/architecture_gate.py`, `core/architecture_registry.py` | Evidence-backed per-plane manifest with source/callsite/integration/trust/enforcement/test/deployment references and signed approvals |
+| G-SECURE-MEMORY-DURABILITY-01 | encrypted interface backed by process-local map | `core/secure_memory.py`, `core/secure_storage.py` | Durable backend, transactional writes, crash recovery, replica consistency and protected key lifecycle |
+| G-MEMORY-METADATA-01 | encrypted memory schema incomplete for governance | `core/secure_memory.py` | Tenant/principal, consent/purpose, source artifact, retention/expiry, tombstones and derived-data deletion |
+| G-AUDIT-CHECKPOINT-CUSTODY-01 | authenticated checkpoint not externally retained by audit class | `core/audit.py` | Durable append-only event custody, external checkpoint retention, trusted time, signer/key governance and restore proof |
+| G-AGENT-SKILL-QUAL-02 | skill registration confused with verified competence | `core/agent_skills.py` | Versioned qualification manifest, scope/jurisdiction, reviewer identity, validity and escalation |
+| G-PLATFORM-GRANT-01 | local grants not issuer-attested | `core/platform.py`, iOS adapter | Signed grants, enrollment, hardware attestation, remote revocation and policy freshness |
+| G-MOBILE-REPLAY-DURABILITY-01 | consumed-action replay set process-local | iOS adapter | Durable or server-authoritative idempotency/replay record and crash/restore semantics |
+| G-BROWSER-ISOLATION-ASSURANCE-01 | static marker scan not runtime security proof | `ecosystem/browser_isolation.py` | Build/dependency/runtime network review, OS permission analysis, WebView threat model and variant coverage |
+| G-TERMINAL-IMPLEMENTATION-01 | target architecture not located as implementation in inspected tree | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md`, recursive tree snapshot | Classify as planned until source/runtime path exists; then trace sandbox, remote identity, cancellation, secret and audit lifecycle |
+
+These are architecture discovery gaps, not test-proven defects. No claim is made about code outside the inspected source snapshot.
