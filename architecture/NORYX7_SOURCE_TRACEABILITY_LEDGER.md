@@ -482,3 +482,8 @@ Reviewed on branch snapshot `e44a7547c7c67ac7e0c8e916fa67cd0282940f38`: `core/hy
 ## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
 
 Reviewed exact branch head `3b62dc69fe0c9db6d095be535cac28d24bc0ab67`: `core/contracts.py`, `core/hypersynth.py`, `core/agent_core.py`, `core/agent_mesh.py`, `core/coordination.py`, `core/provider_router.py`, `core/provider_execution.py`, `core/resource_router.py`, `core/multimodal.py`, `core/verification.py`, `core/evaluation_campaign.py`, `core/state_journal.py`, `core/recovery.py`, `core/offline.py`, `core/egress.py`, `core/supply_chain.py`, `ecosystem/runtime_dispatch.py`, `ecosystem/global_scale.py`, `ecosystem/global_fabric.py`. Detailed bounded observations and exact contract implications: `NORYX7_EXECUTION_SEMANTICS_AGENT_SCHEDULING_PROVIDER_EFFECTS_AND_DISTRIBUTED_FABRIC_RECONCILIATION.md`.
+
+
+## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
+
+Reviewed at branch `architecture/system-wide-closure-mirror-world-2026-11-21`: `core/finch.py`, `core/evaluation.py`, `core/universal_intelligence.py`, `core/cyber_range.py`, `core/collaboration.py`, `core/agent_skills.py`, `core/verification.py`, `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`, `architecture/BUSINESS_PROJECT_FABRIC.md`, `architecture/NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md`. Bounded findings, source semantics and architecture implications are recorded in `NORYX7_DOMAIN_CALIBRATION_SPECIALIST_QUALIFICATION_CYBER_RANGE_AND_PUBLIC_IMPACT_RECONCILIATION.md`.
