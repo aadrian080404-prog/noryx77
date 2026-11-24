@@ -398,3 +398,7 @@ All findings map to existing B71–B104; W01–W12 remain PARTIAL.
 - CyberRange's synthetic sandbox restriction is useful; OwnerAuthorization lacks target/method/environment/issuer/revocation/single-use scope, and `verified=True` means simulation path completed, not real-world validation.
 - W12 needs segregated ledgers, double-entry accounting, independent audit, governance/appeal and impact records with baseline/counterfactual/additionality/leakage/rebound/permanence/uncertainty.
 All remain architecture gaps; no domain qualification, calibrated forecast, independent evaluator, cyber validation or payment/impact service is claimed implemented.
+
+## Cross-workstream collision discovery — 2026-11-25
+
+The cross-stream collision and handoff model is consolidated in [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md). Add explicit discovery coverage for: (a) multiple runtime coordinators/facades; (b) identity registries and capability issuers; (c) state stores, journals, memory replicas and recovery consumers; (d) agent/provider/scheduler routing overlap; (e) evidence, audit, telemetry and business-ledger separation; (f) cyber-range/MIRROR WORLD and simulation-to-reality boundaries; (g) offline revocation/state epochs; and (h) product/community records versus runtime authority. These are collision hypotheses until source evidence resolves them. Discovery remains parallel; contract freeze follows upstream dependencies. W01–W12 remain PARTIAL.
