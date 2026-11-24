@@ -448,3 +448,27 @@ These are bounded source findings, not an end-to-end egress or provider security
 | `jarvis/memory/store.py` | Separate bounded in-process key/value store | No execution/tenant isolation, provenance, retention or deletion protocol |
 
 Findings are source-bounded and do not constitute an end-to-end security or distributed-systems test.
+
+
+## Branching cognition, FRL, reverse engineering and domain operations — source snapshot e44a7547c7c67ac7e0c8e916fa67cd0282940f38
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `core/hypersynth.py` | Bounded cognitive pipeline wiring decomposition, planning, hypotheses, simulation, allocation, execution and metacognition | Default planner budget is constrained by max_agents; no general branch exploration/merge lifecycle evidenced |
+| `core/decomposition.py` | Bounded ordered subtasks and dependency validation | Not a general search-space explorer; dependency ordering is constrained to earlier task IDs |
+| `core/planning.py` | Typed bounded PlanStep/Plan with action/risk/dependency fields | Planning contract does not itself execute concurrent DAG or competing branches |
+| `core/reasoning.py` | One hypothesis per plan step; structural hypothesis checks | InternalSimulator checks statement/task presence, not domain-model prediction or calibrated feasibility |
+| `core/metacognition.py` | Plan/hypothesis/simulation/result identity and count/order consistency | Pipeline integrity does not prove explored alternatives, semantic truth or calibrated confidence |
+| `core/universal_intelligence.py` | Evidence/DomainAssessment records with numeric strength/confidence/uncertainty | Source strings and numeric values are not authenticated, source-span anchored or calibrated by shape checks |
+| `core/subtask_verification.py` | Exact route/result coverage and agent_result verification marker | Output string + boolean marker is not source-grounded entailment or independent semantic verification |
+| `core/evaluation.py` | Aggregates supplied dimension results and requires all recorded pass | No campaign execution identity, per-case uniqueness or signed evaluator lineage in this contract |
+| `core/evaluation_campaign.py` | Deterministic synthetic case/holdout manifest generation | Explicitly generates cases only; does not execute them or authenticate independently produced results |
+| `core/metacognitive_challenge.py` | Bounded challenge/trace contract for selected domains | Challenge result semantics and verifier independence require separate source/benchmark governance |
+| `core/cyber_range.py` | Symbolic attack phases against synthetic sandbox targets with owner authorization token | Not general RE runtime, real-target testing or protocol reconstruction engine |
+| `core/sandbox.py` | Fail-closed sandbox state machine and rejection of privileged flags | Actual host/container/VM isolation and egress mediation are external adapter obligations |
+| `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md` | Terminal session, local/remote job and policy/sandbox/audit target architecture | No dedicated PowerShell/Cloud Terminal runtime established by reviewed source inventory |
+| `ecosystem/browser_isolation.py` | Static marker scan for standalone browser source | Not runtime WebView threat assessment or network/device isolation proof |
+| `core/supply_chain.py` | Ed25519 artifact manifest and digest verifier | Does not provide SBOM, reproducible build, signer role lifecycle or staged release approval |
+| `architecture/NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md` | MIF/theorem capsule and proof-carrying optimization architecture | Target architecture; no dedicated general FRL proof-kernel/runtime established by this inventory |
+
+These are bounded source observations at the stated commit, not execution tests or production certification.
