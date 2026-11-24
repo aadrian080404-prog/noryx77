@@ -107,3 +107,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest cognitive/evidence/MIRROR WORLD/global-scale reconciliation — 2026-11-24
 
 31. [Cognitive Evidence, Evaluation, Mirror-World and Global-Scale Reconciliation](NORYX7_COGNITIVE_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_SCALE_RECONCILIATION.md) — maps HYPERSYNTH, primary-secondary-primary collaboration, metacognitive challenge, evaluation campaigns, FINCH heuristics, multimodal data references, distributed/global control primitives and research/provider egress. Defines assurance evidence levels and records ADR-B90–B96 as open.
+
+
+## Additional reconciliation — 2026-11-24
+
+- [NEXUS, Research, Specialist Domains and Impact Reconciliation](NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md) — source-backed distinction between structural verification and semantic evidence; research egress/content custody; specialist qualification; MIRROR WORLD model validity; community/environmental outcome and funds governance. Proposes ADR-B97–B101; all remain OPEN. W01–W12 remain PARTIAL.
