@@ -132,3 +132,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Tool protocol, provider failover and external-effect reconciliation — 2026-11-24
 
 35. [Tool Protocol, Provider Failover, Execution Trace and External Effect Reconciliation](NORYX7_TOOL_PROVIDER_PROTOCOL_AND_EFFECT_RECONCILIATION.md) — reconciles ToolRegistry authorization/provenance, provider retry/failover, bounded HTTP transport, in-memory execution hash chain, DNS/socket egress and effect certainty. Maps to B70–B72, B79–B80, B85–B86, B90, B95–B98, B102 and B104. W01–W12 remain PARTIAL.
+
+
+## Memory custody, cryptographic authority, multimodal lineage and global placement — 2026-11-24
+
+36. [Memory Custody, Cryptographic Authority, Multimodal Lineage and Global Placement Reconciliation](NORYX7_MEMORY_CRYPTO_MULTIMODAL_AND_GLOBAL_PLACEMENT_RECONCILIATION.md) — reconciles context hydration, memory scope/deletion, encrypted storage adapters, KMS/HSM and key epochs, media provenance, agent qualification, global resource placement and supply-chain admission. Maps to existing B70–B74, B76–B78, B81–B82, B85, B87, B90, B92–B95, B97, B99–B104. W01–W12 remain PARTIAL.
