@@ -414,3 +414,25 @@ No new ADR series is created. Reconcile the findings with existing open decision
 | B104 | Offline/provider unified durable intent and indeterminate side-effect reconciliation | OPEN |
 
 Where these requirements overlap existing decisions, consolidate rather than create parallel authorities. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — memory, crypto, multimodal and placement decision mapping
+
+Consolidate these requirements into existing open ADRs; do not create duplicate authorities:
+
+| Existing ADR | Additional detail to include | Status |
+|---|---|---|
+| B70/B77 | Durable memory/audit deletion evidence, external checkpoints and evidence-backed release state | OPEN |
+| B72 | SBOM, reproducible/independent build provenance, signer roles and staged release approval | OPEN |
+| B73/B74 | Offline trust freshness, durable media/memory sync and conflict/deletion propagation | OPEN |
+| B76/B99 | Agent specialist qualification, domain scope, expiry and independent reviewer evidence | OPEN |
+| B81/B103 | Canonical memory envelope, execution-scoped hydration, typed degraded context, retention/tombstones and replica consistency | OPEN |
+| B82/B102 | KMS/HSM-backed key authority, trust-root rotation, attestation freshness and distributed revocation | OPEN |
+| B85/B87 | Agent admission, lease, health/capacity and deterministic resource placement | OPEN |
+| B90/B94/B97 | Multimodal source custody, derivative lineage and evidence-to-claim provenance | OPEN |
+| B92/B93/B100 | Media/model/snapshot binding, calibrated domain validity and MIRROR WORLD replay | OPEN |
+| B95 | Durable global storage/provider adapters and data residency contract | OPEN |
+| B101 | Resource cost/energy/carbon accounting and independently measured community outcomes | OPEN |
+| B104 | Durable offline memory/media outbox, tombstones and indeterminate delivery reconciliation | OPEN |
+
+Where a requirement crosses multiple ADRs, define one authoritative owner and reference the shared contract rather than duplicating it. W01–W12 remain PARTIAL.
