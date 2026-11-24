@@ -147,3 +147,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
 
 38. [Execution Semantics, Agent Scheduling, Provider Effects and Distributed Fabric Reconciliation](NORYX7_EXECUTION_SEMANTICS_AGENT_SCHEDULING_PROVIDER_EFFECTS_AND_DISTRIBUTED_FABRIC_RECONCILIATION.md) — source-backed review of HYPERSYNTH bounds, agent assignment/routing, provider retries, external-effect uncertainty, offline/state recovery, memory/media custody, egress, supply chain and global placement. Maps requirements to existing B71–B104; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
+
+39. [Domain Calibration, Specialist Qualification, Cyber-Range Assurance and Public-Impact Accounting Reconciliation](NORYX7_DOMAIN_CALIBRATION_SPECIALIST_QUALIFICATION_CYBER_RANGE_AND_PUBLIC_IMPACT_RECONCILIATION.md) — source-backed W06/W07/W09/W10/W11/W12 review of FINCH scoring vs calibrated probability, specialist routing vs qualification, collaboration independence, evaluation evidence, synthetic cyber authorization and independently verified community/environmental outcomes. W01–W12 remain PARTIAL.
