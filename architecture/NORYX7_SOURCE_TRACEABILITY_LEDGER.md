@@ -421,3 +421,30 @@ This is a source-snapshot traceability record, not an implementation or producti
 | `core/offline.py` | Offline envelope/queue and recovery integration | Queue durability and uncertain effect state must converge with provider dispatch lifecycle |
 
 These are bounded source findings, not an end-to-end egress or provider security assessment.
+
+
+## Memory, cryptographic authority, multimodal and global placement traceability — 2026-11-24
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `core/memory.py` | Bounded in-process store, deep-copy and optional execution_id filtering | Tenant/principal/consent/retention/expiry/tombstone and durable storage not in item schema |
+| `core/context.py` | Context snapshot with optional memory hydration | Calls `memory.list()` without execution_id; errors become indistinguishable empty memory |
+| `core/memory_hierarchy.py` | Bounded L0–L5 key/value hierarchy | Record has key/value/level only; no source, scope, consent, expiry, lineage or deletion semantics |
+| `core/secure_memory.py` | Serializes MemoryItem into encrypted storage adapter | Schema omits tenant/consent/retention/lineage and inherits backing-store durability limits |
+| `core/secure_storage.py` | AES-GCM ciphertext store with namespace/record AAD | In-process dictionary; no durable backend, replication or backup proof |
+| `core/crypto.py` | AES-256-GCM, HKDF-SHA256, key IDs and authenticated metadata | InMemoryKeyProvider is test-only; production KMS/HSM is an external boundary |
+| `core/key_lifecycle.py` | ACTIVE/RETIRING/REVOKED key metadata state machine | Local in-memory metadata; no distributed revocation epoch or KMS/HSM implementation shown |
+| `core/attestation.py` | External verifier boundary; local runtime ID/measurement/nonce/expiry binding | Durable replay protection, remote revocation and trust-root lifecycle remain external |
+| `core/identity.py` | Ed25519 agent identity and attestation with local trust-anchor registry | Current principal delegation, issuer lifecycle and distributed revocation are separate concerns |
+| `core/multimodal.py` | Media modality/content type/digest/locator and request digest | No locator authentication, encrypted custody, consent, retention or derivative lineage |
+| `core/agent_core.py` | Bounded sequential agent phase machine | Authorization hook optional at core constructor; local lock and serial steps, no distributed lease/capacity |
+| `core/agent_fabric.py` | Trusted identity + skill + principal callback; first sorted authorized binding | No live health/capacity/residency/cost/energy or qualification-aware selection |
+| `core/agent_skills.py` | Bounded declarative skill registry | Skill registration is not authority or specialist qualification; default handler is no-op |
+| `core/resource_router.py` | Deterministic DEVICE/EDGE/CLOUD selection | Static thresholds, no live telemetry, cost, energy, residency or reservation |
+| `ecosystem/global_scale.py` | Bounded region/cell/capacity/health/queue/metric primitives | Module states these are models, not production scheduler, database, broker or network fabric |
+| `ecosystem/global_fabric.py` | Local global-memory metadata/digest/replica index | Payload durability and replica health/reachability/independence are not proven |
+| `core/supply_chain.py` | Ed25519 signed manifest and artifact digest verification | Manifest lacks signer role, validity/revocation epoch, SBOM, build provenance and release approval |
+| `core/observability.py` | Bounded in-process security event buffer | No durable event backend, alert ownership, retention or incident workflow |
+| `jarvis/memory/store.py` | Separate bounded in-process key/value store | No execution/tenant isolation, provenance, retention or deletion protocol |
+
+Findings are source-bounded and do not constitute an end-to-end security or distributed-systems test.
