@@ -142,3 +142,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Branching cognition, FRL, reverse engineering and domain operations — 2026-11-24
 
 37. [Branching Cognition, Formal Evidence, Reverse Engineering and Domain Operations Reconciliation](NORYX7_BRANCHING_COGNITION_FRL_REVERSE_ENGINEERING_AND_DOMAIN_OPERATIONS_RECONCILIATION.md) — source-reconciles bounded HYPERSYNTH hypothesis generation, NEXUS/FRL and evaluation integrity, authorized RE workbench, PowerShell/Cloud Terminal and browser/polyglot boundaries, specialist qualification, MIRROR WORLD validity and environmental/community outcome controls. Maps to existing B70–B72, B75–B78, B79–B80, B85–B88, B90–B94, B96–B104. No new ADR series; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
+
+37. [Cognitive Branching, Formal Evidence, MIRROR WORLD and Systems Understanding Reconciliation](NORYX7_COGNITIVE_BRANCHING_FORMAL_EVIDENCE_MIRROR_WORLD_AND_SYSTEMS_UNDERSTANDING_RECONCILIATION.md) — bounded source review of HYPERSYNTH hypothesis generation and sequential execution, NEXUS/FRL evidence boundaries, model validity, authorized reverse engineering, terminal/surface contracts, specialist qualification, global placement and ecosystem impact. Maps requirements to existing B79–B104; all W01–W12 remain PARTIAL.
