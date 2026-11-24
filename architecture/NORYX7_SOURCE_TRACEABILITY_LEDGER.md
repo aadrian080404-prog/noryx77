@@ -289,3 +289,22 @@ The absence of named product modules is limited to the inspected `ecosystem/` di
 | `core/architecture_gate.py`, `core/architecture_registry.py` | 18-plane structural field/path gate and definitions | W01/W02/W11 | MAPPED; all filename tokens exist in tree, but no semantic/call-site/deployment/freeze evidence |
 
 Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. Source presence is not implementation acceptance or production assurance.
+
+
+## Additional source mapping — cognitive/evidence/global-scale pass — 2026-11-24
+
+| Source path | Architectural responsibility | Workstreams | Reconciliation status / limitation |
+|---|---|---|---|
+| `core/hypersynth.py` | Bounded cognition, decomposition, specialist routing, planning, hypothesis/simulation, sequential execution and result admission | W02/W04/W05/W06/W10 | MAPPED; max_agents bounds plan size and execution is sequential; structural simulation checks do not establish domain truth |
+| `core/hypersynth_runtime.py` | Local composition root for policy, recovery, ActionGate, ToolExecutor, memory, collaboration and kernel | W01/W02/W03/W09/W11 | MAPPED; local composition, not distributed/durable atomicity |
+| `core/collaboration.py` | Primary proposal → secondary critique → primary reconciliation | W04/W06/W09 | MAPPED; shared model/provider/evidence lineage may defeat independence; digests prove integrity, not truth |
+| `core/metacognitive_challenge.py` | Challenge schema, injected independent verifier, structural pipeline challenge and adaptive scoring | W06/W10 | MAPPED; external verifier/dataset independence and score calibration unresolved |
+| `core/evaluation.py`, `core/evaluation_campaign.py` | Dimension aggregation and deterministic synthetic/holdout manifest | W06/W10/W11 | MAPPED; no execution, evaluator authentication, result uniqueness or durable signed manifest |
+| `core/finch.py` | Bounded event graph, keyword/severity relevance, batch anomaly and severity-mean forecast | W06/W07/W10 | MAPPED; heuristic only, no temporal calibration/backtest/causal validity |
+| `core/multimodal.py` | Modality references and payload digest | W03/W06/W08/W09 | MAPPED; no payload encryption, locator authentication, consent or retention lifecycle |
+| `core/distributed.py` | Local node/shard descriptors | W05/W08/W11 | MAPPED; no network replication, membership consensus, durability or failover |
+| `ecosystem/global_scale.py` | Region/cell selection, capacity accounting, in-memory event queue and degradation primitives | W02/W05/W08/W11 | MAPPED; production adapters, durable broker, autoscaling, leases and telemetry absent from this module |
+| `core/frontier_capabilities.py` | HTTPS research and external provider capability adapters; bounded chess analysis | W06/W09/W10/W12 | MAPPED; egress SSRF controls, source trust, provider attestation and regulated transaction lifecycle unresolved |
+| `core/orchestration.py`, `ecosystem/completeness.py` | Request-stage state machine and structural completeness gate | W01/W02/W08/W11 | MAPPED; state transition/structural pass does not prove external execution or operational readiness |
+
+Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. This is source-level architecture mapping, not a test or deployment claim.
