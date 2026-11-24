@@ -303,3 +303,20 @@ These are architecture discovery gaps, not test-proven defects. No claim is made
 | G-W12-IMPACT-OUTCOME-02 | activity counts can be mistaken for net impact | `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, lifecycle boundaries, leakage/rebound, uncertainty, independent verification and durability monitoring |
 
 These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Additional tool/provider/protocol/effect gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-TOOL-AUTH-CONTEXT-01 | authorization context too narrow at registry seam | `core/tool_protocol.py` | Signed principal/tenant/session/device, policy epoch, target, risk and exact action binding |
+| G-TOOL-PROVENANCE-01 | tool@version label is not artifact/lineage provenance | `core/tool_protocol.py` | Immutable artifact/build digest, input/output digest, schema, source and authorization receipt |
+| G-PROVIDER-FAILOVER-EFFECT-01 | generic exception treated as retry/failover trigger | `core/provider_resilience.py` | Provider-specific effect certainty, operation lookup, idempotency and compensation state machine |
+| G-PROVIDER-IDEMPOTENCY-01 | attempt ID can repeat across separate invocations | `core/provider_resilience.py` | Caller-supplied durable operation ID and provider-supported idempotency key |
+| G-HTTP-EGRESS-DNS-01 | URL/TLS/redirect validation not socket/DNS isolation | `core/http_provider.py`, `core/egress.py` | Canonical DNS resolution, resolved-IP policy, pinning and mandatory transport mediation |
+| G-TRACE-DURABILITY-01 | execution hash chain exists only in process memory | `core/execution_trace.py` | Durable append-only storage, external checkpoint, trusted time, signer and restore semantics |
+| G-TRACE-COMPLETENESS-01 | local chain cannot prove omitted events were never emitted | `core/execution_trace.py` | Independent dispatch receipts, sequence authority and external head anchoring |
+| G-PROVIDER-QUALIFICATION-01 | provider selection does not encode residency/semantic equivalence | `core/provider_router.py`, `core/provider_resilience.py` | Signed provider manifest, allowed data class/region, capability equivalence, SLO/cost and revocation |
+| G-OFFLINE-PROVIDER-RECONCILIATION-01 | offline queue and provider effect state not shown as one durable lifecycle | `core/offline.py`, provider adapters | Unified intent/idempotency/receipt/indeterminate/remote-reconcile protocol |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
