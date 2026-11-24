@@ -347,3 +347,14 @@ All B90–B96 are OPEN / PROPOSED, not approved or frozen.
 | B101 | Community and Environmental Outcome Accounting | Intervention baselines, net outcome boundaries, independent measurement, contributor safeguards, restricted funds, ledger separation, grievance and public reporting; reconcile with B84 | OPEN |
 
 These proposals extend existing architecture decisions and must be reconciled before any decision is marked accepted. They do not authorize implementation or testing.
+
+
+## Additional decisions from ingress/memory/offline reconciliation — 2026-11-24
+
+| ID | Priority | Decision to resolve | Affected planes | Required evidence/output | Status |
+|---|---|---|---|---|---|
+| ADR-B102 | B0 | Canonical ingress principal and session lifecycle: issuer, enrolled principal/device, audience, scope, key ID, expiry, revocation epoch and execution correlation; client IDs are metadata only | P01, P06–P14 | Enrollment/session/revocation state machine and issuer/device binding | OPEN |
+| ADR-B103 | B0 | Memory context isolation and degraded-state semantics: tenant/principal/task/execution scope, explicit share grants, typed hydration outcomes, provenance, consent, expiry, deletion and audit | P01, P03, P09, P12, P15 | Canonical memory access matrix and complete lifecycle | OPEN |
+| ADR-B104 | B0 | Durable offline outbox and indeterminate side-effect reconciliation: persistent intent, idempotency, receipts, crash recovery, duplicate delivery, compensation and remote acknowledgement | P05–P09, P12–P16 | State machine and cross-store transaction/reconciliation contract | OPEN |
+
+**Decision consolidation, not duplicate ADR creation:** proposed B105 (durable security events/incident lifecycle) overlaps ADR-B70; proposed B106 (evidence-backed release/self-improvement admission) overlaps ADR-B72 and ADR-B78. Reconcile their scope and acceptance evidence into those existing decisions rather than creating parallel authorities. B98 also owns the research-egress/content-isolation portion of this pass.
