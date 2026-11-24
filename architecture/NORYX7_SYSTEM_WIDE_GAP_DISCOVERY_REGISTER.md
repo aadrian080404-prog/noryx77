@@ -386,3 +386,15 @@ All findings map to existing ADRs B71–B104; W01–W12 remain PARTIAL.
 - Egress allowlist does not prove DNS pinning/socket mediation; supply-chain signature verification does not itself provide key lifecycle/SBOM/build provenance.
 - Global placement primitives do not prove capacity reservation, distributed leases, live telemetry freshness or production worker orchestration.
 All findings map to existing B71–B104; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
+
+- FINCH `Forecast.likelihood` is arithmetic mean severity; no time-to-event model or calibration. Type heuristic scores separately from probabilities and require temporal holdout, proper scoring, calibration and drift lifecycle.
+- Universal Intelligence has six explicit domain keyword maps plus general reasoning while the domain architecture catalog specifies thirteen domains; track coverage explicitly without assuming unimplemented modules.
+- Specialist routing and skill registration do not establish competence, jurisdiction, expiry, independence or execution authority.
+- AgentCollaboration's SHA-256 digests cover generated output strings, not source evidence; distinct agent IDs do not prove independent model/provider/source/failure domains.
+- EvaluationMatrix accepts caller pass flags and non-empty evidence strings; campaign manifest/result must bind exact artifact, evaluator, holdout, raw test results and independence.
+- CyberRange's synthetic sandbox restriction is useful; OwnerAuthorization lacks target/method/environment/issuer/revocation/single-use scope, and `verified=True` means simulation path completed, not real-world validation.
+- W12 needs segregated ledgers, double-entry accounting, independent audit, governance/appeal and impact records with baseline/counterfactual/additionality/leakage/rebound/permanence/uncertainty.
+All remain architecture gaps; no domain qualification, calibrated forecast, independent evaluator, cyber validation or payment/impact service is claimed implemented.
