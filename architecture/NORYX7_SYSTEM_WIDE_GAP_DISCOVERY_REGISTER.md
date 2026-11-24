@@ -226,3 +226,22 @@ These are architecture discovery findings, not test-proven defects.
 | G-COLLAB-INDEPENDENCE-01 | agent diversity not equivalent to independent evidence | `core/collaboration.py` | Model/provider/evidence lineage, independent source policy and disagreement adjudication |
 
 These are architecture discovery findings, not test-proven defects.
+
+
+## Additional NEXUS, research, specialist and impact gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-CLAIM-LINEAGE-01 | semantic lineage absent from inspected verifier path | `core/verification.py`, `core/reasoning.py` | Typed claims, source spans, immutable artifact identity, support/contradiction links, temporal validity and reviewer scope |
+| G-SOURCE-AUTHORITY-01 | source authenticity/authority not established by digest | `core/frontier_capabilities.py` | Authenticated publisher/source identity, authority scope, capture time, correction/retraction and source independence |
+| G-EGRESS-REDIRECT-01 | network destination enforcement incomplete in inspected fetch path | `core/frontier_capabilities.py` | DNS/IP/private-address controls, redirect revalidation, proxy handling and mandatory egress mediation |
+| G-CONTENT-INSTRUCTION-01 | retrieved content can cross trust boundary | `core/frontier_capabilities.py` | Explicit untrusted-data/instruction separation, parser isolation and prompt-injection-resistant ingestion contract |
+| G-SPECIALIST-QUAL-01 | routing label can be mistaken for qualified competence | `core/universal_intelligence.py`, `core/subtask_uif.py` | Versioned qualification manifest, independent assessment, jurisdiction, validity/expiry and escalation |
+| G-SUBTASK-SEMANTIC-01 | structural subtask verification can be mistaken for semantic truth | `core/subtask_verification.py` | Bind each result to evidence, semantic validator, reviewer and exact claim scope |
+| G-PROVIDER-RECEIPT-01 | provider response integrity and effect certainty incomplete | `core/frontier_capabilities.py` | Signed receipt binding request/response/quote/recipient/amount/time/idempotency and reconciliation |
+| G-MODEL-VALIDITY-01 | simulation validity not established by structural feasibility | `core/reasoning.py`, `core/finch.py` | Model manifests, calibration, independent validation, uncertainty, OOD envelope and field transfer criteria |
+| G-IMPACT-BASELINE-01 | project activity can be misreported as net impact | domain assurance and community architecture | Baseline, counterfactual, additionality, leakage/rebound, lifecycle boundary, uncertainty and independent measurement |
+| G-CONTRIBUTOR-SAFETY-01 | contributor safeguards/fair compensation not evidenced in inspected ecosystem modules | `ecosystem/` inventory; community requirements | Voluntary terms, safety/insurance, safeguarding, grievance, stop-work authority, compensation and exit |
+| G-FUNDS-LEDGER-02 | fund categories and project restrictions lack source-level ledger trace in inspected scope | `architecture/BUSINESS_PROJECT_FABRIC.md` | Beneficial ownership, segregated funds, double-entry ledger, payment reconciliation, refunds/disputes and independent audit |
+
+These are architecture discovery gaps, not test-proven defects. The inspected `ecosystem/` directory is not a claim about all repository subtrees or external services.
