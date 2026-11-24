@@ -137,3 +137,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Memory custody, cryptographic authority, multimodal lineage and global placement — 2026-11-24
 
 36. [Memory Custody, Cryptographic Authority, Multimodal Lineage and Global Placement Reconciliation](NORYX7_MEMORY_CRYPTO_MULTIMODAL_AND_GLOBAL_PLACEMENT_RECONCILIATION.md) — reconciles context hydration, memory scope/deletion, encrypted storage adapters, KMS/HSM and key epochs, media provenance, agent qualification, global resource placement and supply-chain admission. Maps to existing B70–B74, B76–B78, B81–B82, B85, B87, B90, B92–B95, B97, B99–B104. W01–W12 remain PARTIAL.
+
+
+## Branching cognition, FRL, reverse engineering and domain operations — 2026-11-24
+
+37. [Branching Cognition, Formal Evidence, Reverse Engineering and Domain Operations Reconciliation](NORYX7_BRANCHING_COGNITION_FRL_REVERSE_ENGINEERING_AND_DOMAIN_OPERATIONS_RECONCILIATION.md) — source-reconciles bounded HYPERSYNTH hypothesis generation, NEXUS/FRL and evaluation integrity, authorized RE workbench, PowerShell/Cloud Terminal and browser/polyglot boundaries, specialist qualification, MIRROR WORLD validity and environmental/community outcome controls. Maps to existing B70–B72, B75–B78, B79–B80, B85–B88, B90–B94, B96–B104. No new ADR series; W01–W12 remain PARTIAL.
