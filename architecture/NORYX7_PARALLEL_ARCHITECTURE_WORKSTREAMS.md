@@ -416,3 +416,8 @@ No runtime integration or verification was performed in this architecture-only p
 ## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
 
 This cycle adds a cross-stream reconciliation for branching cognition, NEXUS/FRL, MIRROR WORLD, authorized systems understanding, terminal/surfaces, domain qualification, global placement and W12 impact. HYPERSYNTH's inspected path creates one hypothesis per plan step and executes assignments sequentially; this is not general branch search or concurrent DAG execution. `core/reverse_engineering.py` returned 404 on the reviewed branch; this is a bounded path observation, not proof of repository-wide absence. The placement router remains threshold-based while global-scale primitives explicitly require production adapters. Shared contracts and owner/consumer mapping are recorded in `NORYX7_COGNITIVE_BRANCHING_FORMAL_EVIDENCE_MIRROR_WORLD_AND_SYSTEMS_UNDERSTANDING_RECONCILIATION.md`. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
+
+This pass reconciles the common operation lifecycle across W01–W12. Source findings include: HYPERSYNTH couples default plan/action bounds to `max_agents`; AgentCoordinator truncates assignment to the first `max_agents` steps and generates a new execution ID; AgentMesh chooses the alphabetically first matching role; ProviderRouter retries after any exception; ProviderExecutionGateway uses a stable principal/provider/capability action ID without a unique request/attempt; offline outbox and global memory/control-plane registries are in-process. See the linked reconciliation for complete contracts and limitations. W01–W12 remain PARTIAL.
