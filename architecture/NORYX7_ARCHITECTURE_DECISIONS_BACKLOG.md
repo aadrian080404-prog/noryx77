@@ -453,3 +453,25 @@ Where a requirement crosses multiple ADRs, define one authoritative owner and re
 | B102/B104 | Bind terminal and RE operations to issuer/session/device, durable intent, receipts and uncertain-effect reconciliation | OPEN |
 
 No new ADR identifiers are created in this pass. Existing proposals remain OPEN until separately reviewed and accepted. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
+
+Consolidate this pass into existing decision authorities; do not create a duplicate ADR series:
+
+| Existing ADR | Reconciliation detail | Status |
+|---|---|---|
+| B79/B80/B85/B87 | Hypothesis/branch, plan, step, execution and operation identity; DAG coverage, concurrency, cancellation and lease semantics | OPEN |
+| B86/B104 | Retry/idempotency and uncertain side-effect reconciliation across terminal, tools and provider operations | OPEN |
+| B88/B90/B97 | Evidence independence, claim classes, source anchoring and semantic admission | OPEN |
+| B91 | Evaluation campaign execution, holdout custody, leakage prevention and evaluator identity | OPEN |
+| B92/B93/B100 | Forecast/model calibration, uncertainty/OOD, validity and Reality Bridge | OPEN |
+| B94/B97 | Multimodal custody, derivative lineage, consent and source anchoring | OPEN |
+| B76/B99 | Specialist qualification, scope, jurisdiction, expiry and independent review | OPEN |
+| B71/B96/B98 | Authorized acquisition, safe egress, content isolation and provider/source identity | OPEN |
+| B72/B77/B89 | Signed model/kernel/artifact manifests, build provenance and evidence-backed freeze | OPEN |
+| B81/B103 | Durable branch/evidence/experiment state, tenant isolation, retention and deletion | OPEN |
+| B83/B84/B101 | Restricted funds, double-entry accounting, safeguards and independently verified environmental outcomes | OPEN |
+| B95 | Production placement/provider adapters, residency, capacity, energy/cost and failure-domain contracts | OPEN |
+
+No ADR is closed by this documentation pass. W01–W12 remain PARTIAL.
