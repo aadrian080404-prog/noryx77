@@ -117,3 +117,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest ingress, memory, offline and operational trust reconciliation — 2026-11-24
 
 32. [Ingress Identity, Memory Isolation, Offline Delivery and Operational Trust Reconciliation](NORYX7_INGRESS_MEMORY_OFFLINE_AND_OPERATIONAL_TRUST_RECONCILIATION.md) — source review of gateway sessions/principal binding, memory/context isolation, offline outbox and uncertain side effects, egress/provider failover, state journal/recovery, supply chain, observability and Python/Go/Rust deployment boundaries. Proposes B102–B104; identifies B105/B106 as consolidation candidates with existing B70/B72/B78. All W01–W12 remain PARTIAL.
+
+
+## Structural gate, secure memory, audit and platform assurance — 2026-11-24
+
+33. [Structural Gate, Encrypted Memory, Audit and Platform Assurance Reconciliation](NORYX7_STRUCTURAL_GATE_SECURE_MEMORY_AUDIT_AND_PLATFORM_ASSURANCE_RECONCILIATION.md) — precise scope of the 18-plane structural gate; encrypted in-memory storage versus durable persistence; audit chain versus externally retained checkpoint; local agent-skill and mobile grants; Browser static isolation scan; PowerShell/Cloud Terminal architecture specification versus implementation inventory. No new ADR series; findings map to B70, B77–B78, B81–B82, B89, B99, B102–B104. W01–W12 remain PARTIAL.
