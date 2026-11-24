@@ -334,3 +334,16 @@ All B85–B89 are OPEN / PROPOSED, not approved or frozen.
 **Streams:** W01, W06, W08, W09, W12. Define host/IP/redirect controls, untrusted-content isolation, signed provider receipts and high-risk transaction confirmation/reconciliation.
 
 All B90–B96 are OPEN / PROPOSED, not approved or frozen.
+
+
+## ADR-B97–B101 — 2026-11-24 (OPEN / PROPOSED)
+
+| ADR | Decision area | Required architecture decision | Status |
+|---|---|---|---|
+| B97 | Canonical Claim and Evidence Lineage | Claim identity/types, source-span anchoring, support/contradiction graph, temporal validity, uncertainty, independence groups, review and expiry; no truth promotion from repetition, consensus or signature alone | OPEN |
+| B98 | Research Egress and Content Isolation | Mandatory destination mediation, DNS/IP/redirect controls, parser isolation, untrusted-content handling, source custody, crawl budgets and signed provider receipts | OPEN |
+| B99 | Specialist Qualification and Scope | Versioned manifests, independent qualification evidence, domain/jurisdiction scope, calibration, expiry, escalation and separation from action authority; reconcile with B76 | OPEN |
+| B100 | MIRROR WORLD Model Validity and Reality Transfer | Model class, assumptions, units, calibration, independent validation, uncertainty, OOD envelope and non-actuating Reality Bridge admission; reconcile with B93 | OPEN |
+| B101 | Community and Environmental Outcome Accounting | Intervention baselines, net outcome boundaries, independent measurement, contributor safeguards, restricted funds, ledger separation, grievance and public reporting; reconcile with B84 | OPEN |
+
+These proposals extend existing architecture decisions and must be reconciled before any decision is marked accepted. They do not authorize implementation or testing.
