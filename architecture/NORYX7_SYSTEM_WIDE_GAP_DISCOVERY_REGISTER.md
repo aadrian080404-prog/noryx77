@@ -357,3 +357,17 @@ These are architecture discovery gaps, not test-proven defects. W01–W12 remain
 | G-IMPACT-NET-04 | Activity/output metrics can be confused with verified environmental/community net outcomes | `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`, `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, leakage/rebound, independent sampling, uncertainty, safeguards and restricted funds |
 
 All findings remain architecture gaps; no runtime defect or test failure is inferred. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
+
+- HYPERSYNTH: no general competing-hypothesis tree/branch lifecycle demonstrated; one hypothesis is derived from each plan step; inspected assignments execute sequentially.
+- Evidence: output presence/contract checks, generated evaluation manifests and confidence fields do not independently establish semantic truth, source authenticity, campaign execution or calibrated probability.
+- FRL/NEXUS: formal proof scope, checker/build trust and empirical-to-formal fidelity must remain distinct; unavailable or untrusted checkers fail closed.
+- MIRROR WORLD: model manifests, calibration, independent validation, uncertainty/OOD, drift/expiry and Reality Bridge safety approval remain closure requirements.
+- Systems understanding: authorized acquisition, artifact custody, isolated analysis, behavior reconstruction and IP/safety boundaries need one lifecycle; reverse-engineering source path was not found at the inspected path/ref (404), not a repo-wide absence finding.
+- Terminal/surfaces: target architecture exists; runtime, scoped capabilities, filesystem/process/egress controls, artifact provenance and offline reconciliation remain to be source-mapped.
+- Domains: skill labels are not qualifications; scope, jurisdiction, reviewer independence, expiry and escalation are required.
+- Placement: static tier thresholds and bounded global primitives do not prove production scheduling, live health/capacity, residency enforcement or cost/energy optimization.
+- W12: ledger, restricted funds, disputes/refunds, safeguards and independently verified net environmental outcomes remain open.
+All findings map to existing ADRs B71–B104; W01–W12 remain PARTIAL.
