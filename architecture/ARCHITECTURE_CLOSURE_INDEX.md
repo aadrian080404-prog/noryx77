@@ -102,3 +102,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Latest agent/runtime reconciliation — 2026-11-24
 
 30. [Agent Dispatch, Runtime Lifecycle and Plane-Registry Reconciliation](NORYX7_AGENT_DISPATCH_RUNTIME_LIFECYCLE_AND_PLANE_REGISTRY_RECONCILIATION.md) — distinguishes native AgentFabric, OperationalAgentFabric, AgentCoordinator, AgentMesh/AgentRuntime and RuntimeEngine; records sequential execution semantics, uncertain external side effects, typed consensus requirements and the boundary between the 18-plane structural gate and evidence-backed freeze. ADR-B85–B89 remain open.
+
+
+## Latest cognitive/evidence/MIRROR WORLD/global-scale reconciliation — 2026-11-24
+
+31. [Cognitive Evidence, Evaluation, Mirror-World and Global-Scale Reconciliation](NORYX7_COGNITIVE_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_SCALE_RECONCILIATION.md) — maps HYPERSYNTH, primary-secondary-primary collaboration, metacognitive challenge, evaluation campaigns, FINCH heuristics, multimodal data references, distributed/global control primitives and research/provider egress. Defines assurance evidence levels and records ADR-B90–B96 as open.
