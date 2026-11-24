@@ -331,3 +331,23 @@ All twelve streams remain PARTIAL. No code-level fix or integration was performe
 | W12 | Audit/storage primitives do not implement project finance or outcome accountability | Durable project ledger, consent, safeguards and independent impact measurement | PARTIAL |
 
 All workstreams remain PARTIAL; no integration or verification was performed.
+
+
+## 2026-11-24 — agent execution, evidence admission, MIRROR WORLD and global impact
+
+| Stream | Additional source finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Agent dispatch accepts principal labels; local identity trust does not prove issuer/tenant/session freshness | Signed principal context, issuer chain, device binding and durable dispatch authorization receipt | PARTIAL |
+| W02 | AgentCore, AgentFabric, AgentMesh, AgentCoordinator and OperationalAgentFabric expose overlapping lifecycles | One canonical lifecycle owner, DAG/attempt/lease/cancel/retry/effect states and compatibility adapters | PARTIAL |
+| W03 | Global fabric stores metadata/digests and replica labels, not durable payload replicas | Tenant ownership, consent, payload custody, consistency, deletion and anti-rollback | PARTIAL |
+| W04 | Multiple agent registries/dispatchers; skill presence is not qualification | Canonical dispatch authority, versioned skills, qualified agents and independent admission | PARTIAL |
+| W05 | Sorted first-match and `plan.steps[:max_agents]` do not define complete DAG scheduling/capacity | Capacity-aware placement, fairness, backpressure, full DAG coverage and lease expiry | PARTIAL |
+| W06 | Output presence and verification markers do not establish claim truth/source support | Claim-to-source lineage, entailment, uncertainty, contradiction and independent review | PARTIAL |
+| W07 | MIRROR WORLD defines scenario/kernel/Reality Bridge architecture; model validity requires scope evidence | Model manifests, calibration, independent validation, OOD envelope and non-actuating bridge | PARTIAL |
+| W08 | Device/front surfaces do not establish shared durable dispatch/evidence lifecycle | Cross-surface principal, consent, idempotency, receipts and offline reconciliation | PARTIAL |
+| W09 | Agent/provider/evidence trust must share a verifiable boundary | Signed grants/receipts, key lifecycle, safe egress and immutable audit | PARTIAL |
+| W10 | Specialist routing and numeric evidence strength do not qualify competence | Domain qualification, jurisdiction, calibration, reviewer and expiry | PARTIAL |
+| W11 | Local heartbeat/campaign registries do not prove distributed health or executed evaluation | Durable telemetry, service ownership, reproducible campaigns, DR and release evidence | PARTIAL |
+| W12 | Finance/community/environment documents remain target architecture | Segregated funds, double-entry ledger, governance, worker safeguards and net outcome measurement | PARTIAL |
+
+No integration or verification was performed in this architecture-only pass.
