@@ -375,3 +375,24 @@ No new ADR series is created by this pass. The source findings are assigned to e
 | B104 | Mobile/offline replay and dispatch records need durable idempotency and indeterminate-effect reconciliation | OPEN |
 
 The gate and cryptographic adapters remain useful primitives. No architecture freeze or production assurance is inferred from their existence.
+
+
+## 2026-11-24 — agent/evidence/MIRROR WORLD/global-impact decision mapping
+
+No new ADR series is created. Reconcile this pass with existing open decisions:
+
+| Existing ADR | Additional detail to include | Status |
+|---|---|---|
+| B79/B80/B85 | One canonical dispatch lifecycle and typed intent/request/task/step/execution/attempt/dispatch identifiers | OPEN |
+| B86/B87 | Full DAG coverage, leases, cancellation, retries, idempotency and uncertain side-effect states | OPEN |
+| B88 | Consensus independence across model/provider/data/team/failure domain; disagreement and correlated error semantics | OPEN |
+| B90/B97 | Structural output verification separated from semantic claim-source evidence and lineage | OPEN |
+| B91 | Campaign manifest, holdout custody, immutable execution evidence, evaluator identity and independent approval | OPEN |
+| B92 | FINCH target/horizon, leakage-safe temporal validation, calibration, proper scoring and drift | OPEN |
+| B93/B100 | MIRROR WORLD model manifest, calibration, validation, uncertainty/OOD envelope and non-actuating Reality Bridge | OPEN |
+| B81/B103 | Global memory payload custody, replica health, consistency, consent, deletion and anti-rollback | OPEN |
+| B82/B102 | Canonical issuer, tenant, session/device scope, freshness and revocation authority for agent dispatch | OPEN |
+| B83/B84/B101 | Segregated project funds, ledger, contributor safeguards, baseline/counterfactual and independent impact outcome | OPEN |
+| B95/B96/B98 | Provider/source identity, research egress, signed receipts and untrusted-content isolation | OPEN |
+
+Where these details overlap an earlier ADR, consolidate the existing decision text rather than creating duplicate authority. All W01–W12 remain PARTIAL.
