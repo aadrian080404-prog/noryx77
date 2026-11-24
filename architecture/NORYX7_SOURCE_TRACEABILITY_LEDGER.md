@@ -328,3 +328,35 @@ Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. This is source
 | `architecture/USER_UNDERSTANDING_FABRIC.md` | Consent-bound personalization and sensitive-trait exclusions | Durable consent, source lineage, correction, deletion and profile-poisoning controls remain to be evidenced |
 
 Source snapshot for this pass: branch `architecture/system-wide-closure-mirror-world-2026-11-21`, head observed at start `a36044b76db9e4a86c3a5a2cc195cde7b46e4a6e`. This table records inspected paths only; it is not an exhaustive call-site inventory.
+
+
+## Additional ingress, memory, offline and operational source traceability — 2026-11-24
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `gateway/auth.py` | HMAC-SHA256 short-lived token with client_id, expiry and nonce | Shared bootstrap bearer; no server-side revocation, audience/scope, enrolled principal/device binding or nonce consumption shown |
+| `gateway/server.py` | HTTP health/session/execute routes; bounded request body; TLS expected externally | No in-process TLS; production proxy trust/rate limits/CSRF/origin controls and session revocation remain external/unresolved |
+| `gateway/runtime_adapter.py` | Maps client_id into task constraints and invokes OperationalNORYXRuntime | client_id is not resolved to an authenticated principal/device in this adapter |
+| `noryx7_operational.py` | OpenRouter ModelFabric composition root and optional state-journal path | One configured model adapter; durable journal only if path configured; no polyglot service composition implied |
+| `core/memory.py` | Bounded in-memory MemoryStore with deep-copy isolation and optional execution filter | Tenant/consent/provenance/expiry/tombstones/durable replicas absent from this store |
+| `core/memory_hierarchy.py` | Bounded L0–L5 key/value hierarchy and promotion | No tenant, source, execution, consent, provenance, expiry or deletion metadata |
+| `core/context.py` | Builds versioned snapshots and hydrates prior memory | `_memory_values` calls `list()` without execution filter; catches errors as empty tuple without degraded-state signal |
+| `core/offline.py` | Authenticated snapshot callback, policy/recovery admission, encrypted bounded outbox abstraction and sync state | Queue is in-memory; exception path acknowledges/removes pending envelope even where external effect may be uncertain |
+| `core/offline_anchor.py` | SQLite WAL/FULL monotonic snapshot marker | Documentation requires protected storage/TPM/HSM replacement or protection for production |
+| `core/state_journal.py` | SQLite WAL/FULL append-only state commit journal, sequence and digest verification | Digest stored in same DB is not independent signed root; cross-store/external side-effect atomicity unresolved |
+| `core/recovery.py` | In-process state/epoch machine and serialized `run_if_normal` critical section | Does not coordinate separate processes/nodes/databases or external transactions |
+| `core/egress.py` | In-memory component/host/port/protocol allowlist | No DNS resolution pinning, redirect validation or proof every socket path is mediated |
+| `core/provider_router.py` | First-match capability routing and generic exception failover | No typed uncertainty/retry safety; failover may be unsafe after an indeterminate side effect |
+| `core/provider_execution.py` | Injected per-call authorizer and ExecutionFabric provider bridge | Action ID is deterministic from principal/provider/capability; no unique attempt receipt/idempotency lifecycle here |
+| `core/resource_router.py` | Static DEVICE/EDGE/CLOUD selection by complexity/privacy/latency | No live capacity, residency, cost, energy or health telemetry |
+| `core/supply_chain.py` | Ed25519 trusted-key manifest verification and artifact digest check | SBOM, build provenance, signer role/rotation/revocation, approval and staged rollback are separate |
+| `core/self_improvement.py` | In-process proposal stage sequence and external admission boundary | Independent reviewer/signer, protected release zone and rollback evidence not supplied by this class |
+| `core/observability.py` | Bounded in-memory security event buffer | Not durable/tamper-evident incident ledger; alert ownership/containment absent |
+| `ecosystem/global_fabric.py` | Memory metadata index with payload/provenance digests and replica labels; local identity/session authorization index | Replica labels do not prove healthy independent replicas; no issuer/revocation authority or payload store |
+| `ecosystem/runtime_dispatch.py` | Injected principal authorization and cross-front handler dispatch with receipt | Receipt is coarse; no durable idempotency ledger or domain result admission in this function |
+| `ecosystem/front_runtime.py` | Thin HYPERSYNTH/JARVIS adapters | Does not establish one lifecycle owner or cross-store transaction |
+| `render.yaml` | Single Python Uvicorn service with external secret injection | Does not deploy inspected Go/Rust/mobile surfaces as one integrated topology |
+| `services/jarvis-gateway-go/main.go` | Go health and SHA-256 digest endpoints | Not full authenticated JARVIS runtime in inspected source |
+| `services/jarvis-runtime-rs/src/lib.rs` | Rust envelope digest and deny-by-default helper | Not full identity/signature/dispatch/journal/recovery runtime in inspected source |
+
+This ledger records bounded path-level observations, not a full call-site or deployment proof.
