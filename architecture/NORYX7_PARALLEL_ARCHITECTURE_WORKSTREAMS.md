@@ -371,3 +371,23 @@ No integration or verification was performed in this architecture-only pass.
 | W12 | Provider side effects may include payment, procurement or community project actions | Explicit consent, segregated funds, idempotency, receipts and independent reconciliation | PARTIAL |
 
 No integration or verification was performed in this architecture-only pass.
+
+
+## 2026-11-24 — memory, crypto, multimodal custody and global placement
+
+| Stream | Additional source finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Agent identity, runtime attestation, key trust and principal delegation are separate local boundaries | Canonical issuer, tenant/session/device, signer, attestation and revocation epochs | PARTIAL |
+| W02 | AgentCore runs plan steps sequentially; memory/key state use separate stores | Unified execution, persistence, context and recovery lifecycle | PARTIAL |
+| W03 | ContextManager calls memory.list() without execution_id; encrypted backing store is in-process | Scoped memory envelope, typed hydration, durable adapters, deletion and lineage | PARTIAL |
+| W04 | AgentFabric selects first authorized sorted binding; skill labels are descriptive | Qualified agent admission, health/capacity placement, delegation and independence | PARTIAL |
+| W05 | ResourceRouter uses static DEVICE/EDGE/CLOUD thresholds | Live capacity, cost, energy, latency, residency and trust-aware placement | PARTIAL |
+| W06 | Media digests do not establish capture provenance; derivatives lack a complete artifact graph | Signed source receipts, immutable derivatives and transformation lineage | PARTIAL |
+| W07 | Media/model/snapshot custody is not one unified validity-bound contract | Experiment, model, parameter, calibration and source provenance binding | PARTIAL |
+| W08 | Device/browser/edge/cloud data references lack a shared custody lifecycle | Cross-surface encryption, locator authorization, offline sync and deletion propagation | PARTIAL |
+| W09 | AES-GCM/Ed25519 primitives exist; external key authority/revocation remains a boundary | KMS/HSM, root ceremony, key epochs, hardware attestation and compromise recovery | PARTIAL |
+| W10 | Skills/domain labels do not establish specialist qualification | Qualification evidence, scope, expiry and domain validators | PARTIAL |
+| W11 | Global scale, observability and supply-chain classes remain bounded primitives | Durable broker/storage/telemetry, SLO, DR and staged release provenance | PARTIAL |
+| W12 | Resource placement affects project energy, cost and environmental impact | Transparent cost/energy/residency accounting and independent outcomes | PARTIAL |
+
+No runtime integration or verification was performed in this architecture-only pass.
