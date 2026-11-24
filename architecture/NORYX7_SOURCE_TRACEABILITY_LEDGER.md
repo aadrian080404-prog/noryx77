@@ -308,3 +308,23 @@ Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. Source presenc
 | `core/orchestration.py`, `ecosystem/completeness.py` | Request-stage state machine and structural completeness gate | W01/W02/W08/W11 | MAPPED; state transition/structural pass does not prove external execution or operational readiness |
 
 Source snapshot: main `7d900bc75843ea968aa5886d251dbfac83a5d93c`. This is source-level architecture mapping, not a test or deployment claim.
+
+
+## Additional source traceability — 2026-11-24
+
+| Source path / scope | Observed responsibility | Evidence boundary / unresolved architecture |
+|---|---|---|
+| `core/verification.py` | Task/output/result shape, identity, cardinality, status and verification-marker checks | Structural acceptance is not semantic truth, entailment, source authority or domain validation |
+| `core/reasoning.py` | Plan-derived hypotheses; identity/basis checks; structural feasibility simulator | No physical/domain calibration, causal validation, independent holdout or uncertainty model shown |
+| `core/universal_intelligence.py` | Deterministic keyword/risk-based domain/strategy/budget routing and supplied assessment aggregation | Route is not competence or authority; supplied evidence-strength values are not calibrated by this component |
+| `core/subtask_uif.py` | Bounded per-subtask routing with explicit `route_authority=False` | Does not qualify specialist agent or authorize actions |
+| `core/subtask_verification.py` | Exact subtask result coverage/order and agent-result verification marker | Boolean evidence record and result marker do not establish source truth or semantic correctness |
+| `core/frontier_capabilities.py` | HTTPS research fetch/search parsing and generic external provider adapter | DNS/IP/redirect, source authority, content isolation, authenticated provider receipts and transaction reconciliation remain open |
+| `core/finch.py` | Event relevance/anomaly/forecast heuristics based on supplied severity, keywords and batch statistics | No calibrated temporal forecast or causal model established |
+| `core/evaluation_campaign.py` | Synthetic scenario and holdout manifest generation | Does not by itself execute campaigns, authenticate evaluator, prove independence or establish statistical power |
+| `ecosystem/` directory inventory | Front/runtime/global-fabric/global-scale/closure primitives | No dedicated financial ledger, marketplace, remediation measurement or community governance engine appeared in this inspected directory; repository-wide absence not asserted |
+| `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md` | Domain manifest and D01–D13 architecture catalog | Specification only; not proof of domain implementations, qualified experts or operational certification |
+| `architecture/BUSINESS_PROJECT_FABRIC.md` | Commercial workflow, fund separation and transaction governance intent | Must be traced to actual ledgers/payment adapters, beneficial ownership, dispute and reconciliation paths |
+| `architecture/USER_UNDERSTANDING_FABRIC.md` | Consent-bound personalization and sensitive-trait exclusions | Durable consent, source lineage, correction, deletion and profile-poisoning controls remain to be evidenced |
+
+Source snapshot for this pass: branch `architecture/system-wide-closure-mirror-world-2026-11-21`, head observed at start `a36044b76db9e4a86c3a5a2cc195cde7b46e4a6e`. This table records inspected paths only; it is not an exhaustive call-site inventory.
