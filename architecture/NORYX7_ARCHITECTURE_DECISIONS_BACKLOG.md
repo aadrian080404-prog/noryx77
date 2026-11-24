@@ -358,3 +358,20 @@ These proposals extend existing architecture decisions and must be reconciled be
 | ADR-B104 | B0 | Durable offline outbox and indeterminate side-effect reconciliation: persistent intent, idempotency, receipts, crash recovery, duplicate delivery, compensation and remote acknowledgement | P05–P09, P12–P16 | State machine and cross-store transaction/reconciliation contract | OPEN |
 
 **Decision consolidation, not duplicate ADR creation:** proposed B105 (durable security events/incident lifecycle) overlaps ADR-B70; proposed B106 (evidence-backed release/self-improvement admission) overlaps ADR-B72 and ADR-B78. Reconcile their scope and acceptance evidence into those existing decisions rather than creating parallel authorities. B98 also owns the research-egress/content-isolation portion of this pass.
+
+
+## 2026-11-24 — structural/platform assurance decision mapping
+
+No new ADR series is created by this pass. The source findings are assigned to existing decisions to avoid duplicate authorities:
+
+| Existing decision | Additional evidence/decision detail | Status |
+|---|---|---|
+| B77 / B89 | The 18-plane gate checks enum coverage, non-empty descriptive fields and implementation-path existence only; freeze requires source/callsite/integration/trust/enforcement/test/deployment evidence | OPEN |
+| B70 | Audit hash chain and HMAC checkpoint need durable event custody, external checkpoint retention, trusted time and incident lifecycle | OPEN |
+| B72 / B78 | Release/self-improvement admission requires independent signer/reviewer, SBOM/build provenance, staged approval and rollback | OPEN |
+| B82 / B102 | Platform enrollment, signed grants, issuer/device binding, session revocation and remote policy freshness | OPEN |
+| B81 / B103 | Encrypted memory must add tenant/principal/purpose/consent/retention/tombstones and durable replica semantics | OPEN |
+| B99 | Agent skill registration must be separated from independently qualified domain competence and action authority | OPEN |
+| B104 | Mobile/offline replay and dispatch records need durable idempotency and indeterminate-effect reconciliation | OPEN |
+
+The gate and cryptographic adapters remain useful primitives. No architecture freeze or production assurance is inferred from their existence.
