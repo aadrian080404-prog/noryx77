@@ -127,3 +127,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## Agent execution, evidence admission, MIRROR WORLD and global impact — 2026-11-24
 
 34. [Agent Execution, Evidence Admission, MIRROR WORLD and Global Impact Reconciliation](NORYX7_AGENT_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_IMPACT_RECONCILIATION.md) — reconciles AgentCore/AgentFabric/AgentMesh/AgentCoordinator/OperationalAgentFabric dispatch ownership; structural output verification versus semantic evidence; model validation and Reality Bridge; FINCH forecast qualification; global memory metadata/replica semantics; and financial/community/environmental outcome governance. Maps to B70, B77, B79–B101 and B103–B104; no duplicate ADR series. W01–W12 remain PARTIAL.
+
+
+## Tool protocol, provider failover and external-effect reconciliation — 2026-11-24
+
+35. [Tool Protocol, Provider Failover, Execution Trace and External Effect Reconciliation](NORYX7_TOOL_PROVIDER_PROTOCOL_AND_EFFECT_RECONCILIATION.md) — reconciles ToolRegistry authorization/provenance, provider retry/failover, bounded HTTP transport, in-memory execution hash chain, DNS/socket egress and effect certainty. Maps to B70–B72, B79–B80, B85–B86, B90, B95–B98, B102 and B104. W01–W12 remain PARTIAL.
