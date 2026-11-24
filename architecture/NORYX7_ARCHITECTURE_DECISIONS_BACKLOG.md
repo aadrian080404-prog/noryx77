@@ -396,3 +396,21 @@ No new ADR series is created. Reconcile this pass with existing open decisions:
 | B95/B96/B98 | Provider/source identity, research egress, signed receipts and untrusted-content isolation | OPEN |
 
 Where these details overlap an earlier ADR, consolidate the existing decision text rather than creating duplicate authority. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — tool/provider/protocol/effect decision mapping
+
+No new ADR series is created. Reconcile the findings with existing open decisions:
+
+| Existing ADR | Additional detail to include | Status |
+|---|---|---|
+| B70 | Durable trace/audit event envelope, external head custody, trusted time and incident workflow | OPEN |
+| B71/B96/B98 | DNS resolution/pinning, socket-level egress, provider attestation and untrusted response isolation | OPEN |
+| B72 | Signed tool/provider artifact, build digest, capability manifest and release lifecycle | OPEN |
+| B79/B102 | Authenticated principal/tenant/session/device and policy epoch bound to exact tool action | OPEN |
+| B80/B85/B86 | Durable operation/attempt IDs, idempotency, provider effect certainty, receipt and compensation | OPEN |
+| B90/B97 | Tool input/output provenance, source authenticity and claim-to-evidence lineage | OPEN |
+| B95 | Provider qualification, residency, schema/capability compatibility and adapter contract | OPEN |
+| B104 | Offline/provider unified durable intent and indeterminate side-effect reconciliation | OPEN |
+
+Where these requirements overlap existing decisions, consolidate rather than create parallel authorities. W01–W12 remain PARTIAL.
