@@ -371,3 +371,18 @@ All findings remain architecture gaps; no runtime defect or test failure is infe
 - Placement: static tier thresholds and bounded global primitives do not prove production scheduling, live health/capacity, residency enforcement or cost/energy optimization.
 - W12: ledger, restricted funds, disputes/refunds, safeguards and independently verified net environmental outcomes remain open.
 All findings map to existing ADRs B71–B104; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
+
+- HYPERSYNTH couples default plan/action bounds to `max_agents`; plan cardinality, concurrency and action budget need separate semantics.
+- AgentCoordinator truncates to `plan.steps[:max_agents]` and creates a fresh execution ID; preserve complete DAG and caller-bound execution identity.
+- AgentMesh chooses alphabetically first role match; qualification, liveness, capacity, trust freshness and independence are not scheduler inputs.
+- ProviderRouter retries on any exception; must distinguish not-dispatched, rejected, confirmed and indeterminate external effects.
+- ProviderExecutionGateway action ID lacks a unique request/operation/attempt binding and its result lacks canonical durable receipt/effect state.
+- Offline encrypted queue and global memory/control-plane registries are in-process; encryption and metadata do not prove durable payload custody or distributed health.
+- StateJournal local SQLite durability is not an independently witnessed checkpoint; RecoveryController epoch/lock is in-process.
+- MediaRef digest/locator is not a custody capability or transformation/consent/retention lineage.
+- Egress allowlist does not prove DNS pinning/socket mediation; supply-chain signature verification does not itself provide key lifecycle/SBOM/build provenance.
+- Global placement primitives do not prove capacity reservation, distributed leases, live telemetry freshness or production worker orchestration.
+All findings map to existing B71–B104; W01–W12 remain PARTIAL.
