@@ -245,3 +245,25 @@ These are architecture discovery findings, not test-proven defects.
 | G-FUNDS-LEDGER-02 | fund categories and project restrictions lack source-level ledger trace in inspected scope | `architecture/BUSINESS_PROJECT_FABRIC.md` | Beneficial ownership, segregated funds, double-entry ledger, payment reconciliation, refunds/disputes and independent audit |
 
 These are architecture discovery gaps, not test-proven defects. The inspected `ecosystem/` directory is not a claim about all repository subtrees or external services.
+
+
+## Additional ingress, memory, offline and operational trust gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-SESSION-PRINCIPAL-02 | identity binding incomplete | `gateway/auth.py`, `gateway/runtime_adapter.py` | Bind session to enrolled principal, issuer, device/workload, audience, scope, key ID and revocation epoch; client_id is metadata only |
+| G-SESSION-REVOCATION-01 | revocation lifecycle absent in inspected token authority | `gateway/auth.py` | Server-side session registry or revocation epoch, logout/compromise handling, key rotation and nonce/replay policy |
+| G-MEMORY-CONTEXT-SCOPE-01 | context hydration not execution-scoped | `core/context.py` | Apply explicit execution/principal/tenant scope and record authorized sharing grants |
+| G-MEMORY-DEGRADED-01 | silent empty-context fallback | `core/context.py` | Typed complete/empty/partial/stale/denied/unavailable state; prohibit silent downgrade for critical tasks |
+| G-OFFLINE-DURABILITY-02 | encrypted queue is process-local | `core/offline.py` | Durable transactional outbox with crash recovery, sequence and signed acknowledgement chain |
+| G-OFFLINE-EFFECT-UNKNOWN-02 | pending record can be removed after exception | `core/offline.py` | Preserve intent on uncertain dispatch; reconcile using idempotency key and authoritative receipt; compensate when required |
+| G-STATE-ROOT-01 | local digest not independent trust root | `core/state_journal.py` | Protected signed checkpoint/root, key lifecycle and cross-store recovery protocol |
+| G-RECOVERY-DISTRIBUTED-01 | recovery lock is process-local | `core/recovery.py` | Define distributed epoch/fencing and behavior across nodes, partitions and restarts |
+| G-EGRESS-ENFORCEMENT-02 | allowlist not proven at network boundary | `core/egress.py` | Mandatory socket/DNS/redirect/proxy enforcement and bypass tests after architecture freeze |
+| G-PROVIDER-RETRY-SAFETY-01 | generic exception failover may duplicate external effect | `core/provider_router.py` | Typed failure certainty, unique idempotency, receipt and reconciliation before retry |
+| G-RESOURCE-PLACEMENT-01 | static resource choice lacks live hard constraints | `core/resource_router.py` | Residency, jurisdiction, capacity, health, cost, energy and quota-aware placement |
+| G-RELEASE-PROVENANCE-02 | artifact signature does not cover complete release chain | `core/supply_chain.py`, `core/self_improvement.py` | SBOM/build provenance, independent approvals, signer lifecycle, staged promotion and rollback |
+| G-SECURITY-EVENT-DURABILITY-02 | security events are process-local | `core/observability.py` | Durable protected event stream, incident owner, alert acknowledgement and containment audit |
+| G-POLYGLOT-DEPLOYMENT-01 | polyglot source presence mistaken for integrated deployment | `render.yaml`, Go/Rust service entry points | Authoritative service inventory, service identity, API compatibility, health, secrets, rollout and DR contracts |
+
+These are architecture discovery gaps, not test-proven defects. The context-scope finding is a source-level observation; no runtime behavior was changed or tested in this architecture-only phase.
