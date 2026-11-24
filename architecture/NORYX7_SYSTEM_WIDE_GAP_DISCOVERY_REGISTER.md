@@ -320,3 +320,22 @@ These are architecture discovery gaps, not test-proven defects. W01–W12 remain
 | G-OFFLINE-PROVIDER-RECONCILIATION-01 | offline queue and provider effect state not shown as one durable lifecycle | `core/offline.py`, provider adapters | Unified intent/idempotency/receipt/indeterminate/remote-reconcile protocol |
 
 These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Additional memory, crypto, multimodal and global placement gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-MEM-CONTEXT-EXEC-01 | execution scope not propagated into memory query | `core/context.py` | Pass execution ID into storage query; typed hydration result and explicit degraded context |
+| G-MEM-CUSTODY-01 | memory schema lacks tenant/consent/retention/deletion lineage | `core/memory.py`, `core/secure_memory.py` | Canonical scoped memory envelope, tombstones and derived-data deletion graph |
+| G-MEM-DURABILITY-01 | encrypted backing store remains in-process | `core/secure_storage.py` | Durable encrypted backend, replication, backup/restore and consistency evidence |
+| G-KEY-AUTHORITY-01 | key lifecycle metadata does not establish external KMS/HSM authority | `core/key_lifecycle.py`, `core/crypto.py` | External key custody, signer roles, key epochs, rotation and distributed revocation |
+| G-ATTEST-REVOCATION-01 | runtime attestation trust freshness/replay lifecycle external | `core/attestation.py`, `core/identity.py` | Durable nonce registry, remote revocation, trust-root rotation and hardware evidence |
+| G-MEDIA-LINEAGE-01 | media digest/locator lacks capture provenance and derivative custody | `core/multimodal.py` | Authenticated locator, encrypted object custody, consent, retention and transformation graph |
+| G-AGENT-QUALIFICATION-01 | first-match dispatch and declarative skills do not qualify specialist execution | `core/agent_fabric.py`, `core/agent_skills.py` | Signed specialist scope, qualification evidence, health/capacity and independence group |
+| G-PLACEMENT-TELEMETRY-01 | static placement thresholds do not admit against live capacity/residency/cost | `core/resource_router.py`, `ecosystem/global_scale.py` | Fresh telemetry, reservations, data residency, energy/cost and failure-domain policy |
+| G-GLOBAL-REPLICA-HEALTH-01 | replica labels do not prove independent healthy durable copies | `ecosystem/global_fabric.py` | Replica attestations, read/write quorum, consistency watermark and restore drills |
+| G-SUPPLY-CHAIN-PROVENANCE-01 | signed artifact manifest lacks SBOM/build/release signer lifecycle | `core/supply_chain.py` | Build provenance, dependency graph, signer roles/revocation and staged release approvals |
+| G-OPS-EVENT-DURABILITY-01 | security event bus is in-process and bounded | `core/observability.py` | Durable append, sequence authority, alert routing, retention and incident response |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
