@@ -193,3 +193,19 @@ These are architecture discovery findings, not test-proven defects.
 | G-IMPACT-MEASURE-01 | impact measurement overclaim risk | Environmental/community architecture requirements | Baseline, boundary, net impact, uncertainty and independent measurement |
 
 These are architecture discovery findings, not test-proven defects.
+
+
+## Additional agent/runtime lifecycle gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-AGENT-OWNER-01 | overlapping authority/dispatch surfaces | `core/agent_fabric.py`, `core/operational_fabric.py`, `core/coordination.py`, `core/agent_mesh.py` | Complete constructor/call-site graph; define registry, selection, delegation, execution, admission and commit owners |
+| G-AGENT-MESH-01 | discovery label exceeds enforcement evidence | `core/agent_mesh.py` | Define authenticated membership, capabilities, liveness lease, capacity and policy enforcement or retain as role lookup only |
+| G-AGENT-LIVE-01 | local heartbeat mistaken for distributed liveness | `core/agent_runtime.py` | Signed heartbeat, lease expiry, failure detector, fencing and partition semantics |
+| G-AGENT-CAPACITY-01 | plan truncation semantics unresolved | `core/coordination.py` | Reject, queue, wave-delegate or explicitly defer excess steps; never silently imply whole-plan completion |
+| G-CONSENSUS-TYPE-01 | universal equality consensus overreach | `core/coordination.py` | Typed comparison, uncertainty, evidence independence and domain-specific disagreement handling |
+| G-DAG-PARALLEL-01 | topological order confused with parallel execution | `noryx7_runtime/scheduler.py`, `noryx7_runtime/engine.py` | Specify bounded concurrent executor, dependency barriers, conflicts, cancellation, fairness and deterministic admission |
+| G-EFFECT-UNKNOWN-01 | FAILED does not prove no external side effect | `noryx7_runtime/engine.py`, `noryx7_runtime/contracts.py` | Add indeterminate/reconciliation states, idempotency and authoritative adapter receipts; prohibit blind retry |
+| G-PLANE-FREEZE-01 | path existence confused with architecture closure | `core/architecture_gate.py`, `core/architecture_registry.py` | Separate structural gate from evidence-backed source/callsite/boundary/test/deployment freeze manifest |
+
+These are architecture discovery findings, not test-proven defects.
