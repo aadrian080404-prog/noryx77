@@ -311,3 +311,23 @@ No stream is closed by this reconciliation.
 | W12 | Community/offline operations need durable identity, consent, safety, compensation and project evidence | Governance, restricted funds, incident/grievance, outcome audit and participant exit | PARTIAL |
 
 All twelve streams remain PARTIAL. No code-level fix or integration was performed.
+
+
+## 2026-11-24 — structural gate, secure memory, audit and platform assurance
+
+| Stream | Additional source finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Local iOS grants/device IDs do not establish issuer-verified principal or attestation | Signed enrollment/grants, issuer chain, device binding and remote revocation | PARTIAL |
+| W02 | Structural registry does not prove runtime reachability; local audit/replay state is not crash durable | Canonical lifecycle/call graph, durable replay and crash recovery | PARTIAL |
+| W03 | EncryptedMemoryStore uses an in-process EncryptedRecordStore backend; memory schema lacks tenant/consent/retention | Durable backend, ownership, purpose, expiry, tombstones and replica semantics | PARTIAL |
+| W04 | Skill registry is local metadata, not qualification or action authority | Versioned manifests, independent qualification and attenuated delegation | PARTIAL |
+| W05 | Plane budget descriptions are not bound to live scheduler enforcement | Admission, quotas, fairness, telemetry and overload policy | PARTIAL |
+| W06 | Audit hash chain and HMAC checkpoint have distinct assurance levels | External durable checkpoint custody and signed freeze evidence | PARTIAL |
+| W07 | Domain models still need calibrated model/version/evidence binding | Validation, uncertainty, safety envelope and Reality Bridge | PARTIAL |
+| W08 | iOS/Android adapter state is local; Browser isolation scan is static | Unified enrollment, permissions, revocation, update and runtime policy | PARTIAL |
+| W09 | Encryption and local replay guards are primitives, not full key/device lifecycle | Protected key custody, durable replay, checkpoint storage and bypass closure | PARTIAL |
+| W10 | Skill labels do not prove domain competence | Specialist qualification, jurisdiction, reviewer and expiry | PARTIAL |
+| W11 | Terminal fabric is specified architecturally but no dedicated runtime was located in inspected tree | Implementation inventory, sandbox, remote host trust, durable telemetry and DR | PARTIAL |
+| W12 | Audit/storage primitives do not implement project finance or outcome accountability | Durable project ledger, consent, safeguards and independent impact measurement | PARTIAL |
+
+All workstreams remain PARTIAL; no integration or verification was performed.
