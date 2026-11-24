@@ -379,3 +379,28 @@ This ledger records bounded path-level observations, not a full call-site or dep
 | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md` | Terminal/Cloud Shell target architecture and security requirements | No dedicated terminal runtime path found in the inspected recursive tree snapshot |
 
 This ledger records the inspected snapshot and path-level findings; it is not a production security assessment.
+
+
+## Agent execution, evidence, MIRROR WORLD and impact source traceability — 2026-11-24
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `core/agent_core.py` | Agent phase lifecycle, bounded sequential plan execution, optional authorization hook and verified response gate | Per-agent lock/local lifecycle; no durable attempt, lease, cancellation or distributed recovery in this class |
+| `core/agent_fabric.py` | Agent identity/skill binding, principal context anti-spoofing and injected principal authorization | Principal is a label parameter; deterministic first authorized candidate; skill presence is not qualification |
+| `core/agent_mesh.py` | Role registry and deterministic role routing | No identity registry or authorization boundary in this class |
+| `core/coordination.py` | ActionGate-protected agent assignment, child task verification and result admission | Assignment truncates to `max_agents`; does not define complete DAG scheduling; equal output does not prove independent consensus |
+| `core/operational_fabric.py` | Supervisor selection, dispatch, admission and optional audit calls | One-task wrapper; durable distributed leases/retry/cancel/recovery not established |
+| `core/agent_runtime.py` | Local agent heartbeat/status with injected monotonic clock | Not distributed liveness or remote attestation |
+| `core/verification.py` | Contract, identity, cardinality, completion and output-presence checks | Non-empty output and verification marker do not establish semantic truth or source entailment |
+| `core/reasoning.py` | Plan-derived hypotheses and bounded structural feasibility checks | Not domain-calibrated simulation or causal/physical validation |
+| `core/subtask_uif.py` | Bounded specialist routing with explicit `route_authority=False` | Routing label does not qualify specialist competence or grant authority |
+| `core/subtask_verification.py` | Exact subtask result coverage/order and commit eligibility marker | String output + boolean verified marker is not source-anchored evidence |
+| `core/universal_intelligence.py` | Domain route/assessment/evidence-shaped records and bounded confidence/uncertainty fields | Supplied strength/confidence are not source-authenticated or calibrated by shape checks |
+| `core/evaluation_campaign.py` | Deterministic local adversarial case/holdout manifest and dimension-completeness approval | Does not itself generate independent evaluation evidence or prove campaign execution/pass |
+| `core/finch.py` | Bounded event graph, relevance/anomaly and forecast-shaped records | Likelihood/horizon/evidence IDs do not establish calibrated predictive performance |
+| `ecosystem/global_fabric.py` | L0–L5 memory metadata, payload/provenance digests and replica labels; local identity authorization index | In-process metadata map; no payload custody, healthy replica proof, issuer or cross-region consensus |
+| `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md` | World graph, experiment manifest, simulation kernels, synthetic browser/cyber range and Reality Bridge target | Model calibration, independent validation, OOD validity and real-world actuation boundary remain evidence requirements |
+| `architecture/BUSINESS_PROJECT_FABRIC.md` | Project lifecycle, financial boundary, commission/accounting workflow requirements | Does not establish deployed payment rails, double-entry ledger, settlement or disputes |
+| `architecture/NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYSTEM_GOVERNANCE.md` | Global memory and identity governance requirements; marketplace/community/impact target architecture | Source inventory remains bounded; durable services and independent outcome accounting not established |
+
+This is a source-snapshot traceability record, not an implementation or production-readiness certification.
