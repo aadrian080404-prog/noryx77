@@ -360,3 +360,22 @@ Source snapshot for this pass: branch `architecture/system-wide-closure-mirror-w
 | `services/jarvis-runtime-rs/src/lib.rs` | Rust envelope digest and deny-by-default helper | Not full identity/signature/dispatch/journal/recovery runtime in inspected source |
 
 This ledger records bounded path-level observations, not a full call-site or deployment proof.
+
+
+## Structural gate, secure memory, audit and platform assurance source traceability — 2026-11-24
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `core/architecture_registry.py` | Defines 18 canonical planes and ten non-empty descriptive fields per plane | Descriptive strings do not prove that integrations, trust boundaries, budgets or recovery are enforced |
+| `core/architecture_gate.py` | Checks enum coverage, non-empty fields and existence of filename tokens in implementation boundary | Does not trace call sites, constructors, runtime reachability, integration, trust enforcement, tests or deployment |
+| `core/secure_storage.py` | Authenticated-encryption record abstraction with namespace/record AAD and ciphertext snapshots | Inspected backing map is process-local memory; no durable database/replication/key lifecycle |
+| `core/secure_memory.py` | Serializes MemoryItem and uses encrypted record adapter; optional execution-ID filter | Schema lacks tenant/principal, consent/purpose, provenance artifact, expiry/retention/tombstone and replica metadata |
+| `core/audit.py` | In-memory SHA-256 event chain and HMAC-SHA256 checkpoint create/verify | Checkpoint not externally persisted by this class; no durable event ledger/trusted timestamp/independent signer |
+| `core/agent_skills.py` | Local skill registry and descriptions | Registration is not qualification, version approval, jurisdiction or action authority |
+| `core/platform.py` | Typed platform request/action; DeviceRuntimeBoundary and epoch gate | Platform adapter enrollment/attestation/revocation remain external |
+| `ios/NoryxIOSAdapter/.../NoryxIOSPlatformAdapter.swift` | Actor-local grants, handlers, expiry, epoch and bounded consumed-action set | No signed grants, durable replay state, hardware attestation or remote revocation shown |
+| `android/noryx7-jarvis-bridge/.../AudioWakeBridge.kt` | Narrow audio wake callback | Wake detection is not identity, explicit user intent, OS permission proof or ActionGate approval |
+| `ecosystem/browser_isolation.py` | Static source marker scan for forbidden Browser integrations | Does not prove runtime behavior, dynamic dependencies, network destination or OS sandbox security |
+| `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md` | Terminal/Cloud Shell target architecture and security requirements | No dedicated terminal runtime path found in the inspected recursive tree snapshot |
+
+This ledger records the inspected snapshot and path-level findings; it is not a production security assessment.
