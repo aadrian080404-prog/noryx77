@@ -291,3 +291,23 @@ ADR-B90–B96 are OPEN. All W01–W12 remain PARTIAL. No runtime source, tests, 
 | W12 | Activity counts differ from net environmental outcomes; restricted funds and safeguards need explicit ledgers | Trace actual project, marketplace, fund, contributor and measurement paths | PARTIAL |
 
 No stream is closed by this reconciliation.
+
+
+## 2026-11-24 — ingress, memory, offline and operational trust reconciliation
+
+| Stream | New source-backed finding | Remaining architecture work | Status |
+|---|---|---|---|
+| W01 | Gateway session binds a signed token to caller-provided client_id, not an enrolled principal/device | Canonical issuer, enrollment, audience, capability scope, revocation and key rotation | PARTIAL |
+| W02 | StateJournal and RecoveryController are durable/local primitives, but cross-store and external effects remain non-atomic | Unified lifecycle, intent/outbox/receipt, restart and recovery semantics | PARTIAL |
+| W03 | Context hydration does not filter by execution_id and hides memory errors as empty context; global memory stores metadata/digests | Scoped reads, typed degraded outcomes, provenance, consent, expiry, tombstones and replica guarantees | PARTIAL |
+| W04 | Provider failover retries after generic exceptions; role/authorization/provenance must follow every dispatch | Retry safety, typed failure classes, qualified provider contracts and effect reconciliation | PARTIAL |
+| W05 | ResourceRouter uses static complexity/privacy/latency thresholds | Add hard residency constraints and live capacity, cost, energy, health and quota policy | PARTIAL |
+| W06 | Durable claim/source/effect evidence must survive memory, offline and provider boundaries | Join evidence lineage with signed receipts and audit | PARTIAL |
+| W07 | Offline device operations and resource placement need Reality Bridge safety constraints | Model/device capability contract, human approval, interlocks and feedback | PARTIAL |
+| W08 | Gateway is one Python ingress; Go/Rust/mobile surfaces are not shown as one integrated deployment | Canonical session/device enrollment and API/version compatibility across surfaces | PARTIAL |
+| W09 | EgressPolicy is an in-memory rule set; it does not itself prove DNS/socket/redirect enforcement | Mandatory network mediation, key custody, session revocation and protected audit | PARTIAL |
+| W10 | Context and provider routing do not carry a complete specialist qualification manifest | Preserve domain scope, qualification, evidence lineage and expiry through execution | PARTIAL |
+| W11 | Supply-chain verifier checks signed manifest/digest; event bus is in-memory; release admission is a staged primitive | SBOM/build provenance, durable incidents, independent approvals, rollback, SLO and DR | PARTIAL |
+| W12 | Community/offline operations need durable identity, consent, safety, compensation and project evidence | Governance, restricted funds, incident/grievance, outcome audit and participant exit | PARTIAL |
+
+All twelve streams remain PARTIAL. No code-level fix or integration was performed.
