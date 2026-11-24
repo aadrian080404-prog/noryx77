@@ -308,3 +308,29 @@ These decisions remain open. They do not authorize implementation or tests.
 **Streams:** W01, W02, W04, W06, W09, W11. Preserve the 18-plane structural gate while requiring source symbols/call sites, authority ownership, boundary enforcement, test evidence, deployment mapping and operational acceptance for freeze.
 
 All B85–B89 are OPEN / PROPOSED, not approved or frozen.
+
+
+## Additional decisions — 2026-11-24 (cognitive evidence, Mirror World and global scale)
+
+### B90 — Evidence Class and Assurance Ladder
+**Streams:** W06, W07, W10, W11. Separate structural, synthetic, independent, empirical/domain-calibrated and operational evidence. No promotion to a stronger assurance class without explicit evidence.
+
+### B91 — Evaluation Campaign Integrity and Benchmark Governance
+**Streams:** W04, W06, W09, W10, W11. Define signed immutable manifests, evaluator identity, one-result semantics, holdout secrecy, benchmark lineage, statistical power, reproducibility and independent approval.
+
+### B92 — FINCH Temporal Forecast Qualification
+**Streams:** W06, W07, W10, W11. Distinguish keyword/severity relevance and anomaly heuristics from calibrated forecasts; require temporal backtesting, base rates, confidence intervals, drift and source-quality controls.
+
+### B93 — MIRROR WORLD Domain Model and Reality Bridge
+**Streams:** W06, W07, W08, W10, W11. Require domain-specific model contracts, calibration, uncertainty, validation and non-actuating Reality Bridge approval.
+
+### B94 — Multimodal Data Custody and Evidence Lineage
+**Streams:** W03, W06, W08, W09. Define authenticated locators, encryption, tenant/consent binding, retention/deletion and transformation lineage.
+
+### B95 — Global Fabric Production Adapter Contract
+**Streams:** W02, W05, W08, W11. Define authenticated membership, durable queues, leases, reservations, replication, autoscaling, quotas, fairness and disaster recovery.
+
+### B96 — Safe Research Egress and Provider Attestation
+**Streams:** W01, W06, W08, W09, W12. Define host/IP/redirect controls, untrusted-content isolation, signed provider receipts and high-risk transaction confirmation/reconciliation.
+
+All B90–B96 are OPEN / PROPOSED, not approved or frozen.
