@@ -475,3 +475,25 @@ Consolidate this pass into existing decision authorities; do not create a duplic
 | B95 | Production placement/provider adapters, residency, capacity, energy/cost and failure-domain contracts | OPEN |
 
 No ADR is closed by this documentation pass. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
+
+Consolidate into existing decision authorities; do not create duplicate ADRs:
+
+| Existing ADR | Reconciliation detail | Status |
+|---|---|---|
+| B79/B80/B85/B87 | Caller-bound execution identity, branch/plan/step/attempt IDs, full DAG admission and lease semantics | OPEN |
+| B86/B104 | Provider/tool/offline idempotency, effect certainty, durable receipts and reconciliation | OPEN |
+| B88/B90/B97 | Consensus independence, evidence lineage and semantic result admission | OPEN |
+| B81/B103 | Durable memory payload custody, tenant isolation, tombstones and verified replicas | OPEN |
+| B82/B102 | Principal/session/device/workload authority continuity | OPEN |
+| B71/B96/B98 | DNS/socket egress enforcement and provider/source attestation | OPEN |
+| B72/B77/B89 | Artifact/model signing lifecycle, external checkpoint and evidence-backed freeze | OPEN |
+| B91 | Evaluation campaign execution and independent holdout custody | OPEN |
+| B94 | Multimodal custody, transformation lineage, consent and retention | OPEN |
+| B95 | Placement telemetry freshness, reservation/lease and production adapters | OPEN |
+| B76/B99 | Specialist qualification as scheduling eligibility | OPEN |
+| B83/B84/B101 | Financial custody, governance and independent outcome evidence | OPEN |
+
+No ADR is closed by this documentation pass. W01–W12 remain PARTIAL.
