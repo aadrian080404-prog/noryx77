@@ -404,3 +404,20 @@ This ledger records the inspected snapshot and path-level findings; it is not a 
 | `architecture/NORYX7_FOUR_FRONT_GLOBAL_MEMORY_AND_ECOSYSTEM_GOVERNANCE.md` | Global memory and identity governance requirements; marketplace/community/impact target architecture | Source inventory remains bounded; durable services and independent outcome accounting not established |
 
 This is a source-snapshot traceability record, not an implementation or production-readiness certification.
+
+
+## Tool protocol, provider and external-effect source traceability — 2026-11-24
+
+| Source path | Observed responsibility | Boundary / unresolved issue |
+|---|---|---|
+| `core/tool_protocol.py` | Local ToolSpec/ToolResult registry; injected authorization callback; tool@version provenance | Callback sees ToolSpec only; no principal/session/target/attempt binding or immutable artifact/input/output provenance |
+| `core/provider_resilience.py` | Bounded provider failover through ProviderRouter and ExecutionFabric; policy denial terminal | Generic exceptions trigger failover; deterministic attempt ID lacks caller operation/idempotency key; no remote effect certainty/receipt |
+| `core/http_provider.py` | HTTPS-by-default JSON POST, timeout, response-size bound, secret environment lookup, redirects rejected | No DNS pinning/socket mediation/private-IP policy or remote idempotency/effect reconciliation proof |
+| `core/execution_trace.py` | Per-execution in-memory SHA-256 hash chain with local verification | No durable persistence, external trusted head, signer identity, trusted time or event completeness guarantee |
+| `core/egress.py` | In-memory component/host/port/protocol allowlist | Does not itself prove DNS rebinding resistance, redirect/socket enforcement or all-transport mediation |
+| `core/secure_channel.py` | Authenticated channel framing, identity/session binding and bounded replay window | Channel integrity is not semantic action authorization or durable remote-effect receipt |
+| `core/provider_router.py` | Capability-based provider registration/resolution | Selection is not provider qualification, residency/cost equivalence or retry safety |
+| `core/provider_execution.py` | Injected authorization before provider adapter dispatch | Needs common operation/idempotency ID, durable attempt and receipt/reconciliation contract |
+| `core/offline.py` | Offline envelope/queue and recovery integration | Queue durability and uncertain effect state must converge with provider dispatch lifecycle |
+
+These are bounded source findings, not an end-to-end egress or provider security assessment.
