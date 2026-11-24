@@ -472,3 +472,8 @@ Findings are source-bounded and do not constitute an end-to-end security or dist
 | `architecture/NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md` | MIF/theorem capsule and proof-carrying optimization architecture | Target architecture; no dedicated general FRL proof-kernel/runtime established by this inventory |
 
 These are bounded source observations at the stated commit, not execution tests or production certification.
+
+
+## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
+
+Reviewed on branch snapshot `e44a7547c7c67ac7e0c8e916fa67cd0282940f38`: `core/hypersynth.py`, `core/reasoning.py`, `core/metacognition.py`, `core/verification.py`, `core/evaluation_campaign.py`, `core/multimodal.py`, `core/agent_core.py`, `core/agent_fabric.py`, `core/resource_router.py`, `jarvis/core/orchestrator.py`, `ecosystem/global_scale.py`; architecture references `NORYX7_MIRROR_WORLD_ARCHITECTURE.md`, `NORYX7_CROSS_CUTTING_ARCHITECTURE_CONTRACTS.md`, `POWERSHELL_CLOUD_TERMINAL_FABRIC.md`, `NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`. `core/reverse_engineering.py` fetch returned 404 at this ref; no repository-wide absence conclusion. Detailed observations and limitations are in the linked reconciliation document.
