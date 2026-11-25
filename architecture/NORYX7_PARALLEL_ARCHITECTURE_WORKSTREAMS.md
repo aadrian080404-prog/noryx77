@@ -430,3 +430,18 @@ W06/W07/W09/W10/W11/W12 cross-pass: the code's FINCH forecast likelihood is a me
 ## Cross-stream dependency and ownership reconciliation — 2026-11-25
 
 The system-wide dependency graph, canonical responsibility map, end-to-end handoffs and collision register are maintained in [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md). Discovery remains concurrent across all streams; upstream dependencies constrain contract freeze, not discovery. No stream may create a parallel identity, policy/capability, runtime lifecycle, trusted state/commit, evidence or financial authority. The synthesis is proposed, does not supersede ADR-001–ADR-005, and does not change any stream from PARTIAL.
+
+
+## Ingress/effects/release evidence cross-pass — 2026-11-25
+
+New bounded reconciliation: `NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md`.
+
+Concurrent W01–W12 implications:
+- W01/W08/W09: ingress identity and route-level trust boundaries.
+- W02/W03/W05: operation/attempt identity, external effect certainty, durable receipts, idempotency and retry ownership.
+- W04/W05/W11: distinction between dependency scheduling, bounded concurrency, resource reservation and failover.
+- W06/W07/W10: provenance and independent evidence for admitted results, simulations and domain outcomes.
+- W11: structural audit, CI, release promotion and runtime operations remain separate evidence streams.
+- W12: billing/metering and community/financial records remain outside execution authority.
+
+ADR-B56–B62 remain OPEN; W01–W12 remain PARTIAL. Discovery continues in parallel while freeze acceptance respects upstream authority/evidence dependencies. No implementation, integration, manual test campaign, merge or deployment is authorized.
