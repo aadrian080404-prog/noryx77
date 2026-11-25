@@ -156,3 +156,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## System-wide cross-workstream ownership and dependency reconciliation — 2026-11-25
 
 28. [Cross-Workstream Dependency, Canonical Ownership and End-to-End Lifecycle Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md) — integrates W01–W12 into one dependency graph, responsibility map, end-to-end lifecycle, collision register and architecture acceptance matrix. Proposed only; W01–W12 remain partial and unfrozen.
+
+
+## 2026-11-25 — ingress, external effects, release evidence and closure gates
+
+[Ingress, External Effects, Release Evidence and Cross-Workstream Closure Reconciliation](NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md) — reconciles gateway and direct API ingress, provider retry/idempotency, uncertain external effects, scheduler/concurrency semantics, CI versus release evidence, and ADR-B56–B62 across W01–W12. All streams remain PARTIAL; no freeze or implementation is implied.
