@@ -176,3 +176,8 @@ See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGL
 ## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
 
 See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). This pass adds exact source/blob anchors for ActionGate and one-shot action/execution/principal-bound grants; IdentityRegistry and replay scope; the two distinct runtime and SQLite state journals; RuntimeRecovery and RecoveryController; offline authenticated encryption, durable SQLite monotonic snapshot anchor and volatile encrypted outbox; FastAPI and standalone gateway ingress; ExecutionFabric adapter registration; and W12 fund-segregation/authorized-transaction architecture. Existing grant/recovery/offline tests are recorded as source artifacts, not tests executed in this pass. Durable offline anti-rollback exists, while the queue itself remains in-memory in the inspected implementation. W01–W12 remain PARTIAL; ADR-003 is not accepted. No implementation or test run is claimed.
+
+
+## Runtime constructor/call-graph and continuity reconciliation — 2026-11-25
+
+21. [Runtime Constructor, Call Graph, Retry, Offline and Release Governance Reconciliation](NORYX7_RUNTIME_CONSTRUCTOR_CALL_GRAPH_RETRY_OFFLINE_AND_RELEASE_GOVERNANCE_RECONCILIATION.md) — source-backed reconciliation of authority constructors, ingress convergence, dual journals, external-effect certainty, provider retry ownership, agent lineage, offline durability, global memory/placement, W12 financial/impact authority and release provenance. It remains a bounded architecture review, not an implementation or verification claim. W01–W12 remain PARTIAL.
