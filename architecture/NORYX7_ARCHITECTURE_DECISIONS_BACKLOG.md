@@ -616,3 +616,20 @@ Reuse existing open decisions for the following newly sharpened questions: (1) m
 ## 2026-11-25 — Cognitive, NEXUS, MIRROR WORLD and global assurance reconciliation
 
 Reuse existing open decisions for: simulation fidelity tiers and model calibration; independent semantic oracles and holdout isolation; source acquisition gateway, immutable evidence and source-to-claim provenance; global replication acknowledgements/quorum and conflict semantics; expiring capacity leases/fencing; mandatory egress enforcement across network surfaces; TrustChain replay persistence/revocation; and campaign execution provenance. Do not infer ADR IDs and do not resolve a decision solely from the presence of a local primitive.
+
+
+## 2026-11-25 — Parallel closure acceleration and integration-readiness decisions
+
+The [Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NORYX7_PARALLEL_CLOSURE_ACCELERATION_DEPENDENCY_DAG_AND_INTEGRATION_READINESS.md) introduces no duplicate ADR series and closes no existing decision. Its source findings sharpen existing authorities:
+
+- **B01/B06/B09/B10:** route parity, canonical principal/session binding and runtime composition across gateway, CLI, JARVIS and other ingress paths.
+- **B02/B10:** constructor/call-site proof for the canonical runtime coordinator and compatibility facade/deprecation boundaries.
+- **B03/B11:** durable journal deployment/configuration, namespace ownership, cross-journal recovery and backup/restore.
+- **B04/B12:** Primary/Secondary lineage, qualification, independence and result admission.
+- **B05/H01/H03/H11:** evidence-bound semantic verification, evaluator identity, typed outcomes and separation of structural verification from truth.
+- **B07/H02:** source-ref-bound evidence cards, contract versioning and invalidation on source/interface change.
+- **B08/H09:** offline authority freshness, key custody and recovery boundaries.
+- **H07/H11/H12:** one provider retry/effect coordinator, idempotency and uncertain remote-effect reconciliation.
+- **H04/H05/H06/H08/H10 and M01–M07:** remain mapped to the parallel workstream lanes and retain their existing acceptance criteria.
+
+The acceleration protocol permits concurrent source discovery and specification, but shared contract decisions remain serialized through ADR ownership. The first integration target after an approved architecture freeze is one authenticated vertical slice. No ADR is accepted, no architecture freeze is declared and no integration/test campaign is authorized by this update. W01–W12 remain PARTIAL.
