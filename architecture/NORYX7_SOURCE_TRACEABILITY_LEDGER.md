@@ -491,3 +491,10 @@ Reviewed at branch `architecture/system-wide-closure-mirror-world-2026-11-21`: `
 ## Cross-workstream traceability overlay — 2026-11-25
 
 The system-level responsibility and dependency overlay is defined in [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md). This overlay is a logical ownership map, not source proof. For each row, the next source pass must record exact paths/revision, constructors, registrations, entrypoints, callers, mutation paths, stores/journals, external effects and failure/recovery behavior. In particular, runtime, identity, capability, state/journal, agent dispatch, provider routing and audit ownership remain source-level reconciliation items until call graphs and persistence paths are inspected. No implementation status is upgraded by this overlay.
+
+
+## 2026-11-25 — ingress, side-effect and release evidence overlay
+
+Bounded source reconciliation cross-referenced against `NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIATION.md`, `NORYX7_SOURCE_RECONCILIATION_W01_W05.md`, `NORYX7_SOURCE_RECONCILIATION_W06_W12.md` and ADR-B56–B62. New synthesis: `NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md`.
+
+Evidence limitation: route-local inspection does not establish reverse-proxy behavior; source component inspection does not establish all dynamic callers; workflow success does not establish deployment approval. The next source pass must add exact route/middleware/configuration references, provider retry caller graph, per-adapter idempotency and receipt semantics, scheduler concurrency/cancellation call paths, and per-platform artifact provenance. Do not upgrade implementation or architecture status based on this overlay.
