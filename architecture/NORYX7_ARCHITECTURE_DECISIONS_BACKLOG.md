@@ -544,3 +544,8 @@ The [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SO
 - Separate cross-front dispatch acceptance receipts from output and observed-effect evidence.
 
 All corresponding existing decisions remain OPEN pending complete call-site, constructor, persistence and deployment evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — single-cycle W01–W12 dependency reconciliation
+
+The [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md) maps current decision dependencies across identity/authority, execution/effect separation, journal ownership/recovery, provider retry/idempotency, agent qualification/DAG scheduling, evidence typing, simulation admission, offline custody, cryptographic revocation, specialist qualification, global placement/release and segregated financial/impact governance. This is a decision-dependency overlay only: it creates no new ADR and does not accept or close existing ADRs. W01–W12 remain PARTIAL pending source/call-site evidence and owner acceptance.
