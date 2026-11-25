@@ -469,3 +469,19 @@ These are architecture gaps to resolve, not assertions that no external integrat
 | Durable observability | W08/W09/W11 | durable tamper-evident events, trace lineage, delivery acknowledgement, alerting and incident containment |
 
 These are architecture gaps, not claims that no external backend or provider exists. W01–W12 remain PARTIAL.
+
+
+## 10. Product-level capability and realization gaps — 2026-11-25
+
+| Gap | Streams | Why it matters | Required closure |
+|---|---|---|---|
+| Product intent versus operational guarantee | W01–W12 | A capability may be specified and have source files without one reachable, governed production path | Per-capability owner, composition/call-site map, runtime boundary, failure model and acceptance evidence |
+| End-to-end object chain | W01/W02/W03/W04/W05/W07/W08/W09 | Principal, interaction, evidence, cognitive run, plan, delegation, action, effect, verification and commit are not yet one canonical versioned chain | Canonical schemas, IDs, state transitions, migration/compatibility and cross-plane conformance |
+| Cognitive branching versus execution concurrency | W04/W05/W07/W08 | Cognitive phases and plan DAGs exist, but scheduler output is consumed sequentially by RuntimeEngine | Bounded concurrent executor, lease/conflict model, cancellation, partial-result semantics and deterministic audit |
+| Semantic evidence and specialist qualification | W04/W06/W10/W12 | Structural verification and keyword specialist routing do not establish source entailment, calibration or professional competence | Claim-span evidence, authenticated sources, calibration, qualification registry and human escalation |
+| MIRROR WORLD reality validity | W06/W10/W11 | Deterministic or synthetic simulation does not establish real-world predictive validity | Domain kernel manifests, calibration/holdout, uncertainty, OOD limits and isolated Reality Bridge safety case |
+| Systems reverse-engineering realization | W06/W07/W08/W10 | Architecture intent and synthetic cyber-range code do not establish a general authorized system-understanding engine | Asset authorization manifest, passive/active tiers, instrumentation isolation, protocol evidence and report standard |
+| Global operating guarantees | W03/W05/W08/W09/W11 | Local registries, replica labels and resource selection do not prove durable global service | Durable multi-region control/data plane, signed node trust, capacity leases, replication acknowledgements and DR evidence |
+| W12 delivery and public impact | W07/W09/W10/W12 | Community and financial architecture is not proof of live payment, custody, ledger or independently verified environmental/social outcomes | Regulated financial controls, double-entry/reconciliation, independent impact baseline/counterfactual and field evidence |
+
+This register is a design/closure inventory, not a claim that no external service exists. W01–W12 remain PARTIAL; no implementation, test campaign or freeze is authorized by this entry.
