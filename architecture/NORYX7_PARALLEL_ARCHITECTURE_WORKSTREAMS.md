@@ -484,3 +484,17 @@ The new source reconciliation adds cross-stream evidence for the following open 
 - W09/W11: CI workflow and signed artifact manifest verifier do not alone establish end-to-end release provenance, promotion and rollback.
 
 **Disposition:** W01–W12 remain PARTIAL. These findings are source-reconciliation inputs; they do not authorize runtime integration or test execution.
+
+
+## Memory and surface contract reconciliation — 2026-11-25
+
+New cross-stream dependencies from the latest source pass:
+- W01/W02/W04/W07: JARVIS and core share a CanonicalSystemFabric identity boundary; production composition, provider retry ownership and durable runtime journal injection remain separate concerns.
+- W02/W04/W05/W07/W08: ToolExecutor uses ActionGate, while generic ToolRegistry delegates authorization to a caller callback; all executable surfaces need one canonical action/effect envelope.
+- W03/W06/W08/W09: encrypted MemoryItem serialization exists, but memory and ciphertext stores are in-process maps; custody metadata, durable backend, deletion and typed hydration remain open.
+- W02/W03/W08/W09: AES-GCM/HKDF primitives exist; in-memory key provider is test-only and production KMS/HSM, rotation, revocation and recovery are not established by these classes.
+- W06/W08/W09/W10: multimodal request digest binds modality/content type/digest/locator but does not establish source authenticity, consent, transformation lineage or claim entailment.
+- W05/W07/W08/W09/W11: device grants check local trust/audience/epoch; resource routing and scheduler order do not prove attested placement, capacity leases or concurrent execution.
+- W07/W08/W09/W11: browser isolation is a static source gate; SecurityEventBus is bounded and process-local, not durable incident evidence.
+
+W01–W12 remain PARTIAL. These findings are architecture requirements, not implementation or test claims.
