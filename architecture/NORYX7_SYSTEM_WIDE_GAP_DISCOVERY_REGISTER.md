@@ -626,3 +626,19 @@ These gaps describe missing or incomplete evidence in the inspected repository s
 | GAP-RETRY-OWNER-AND-COMPENSATION-MAP | W02/W03/W05/W09/W11/W12 | Identify one retry/effect coordinator per side-effect path; document idempotency, unknown effect, compensation and financial reconciliation. |
 
 These gaps identify architecture closure work; they do not claim that a vulnerability exists. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Verification, bootstrap, acquisition and global operations gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-SEMANTIC-RESULT-ADMISSION | W02/W04/W06/W10 | Independent semantic evaluator, source-bound claims, scope/uncertainty, calibration and evaluator identity. |
+| GAP-EVALUATION-EVIDENCE-ATTESTATION | W06/W09/W11 | Bind each score/pass to immutable case, build, evaluator, raw output and reproducible evidence; prove holdout isolation. |
+| GAP-SECURE-BOOT-ANCHOR-CHAIN | W01/W09/W11 | Cryptographically chain ordered measured stages to configured root; validate signatures, anti-rollback and runtime admission consumer. |
+| GAP-RESEARCH-URL-EGRESS-ENFORCEMENT | W05/W06/W08/W09/W11 | Prove DNS/IP/redirect validation and network-level egress policy for every acquisition path; bind bytes and spans to custody records. |
+| GAP-OBSERVABILITY-DURABLE-INCIDENT-CHAIN | W03/W09/W11 | Durable signed event chain, gap detection, delivery acknowledgements, incident ownership and recovery evidence. |
+| GAP-GLOBAL-CAPACITY-LEASE-AND-FENCING | W05/W08/W11 | Atomic expiring reservations, node attestation, fencing, split-brain and failover evidence. |
+| GAP-SELF-IMPROVEMENT-RELEASE-ATTESTATION | W06/W09/W11 | Bind proposal to exact tested artifact, independent verification, signed approval, canary, deployment measurement and rollback. |
+| GAP-SPECIALIST-CREDENTIAL-VERIFICATION | W01/W06/W10 | Issuer-verified scoped credentials, jurisdiction, expiry, conflict and independent review. |
+
+These are source-reconciliation closure requirements, not proof of exploitability or absence of external controls. W01–W12 remain PARTIAL.
