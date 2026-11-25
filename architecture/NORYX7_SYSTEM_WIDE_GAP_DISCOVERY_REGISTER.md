@@ -612,3 +612,17 @@ These are architecture closure requirements, not proof of a vulnerability or abs
 | GAP-W12-INDEPENDENT-IMPACT-MEASUREMENT | W06/W07/W10/W12 | Establish baseline/counterfactual, boundary, methodology, independent verifier, uncertainty, net outcome and correction/grievance. |
 
 These gaps describe missing or incomplete evidence in the inspected repository source scope; they do not assert that no external provider exists. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Handoff contract and schema-governance gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-CANONICAL-ENVELOPE-IMPLEMENTATION-MAP | W01–W12 | Map each proposed envelope to existing types, adapters, serializers, API schemas and all consumers; identify duplicate/contradictory shapes. |
+| GAP-SCHEMA-REGISTRY-AND-COMPATIBILITY | W01–W12 | Assign one owner/registry per canonical contract, major/minor/patch compatibility, unknown-field policy, deprecation and loss-aware adapters. |
+| GAP-HANDOFF-ISSUER-CONSUMER-TRACE | W01/W02/W04/W05/W06/W08/W09 | Trace every producer/consumer and validate issuer, audience, scope, policy epoch, signature and lineage at the actual enforcement boundary. |
+| GAP-LIFECYCLE-ERROR-VOCABULARY-COLLISION | W02/W03/W04/W05/W06/W07/W08/W09/W11/W12 | Reconcile local enums without forcing unrelated operation/effect/evidence/qualification/lease/release states into one enum. |
+| GAP-EVIDENCE-INVALIDATION-DEPENDENCY-GRAPH | W01–W12 | Bind evidence cards to exact source blobs and transitive dependencies; invalidate affected claims when source or contract changes. |
+| GAP-RETRY-OWNER-AND-COMPENSATION-MAP | W02/W03/W05/W09/W11/W12 | Identify one retry/effect coordinator per side-effect path; document idempotency, unknown effect, compensation and financial reconciliation. |
+
+These gaps identify architecture closure work; they do not claim that a vulnerability exists. W01–W12 remain PARTIAL.
