@@ -537,3 +537,14 @@ These are unresolved architecture gaps, not claims that no external system or se
 - **GAP-SURFACE-TRUST-ENFORCEMENT:** local device registry and static browser scanner do not establish hardware attestation, renderer isolation or enforced egress.
 
 These are discovery labels, not new ADR identifiers. Full source evidence and closure gates are in `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE_SOURCE_MAP.md`. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Additional trust and agent execution gaps
+
+- **GAP-AGENTCORE-AUTH-PROFILE:** AgentCore accepts an optional authorization hook; every production caller must declare its authorization profile or planning-only restriction.
+- **GAP-SKILL-EXECUTABILITY-QUALIFICATION:** declarative skill registration can use a no-op handler and does not prove implementation or qualification.
+- **GAP-ATTESTATION-PLANE-SEPARATION:** runtime measurement attestation and agent operation attestation are distinct trust planes and need explicit linked envelopes.
+- **GAP-KEY-LIFECYCLE-DURABILITY:** KeyLifecycle tracks metadata in process memory; KMS/HSM binding, durable version state and revocation propagation are not established here.
+- **GAP-CROSS-JOURNAL-RECOVERY:** local RecoveryController and RuntimeRecovery do not demonstrate coordinated recovery across all journals, provider effects and replicas.
+- **GAP-VERIFICATION-OBJECT:** bare boolean verification does not bind source evidence, verifier identity, method or policy version.
+
+These labels are discovery entries, not ADR IDs. W01–W12 remain PARTIAL.
