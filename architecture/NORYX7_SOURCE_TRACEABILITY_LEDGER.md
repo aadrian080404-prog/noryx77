@@ -778,3 +778,20 @@ No dedicated named NEXUS, FRL, integrated MIRROR WORLD engine, payments/escrow/d
 ## 2026-11-25 — Normative handoff contract reference
 
 Added `NORYX7_CANONICAL_HANDOFF_SCHEMAS_VERSIONING_FAILURE_AND_OWNERSHIP_CATALOG.md` as the cross-stream normative contract reference. It defines proposed typed record families and maps each handoff to producer, consumer, authority and blocking failure. This is an architecture proposal, not evidence that these exact schemas are implemented. Existing source anchors remain those recorded in the preceding source reconciliations; this catalog introduces no new source-level implementation claims.
+
+
+## 2026-11-25 — Verification and operations source anchors
+
+| Source path | Observed bounded behavior | Boundary not proven |
+|---|---|---|
+| `core/verification.py` | Task/result/state shape, identity and output-presence checks | Semantic correctness, source entailment, independent evaluator |
+| `core/evaluation.py` | Caller-supplied pass/score/evidence aggregation | Evidence authenticity, score derivation, campaign execution/holdout |
+| `core/universal_intelligence.py` | Keyword-based domain routing and assessment records | Credential/jurisdiction/competence verification |
+| `core/secure_boot.py` | Stage-name accumulation and caller digest equality | Anchor-bound signed ordered measured boot and anti-rollback |
+| `core/frontier_capabilities.py` | HTTPS fetch, TLS context, timeout and response byte cap | Per-hop destination/IP egress policy and source authority |
+| `core/observability.py`, `core/alerting.py` | In-memory event and alert queues | Durable audit, delivery acknowledgement and incident response |
+| `core/self_improvement.py` | Local staged proposal workflow | Signed external approval bound to tested artifact/release |
+| `ecosystem/global_fabric.py` | In-process digest metadata and session capability index | Durable replication and external issuer freshness/revocation |
+| `ecosystem/global_scale.py` | In-process health/capacity selection, metrics and staged healing | Atomic fenced leases, durable fleet, deployment and DR evidence |
+
+Exact inspected revision: `6231e7caaccedfdea5c8a4e6f73aef0f4e5129af`. See `NORYX7_VERIFICATION_TRUST_BOOTSTRAP_RESEARCH_EGRESS_AND_GLOBAL_OPERATIONS_SOURCE_AUDIT.md` for detailed observations. These rows describe inspected code only and do not rule out upstream/external controls.
