@@ -650,3 +650,18 @@ The [Operational Composition, State Machine, Memory and Surface Contract Reconci
 - **B83/B84/B101:** segregated funds, accounting reconciliation, governance and independently measured impact.
 
 The September 2026 operational notes remain historical context; their test totals are not current CI evidence. No ADR is accepted, no freeze is declared and no integration or test campaign is authorized. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Capability realization and product-plane decision consolidation
+
+The [Capability Realization Inventory: NEXUS, MIRROR WORLD, Domains and Ecosystem](NORYX7_CAPABILITY_REALIZATION_INVENTORY_NEXUS_MIRROR_WORLD_DOMAINS_AND_ECOSYSTEM.md) creates no duplicate ADR series and accepts no existing decision. Consolidate its requirements into current decision authorities:
+
+- **B05/B88/B90/B97:** NEXUS semantic graph, claim/evidence/source spans, epistemic classes, contradiction and correction lifecycle.
+- **B91:** FRL/evaluation checker identity, holdout custody and independent evaluation evidence.
+- **B92/B93/B100:** MIRROR WORLD model manifests, fidelity/calibration, OOD limits and Reality Bridge.
+- **B71/B96/B98/M02:** authorized systems/research acquisition, passive/active/lab scope, egress and artifact custody.
+- **B76/B99/M04:** independently qualified domain specialists, jurisdiction, expiry, calibration and escalation.
+- **B42/B72/B77/B78/B95:** global operations, capacity leases, SLO/DR, supply-chain provenance, deployment attestation and rollback.
+- **B43/B83/B84/B101:** W12 executable financial custody, segregated ledgers, marketplace/community governance and independent impact measurement.
+
+The source-tree absence of dedicated named modules is a bounded inventory result, not a claim about external systems. All corresponding decisions remain OPEN. W01–W12 remain PARTIAL.
