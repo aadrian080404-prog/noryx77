@@ -515,3 +515,35 @@ See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGL
 ## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
 
 See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). New source/blob anchors cover ActionGate and one-shot grant binding; IdentityRegistry/replay scope; distinct runtime and SQLite journals; RuntimeRecovery/RecoveryController; offline authenticated encryption, durable monotonic anchor and volatile outbox; multiple ingress routes; ExecutionFabric adapter registration; and W12 fund segregation/authorized transaction architecture. Tests are recorded as source artifacts, not executed checks. Durable anti-rollback exists, while the inspected outbox remains in-memory. W01–W12 remain PARTIAL; ADR-003 is not accepted and no implementation or test pass is claimed.
+
+
+## 4. Source reconciliation checkpoint — 2026-11-25
+
+**Reviewed source snapshot:** `d629cdd0472e81f8876d144ebb133fbbd6a0c7b9` (branch `architecture/system-wide-closure-mirror-world-2026-11-21`). The following exact blob anchors were inspected for constructor/call-graph and continuity semantics:
+
+| Source path | Blob SHA | Reconciliation note |
+|---|---|---|
+| `core/identity.py` | `e6e8e5b03135251baca489643f86c7d81a755a08` | Ed25519 identity and in-memory trust-anchor registry |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | Action/execution/principal/key-bound one-shot authorization grants and ActionGate |
+| `gateway/auth.py` | `fa456172c99b183dcb2acd0ec99303ec540d2583` | Browser SessionAuthority, distinct from agent identity registry |
+| `web/app.py` | `a03d012d6f9f2fdbfb8a5e64397511e5ac692360` | FastAPI session/execute routes and direct /api/chat route |
+| `gateway/server.py` | `b434cdbe118ecea48029adcd2c954fa1ac14461c` | Separate HTTP gateway server and Bearer session check |
+| `core/recovery.py` | `226193d08b0b8c57f275125e25b7823886ea163d` | Process-local recovery epoch and serialized guarded operation |
+| `core/state.py` | `f1dd791359038d799a63852ea850ce7f3d738148` | Verified state commit and optional durable journal injection |
+| `core/state_journal.py` | `4ea3419cb05a4edbb228966ea2584894197caa83` | SQLite WAL/FULL state-commit journal |
+| `noryx7_runtime/state.py` | `444aba1fb92a4bb70ee2ee31b23d3946680bb630` | Runtime reservation and attestation journal |
+| `noryx7_runtime/recovery.py` | `ecd5743a494a150e13556e5c3932b77a6b08aaa7` | Runtime journal signature/identity/chain recovery validation |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Encrypted in-memory outbox and sync acknowledgement semantics |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | First-match provider resolution and exception failover |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | Single-provider ExecutionFabric bridge with callback authorization |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Bounded provider attempts and local provenance records |
+| `core/coordination.py` | `c5743872a5b50765db04e4a42739e9ad238ad983` | Bounded assignment, sequential child execution and equality consensus |
+| `core/agent_fabric.py` | `3704dd7bf66815274cc319c9583c45ae575f3d36` | Native identity-bound agent fabric |
+| `core/agent_mesh.py` | `25c9162750708e53742862f9f413fdf5200ca08f` | Role registry/selection path |
+| `core/operational_fabric.py` | `a2f6a46c1fdec47f3fe1f95f6c20f9848673f127` | Operational supervisor/agent path |
+| `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | In-memory global memory and identity authorization indexes |
+| `ecosystem/runtime_dispatch.py` | `9f4f628c322aabb571fce64d54c3d6740cb142fd` | Principal-authorized cross-front dispatch receipt |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted-key signed artifact manifest and artifact-byte verification |
+| `.github/workflows/noryx7-foundation.yml` | `80963b0a328724bad04908ee2db72ce71dd10ae6` | Compile/pytest/browser CI workflow; not release promotion evidence |
+
+Detailed interpretation and limitations are in [Runtime Constructor, Call Graph, Retry, Offline and Release Governance Reconciliation](NORYX7_RUNTIME_CONSTRUCTOR_CALL_GRAPH_RETRY_OFFLINE_AND_RELEASE_GOVERNANCE_RECONCILIATION.md). This inventory does not claim every production constructor/caller or deployment adapter has been exhausted.
