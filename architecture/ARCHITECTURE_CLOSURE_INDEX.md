@@ -223,3 +223,8 @@ Added `NORYX7_COGNITIVE_PIPELINE_RESEARCH_ACQUISITION_GLOBAL_FABRIC_AND_EGRESS_A
 ## 2026-11-25 — Operational composition, state machine, memory and surface reconciliation
 
 Added [Operational Composition, State Machine, Memory and Surface Contract Reconciliation](NORYX7_OPERATIONAL_COMPOSITION_STATE_MACHINE_MEMORY_AND_SURFACE_CONTRACT_RECONCILIATION.md), source-anchored to HEAD `0cf3ace262d362454e0537b239c920613f885cd3`. This pass connects route divergence, principal/session separation, operation/effect certainty, memory custody, agent DAG assignment, placement leases, evidence lineage, release assurance and domain/impact qualification. It also classifies the September operational notes as historical rather than current verification evidence. No ADR accepted; no freeze or integration authorized. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Capability realization inventory across W06–W12
+
+Added [Capability Realization Inventory: NEXUS, MIRROR WORLD, Domains and Ecosystem](NORYX7_CAPABILITY_REALIZATION_INVENTORY_NEXUS_MIRROR_WORLD_DOMAINS_AND_ECOSYSTEM.md), source-tree snapshot `978b26630ce9fb7e1baa394ed0fe4bf477271e6f`. It distinguishes architecture-defined product planes from named executable foundations: NEXUS/FRL, MIRROR WORLD, general Systems Reverse Engineering, qualified specialist domains, global operations and W12 financial/community services. It records the limits of CyberRange, FINCH, UniversalIntelligenceFabric, research acquisition, global fabric and supply-chain primitives. No external service absence is inferred. W01–W12 remain PARTIAL.
