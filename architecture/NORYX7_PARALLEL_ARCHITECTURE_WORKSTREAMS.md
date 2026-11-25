@@ -469,3 +469,18 @@ See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGL
 ## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
 
 See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). New source anchors cover one-shot action/execution/principal-bound grants and ActionGate; identity registry/replay scope; distinct runtime and SQLite state journals; RuntimeRecovery/RecoveryController; authenticated offline encryption, durable monotonic snapshot anchor and volatile outbox; multiple ingress routes; ExecutionFabric adapter registration; and W12 fund segregation/authorized transaction architecture. Tests are recorded as source artifacts, not as executed checks. Durable offline anti-rollback exists, but the inspected queue is in-memory. W01–W12 remain PARTIAL; no ADR acceptance, implementation or test pass is claimed.
+
+
+## Runtime constructor and continuity pass — 2026-11-25
+
+The new source reconciliation adds cross-stream evidence for the following open dependencies:
+- W01/W02/W07/W08/W09: separate IdentityRegistry, AuthorizationAuthority, SessionAuthority, JARVIS authorization and global session/device authority; production composition root and principal normalization remain unresolved.
+- W02/W03/W08/W09: runtime attestation/reservation journal and SQLite verified-state journal have different semantics; no cross-journal transaction/recovery protocol is established.
+- W02/W05/W08/W11: ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor have distinct retry semantics; one end-to-end retry owner and typed uncertain-effect outcomes remain open.
+- W04/W05/W07/W11: agent assignment truncation, newly generated child execution identity, sequential execution and equality-only consensus require explicit DAG/lineage semantics.
+- W03/W08/W09: durable snapshot anti-rollback exists, but the offline outbox/acknowledgement map remains in-memory in the inspected implementation.
+- W03/W05/W08/W09: global memory and identity fabrics are local indexes; replica metadata and placement labels do not establish durable replication or resource leases.
+- W12: source inventory does not establish a production ledger/payment/escrow/impact accounting stack; architecture proposals remain separate from operational financial authority.
+- W09/W11: CI workflow and signed artifact manifest verifier do not alone establish end-to-end release provenance, promotion and rollback.
+
+**Disposition:** W01–W12 remain PARTIAL. These findings are source-reconciliation inputs; they do not authorize runtime integration or test execution.
