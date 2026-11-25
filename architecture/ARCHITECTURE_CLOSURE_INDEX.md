@@ -181,3 +181,8 @@ See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX
 ## Runtime constructor/call-graph and continuity reconciliation — 2026-11-25
 
 21. [Runtime Constructor, Call Graph, Retry, Offline and Release Governance Reconciliation](NORYX7_RUNTIME_CONSTRUCTOR_CALL_GRAPH_RETRY_OFFLINE_AND_RELEASE_GOVERNANCE_RECONCILIATION.md) — source-backed reconciliation of authority constructors, ingress convergence, dual journals, external-effect certainty, provider retry ownership, agent lineage, offline durability, global memory/placement, W12 financial/impact authority and release provenance. It remains a bounded architecture review, not an implementation or verification claim. W01–W12 remain PARTIAL.
+
+
+## Memory, multimodal, model, tool, device and surface contract pass — 2026-11-25
+
+22. [Memory, Multimodal, Model, Tool, Device and Surface Contract Reconciliation](NORYX7_MEMORY_MULTIMODAL_MODEL_TOOL_DEVICE_AND_SURFACE_CONTRACT_RECONCILIATION.md) — reconciles bounded memory and encrypted storage, key custody, multimodal provenance, model authority, tool/skill gates, device grants, placement, JARVIS shared execution, browser isolation and observability. Architecture-only; W01–W12 remain PARTIAL.
