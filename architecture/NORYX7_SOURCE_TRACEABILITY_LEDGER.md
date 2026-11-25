@@ -728,3 +728,27 @@ Inspected at source ref `9717088d23b36ee2b4fe70addf0bb2fc153a377e`:
 | `ecosystem/completeness.py` | `c4fb481703c6c2059d1cfea08a24300e7277f270` | Contract-shape, canonical-plane, path-presence and static browser scan gate. |
 
 These anchors support a concrete gateway-to-operational-runtime vertical path and meaningful security/state primitives. They do not establish route parity, universal canonical composition, configured durable journal, retry safety after ambiguous side effects, semantic correctness, runtime sandboxing or global federation. See the parallel closure acceleration document for the bounded source interpretation and dependency DAG.
+
+
+## 2026-11-25 — Operational composition, memory and surface source anchors
+
+Inspected at source HEAD `0cf3ace262d362454e0537b239c920613f885cd3`:
+
+| Path | Blob SHA | Traceability note |
+|---|---|---|
+| `web/app.py` | `a03d012d6f9f2fdbfb8a5e64397511e5ac692360` | FastAPI session/execute gateway routes plus direct `/api/chat` runtime route; process-cached runtime/gateway. |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | Exact-action one-shot grant and ActionGate authority primitives. |
+| `core/identity.py` | `e6e8e5b03135251baca489643f86c7d81a755a08` | Ed25519 agent identity and local trust registry. |
+| `core/coordination.py` | `c5743872a5b50765db04e4a42739e9ad238ad983` | Agent assignment truncates to max_agents; execute creates a new execution ID and iterates sequentially. |
+| `core/agent_mesh.py` | `25c9162750708e53742862f9f413fdf5200ca08f` | Role-only, alphabetically first local agent selection. |
+| `noryx7_runtime/engine.py` | `128e0522cb2234e115ae2b2e770279374a633a4d` | Bounded action engine with optional trust/journal/authorization/replay dependencies. |
+| `noryx7_runtime/contracts.py` | `9bb6632b214e8d9d3221c9ccf03ab6233209a184` | Execution lifecycle currently lacks explicit partial/indeterminate/compensation states. |
+| `noryx7_runtime/scheduler.py` | `5d87d38e17c93dd26975119bb3af1dddd6c132b9` | Deterministic topological ordering, not concurrent execution. |
+| `core/memory.py` | `1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd` | Bounded process-local deep-copy MemoryStore with optional execution filter. |
+| `jarvis/memory/store.py` | `85123bbfe425ed21e7cd7d2dd2a55fdbb532a05d` | Separate simple in-process key/value store. |
+| `core/multimodal.py` | `8c3fb71a6277806d98c2c294444443ddcc3ff9ee` | Modality/content type/digest/locator reference, not full media custody. |
+| `core/resource_router.py` | `4f7bf28200edd05f1236d9779437e4aa43bba8ab` | Deterministic complexity/privacy/latency tier heuristic. |
+| `core/offline_anchor.py` | `a130043ae7dff949b072ae97fd00137d8051d2ea` | SQLite monotonic snapshot anchor; protected hardware root remains external. |
+| `ecosystem/dispatch_contract.py` | `87be053ccad3776d7eebf1cad280a4f52fec9ab6` | Typed cross-front dispatch receipt and evidence digest. |
+
+See the operational composition reconciliation for contract requirements and limitations. These anchors do not prove production route parity, universal constructor adoption, distributed durability or end-to-end operation.
