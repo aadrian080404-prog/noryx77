@@ -445,3 +445,17 @@ Concurrent W01–W12 implications:
 - W12: billing/metering and community/financial records remain outside execution authority.
 
 ADR-B56–B62 remain OPEN; W01–W12 remain PARTIAL. Discovery continues in parallel while freeze acceptance respects upstream authority/evidence dependencies. No implementation, integration, manual test campaign, merge or deployment is authorized.
+
+
+## Source-level authority/state/effect pass — 2026-11-25
+
+Concurrent source review adds the following W01–W12 cross-stream blockers, detailed in `NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md`:
+- W01/W02/W09: gateway session, direct API route, standalone gateway and runtime principal boundaries.
+- W02/W03/W06: in-memory attestation/reservation journal versus SQLite verified-state journal; separate execution/effect states.
+- W02/W05/W09: three provider dispatch/failover paths and missing singular retry/effect ownership.
+- W04/W05: assignment truncation, lexical role routing, sequential execution, and distinct consensus versus multi-step joins.
+- W03/W08: in-memory offline queue, snapshot epochs and recovery/acknowledgement semantics.
+- W06/W07/W09: dispatch receipts, attestations, simulation reports and observed effects remain distinct evidence classes.
+- W03/W05/W08/W11/W12: in-memory global memory/identity/placement primitives require explicit durable, fleet and governance adapters.
+
+Discovery continues in parallel. All workstreams remain PARTIAL; no architecture freeze or implementation is implied.
