@@ -218,3 +218,8 @@ Added `NORYX7_COGNITIVE_PIPELINE_RESEARCH_ACQUISITION_GLOBAL_FABRIC_AND_EGRESS_A
 ## 2026-11-25 — Parallel closure acceleration and integration readiness
 
 [Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NORYX7_PARALLEL_CLOSURE_ACCELERATION_DEPENDENCY_DAG_AND_INTEGRATION_READINESS.md) records the four-front acceleration method, exact current executable-path anchors, W01–W12 parallel lanes, shared dependency DAG, post-freeze vertical-slice target and evidence-state transitions. It is architecture-only. It does not declare a freeze, authorize integration or claim end-to-end readiness. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Operational composition, state machine, memory and surface reconciliation
+
+Added [Operational Composition, State Machine, Memory and Surface Contract Reconciliation](NORYX7_OPERATIONAL_COMPOSITION_STATE_MACHINE_MEMORY_AND_SURFACE_CONTRACT_RECONCILIATION.md), source-anchored to HEAD `0cf3ace262d362454e0537b239c920613f885cd3`. This pass connects route divergence, principal/session separation, operation/effect certainty, memory custody, agent DAG assignment, placement leases, evidence lineage, release assurance and domain/impact qualification. It also classifies the September operational notes as historical rather than current verification evidence. No ADR accepted; no freeze or integration authorized. W01–W12 remain PARTIAL.
