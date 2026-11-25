@@ -485,3 +485,23 @@ These are architecture gaps, not claims that no external backend or provider exi
 | W12 delivery and public impact | W07/W09/W10/W12 | Community and financial architecture is not proof of live payment, custody, ledger or independently verified environmental/social outcomes | Regulated financial controls, double-entry/reconciliation, independent impact baseline/counterfactual and field evidence |
 
 This register is a design/closure inventory, not a claim that no external service exists. W01–W12 remain PARTIAL; no implementation, test campaign or freeze is authorized by this entry.
+
+
+## 11. Agent, evidence, simulation and release assurance gaps — 2026-11-25
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| Structural gate mistaken for architecture closure | W01–W12 | Separate path-presence checks from contract conformance, constructor/call-site integration and acceptance evidence |
+| Agent role selection and assignment completeness | W01/W04/W05/W10 | Qualification manifest, full plan coverage, overflow policy, parent-child lineage, independent verifier and capacity-aware scheduling |
+| Sequential coordinator and consensus semantics | W02/W04/W05 | Bounded concurrent DAG execution, leases, cancellation/join, partial outcomes and semantic consensus preserving dissent |
+| Structural evidence promoted to truth | W06/W10 | Typed claims, immutable source spans, entailment/contradiction edges, calibrated uncertainty and reviewer lineage |
+| MIRROR WORLD source-to-reality validity | W06/W07/W10 | Implemented domain kernels, source custody, independent holdouts, calibration, OOD policy and isolated Reality Bridge |
+| Cyber range generalized beyond sandbox | W07/W08/W09 | Explicit authorized asset manifests, passive/active tiers, safe acquisition, production isolation and reproducible evidence |
+| FINCH forecast probability interpretation | W06/W07/W10/W11 | Target definitions, temporal holdouts, proper scoring, calibration curves, uncertainty and independent field validation |
+| Evaluation campaign evidence independence | W06/W10/W11 | Campaign execution, evaluator identity, holdout custody, leakage controls, reproducibility and approval evidence |
+| Provider retry and uncertain side effects | W02/W08/W09/W11 | Single retry coordinator, idempotency, typed uncertain-effect state, authenticated target receipt and reconciliation |
+| Dispatch receipt overclaim | W01/W02/W08/W09 | Separate acceptance, returned payload digest, signer identity, observed effect and verified commit |
+| Browser source scan overclaim | W08/W09/W11 | Runtime sandbox/OS boundary, egress mediation, origin/session/download controls and adversarial platform evidence |
+| Signed manifest versus full release provenance | W09/W11 | Trusted builder, dependency/SBOM, key lifecycle, approval quorum, deployment identity, promotion and rollback chain |
+
+These are architecture gaps, not claims that no external provider or service exists. W01–W12 remain PARTIAL.
