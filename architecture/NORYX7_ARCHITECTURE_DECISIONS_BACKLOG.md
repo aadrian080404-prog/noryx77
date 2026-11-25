@@ -549,3 +549,8 @@ All corresponding existing decisions remain OPEN pending complete call-site, con
 ## 2026-11-25 — single-cycle W01–W12 dependency reconciliation
 
 The [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md) maps current decision dependencies across identity/authority, execution/effect separation, journal ownership/recovery, provider retry/idempotency, agent qualification/DAG scheduling, evidence typing, simulation admission, offline custody, cryptographic revocation, specialist qualification, global placement/release and segregated financial/impact governance. This is a decision-dependency overlay only: it creates no new ADR and does not accept or close existing ADRs. W01–W12 remain PARTIAL pending source/call-site evidence and owner acceptance.
+
+
+## 2026-11-25 — constructor and authority decision dependencies
+
+See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). Decision dependencies include preserving exact one-shot action grants and revocation-aware consume/execute; determining issuer/projection boundaries among identity and session authorities; retaining distinct runtime and verified-state journals while defining cross-journal commit/recovery; keeping durable offline monotonic anchor distinct from volatile encrypted outbox; unifying ingress/effect evidence; and keeping financial custody independent of agent authority. This adds no ADR, does not accept ADR-003 and closes no existing decision. W01–W12 remain PARTIAL.
