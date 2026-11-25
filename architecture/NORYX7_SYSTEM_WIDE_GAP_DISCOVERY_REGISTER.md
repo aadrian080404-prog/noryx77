@@ -577,3 +577,22 @@ These are discovery labels, not ADR identifiers. W01–W12 remain PARTIAL.
 | GAP-ACCELERATION-EVIDENCE-INVALIDATION | W01–W12 | Define source-ref-bound evidence cards and invalidate dependent conclusions when source blobs, contracts or constructors change. |
 
 These gaps are source-reconciliation findings, not proof of a vulnerability or absence of external infrastructure. The corresponding architecture decisions remain open. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Operation, memory custody, ingress and placement gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-DIRECT-CHAT-INGRESS-PARITY | W01/W02/W08/W09 | Resolve direct `/api/chat` versus session-authenticated `/v1/execute`; define trusted upstream identity and route policy. |
+| GAP-PRINCIPAL-ASSERTION-CANONICALIZATION | W01/W08/W09 | Define signed/verified principal assertion with issuer, tenant, audience, session/device/workload, assurance, policy epoch, expiry and delegation lineage. |
+| GAP-OPERATION-IDENTIFIER-CONTINUITY | W02/W04/W05/W08 | Preserve coordinator-issued operation/execution identity across plan, child task, agent, tool, provider, journal, evidence and receipt. |
+| GAP-EXECUTION-EFFECT-STATE-SEPARATION | W02/W03/W05/W09 | Separate orchestration lifecycle from external-effect certainty; add indeterminate, partial, compensation and reconciliation semantics before retry policy freeze. |
+| GAP-AGENT-DAG-COMPLETE-ASSIGNMENT | W02/W04/W05 | Preserve all plan nodes; define queue/backpressure, lease, cancellation, join, partial outcome and no silent max-agent truncation. |
+| GAP-AGENT-QUALIFICATION-AND-PLACEMENT | W04/W05/W07/W10/W11 | Select by qualification, health, capacity, jurisdiction, trust freshness, independence and expiring fenced lease, not role/lexical order alone. |
+| GAP-MEMORY-SEMANTIC-PARITY | W03/W08 | Reconcile core and JARVIS memory semantics; enforce tenant/execution scope, deep-copy/isolation, unavailable-vs-empty and explicit sharing grants. |
+| GAP-MULTIMODAL-CUSTODY | W03/W06/W08/W09/W10 | Bind media capture authenticity, consent/rights, acquisition source, transformation lineage, retention and claim spans beyond digest/locator. |
+| GAP-RESOURCE-PLACEMENT-LEASE | W05/W07/W08/W11 | Extend static tier heuristic with live capacity, residency, cost/latency/energy, attestation, lease expiry, fencing and failover semantics. |
+| GAP-HISTORICAL-OPS-EVIDENCE-FRESHNESS | W01–W12 | Treat 2026-09-08 operations notes and their test totals as historical until rerun/reconciled against current HEAD and deployment. |
+| GAP-IMPACT-LEDGER-SEPARATION | W06/W09/W10/W12 | Keep financial accounting, security audit, evidence provenance and independently measured public impact in separate correlated ledgers. |
+
+These are architecture closure requirements, not proof of a vulnerability or absence of external controls. W01–W12 remain PARTIAL.
