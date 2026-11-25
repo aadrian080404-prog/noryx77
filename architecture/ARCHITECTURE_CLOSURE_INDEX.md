@@ -186,3 +186,8 @@ See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX
 ## Memory, multimodal, model, tool, device and surface contract pass — 2026-11-25
 
 22. [Memory, Multimodal, Model, Tool, Device and Surface Contract Reconciliation](NORYX7_MEMORY_MULTIMODAL_MODEL_TOOL_DEVICE_AND_SURFACE_CONTRACT_RECONCILIATION.md) — reconciles bounded memory and encrypted storage, key custody, multimodal provenance, model authority, tool/skill gates, device grants, placement, JARVIS shared execution, browser isolation and observability. Architecture-only; W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — product identity and realization boundaries
+
+[Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md) defines NORYX7 as a governed, distributed agentic operating platform, distinguishes product intent from source-backed implementation and operational guarantees, maps the current capability families to their actual realization boundaries, and specifies a canonical end-to-end object chain. It explicitly bounds claims about HYPERSYNTH, agents, tools, memory, multimodal, device/edge/cloud, NEXUS, MIRROR WORLD, systems understanding and W12 community/finance/impact. W01–W12 remain PARTIAL; architecture-only.
