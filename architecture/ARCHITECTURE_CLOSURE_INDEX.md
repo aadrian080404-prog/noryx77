@@ -161,3 +161,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## 2026-11-25 — ingress, external effects, release evidence and closure gates
 
 [Ingress, External Effects, Release Evidence and Cross-Workstream Closure Reconciliation](NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md) — reconciles gateway and direct API ingress, provider retry/idempotency, uncertain external effects, scheduler/concurrency semantics, CI versus release evidence, and ADR-B56–B62 across W01–W12. All streams remain PARTIAL; no freeze or implementation is implied.
+
+
+## 2026-11-25 — source-level authority, state and effect conflict reconciliation
+
+[Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md) — bounded source inspection of dual StateJournal classes, execution/effect lifecycle, FastAPI and standalone gateway ingress, three provider paths, agent assignment/consensus, offline outbox, dispatch receipts and global memory/placement primitives. Maps source-level conflicts across W01–W12; all remain PARTIAL.
