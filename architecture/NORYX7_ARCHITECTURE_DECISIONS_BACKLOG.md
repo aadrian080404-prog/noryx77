@@ -682,3 +682,17 @@ The [Canonical Handoff Schemas, Versioning, Failure and Ownership Catalog](NORYX
 - **B43/B83/B84/B101:** FinancialEntry, GovernanceDecision and ImpactEvidence.
 
 The catalog is a normative proposal. Existing decision owners must record alternatives, consequences, compatibility and approval in their governing ADR/backlog. All affected decisions remain OPEN; W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Additional source-grounded decision evidence
+
+The source audit `NORYX7_VERIFICATION_TRUST_BOOTSTRAP_RESEARCH_EGRESS_AND_GLOBAL_OPERATIONS_SOURCE_AUDIT.md` adds evidence for existing open decisions; it does not accept or create a duplicate ADR:
+- **W06 / semantic admission:** define independent evaluator identity, evidence binding, semantic scope and calibration; structural verification is insufficient for claim truth.
+- **W09 / trust bootstrap:** resolve anchor-bound measured boot, signer hierarchy, stage order, anti-rollback and runtime consumer.
+- **W05/W08/W09 / research egress:** decide enforceable per-hop URL/IP/redirect controls and acquisition custody.
+- **W03/W09/W11 / incident evidence:** decide durable audit, signed checkpoints, alert delivery/acknowledgement and recovery ownership.
+- **W05/W11 / global capacity:** decide durable fenced leases, reservation atomicity, attestation and failover.
+- **W06/W09/W11 / self-improvement release:** bind external admission to tested artifact digest, independent verification, approval, canary and rollback.
+- **W01/W06/W10 / specialist authority:** define credential issuer, jurisdiction, scope, expiry, conflict and independent reviewer.
+
+All related decisions remain OPEN pending alternatives, owner review and explicit acceptance evidence. W01–W12 remain PARTIAL.
