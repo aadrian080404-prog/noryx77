@@ -453,3 +453,19 @@ See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX
 | Release provenance and rollback | W09/W11 | CI workflow and signed manifest verifier do not establish source-to-artifact-to-deployment chain or staged rollback | Signed provenance chain, builder identity, SBOM, approval quorum, promotion and rollback evidence |
 
 These are architecture gaps to resolve, not assertions that no external integration exists. W01–W12 remain PARTIAL; no gap is closed by path presence alone.
+
+
+## 9. Memory, multimodal and surface gaps — 2026-11-25
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| Memory custody and durable hydration | W03/W06/W08/W09 | tenant/principal/session/execution scope, source lineage, purpose/consent, retention/deletion, durable backend and typed partial/stale/error outcomes |
+| Key governance | W02/W03/W08/W09 | production KMS/HSM, key version/rotation, compromise/revocation, backup/restore and offline-device recovery |
+| Multimodal provenance | W06/W08/W09/W10 | authenticated source/capture, rights/consent, immutable transforms, timestamps/segments and claim-to-source verification |
+| Model evidence and independence | W02/W04/W05/W06/W10 | invocation provenance, correlated-provider analysis, calibrated verification and typed evidence admission |
+| Tool protocol convergence | W02/W04/W05/W07/W08 | converge callback-authorized ToolRegistry and ActionGate ToolExecutor on canonical ActionSpec/effect lifecycle |
+| Device and placement attestation | W05/W07/W08/W09/W11 | signed device/node identity, remote revocation, capacity lease, fencing, residency and completion receipt |
+| Browser surface assurance | W07/W08/W09 | runtime sandbox, network egress, URL/origin, downloads, cookie/session custody and update rollback evidence |
+| Durable observability | W08/W09/W11 | durable tamper-evident events, trace lineage, delivery acknowledgement, alerting and incident containment |
+
+These are architecture gaps, not claims that no external backend or provider exists. W01–W12 remain PARTIAL.
