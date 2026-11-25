@@ -665,3 +665,20 @@ The [Capability Realization Inventory: NEXUS, MIRROR WORLD, Domains and Ecosyste
 - **B43/B83/B84/B101:** W12 executable financial custody, segregated ledgers, marketplace/community governance and independent impact measurement.
 
 The source-tree absence of dedicated named modules is a bounded inventory result, not a claim about external systems. All corresponding decisions remain OPEN. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Handoff schema and ownership decisions
+
+The [Canonical Handoff Schemas, Versioning, Failure and Ownership Catalog](NORYX7_CANONICAL_HANDOFF_SCHEMAS_VERSIONING_FAILURE_AND_OWNERSHIP_CATALOG.md) consolidates, without accepting or duplicating ADRs, the decision work around:
+
+- **B01/B06/B09/B10:** PrincipalAssertion, DelegationGrant, CapabilityDecision and issuer ownership.
+- **B02/B07/B10/B22/B24:** OperationEnvelope, ExecutionEnvelope, ActionIntent, dispatch/effect lifecycle and retry owner.
+- **B03/B11/H08/B23:** StateCommit, MemoryRecord, AuditEvent, durable state and recovery.
+- **B04/B12/B25:** AgentQualification, DelegationLease, AgentResult and ResultAdmission.
+- **B05/B88/B90/B97:** SourceArtifact, SourceSpan, ClaimRecord, EvidenceLink and ProofArtifact.
+- **B42/B72/B77/B78/B95/B26/B27/B29:** PlacementLease, TrustBundle, ReleaseEvidence and IncidentRecord.
+- **B71/B96/B98/M02/B92/B93/B100:** WorldManifest, ExperimentSpec, SimulationRun and RealityBridgeApproval.
+- **B76/B99/M04:** DomainQualification.
+- **B43/B83/B84/B101:** FinancialEntry, GovernanceDecision and ImpactEvidence.
+
+The catalog is a normative proposal. Existing decision owners must record alternatives, consequences, compatibility and approval in their governing ADR/backlog. All affected decisions remain OPEN; W01–W12 remain PARTIAL.
