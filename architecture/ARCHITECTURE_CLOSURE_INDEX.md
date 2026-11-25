@@ -191,3 +191,8 @@ See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX
 ## 2026-11-25 — product identity and realization boundaries
 
 [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md) defines NORYX7 as a governed, distributed agentic operating platform, distinguishes product intent from source-backed implementation and operational guarantees, maps the current capability families to their actual realization boundaries, and specifies a canonical end-to-end object chain. It explicitly bounds claims about HYPERSYNTH, agents, tools, memory, multimodal, device/edge/cloud, NEXUS, MIRROR WORLD, systems understanding and W12 community/finance/impact. W01–W12 remain PARTIAL; architecture-only.
+
+
+## 2026-11-25 — agent, evidence, simulation, forecast and release assurance source reconciliation
+
+[Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconciliation](NORYX7_AGENT_EVIDENCE_SIMULATION_FORECAST_AND_RELEASE_ASSURANCE_SOURCE_RECONCILIATION.md) adds source-level evidence for the structural-only scope of the 18-plane architecture gate; deterministic first-match AgentMesh selection; AgentCoordinator assignment truncation and sequential execution; subtask structural coverage versus semantic evidence; synthetic sandbox-only cyber range; heuristic FINCH forecasts; manifest-only evaluation campaign generation; provider retry/effect uncertainty; dispatch receipt limits; static browser source scanning; and signed artifact-manifest verification boundaries. No ADR is closed, no tests or release are claimed, and W01–W12 remain PARTIAL.
