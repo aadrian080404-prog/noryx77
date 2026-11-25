@@ -547,3 +547,26 @@ See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX
 | `.github/workflows/noryx7-foundation.yml` | `80963b0a328724bad04908ee2db72ce71dd10ae6` | Compile/pytest/browser CI workflow; not release promotion evidence |
 
 Detailed interpretation and limitations are in [Runtime Constructor, Call Graph, Retry, Offline and Release Governance Reconciliation](NORYX7_RUNTIME_CONSTRUCTOR_CALL_GRAPH_RETRY_OFFLINE_AND_RELEASE_GOVERNANCE_RECONCILIATION.md). This inventory does not claim every production constructor/caller or deployment adapter has been exhausted.
+
+
+## 5. Memory, multimodal and surface source checkpoint — 2026-11-25
+
+Reviewed source snapshot: `fea4eaae990590c65ee564a8ffa37697e5f2ab42`. Exact anchors and interpretations are documented in [Memory, Multimodal, Model, Tool, Device and Surface Contract Reconciliation](NORYX7_MEMORY_MULTIMODAL_MODEL_TOOL_DEVICE_AND_SURFACE_CONTRACT_RECONCILIATION.md):
+
+| Source | Blob SHA | Note |
+|---|---|---|
+| `core/memory.py` | `1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd` | bounded process-local memory with deep-copy and execution filtering |
+| `core/memory_hierarchy.py` | `d908fcb7252e97072501b94dada23ae571807850` | L0–L5 bounded map |
+| `core/secure_memory.py` | `27727ce69802f3ad4f082bf4b9bc4ef013fa7812` | versioned encrypted MemoryItem adapter |
+| `core/secure_storage.py` | `0fd726f2bad1ff6e133b46c04039ae2c943d350f` | AES-GCM ciphertext map and AAD binding |
+| `core/crypto.py` | `ce0f534fb6f786838325dc22469c2364aee4ee9b` | AES-256-GCM, HKDF and key-provider abstraction |
+| `core/multimodal.py` | `8c3fb71a6277806d98c2c294444443ddcc3ff9ee` | media reference and request digest |
+| `noryx7_runtime/model_fabric.py` | `abb8bd9bb3217fff967e898afbdc491eb5082f45` | model capability/cost/latency/fan-out constraints |
+| `core/tool_protocol.py` | `1c529fbbf5352469be8ab6633edc48113da8a3bf` | callback-authorized generic tool protocol |
+| `core/tools.py` | `a5c2797cce7c803abb272bab761b3288ba0f7e72` | ActionGate-backed ToolExecutor |
+| `core/device.py` | `4f7d82ec5a1e40b595c4c341ab7d3ed551f3ac14` | local device audience/epoch capability gate |
+| `core/resource_router.py` | `4f7bf28200edd05f1236d9779437e4aa43bba8ab` | heuristic device/edge/cloud tier choice |
+| `core/system_fabric.py` | `cf28bd8a144480467b6bd2cf3726b510a7b7924f` | shared JARVIS/core object-identity contract |
+| `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | static Android browser isolation scan |
+| `core/observability.py` | `05dea0228b9b05c8684db7fe0aa890d7faa44485` | bounded in-memory security event bus |
+
