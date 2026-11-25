@@ -498,3 +498,8 @@ New cross-stream dependencies from the latest source pass:
 - W07/W08/W09/W11: browser isolation is a static source gate; SecurityEventBus is bounded and process-local, not durable incident evidence.
 
 W01–W12 remain PARTIAL. These findings are architecture requirements, not implementation or test claims.
+
+
+## Product identity and realization map — 2026-11-25
+
+The new [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md) binds W01–W12 to one operating model: intent and evidence intake; HYPERSYNTH cognition and planning; agent/model/resource coordination; governed action execution; verification and state/memory admission; distributed placement; and user-facing surfaces. It separates implemented primitives from proposed contracts and operational guarantees. It also makes explicit that systems reverse engineering, calibrated MIRROR WORLD, global federation and W12 financial/impact execution are not established as complete production capabilities by the inspected source. Cross-stream dependencies remain open; W01–W12 remain PARTIAL.
