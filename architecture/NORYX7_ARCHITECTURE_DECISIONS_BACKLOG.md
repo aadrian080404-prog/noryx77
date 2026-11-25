@@ -516,3 +516,17 @@ No new ADRs created; reconcile any B105/B106 references into canonical existing 
 ## Cross-workstream synthesis disposition — 2026-11-25
 
 The [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md) consolidates the dependency graph and responsibility boundaries without creating duplicate ADRs. Existing blocking decisions ADR-B01–B08 remain open until source-level ownership and call-path evidence is collected. Existing high-priority decisions H01–H12 remain governed by this backlog. The synthesis does not decide unresolved implementation ownership by assertion and does not authorize integration, testing, merge or deployment. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — ingress/effect/release reconciliation
+
+Existing ADR-B56–B62 remain OPEN and are clarified by [Ingress, External Effects, Release Evidence and Cross-Workstream Closure Reconciliation](NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md):
+- B56: canonical effect/receipt/compensation outcome state machine.
+- B57: separate topological ordering, concurrency admission, resource reservation and dispatch.
+- B58: distinguish digest integrity, keyed authentication, signer identity and model/provider provenance.
+- B59: reconcile actual provider usage/cost/latency from receipts; static metadata is not metering truth.
+- B60: reconcile route-level authentication and principal provenance across gateway and direct API paths.
+- B61: per-platform artifact build, test, sign, promotion and rollback evidence.
+- B62: machine-readable audit evidence scope, exclusions, revision and limitations.
+
+No new ADR IDs are created and no decision is closed by documentation alone. W01–W12 remain PARTIAL.
