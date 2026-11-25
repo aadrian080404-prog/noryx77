@@ -590,3 +590,17 @@ The [Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconcil
 - B83/B84/B101: segregated funds, double-entry accounting and independently verified community/environmental outcomes remain OPEN.
 
 The 18-plane architecture gate is a structural path-presence check, not sufficient evidence for semantic or operational completeness. No ADR is accepted by this documentation pass. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — source reconciliation refinement (existing decisions only)
+
+No duplicate ADR series is introduced. The new distributed-evidence/memory/research/SRE reconciliation sharpens existing decisions:
+- **B01–B04:** unify principal/delegation, runtime lifecycle, state/recovery and agent operation identity across providers, tools, models and reviewers.
+- **B05, H01–H03:** typed SourceArtifact/SourceSpan/Claim/EvidenceLink/Derivation/ProofArtifact schemas; source independence, FRL checker trust and correction/retraction semantics.
+- **H04–H05:** WorldManifest, domain-specific calibration/holdout, uncertainty and isolated Reality Bridge.
+- **H07–H10:** provider versus placement routing, canonical memory tiers, key custody, audit/evidence/business-ledger separation.
+- **H11–H12:** outcome/effect certainty vocabulary, retry/idempotency and global budget/fairness contracts.
+- **M02:** authorized Systems Reverse Engineering tiers and asset-scope manifest; public/passive/controlled/lab/source-assisted modes.
+- **M03:** signed build/release/rollback and controlled self-improvement admission.
+- **M04:** specialist qualification, jurisdiction/scope, domain validity and independent review.
+All listed decisions remain OPEN pending alternatives, owner, rationale, cross-plane compatibility and acceptance criteria. W01–W12 remain PARTIAL.
