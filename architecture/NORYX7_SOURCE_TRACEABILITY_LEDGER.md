@@ -686,3 +686,22 @@ See the new source map for limitations, contracts and W01–W12 impact.
 | `jarvis/core/provider.py` | `caee59075b8c4f317922f615ee5c7d6f1d3dde71` | JARVIS typed provider adapter boundary. |
 
 Full limitations and closure requirements are in `NORYX7_AGENT_CORE_SKILL_QUALIFICATION_KEY_LIFECYCLE_AND_ATTESTATION_AUTHORITY_RECONCILIATION.md`.
+
+## 2026-11-25 — Cognitive, research, global fabric and trust source anchors
+
+| Path | Blob SHA | Inventory note |
+|---|---|---|
+| `core/reasoning.py` | `7bf5d905f07b4805e3505e13408a685d81f7842b` | Hypothesis mapping and plan-level InternalSimulator. |
+| `core/metacognition.py` | `9aed7b2522175f6e4a097631566682cdff6a118f` | Structural pipeline reflection and boolean-derived confidence. |
+| `core/metacognitive_challenge.py` | `3f343b153b971559a72730dcfcbb8412f8879d74` | Injected independent challenge plus structural pipeline verifier. |
+| `core/frontier_capabilities.py` | `e76ace57c6d43b5db7d391ab533b0fa41ed5a6cc` | HTTPS web research acquisition, content hashes and extracted links. |
+| `core/egress.py` | `e50095f8a0265adfcac4812aa06778cece58fe83` | In-memory component/host/port/protocol allow-list. |
+| `core/trust_chain.py` | `bac239a5a5e451a69a89c6456daecf34fe344e48` | Agent/device/channel/epoch/action Ed25519 trust chain and replay guard. |
+| `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | Local global-memory index with replica identifiers/digests. |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | Region/cell capacity selection, local compute reservation, in-memory EventFabric. |
+| `core/evaluation.py` | `df35992d09ffb2a9a82e0c1c739b4de3f1b7dd4e` | Evaluation matrix of externally supplied evidence. |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case/holdout manifests; no campaign execution in this layer. |
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Synthetic sandbox-only cyber simulation. |
+| `core/secure_boot.py` | `32436ebc39f0044768e13340e8e6d1274cd5c51a` | Digest-comparison secure-boot-style primitive. |
+
+See the new reconciliation document for bounded semantics and closure evidence.
