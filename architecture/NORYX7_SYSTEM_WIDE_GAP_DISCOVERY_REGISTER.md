@@ -432,3 +432,8 @@ These are source-level bounded findings and unknowns, not declarations of exploi
 ## 2026-11-25 — single-cycle W01–W12 end-to-end reconciliation
 
 See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md). This concurrent pass reconciles identity/authority, runtime ingress, dual state journals, provider retry/effects, agent selection/scheduling, offline custody, evidence classes, simulation-to-reality, specialist qualification, global placement/release and financial/community impact. It records canonical object families, cross-stream collision targets, linked execution/effect lifecycles and the next constructor/registration/call-site source pass. Findings are bounded to named source snapshots; unknowns are not absence claims. W01–W12 remain PARTIAL; no ADR is silently accepted, no implementation or integration is authorized, and no test campaign, merge, deployment or freeze is claimed.
+
+
+## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
+
+See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). Added source anchors identify ActionGate and exact one-shot grants, identity/replay scope, separate runtime and SQLite journals, runtime recovery and recovery epochs, offline encrypted outbox versus durable monotonic anchor, ingress divergence, ExecutionFabric registration and W12 fund-segregation architecture. Durable anti-rollback is present; the inspected outbox remains in-memory. Existing tests are evidence of test specifications, not tests executed. W01–W12 remain PARTIAL.
