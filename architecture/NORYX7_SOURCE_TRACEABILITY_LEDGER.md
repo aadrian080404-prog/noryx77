@@ -670,3 +670,19 @@ Inspected at HEAD `4889dd52aa4b7aec737ed4f910f6f77e6e7fa978`:
 | `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | Static source scanner, not runtime sandbox proof. |
 
 See the new source map for limitations, contracts and W01–W12 impact.
+
+## 2026-11-25 — Agent Core, skills, key and attestation source anchors
+
+| Path | Blob SHA | Inventory note |
+|---|---|---|
+| `core/agent_core.py` | `f9ad4e3e7bc03e03ddcce4df563e551d4226d747` | Sequential local lifecycle; optional authorization hook; boolean verification; sorted local registry. |
+| `core/agent_identity.py` | `cc1076ef80a0e88066ee77155d6c630844907cd7` | Static agent mission profiles, not credentials. |
+| `core/agent_skills.py` | `281d294ee0142a8dd33db5d61f634f95943db231` | Bounded skill registry; declarative no-op default handler. |
+| `core/key_lifecycle.py` | `9cdb83a93dc75df6b1fc9041f75894cf960328a5` | In-memory key lifecycle metadata and external KMS/HSM boundary. |
+| `core/attestation.py` | `48a5145b33c73c9e8d3b1f0051050dd97f89786f` | External runtime attestation verifier interface and measurement binding. |
+| `noryx7_runtime/attestation.py` | `b417bdb09f5ad920f7b6cf96910aea5c6447ac2a` | Ed25519 agent operation attestation and chain verification. |
+| `core/recovery.py` | `226193d08b0b8c57f275125e25b7823886ea163d` | Process-local recovery state machine and epoch. |
+| `noryx7_runtime/recovery.py` | `ecd5743a494a150e13556e5c3932b77a6b08aaa7` | Runtime StateJournal recovery and attestation validation. |
+| `jarvis/core/provider.py` | `caee59075b8c4f317922f615ee5c7d6f1d3dde71` | JARVIS typed provider adapter boundary. |
+
+Full limitations and closure requirements are in `NORYX7_AGENT_CORE_SKILL_QUALIFICATION_KEY_LIFECYCLE_AND_ATTESTATION_AUTHORITY_RECONCILIATION.md`.
