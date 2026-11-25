@@ -228,3 +228,8 @@ Added [Operational Composition, State Machine, Memory and Surface Contract Recon
 ## 2026-11-25 — Capability realization inventory across W06–W12
 
 Added [Capability Realization Inventory: NEXUS, MIRROR WORLD, Domains and Ecosystem](NORYX7_CAPABILITY_REALIZATION_INVENTORY_NEXUS_MIRROR_WORLD_DOMAINS_AND_ECOSYSTEM.md), source-tree snapshot `978b26630ce9fb7e1baa394ed0fe4bf477271e6f`. It distinguishes architecture-defined product planes from named executable foundations: NEXUS/FRL, MIRROR WORLD, general Systems Reverse Engineering, qualified specialist domains, global operations and W12 financial/community services. It records the limits of CyberRange, FINCH, UniversalIntelligenceFabric, research acquisition, global fabric and supply-chain primitives. No external service absence is inferred. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Canonical handoff, schema and failure convergence
+
+Added [Canonical Handoff Schemas, Versioning, Failure and Ownership Catalog](NORYX7_CANONICAL_HANDOFF_SCHEMAS_VERSIONING_FAILURE_AND_OWNERSHIP_CATALOG.md). It consolidates versioned envelopes and handoffs for principal/delegation/capability, operation/execution, action/dispatch/effect, state/memory/audit, agent qualification/result admission, provider/placement, NEXUS evidence/FRL, MIRROR WORLD/Reality Bridge, surfaces/offline, release/incident, domains and W12 financial/impact records. It defines compatibility, failure/retry semantics, accountable ownership and evidence invalidation. This is a normative convergence proposal, not accepted ADR/schema implementation/freeze. W01–W12 remain PARTIAL.
