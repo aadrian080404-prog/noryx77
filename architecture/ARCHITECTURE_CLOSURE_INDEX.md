@@ -209,3 +209,7 @@ Added `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE
 ## 2026-11-25 — Agent Core, skill qualification, key lifecycle and attestation authority
 
 Added `NORYX7_AGENT_CORE_SKILL_QUALIFICATION_KEY_LIFECYCLE_AND_ATTESTATION_AUTHORITY_RECONCILIATION.md`, anchored to source files at HEAD `773cd0186e58a8df0f399dbd01157f49a665684c`. New distinctions: AgentCore serializes its local run and has an optional authorization hook; skill registry permits declarative no-op handlers; runtime measurement attestation and agent operation attestation are distinct trust planes; key lifecycle metadata and RecoveryController are process-local; RuntimeRecovery validates its own runtime journal rather than coordinating all journals and external effects. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Cognitive pipeline, research acquisition, global fabric and egress assurance
+
+Added `NORYX7_COGNITIVE_PIPELINE_RESEARCH_ACQUISITION_GLOBAL_FABRIC_AND_EGRESS_ASSURANCE_RECONCILIATION.md`, anchored to source HEAD `773cd0186e58a8df0f399dbd01157f49a665684c`. This pass distinguishes plan consistency from domain simulation; records the limited semantics of InternalSimulator and PipelineChallengeVerifier; maps source acquisition hashes versus source authority and exact claim spans; distinguishes replica IDs/local capacity maps from distributed acknowledgements and leases; and maps TrustChain/EgressPolicy primitives against mandatory enforcement. W01–W12 remain PARTIAL.
