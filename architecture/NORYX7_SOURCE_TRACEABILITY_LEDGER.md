@@ -647,3 +647,26 @@ Reviewed at source snapshot `4889dd52aa4b7aec737ed4f910f6f77e6e7fa978`:
 | `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | static browser source marker scanner |
 
 These anchors establish inspected source scope only. They do not prove all constructors/callers use the components or that any capability is production-ready.
+
+## 2026-11-25 — Additional exact source anchors
+
+Inspected at HEAD `4889dd52aa4b7aec737ed4f910f6f77e6e7fa978`:
+
+| Path | Blob SHA | Inventory note |
+|---|---|---|
+| `core/agent_fabric.py` | `3704dd7bf66815274cc319c9583c45ae575f3d36` | Principal-bound skill/identity checks; lexical first-authorized selection. |
+| `core/agent_runtime.py` | `c6e0b0edd40fdcfc2264e8dc19ba5ae43b0187da` | Local router lifecycle/heartbeat view. |
+| `core/memory.py` | `1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd` | Bounded in-process MemoryStore. |
+| `core/memory_hierarchy.py` | `d908fcb7252e97072501b94dada23ae571807850` | Bounded dictionary-backed L0–L5 hierarchy. |
+| `core/secure_memory.py` | `27727ce69802f3ad4f082bf4b9bc4ef013fa7812` | Encrypted adapter over EncryptedRecordStore. |
+| `jarvis/memory/store.py` | `85123bbfe425ed21e7cd7d2dd2a55fdbb532a05d` | Separate JARVIS in-process memory store. |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | Capability-based deterministic provider selection. |
+| `core/http_provider.py` | `d40c9e4ffb9c830dc3307fe8a9b4c7bcf34c307f` | Bounded HTTP JSON transport adapter. |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | Provider-to-ExecutionFabric authorized gateway. |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Separate bounded failover/retry path. |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted-key Ed25519 manifest and artifact digest verification. |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Heuristic event relevance/anomaly/mean-severity forecast. |
+| `core/device_fabric.py` | `3b0ead031e03040d25bb7df3a716aaa50fa8591c` | Local capability/online device registry. |
+| `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | Static source scanner, not runtime sandbox proof. |
+
+See the new source map for limitations, contracts and W01–W12 impact.
