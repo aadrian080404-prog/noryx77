@@ -402,3 +402,15 @@ All remain architecture gaps; no domain qualification, calibrated forecast, inde
 ## Cross-workstream collision discovery — 2026-11-25
 
 The cross-stream collision and handoff model is consolidated in [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md). Add explicit discovery coverage for: (a) multiple runtime coordinators/facades; (b) identity registries and capability issuers; (c) state stores, journals, memory replicas and recovery consumers; (d) agent/provider/scheduler routing overlap; (e) evidence, audit, telemetry and business-ledger separation; (f) cyber-range/MIRROR WORLD and simulation-to-reality boundaries; (g) offline revocation/state epochs; and (h) product/community records versus runtime authority. These are collision hypotheses until source evidence resolves them. Discovery remains parallel; contract freeze follows upstream dependencies. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — ingress, effects and release-evidence gaps
+
+The [Ingress, External Effects, Release Evidence and Cross-Workstream Closure Reconciliation](NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md) deepens existing ADR-B56–B62 without creating duplicate IDs. Track the following as unresolved architecture gaps:
+- Gateway-session `/v1/execute` and direct `/api/chat` paths are not proven to share the same route-level authentication boundary; upstream proxy behavior remains unknown.
+- ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor require composed retry ownership; nested retry amplification and duplicate side effects are not resolved.
+- Logical operation, attempt, downstream idempotency, dispatch receipt, observed effect and durable commit need distinct identities/states.
+- Topological scheduling does not by itself establish bounded parallel execution, resource reservation, cancellation or partial-result joins.
+- Structural audit outputs, CI success, architecture acceptance and deployment/release approval need separate evidence schemas and scopes.
+- Per-platform artifact provenance and release coverage remain incomplete in the inspected inventory.
+These are source-grounded gaps/unknowns, not proof of an exploitable endpoint or a failed production deployment. W01–W12 remain PARTIAL.
