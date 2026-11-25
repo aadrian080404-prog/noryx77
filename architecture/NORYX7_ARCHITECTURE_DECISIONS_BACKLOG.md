@@ -530,3 +530,17 @@ Existing ADR-B56–B62 remain OPEN and are clarified by [Ingress, External Effec
 - B62: machine-readable audit evidence scope, exclusions, revision and limitations.
 
 No new ADR IDs are created and no decision is closed by documentation alone. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — source-level authority/state/effect decisions
+
+The [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md) deepens existing decisions without creating duplicate ADR IDs:
+- Canonicalize the two journal concepts and their transaction/recovery relationship; do not conflate attestation reservations with durable verified-state commits.
+- Separate execution lifecycle from external-effect lifecycle and represent dispatch uncertainty.
+- Reconcile FastAPI and standalone gateway ingress, authentication and deployment trust boundaries.
+- Establish one provider retry/effect coordinator across ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor.
+- Separate agent assignment, child task, parent execution, same-task consensus and multi-step aggregation semantics.
+- Define durable offline outbox/inbox and acknowledgement-before-deletion semantics.
+- Separate cross-front dispatch acceptance receipts from output and observed-effect evidence.
+
+All corresponding existing decisions remain OPEN pending complete call-site, constructor, persistence and deployment evidence. W01–W12 remain PARTIAL.
