@@ -570,3 +570,26 @@ Reviewed source snapshot: `fea4eaae990590c65ee564a8ffa37697e5f2ab42`. Exact anch
 | `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | static Android browser isolation scan |
 | `core/observability.py` | `05dea0228b9b05c8684db7fe0aa890d7faa44485` | bounded in-memory security event bus |
 
+
+
+## 6. Product identity and capability realization checkpoint — 2026-11-25
+
+Reviewed source snapshot: `bab155831256442e6018b78163c11c690f1547b9`. Exact blob SHAs, bounded observations and the proposed canonical object chain are recorded in [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md). Additional exact anchors in this pass include:
+
+| Source | Blob SHA | Bounded interpretation |
+|---|---|---|
+| `core/architecture_gate.py` | `ed2e748821c0389672c747e9568b170de684c797` | structural 18-plane registry/path-presence gate |
+| `core/architecture_registry.py` | `2b90f6705be0e6ccf2474e94962c0d0c9539df43` | canonical plane definitions and source path tokens |
+| `core/hypersynth.py` | `187699d6e0945a2b1e8a9b194cd9001b1af8cd9f` | bounded cognitive phase pipeline and specialist/subtask routing |
+| `core/planning.py` | `e9dbf86b1a90ce6d9e8a7af8445ddb73cbcaedd5` | bounded plan construction and dependency validation |
+| `core/decomposition.py` | `b56af362124a307959355b5e252d0d960adfca52` | bounded subtask decomposition and dependency checks |
+| `core/tools.py` | `a5c2797cce7c803abb272bab761b3288ba0f7e72` | ActionGate-backed tool execution path |
+| `core/tool_protocol.py` | `1c529fbbf5352469be8ab6633edc48113da8a3bf` | separate callback-authorized tool registry path |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | structural/task/result checks; not semantic truth by itself |
+| `core/universal_intelligence.py` | `986dd5976b6451a5a75950535c13f4355f57fb0f` | deterministic specialist routing and evidence-shaped assessments |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | event relevance/anomaly heuristics and mean-severity forecast likelihood |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | deterministic synthetic campaign/holdout manifest generation |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | local region/cell capacity selection primitives |
+| `noryx7_runtime/engine.py` | `128e0522cb2234e115ae2b2e770279374a633a4d` | sequential execution over scheduler-produced topological order |
+
+These anchors are source observations, not end-to-end implementation or production assurance. The document also records the boundary that the inspected cyber range is synthetic, MIRROR WORLD calibration is not established, and product-level reverse-engineering and W12 finance/impact operations remain proposals/closure targets.
