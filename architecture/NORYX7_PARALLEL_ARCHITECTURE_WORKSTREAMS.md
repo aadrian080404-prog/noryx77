@@ -533,3 +533,7 @@ No integration is authorized by this pass. All W01–W12 remain PARTIAL.
 ## 2026-11-25 — Cross-stream source pass
 
 The new source map adds bounded evidence for W01–W12: multiple agent registries and local runtime status; separate memory custody layers; distinct provider execution/failover paths; incomplete external-effect reconciliation; artifact signature scope; heuristic rather than calibrated FINCH forecasts; and partial device/browser trust boundaries. Shared contract dependencies and closure gates are recorded in `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE_SOURCE_MAP.md`. No stream is closed; all W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Agent Core and trust authority continuation
+
+Additional cross-stream source evidence: AgentCore's per-instance lock serializes execution; its authorization hook is optional at this layer and verification is represented as a boolean; declarative skills can default to a no-op; key metadata and recovery epochs are local; runtime measurement verification and signed agent-operation attestations have separate issuers and semantics. The new reconciliation document specifies shared contract and closure requirements. All W01–W12 remain PARTIAL.
