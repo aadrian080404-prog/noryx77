@@ -560,3 +560,17 @@ The [Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NO
 W01 authority/identity; W02 runtime topology; W03 state/recovery; W04 agent fabric; W05 routing/resources; W06 semantics/evidence; W07 MIRROR WORLD; W08 surfaces/distribution; W09 security/assurance; W10 domain fabrics; W11 performance/operations; W12 product/ecosystem.
 
 W01–W06 shared substrate decisions block dependent freeze, but W07–W12 source discovery and bounded specification continue concurrently. All streams remain PARTIAL; this protocol authorizes no runtime/test/configuration changes.
+
+
+## 2026-11-25 — Contract convergence follow-through
+
+The [Operational Composition, State Machine, Memory and Surface Contract Reconciliation](NORYX7_OPERATIONAL_COMPOSITION_STATE_MACHINE_MEMORY_AND_SURFACE_CONTRACT_RECONCILIATION.md) adds the next parallel closure packet:
+
+- W01/W08: ingress route parity and one verified PrincipalAssertion before cognition/action.
+- W02/W03: coordinator-issued operation/execution identity and separate orchestration/effect certainty state machines.
+- W03/W06/W12: separate memory, evidence, audit, domain-state and financial-ledger custody classes.
+- W04/W05: complete DAG assignment, delegation leases, provider idempotency and independence metadata.
+- W06/W07/W10: typed claims/evidence, simulation fidelity and specialist qualification.
+- W08/W09/W11: device/browser isolation, socket-level egress, release chain, SLO and disaster recovery.
+
+Historical operational notes are not current test or deployment evidence. All workstreams remain PARTIAL.
