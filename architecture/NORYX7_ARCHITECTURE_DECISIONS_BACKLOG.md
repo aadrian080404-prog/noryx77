@@ -554,3 +554,22 @@ The [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGL
 ## 2026-11-25 — constructor and authority decision dependencies
 
 See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). Decision dependencies include preserving exact one-shot action grants and revocation-aware consume/execute; determining issuer/projection boundaries among identity and session authorities; retaining distinct runtime and verified-state journals while defining cross-journal commit/recovery; keeping durable offline monotonic anchor distinct from volatile encrypted outbox; unifying ingress/effect evidence; and keeping financial custody independent of agent authority. This adds no ADR, does not accept ADR-003 and closes no existing decision. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — product identity and capability realization boundaries
+
+The [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md) consolidates the product definition and current realization boundary. It introduces no duplicate ADR series. Existing decision ownership remains:
+
+- B01–B08: canonical identity/authority, runtime, journals, agents, evidence, tenant/session, versioning and offline revocation.
+- B79/B80/B85/B87: cognitive branch, plan/DAG, operation identity, execution concurrency and leases.
+- B86/B104: action/effect certainty, idempotency, retries and reconciliation.
+- B88/B90/B97/B94: source authenticity, claim/evidence semantics, independence, multimodal custody and transformation lineage.
+- B76/B99: specialist qualification and jurisdiction/scope.
+- B91/B92/B93/B100: evaluation execution, calibration, MIRROR WORLD validity and Reality Bridge.
+- B71/B96/B98: lawful systems acquisition, safe egress and source/provider assurance.
+- B81/B103: durable memory, tenant scope, retention/deletion and replica semantics.
+- B95: production placement, residency, capacity leases and failure domains.
+- B83/B84/B101: financial custody, double-entry accounting, community governance and independently verified outcomes.
+- B72/B77/B89: signed artifact/model/kernel provenance and evidence-backed freeze.
+
+The product map distinguishes architecture intent, source behavior and operational guarantees. It does not close any ADR or authorize integration, test campaigns, merge, deployment or freeze. W01–W12 remain PARTIAL.
