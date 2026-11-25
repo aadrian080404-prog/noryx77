@@ -213,3 +213,8 @@ Added `NORYX7_AGENT_CORE_SKILL_QUALIFICATION_KEY_LIFECYCLE_AND_ATTESTATION_AUTHO
 ## 2026-11-25 — Cognitive pipeline, research acquisition, global fabric and egress assurance
 
 Added `NORYX7_COGNITIVE_PIPELINE_RESEARCH_ACQUISITION_GLOBAL_FABRIC_AND_EGRESS_ASSURANCE_RECONCILIATION.md`, anchored to source HEAD `773cd0186e58a8df0f399dbd01157f49a665684c`. This pass distinguishes plan consistency from domain simulation; records the limited semantics of InternalSimulator and PipelineChallengeVerifier; maps source acquisition hashes versus source authority and exact claim spans; distinguishes replica IDs/local capacity maps from distributed acknowledgements and leases; and maps TrustChain/EgressPolicy primitives against mandatory enforcement. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Parallel closure acceleration and integration readiness
+
+[Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NORYX7_PARALLEL_CLOSURE_ACCELERATION_DEPENDENCY_DAG_AND_INTEGRATION_READINESS.md) records the four-front acceleration method, exact current executable-path anchors, W01–W12 parallel lanes, shared dependency DAG, post-freeze vertical-slice target and evidence-state transitions. It is architecture-only. It does not declare a freeze, authorize integration or claim end-to-end readiness. All W01–W12 remain PARTIAL.
