@@ -621,3 +621,29 @@ Reviewed source snapshot: `a3c4d0676c33206f8cd81ddd9ca3be35f15af6a4`. Exact blob
 | `architecture/NORYX7_AGENT_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_IMPACT_RECONCILIATION.md` | `e2ee98e058fe2a27f05d8f1d3b98c78403937c18` | agent/evidence/MIRROR WORLD/global impact boundaries |
 
 Source anchors are not end-to-end or production guarantees. No tests were executed by this source review.
+
+
+## 2026-11-25 — additional exact source anchors
+
+Reviewed at source snapshot `4889dd52aa4b7aec737ed4f910f6f77e6e7fa978`:
+
+| Source path | Blob SHA | Traceability note |
+|---|---|---|
+| `core/memory.py` | `1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd` | bounded process-local execution-scoped memory |
+| `core/memory_hierarchy.py` | `d908fcb7252e97072501b94dada23ae571807850` | bounded L0–L5 dictionary and explicit promotion |
+| `core/secure_memory.py` | `27727ce69802f3ad4f082bf4b9bc4ef013fa7812` | encrypted MemoryItem adapter |
+| `core/secure_storage.py` | `0fd726f2bad1ff6e133b46c04039ae2c943d350f` | AAD-bound ciphertext in process-local dictionary |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | offline snapshot/outbox/synchronization contracts |
+| `core/offline_anchor.py` | `a130043ae7dff949b072ae97fd00137d8051d2ea` | SQLite monotonic snapshot anchor |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | registration-order provider selection and exception failover |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | provider-to-ExecutionFabric bridge |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | bounded attempt-recording provider executor |
+| `core/tool_protocol.py` | `1c529fbbf5352469be8ab6633edc48113da8a3bf` | injected-authorizer ToolRegistry and ToolResult |
+| `core/tools.py` | `a5c2797cce7c803abb272bab761b3288ba0f7e72` | ActionGate-backed ToolExecutor and output verification |
+| `noryx7_runtime/model_fabric.py` | `abb8bd9bb3217fff967e898afbdc491eb5082f45` | model capability/budget routing and runtime-bound request provenance |
+| `jarvis/memory/store.py` | `85123bbfe425ed21e7cd7d2dd2a55fdbb532a05d` | separate bounded JARVIS in-memory store |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | event graph, heuristic relevance/anomaly and forecast primitives |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | trusted-key Ed25519 artifact-manifest verification |
+| `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | static browser source marker scanner |
+
+These anchors establish inspected source scope only. They do not prove all constructors/callers use the components or that any capability is production-ready.
