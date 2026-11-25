@@ -541,3 +541,22 @@ Additional cross-stream source evidence: AgentCore's per-instance lock serialize
 ## 2026-11-25 — Cognitive, NEXUS, MIRROR WORLD and global assurance source pass
 
 New cross-stream findings: InternalSimulator is a plan consistency check, not a physical/domain simulator; PipelineChallengeVerifier checks structural correspondence rather than semantic truth; research acquisition hashes fetched content but does not itself prove publisher authority or exact claim support; global memory replica IDs and capacity selection are local abstractions, while EventFabric is explicitly in-memory; TrustChain provides a composed local trust proof, but replay durability and universal egress enforcement remain open. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Acceleration protocol and parallel dependency DAG
+
+The [Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NORYX7_PARALLEL_CLOSURE_ACCELERATION_DEPENDENCY_DAG_AND_INTEGRATION_READINESS.md) now governs the next bounded closure cycles:
+
+- All W01–W12 may perform source inventory, contract drafting and gap discovery concurrently.
+- Shared authority, runtime, state, action and evidence decisions remain serialized through the relevant ADR owner.
+- Every evidence card records exact source ref/blob SHAs, owner, contract, dependencies, lifecycle, threat boundary, later acceptance evidence and disposition.
+- Unchanged evidence may be reused only with its original source ref; source changes invalidate dependent cards.
+- Integration remains gated on an explicit architecture-freeze manifest.
+- The first post-freeze integration proof is one authenticated vertical slice, followed by expansion through dependency groups.
+- Structural gates and CI results are scoped to the properties/jobs and exact commits they test; neither is global semantic or operational proof.
+
+### Concurrent lane assignments
+
+W01 authority/identity; W02 runtime topology; W03 state/recovery; W04 agent fabric; W05 routing/resources; W06 semantics/evidence; W07 MIRROR WORLD; W08 surfaces/distribution; W09 security/assurance; W10 domain fabrics; W11 performance/operations; W12 product/ecosystem.
+
+W01–W06 shared substrate decisions block dependent freeze, but W07–W12 source discovery and bounded specification continue concurrently. All streams remain PARTIAL; this protocol authorizes no runtime/test/configuration changes.
