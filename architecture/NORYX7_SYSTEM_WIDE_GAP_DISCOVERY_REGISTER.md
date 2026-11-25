@@ -505,3 +505,24 @@ This register is a design/closure inventory, not a claim that no external servic
 | Signed manifest versus full release provenance | W09/W11 | Trusted builder, dependency/SBOM, key lifecycle, approval quorum, deployment identity, promotion and rollback chain |
 
 These are architecture gaps, not claims that no external provider or service exists. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — additional source-reconciled gaps
+
+| Gap | Workstreams | Required architecture closure |
+|---|---|---|
+| Core/JARVIS memory duplication and storage semantics differ | W03/W08/W09 | Canonical memory ownership, adapter/migration contract, tier backend, namespace, retention and restore matrix |
+| Encrypted memory is not necessarily durable memory | W03/W09/W11 | Durable backend, backup/restore, replication, key rotation, deletion/tombstone propagation and recovery evidence |
+| Offline queue durability is distinct from monotonic anchor durability | W02/W03/W08/W09 | Durable outbox/inbox/ack lifecycle, idempotent sync, conflict resolution and replay-safe recovery |
+| Provider paths have divergent selection, action IDs and retry behavior | W02/W04/W05/W08/W09 | Unified logical operation/idempotency identity, attempt model, dispatch/effect certainty and signed adapter receipts |
+| ToolRegistry and ToolExecutor have different authorization/result contracts | W01/W02/W08/W09 | Canonical ToolSpec/ActionSpec, principal/tenant binding, result evidence and effect lifecycle |
+| Model fan-out/provenance does not establish independence or correctness | W04/W05/W06/W10/W11 | Model/source lineage, common-cause groups, independent evaluation and calibrated confidence |
+| FINCH forecast likelihood is heuristic | W06/W07/W10/W11 | Forecast target/horizon/calibration cohort, probability distribution, proper scoring and drift evaluation |
+| NEXUS source citations lack a single fully established custody graph | W06/W09/W10 | SourceArtifact/SourceSpan, immutable acquisition, exact extraction spans, contradiction/correction/retraction graph |
+| Formal proof, empirical observation and simulation output can be conflated | W06/W07/W10 | Typed epistemic artifacts, checker identity and explicit limits of proof/model assumptions |
+| Cyber range does not constitute general authorized reverse engineering | W07/W08/W09/W10 | Asset authorization manifest, passive/active tiers, sandbox, egress limits, stop conditions and signed findings |
+| Browser source scan is not runtime containment | W08/W09/W11 | Process/OS sandbox, origin and download policy, network egress mediation and adversarial validation |
+| Artifact signature is not full release provenance | W09/W11 | Builder identity, dependency/SBOM, approval, artifact promotion, deployment attestation and rollback chain |
+| W12 financial and environmental impact evidence remains separate | W10/W11/W12 | Segregated double-entry ledger, payment reconciliation, independent outcome measurement and dispute/audit workflow |
+
+These are unresolved architecture gaps, not claims that no external system or service exists. W01–W12 remain PARTIAL.
