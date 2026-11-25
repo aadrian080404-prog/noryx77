@@ -166,3 +166,8 @@ These are proposed architecture additions. Source-level reconciliation and expli
 ## 2026-11-25 — source-level authority, state and effect conflict reconciliation
 
 [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md) — bounded source inspection of dual StateJournal classes, execution/effect lifecycle, FastAPI and standalone gateway ingress, three provider paths, agent assignment/consensus, offline outbox, dispatch receipts and global memory/placement primitives. Maps source-level conflicts across W01–W12; all remain PARTIAL.
+
+
+## 2026-11-25 — single-cycle W01–W12 end-to-end reconciliation
+
+See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md). This concurrent pass reconciles identity/authority, runtime ingress, dual state journals, provider retry/effects, agent selection/scheduling, offline custody, evidence classes, simulation-to-reality, specialist qualification, global placement/release and financial/community impact. It records canonical object families, cross-stream collision targets, linked execution/effect lifecycles and the next constructor/registration/call-site source pass. Findings are bounded to named source snapshots; unknowns are not absence claims. W01–W12 remain PARTIAL; no ADR is silently accepted, no implementation or integration is authorized, and no test campaign, merge, deployment or freeze is claimed.
