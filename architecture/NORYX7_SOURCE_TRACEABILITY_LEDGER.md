@@ -773,3 +773,8 @@ Recursive Git tree inspected without truncation at HEAD `978b26630ce9fb7e1baa394
 | `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted-key artifact manifest and artifact digest verification. |
 
 No dedicated named NEXUS, FRL, integrated MIRROR WORLD engine, payments/escrow/double-entry ledger or independent impact measurement implementation path was identified in the inspected tree. This is a bounded tree observation, not proof that no generic or external implementation exists. See the capability realization inventory for classification and next closure work.
+
+
+## 2026-11-25 — Normative handoff contract reference
+
+Added `NORYX7_CANONICAL_HANDOFF_SCHEMAS_VERSIONING_FAILURE_AND_OWNERSHIP_CATALOG.md` as the cross-stream normative contract reference. It defines proposed typed record families and maps each handoff to producer, consumer, authority and blocking failure. This is an architecture proposal, not evidence that these exact schemas are implemented. Existing source anchors remain those recorded in the preceding source reconciliations; this catalog introduces no new source-level implementation claims.
