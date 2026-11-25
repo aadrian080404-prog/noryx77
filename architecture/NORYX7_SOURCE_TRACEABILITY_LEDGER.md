@@ -705,3 +705,26 @@ Full limitations and closure requirements are in `NORYX7_AGENT_CORE_SKILL_QUALIF
 | `core/secure_boot.py` | `32436ebc39f0044768e13340e8e6d1274cd5c51a` | Digest-comparison secure-boot-style primitive. |
 
 See the new reconciliation document for bounded semantics and closure evidence.
+
+
+## 2026-11-25 — Gateway, operational runtime and integration acceleration source anchors
+
+Inspected at source ref `9717088d23b36ee2b4fe70addf0bb2fc153a377e`:
+
+| Path | Blob SHA | Traceability note |
+|---|---|---|
+| `gateway/server.py` | `b434cdbe118ecea48029adcd2c954fa1ac14461c` | Session issue/verification and RuntimeAdapter delegation. |
+| `gateway/runtime_adapter.py` | `6661fbc150c77ba79d3b1f16cc0f66742b20f935` | Authenticated client request becomes TaskSpec; HYPERSYNTH result is checked before response. |
+| `core/operational_runtime.py` | `0106879b43b8de90a87a11ca9c361be72ab37072` | ModelFabric-required composition starts and checks Primary/Secondary agents. |
+| `noryx7_operational.py` | `72300445c4c3cb8e18ae94f0226c2246a069d368` | OpenRouter-backed CLI; optional SQLite journal path. |
+| `core/runtime.py` | `454f90e6b06ca6f013e325640a16d349b18797ae` | NORYXRuntime composes policy, recovery, security, ActionGate, memory, state, optional journal and HYPERSYNTH. |
+| `core/system_fabric.py` | `cf28bd8a144480467b6bd2cf3726b510a7b7924f` | CanonicalSystemFabric enforces component identity equality when explicitly composed. |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | ProviderExecutionGateway routes provider calls through ExecutionFabric authorization. |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Separate bounded provider retry/failover executor. |
+| `core/state_journal.py` | `4ea3419cb05a4edbb228966ea2584894197caa83` | SQLite WAL/FULL verified-state journal. |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Offline lifecycle, snapshot, queue and sync contracts. |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | Task/output/result structural checks; not a semantic truth oracle. |
+| `ecosystem/global_closure.py` | `d4f84e5cb23a764c1a85527fb0cf101ebaf11457` | Structural cross-layer module/symbol gate with explicit external validation boundaries. |
+| `ecosystem/completeness.py` | `c4fb481703c6c2059d1cfea08a24300e7277f270` | Contract-shape, canonical-plane, path-presence and static browser scan gate. |
+
+These anchors support a concrete gateway-to-operational-runtime vertical path and meaningful security/state primitives. They do not establish route parity, universal canonical composition, configured durable journal, retry safety after ambiguous side effects, semantic correctness, runtime sandboxing or global federation. See the parallel closure acceleration document for the bounded source interpretation and dependency DAG.
