@@ -561,3 +561,19 @@ These labels are discovery entries, not ADR IDs. W01–W12 remain PARTIAL.
 - **GAP-EVALUATION-HOLDOUT-ASSURANCE:** campaign manifest generation and evidence recording do not prove execution, holdout isolation or independent evidence provenance.
 
 These are discovery labels, not ADR identifiers. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Parallel integration-readiness gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-INGRESS-ROUTE-PARITY | W01/W02/W08/W09 | Inventory every HTTP/API/CLI/JARVIS entrypoint and prove common principal, request, execution, authorization and result-admission semantics or document explicit adapters. |
+| GAP-CANONICAL-RUNTIME-COMPOSITION | W02/W03/W04/W08 | Prove constructor/call-site adoption of one canonical runtime composition; classify compatibility facades and prohibit silent alternate authority paths. |
+| GAP-PROVIDER-RETRY-IDEMPOTENCY | W02/W05/W08/W09/W11 | Reconcile provider gateways/retry executors with one logical operation ID, idempotency key, uncertain-effect state and authenticated reconciliation receipt. |
+| GAP-STATE-JOURNAL-DEPLOYMENT | W02/W03/W08/W11 | Prove durable journal configuration in each target deployment, namespace ownership, backup/restore and cross-journal recovery. |
+| GAP-SEMANTIC-VERIFICATION-BOUNDARY | W06/W07/W10 | Distinguish contract/output-presence verification from independent semantic/domain correctness and bind verdicts to evidence, evaluator and policy version. |
+| GAP-STRUCTURAL-GATE-SCOPE | W01–W12 | Keep module/path/contract-shape gates distinct from call-site integration, runtime behavior, external hardware/service validation and semantic acceptance. |
+| GAP-PRIMARY-SECONDARY-INDEPENDENCE | W04/W05/W06/W10 | Define common-cause independence, shared context/model/provider lineage, dissent retention and independent evaluator requirements. |
+| GAP-ACCELERATION-EVIDENCE-INVALIDATION | W01–W12 | Define source-ref-bound evidence cards and invalidate dependent conclusions when source blobs, contracts or constructors change. |
+
+These gaps are source-reconciliation findings, not proof of a vulnerability or absence of external infrastructure. The corresponding architecture decisions remain open. W01–W12 remain PARTIAL.
