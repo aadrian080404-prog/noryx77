@@ -574,3 +574,16 @@ The [Operational Composition, State Machine, Memory and Surface Contract Reconci
 - W08/W09/W11: device/browser isolation, socket-level egress, release chain, SLO and disaster recovery.
 
 Historical operational notes are not current test or deployment evidence. All workstreams remain PARTIAL.
+
+
+## 2026-11-25 — Realization boundary work in parallel
+
+The [Capability Realization Inventory: NEXUS, MIRROR WORLD, Domains and Ecosystem](NORYX7_CAPABILITY_REALIZATION_INVENTORY_NEXUS_MIRROR_WORLD_DOMAINS_AND_ECOSYSTEM.md) adds focused work for W06–W12 while W01–W05 continue:
+
+- W06: distinguish UniversalIntelligence Evidence/DomainAssessment and research hashes from a full NEXUS claim graph and FRL proof lifecycle.
+- W07: distinguish synthetic CyberRange, plan-level simulation and FINCH heuristics from calibrated MIRROR WORLD domain kernels and Reality Bridge.
+- W10: convert domain labels/routes into independent qualification, jurisdiction, standards, calibration and escalation manifests.
+- W11: turn local scale/placement primitives into durable distributed leases, replication, SLO/DR and release evidence.
+- W12: separate architecture-only business/project concepts from executable payment, ledger, marketplace and impact services.
+
+The repository-tree scan is bounded to the inspected source snapshot; an external service or generic implementation under another name is not ruled out. All streams remain PARTIAL.
