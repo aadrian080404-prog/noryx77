@@ -498,3 +498,10 @@ The system-level responsibility and dependency overlay is defined in [Cross-Work
 Bounded source reconciliation cross-referenced against `NORYX7_REPOSITORY_INVENTORY_AND_EXECUTION_PATH_RECONCILIATION.md`, `NORYX7_SOURCE_RECONCILIATION_W01_W05.md`, `NORYX7_SOURCE_RECONCILIATION_W06_W12.md` and ADR-B56–B62. New synthesis: `NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md`.
 
 Evidence limitation: route-local inspection does not establish reverse-proxy behavior; source component inspection does not establish all dynamic callers; workflow success does not establish deployment approval. The next source pass must add exact route/middleware/configuration references, provider retry caller graph, per-adapter idempotency and receipt semantics, scheduler concurrency/cancellation call paths, and per-platform artifact provenance. Do not upgrade implementation or architecture status based on this overlay.
+
+
+## 2026-11-25 — source-level authority, journal and dispatch reconciliation
+
+Bounded source anchors inspected on the architecture branch (source inherited from merge-base `7d900bc75843ea968aa5886d251dbfac83a5d93c`): `web/app.py`, `gateway/auth.py`, `gateway/server.py`, `gateway/runtime_adapter.py`, `noryx7_runtime/engine.py`, `noryx7_runtime/state.py`, `noryx7_runtime/lifecycle.py`, `noryx7_runtime/scheduler.py`, `core/state.py`, `core/state_journal.py`, `core/provider_router.py`, `core/provider_execution.py`, `core/provider_resilience.py`, `core/execution_fabric.py`, `core/coordination.py`, `core/agent_mesh.py`, `core/offline.py`, `ecosystem/runtime_dispatch.py`, `ecosystem/dispatch_contract.py`, `ecosystem/global_fabric.py`, `ecosystem/global_scale.py`, `core/verification.py`, `core/evaluation_campaign.py`, `core/cyber_range.py` and `core/resource_router.py`.
+
+Detailed file blob SHAs, bounded observations and required contracts are recorded in `NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md`. The review does not establish all dynamic callers, deployment proxy policy or production adapters. No implementation status is upgraded.
