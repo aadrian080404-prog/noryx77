@@ -516,3 +516,16 @@ See [Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconcil
 - W08/W09/W11: browser source scanning is not runtime isolation; signed artifact manifests are not a full trusted build-to-deployment chain.
 - W11/W12: evaluation campaign manifests do not execute independent campaigns; financial and impact outcomes still require separate evidence and custody.
 All W01–W12 remain PARTIAL; architecture-only.
+
+
+## 2026-11-25 — distributed evidence, memory and systems reconstruction pass
+
+The new source reconciliation maps the following cross-stream work concurrently:
+- W01/W06/W09/W10: source artifact custody, exact spans, reviewer identity, source independence groups, formal proof versus empirical evidence, correction and retraction lineage.
+- W02/W04/W05/W08: shared logical operation identity across ProviderRouter, ProviderExecutionGateway, ResilientProviderExecutor, tools and external adapters; distinguish attempts, uncertain effects, observations and commits.
+- W03/W09/W11: core/JARVIS memory divergence, encrypted adapter versus durable backend, offline queue versus monotonic anchor, key custody, retention, tombstones and recovery.
+- W06/W07/W10: typed NEXUS/FRL artifacts, world manifests, calibration/holdout validation and explicit separation of simulation from observation.
+- W07/W08/W09: authorized Systems Reverse Engineering tiers, asset authorization manifests, safe egress, sandboxing and stop conditions.
+- W09/W11: signed manifest versus full build-to-deployment provenance, approval, rollback and runtime attestation.
+- W12: payment/escrow/ledger/impact evidence must remain separate from product telemetry and activity counts.
+No integration is authorized by this pass. All W01–W12 remain PARTIAL.
