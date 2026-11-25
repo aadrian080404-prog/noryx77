@@ -427,3 +427,8 @@ See [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SO
 - OfflineSyncQueue is in-memory and local failure removes its queued item; durable outbox and uncertain local-effect recovery remain open.
 - Runtime dispatch receipt hashes a type representation/exception type, not an independently observed target effect.
 These are source-level bounded findings and unknowns, not declarations of exploitable vulnerabilities. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — single-cycle W01–W12 end-to-end reconciliation
+
+See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md). This concurrent pass reconciles identity/authority, runtime ingress, dual state journals, provider retry/effects, agent selection/scheduling, offline custody, evidence classes, simulation-to-reality, specialist qualification, global placement/release and financial/community impact. It records canonical object families, cross-stream collision targets, linked execution/effect lifecycles and the next constructor/registration/call-site source pass. Findings are bounded to named source snapshots; unknowns are not absence claims. W01–W12 remain PARTIAL; no ADR is silently accepted, no implementation or integration is authorized, and no test campaign, merge, deployment or freeze is claimed.
