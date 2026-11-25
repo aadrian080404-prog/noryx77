@@ -537,3 +537,7 @@ The new source map adds bounded evidence for W01–W12: multiple agent registrie
 ## 2026-11-25 — Agent Core and trust authority continuation
 
 Additional cross-stream source evidence: AgentCore's per-instance lock serializes execution; its authorization hook is optional at this layer and verification is represented as a boolean; declarative skills can default to a no-op; key metadata and recovery epochs are local; runtime measurement verification and signed agent-operation attestations have separate issuers and semantics. The new reconciliation document specifies shared contract and closure requirements. All W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Cognitive, NEXUS, MIRROR WORLD and global assurance source pass
+
+New cross-stream findings: InternalSimulator is a plan consistency check, not a physical/domain simulator; PipelineChallengeVerifier checks structural correspondence rather than semantic truth; research acquisition hashes fetched content but does not itself prove publisher authority or exact claim support; global memory replica IDs and capacity selection are local abstractions, while EventFabric is explicitly in-memory; TrustChain provides a composed local trust proof, but replay durability and universal egress enforcement remain open. W01–W12 remain PARTIAL.
