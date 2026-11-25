@@ -593,3 +593,31 @@ Reviewed source snapshot: `bab155831256442e6018b78163c11c690f1547b9`. Exact blob
 | `noryx7_runtime/engine.py` | `128e0522cb2234e115ae2b2e770279374a633a4d` | sequential execution over scheduler-produced topological order |
 
 These anchors are source observations, not end-to-end implementation or production assurance. The document also records the boundary that the inspected cyber range is synthetic, MIRROR WORLD calibration is not established, and product-level reverse-engineering and W12 finance/impact operations remain proposals/closure targets.
+
+
+## 7. Agent, evidence, simulation and release assurance source checkpoint — 2026-11-25
+
+Reviewed source snapshot: `a3c4d0676c33206f8cd81ddd9ca3be35f15af6a4`. Exact blob SHAs and bounded interpretations are recorded in [Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconciliation](NORYX7_AGENT_EVIDENCE_SIMULATION_FORECAST_AND_RELEASE_ASSURANCE_SOURCE_RECONCILIATION.md). Additional anchors:
+| Source | Blob SHA | Bounded interpretation |
+|---|---|---|
+| `core/architecture_gate.py` | `ed2e748821c0389672c747e9568b170de684c797` | 18-plane structural definition and implementation-path presence gate |
+| `core/architecture_registry.py` | `2b90f6705be0e6ccf2474e94962c0d0c9539df43` | canonical structural plane definitions |
+| `core/agent_mesh.py` | `25c9162750708e53742862f9f413fdf5200ca08f` | exact-role, sorted-first agent selection |
+| `core/coordination.py` | `c5743872a5b50765db04e4a42739e9ad238ad983` | max_agents truncation, sequential child-task execution and exact-output consensus |
+| `core/subtask_verification.py` | `2980638a44062d8e92f2941822cb30105a697327` | exact subtask coverage/order and structural commit eligibility |
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | synthetic sandbox-only simulation; no arbitrary network execution |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | deterministic scenario/holdout manifest generation and externally supplied evaluation evidence |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | keyword/severity relevance, deviation anomaly and mean-severity forecast heuristic |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | trusted-key Ed25519 manifest and artifact-byte digest verification |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | first eligible provider resolution |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | per-call authorized provider bridge |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | bounded provider failover attempts with exception-based exclusion |
+| `ecosystem/browser_isolation.py` | `73f69b55f7bb6335d6e9294c7d48ebac1868991a` | static browser source marker scan |
+| `ecosystem/dispatch_contract.py` | `87be053ccad3776d7eebf1cad280a4f52fec9ab6` | typed dispatch receipt with evidence digest |
+| `ecosystem/runtime_dispatch.py` | `9f4f628c322aabb571fce64d54c3d6740cb142fd` | principal callback and front topology checked before handler dispatch; receipt evidence is result/exception type |
+| `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md` | `61d53f8a47dd5b03e5988fc8f7888d6f337dc993` | proposed world-model and isolated Reality Bridge architecture |
+| `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md` | `3c88133795ab5aa944b52572b2fc400d89ef9c45` | proposed domain qualification/evidence lifecycle and operational assurance |
+| `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | `9fad1e90f818b572d0cbe4bdfd05cf46ca483c9f` | NEXUS claim semantics, research custody, specialist qualification and W12 impact controls |
+| `architecture/NORYX7_AGENT_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_IMPACT_RECONCILIATION.md` | `e2ee98e058fe2a27f05d8f1d3b98c78403937c18` | agent/evidence/MIRROR WORLD/global impact boundaries |
+
+Source anchors are not end-to-end or production guarantees. No tests were executed by this source review.
