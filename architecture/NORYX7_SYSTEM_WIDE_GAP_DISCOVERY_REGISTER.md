@@ -548,3 +548,16 @@ These are discovery labels, not new ADR identifiers. Full source evidence and cl
 - **GAP-VERIFICATION-OBJECT:** bare boolean verification does not bind source evidence, verifier identity, method or policy version.
 
 These labels are discovery entries, not ADR IDs. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Cognitive, acquisition, global and enforcement gaps
+
+- **GAP-SIMULATION-FIDELITY-TIERS:** InternalSimulator checks plan consistency; domain simulation and digital-twin fidelity are not established by it.
+- **GAP-SEMANTIC-INDEPENDENT-ORACLE:** PipelineChallengeVerifier checks structural correspondence; independent semantic truth needs protected external/domain oracles.
+- **GAP-SOURCE-TO-CLAIM-PROVENANCE:** research content hashes do not alone establish publisher authority, exact supporting spans, rights, freshness or source independence.
+- **GAP-GLOBAL-REPLICA-ACKNOWLEDGEMENT:** replica identifiers in local memory metadata are not signed write acknowledgements or quorum evidence.
+- **GAP-CAPACITY-LEASE-FENCING:** local region/cell/compute selection is not a distributed expiring lease with fencing.
+- **GAP-EGRESS-ENFORCEMENT-COVERAGE:** an allow-list primitive does not prove all network-capable components traverse it.
+- **GAP-TRUSTCHAIN-REPLAY-DURABILITY:** default replay guard scope is instance-local unless shared/injected; distributed persistence is not shown.
+- **GAP-EVALUATION-HOLDOUT-ASSURANCE:** campaign manifest generation and evidence recording do not prove execution, holdout isolation or independent evidence provenance.
+
+These are discovery labels, not ADR identifiers. W01–W12 remain PARTIAL.
