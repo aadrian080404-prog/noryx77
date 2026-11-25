@@ -608,3 +608,7 @@ All listed decisions remain OPEN pending alternatives, owner, rationale, cross-p
 ## 2026-11-25 — Source-pass reconciliation (reuse existing decisions)
 
 The 2026-11-25 agent/memory/provider/operations source map introduces no new ADR series. Reconcile its findings into the existing open decisions for: canonical agent registry and qualification/delegation; provider effect lifecycle, idempotency and uncertain outcomes; memory custody, encryption/key lifecycle and durable recovery; NEXUS evidence provenance and forecast calibration; device/browser surface trust and egress; supply-chain/release attestation; and W12 ledger/impact evidence. Do not infer ADR IDs from topic names. Existing decision owners and exact statuses remain authoritative in the preceding backlog entries. No decision is marked resolved by this source inspection.
+
+## 2026-11-25 — Agent Core and trust-authority reconciliation
+
+Reuse existing open decisions for the following newly sharpened questions: (1) mandatory AgentCore authorization versus planning-only composition; (2) declarative/executable/qualified skill lifecycle; (3) typed evidence-bound VerificationRecord and independent evaluator identity; (4) layered runtime measurement and agent operation attestations; (5) durable KMS/HSM key metadata, nonce replay and revocation; (6) cross-journal recovery and external-effect reconciliation. No ADR identifier is inferred and no decision is marked resolved by source inspection.
