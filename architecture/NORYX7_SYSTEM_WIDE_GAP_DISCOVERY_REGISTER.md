@@ -526,3 +526,14 @@ These are architecture gaps, not claims that no external provider or service exi
 | W12 financial and environmental impact evidence remains separate | W10/W11/W12 | Segregated double-entry ledger, payment reconciliation, independent outcome measurement and dispute/audit workflow |
 
 These are unresolved architecture gaps, not claims that no external system or service exists. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Newly isolated cross-plane gaps
+
+- **GAP-AGENT-REGISTRY-CONSOLIDATION:** AgentFabric, AgentRuntime/router status and other agent selection/coordinator paths do not yet prove one canonical lifecycle/qualification authority.
+- **GAP-MEMORY-CUSTODY-CONSOLIDATION:** hot MemoryStore, L0–L5 hierarchy, encrypted adapter and JARVIS store have no demonstrated common durability/replication/deletion/recovery contract.
+- **GAP-PROVIDER-EFFECT-RECONCILIATION:** ProviderExecutionGateway and ResilientProviderExecutor are separate; retry after ambiguous remote completion needs idempotency and reconciliation before failover.
+- **GAP-RELEASE-ATTESTATION-CHAIN:** trusted Ed25519 manifest and artifact digest are useful primitives, but do not prove builder provenance, key lifecycle, SBOM, approvals, deployment measurement or rollback.
+- **GAP-FORECAST-CALIBRATION:** FINCH likelihood is mean severity, not calibrated event probability; temporal holdout and calibration evidence are absent in this module.
+- **GAP-SURFACE-TRUST-ENFORCEMENT:** local device registry and static browser scanner do not establish hardware attestation, renderer isolation or enforced egress.
+
+These are discovery labels, not new ADR identifiers. Full source evidence and closure gates are in `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE_SOURCE_MAP.md`. W01–W12 remain PARTIAL.
