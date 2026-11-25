@@ -529,3 +529,7 @@ The new source reconciliation maps the following cross-stream work concurrently:
 - W09/W11: signed manifest versus full build-to-deployment provenance, approval, rollback and runtime attestation.
 - W12: payment/escrow/ledger/impact evidence must remain separate from product telemetry and activity counts.
 No integration is authorized by this pass. All W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Cross-stream source pass
+
+The new source map adds bounded evidence for W01–W12: multiple agent registries and local runtime status; separate memory custody layers; distinct provider execution/failover paths; incomplete external-effect reconciliation; artifact signature scope; heuristic rather than calibrated FINCH forecasts; and partial device/browser trust boundaries. Shared contract dependencies and closure gates are recorded in `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE_SOURCE_MAP.md`. No stream is closed; all W01–W12 remain PARTIAL.
