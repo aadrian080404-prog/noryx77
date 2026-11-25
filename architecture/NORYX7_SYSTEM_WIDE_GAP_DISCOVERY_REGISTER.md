@@ -437,3 +437,19 @@ See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGL
 ## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
 
 See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). Added source anchors identify ActionGate and exact one-shot grants, identity/replay scope, separate runtime and SQLite journals, runtime recovery and recovery epochs, offline encrypted outbox versus durable monotonic anchor, ingress divergence, ExecutionFabric registration and W12 fund-segregation architecture. Durable anti-rollback is present; the inspected outbox remains in-memory. Existing tests are evidence of test specifications, not tests executed. W01–W12 remain PARTIAL.
+
+
+## 8. Newly reconciled cross-plane gaps — 2026-11-25
+
+| Gap | Affected streams | Evidence/impact | Required closure artifact |
+|---|---|---|---|
+| Authority composition and principal normalization | W01/W02/W07/W08/W09 | Core identity, action grants, gateway sessions, JARVIS authorization and global session/device authorization are separate local authorities | Constructor profile matrix, composition root, canonical PrincipalAssertion and revocation/freshness contract |
+| Cross-journal transaction ownership | W02/W03/W08/W09 | Runtime reservation/attestation journal and SQLite verified-state journal have different durability and recovery semantics | Operation transaction state machine and crash/restart reconciliation matrix |
+| Effect certainty and retry multiplication | W02/W05/W08/W11 | Provider routing, execution gateway and resilience wrapper expose distinct retry behavior; raw exceptions do not prove no target effect | Single retry coordinator, typed effect outcomes and target idempotency/compensation contract |
+| Agent lineage and incomplete assignment | W04/W05/W07/W11 | Assignment is bounded by max_agents; execute creates a new execution ID and runs sequentially; consensus requires exact output equality | Parent-child DAG lineage, overflow policy, concurrency/lease/cancel/join and typed consensus contract |
+| Offline queue durability | W03/W08/W09 | Snapshot anti-rollback anchor is durable, but the inspected outbox and acknowledgement deletion are process-local | Durable outbox/inbox, signed remote receipt, replay and crash-safe acknowledgement contract |
+| Global memory/placement operationalization | W03/W05/W08/W09 | Replica IDs and placement primitives do not establish replica acknowledgement, durable payload custody or resource leases | Storage/replication adapter contract, consistency model, placement lease and node attestation |
+| W12 financial and impact execution authority | W07/W09/W10/W12 | Tree inventory did not establish production ledger/payment/escrow implementation; business/project architecture remains proposal-level evidence | Double-entry ledger, segregation, payment/escrow controls, reconciliation and independent impact methodology |
+| Release provenance and rollback | W09/W11 | CI workflow and signed manifest verifier do not establish source-to-artifact-to-deployment chain or staged rollback | Signed provenance chain, builder identity, SBOM, approval quorum, promotion and rollback evidence |
+
+These are architecture gaps to resolve, not assertions that no external integration exists. W01–W12 remain PARTIAL; no gap is closed by path presence alone.
