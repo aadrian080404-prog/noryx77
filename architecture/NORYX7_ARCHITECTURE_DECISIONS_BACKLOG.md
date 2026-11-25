@@ -612,3 +612,7 @@ The 2026-11-25 agent/memory/provider/operations source map introduces no new ADR
 ## 2026-11-25 — Agent Core and trust-authority reconciliation
 
 Reuse existing open decisions for the following newly sharpened questions: (1) mandatory AgentCore authorization versus planning-only composition; (2) declarative/executable/qualified skill lifecycle; (3) typed evidence-bound VerificationRecord and independent evaluator identity; (4) layered runtime measurement and agent operation attestations; (5) durable KMS/HSM key metadata, nonce replay and revocation; (6) cross-journal recovery and external-effect reconciliation. No ADR identifier is inferred and no decision is marked resolved by source inspection.
+
+## 2026-11-25 — Cognitive, NEXUS, MIRROR WORLD and global assurance reconciliation
+
+Reuse existing open decisions for: simulation fidelity tiers and model calibration; independent semantic oracles and holdout isolation; source acquisition gateway, immutable evidence and source-to-claim provenance; global replication acknowledgements/quorum and conflict semantics; expiring capacity leases/fencing; mandatory egress enforcement across network surfaces; TrustChain replay persistence/revocation; and campaign execution provenance. Do not infer ADR IDs and do not resolve a decision solely from the presence of a local primitive.
