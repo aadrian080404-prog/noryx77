@@ -752,3 +752,24 @@ Inspected at source HEAD `0cf3ace262d362454e0537b239c920613f885cd3`:
 | `ecosystem/dispatch_contract.py` | `87be053ccad3776d7eebf1cad280a4f52fec9ab6` | Typed cross-front dispatch receipt and evidence digest. |
 
 See the operational composition reconciliation for contract requirements and limitations. These anchors do not prove production route parity, universal constructor adoption, distributed durability or end-to-end operation.
+
+
+## 2026-11-25 — Capability realization tree inventory
+
+Recursive Git tree inspected without truncation at HEAD `978b26630ce9fb7e1baa394ed0fe4bf477271e6f`. Keyword inventory across mirror/world/nexus/evidence/claim/formal/cyber/finch/impact/ledger/business/payment/market/climate/environment/agriculture/community/forecast/simulation/reverse/research returned architecture documents plus these directly relevant implementation paths:
+
+| Path | Blob SHA | Bounded note |
+|---|---|---|
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Synthetic sandbox-only symbolic cyber simulation with owner authorization. |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Bounded event graph, heuristic relevance/anomaly and forecast primitives. |
+| `core/universal_intelligence.py` | `986dd5976b6451a5a75950535c13f4355f57fb0f` | Evidence/DomainAssessment structures and keyword-based specialist routing. |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case/holdout manifest generation; no case execution in this layer. |
+| `core/frontier_capabilities.py` | `e76ace57c6d43b5db7d391ab533b0fa41ed5a6cc` | Bounded HTTPS research acquisition and content hashes. |
+| `core/reasoning.py` | `7bf5d905f07b4805e3505e13408a685d81f7842b` | Hypothesis/plan consistency simulation, not calibrated physical-domain simulation. |
+| `core/self_improvement.py` | `2cc85de48becd7243e6d3d572dded25841587a08` | Proposal-only staged improvement boundary. |
+| `core/resource_router.py` | `4f7bf28200edd05f1236d9779437e4aa43bba8ab` | Deterministic device/edge/cloud heuristic. |
+| `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | Local global-memory/identity index primitives. |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | Local region/cell/capacity and event-fabric abstractions. |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted-key artifact manifest and artifact digest verification. |
+
+No dedicated named NEXUS, FRL, integrated MIRROR WORLD engine, payments/escrow/double-entry ledger or independent impact measurement implementation path was identified in the inspected tree. This is a bounded tree observation, not proof that no generic or external implementation exists. See the capability realization inventory for classification and next closure work.
