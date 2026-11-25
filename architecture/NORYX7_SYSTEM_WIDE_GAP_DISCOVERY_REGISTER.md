@@ -596,3 +596,19 @@ These gaps are source-reconciliation findings, not proof of a vulnerability or a
 | GAP-IMPACT-LEDGER-SEPARATION | W06/W09/W10/W12 | Keep financial accounting, security audit, evidence provenance and independently measured public impact in separate correlated ledgers. |
 
 These are architecture closure requirements, not proof of a vulnerability or absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Product-plane realization gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-NEXUS-SEMANTIC-GRAPH-REALIZATION | W06 | Specify/implement versioned Claim/Evidence/SourceArtifact/SourceSpan graph, contradiction, temporal scope, independence and correction lifecycle; current evidence/domain primitives are narrower. |
+| GAP-FRL-PROOF-CHECKER-REALIZATION | W06/W09 | Define exact proof artifacts, theory/checker identity, checker trust, resource limits and independently reproducible verification. |
+| GAP-MIRROR-WORLD-INTEGRATED-KERNELS | W06/W07/W10 | Distinguish plan consistency and synthetic cyber simulation from calibrated physical/environmental/economic kernels, experiment ledger and Reality Bridge. |
+| GAP-SYSTEMS-RE-ACQUISITION-TIERS | W07/W08/W09/W10 | Define authorized asset manifests, passive/active/lab modes, artifact custody, safe acquisition and report/evidence standards; synthetic CyberRange alone is not general reverse engineering. |
+| GAP-SPECIALIST-QUALIFICATION-REGISTRY | W01/W04/W06/W10 | Replace domain labels/keyword routes as competence claims with independent qualification, jurisdiction, scope, expiry, conflict and review records. |
+| GAP-GLOBAL-FLEET-OPERATIONS-ASSURANCE | W05/W08/W09/W11 | Prove node/region membership, attestation, durable capacity leases/fencing, replication/quorum, SLO/DR and release/deployment provenance. |
+| GAP-W12-EXECUTABLE-LEDGER-AND-PAYMENTS | W01/W09/W11/W12 | Establish explicit authorized payment adapters, segregated double-entry ledgers, settlement/refund/dispute/reconciliation and audit. |
+| GAP-W12-INDEPENDENT-IMPACT-MEASUREMENT | W06/W07/W10/W12 | Establish baseline/counterfactual, boundary, methodology, independent verifier, uncertainty, net outcome and correction/grievance. |
+
+These gaps describe missing or incomplete evidence in the inspected repository source scope; they do not assert that no external provider exists. All W01–W12 remain PARTIAL.
