@@ -503,3 +503,16 @@ W01–W12 remain PARTIAL. These findings are architecture requirements, not impl
 ## Product identity and realization map — 2026-11-25
 
 The new [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT_IDENTITY_CAPABILITY_BOUNDARIES_AND_REALIZATION_MAP.md) binds W01–W12 to one operating model: intent and evidence intake; HYPERSYNTH cognition and planning; agent/model/resource coordination; governed action execution; verification and state/memory admission; distributed placement; and user-facing surfaces. It separates implemented primitives from proposed contracts and operational guarantees. It also makes explicit that systems reverse engineering, calibrated MIRROR WORLD, global federation and W12 financial/impact execution are not established as complete production capabilities by the inspected source. Cross-stream dependencies remain open; W01–W12 remain PARTIAL.
+
+
+## Agent, evidence and assurance source pass — 2026-11-25
+
+See [Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconciliation](NORYX7_AGENT_EVIDENCE_SIMULATION_FORECAST_AND_RELEASE_ASSURANCE_SOURCE_RECONCILIATION.md). Cross-stream deltas:
+- W01/W04/W10: role-first agent selection is not qualified competence; bind agent, verifier and specialist identities to issuer, scope, expiry and independent assessment.
+- W02/W04/W05: coordinator truncates assignment to max_agents and executes sequentially; define full DAG coverage, parent/child lineage, capacity leases, concurrency, cancellation and aggregation.
+- W06/W10: subtask structural coverage and supplied evidence-strength fields do not prove claim-source entailment or calibrated uncertainty; establish typed NEXUS claims and evidence lineage.
+- W07/W10: MIRROR WORLD architecture is detailed, but synthetic cyber-range execution and heuristic FINCH likelihood do not establish calibrated real-world simulation or forecasts.
+- W02/W08/W09: provider retry paths and dispatch receipts do not prove target-side effects; unify idempotency, effect certainty and authenticated receipts.
+- W08/W09/W11: browser source scanning is not runtime isolation; signed artifact manifests are not a full trusted build-to-deployment chain.
+- W11/W12: evaluation campaign manifests do not execute independent campaigns; financial and impact outcomes still require separate evidence and custody.
+All W01–W12 remain PARTIAL; architecture-only.
