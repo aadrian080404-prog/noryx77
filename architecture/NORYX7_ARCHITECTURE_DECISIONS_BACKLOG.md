@@ -573,3 +573,20 @@ The [Product Identity, Capability Boundaries and Realization Map](NORYX7_PRODUCT
 - B72/B77/B89: signed artifact/model/kernel provenance and evidence-backed freeze.
 
 The product map distinguishes architecture intent, source behavior and operational guarantees. It does not close any ADR or authorize integration, test campaigns, merge, deployment or freeze. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — agent, evidence, simulation and release assurance decisions
+
+The [Agent, Evidence, Simulation, Forecast and Release Assurance Source Reconciliation](NORYX7_AGENT_EVIDENCE_SIMULATION_FORECAST_AND_RELEASE_ASSURANCE_SOURCE_RECONCILIATION.md) maps source findings to existing decision authorities; it creates no duplicate ADR IDs and closes none:
+
+- B79/B80/B85/B87: agent selection, qualification, complete plan coverage, parent/child lineage, DAG concurrency, leases and semantic consensus remain OPEN.
+- B88/B90/B97: typed claim/evidence graph, source-span entailment, contradiction, independence and uncertainty remain OPEN.
+- B91: evaluation execution, holdout custody, evaluator identity and evidence independence remain OPEN.
+- B92/B93/B100: FINCH calibration, MIRROR WORLD model admission, OOD limits and Reality Bridge assurance remain OPEN.
+- B71/B96/B98: authorized system acquisition, safe egress, browser/runtime isolation and content handling remain OPEN.
+- B72/B77/B89: trusted builder, artifact provenance, signer lifecycle, promotion and rollback remain OPEN.
+- B86/B104: provider retries, idempotency and uncertain external-effect reconciliation remain OPEN.
+- B76/B99: specialist qualification, scope, jurisdiction, calibration and expiry remain OPEN.
+- B83/B84/B101: segregated funds, double-entry accounting and independently verified community/environmental outcomes remain OPEN.
+
+The 18-plane architecture gate is a structural path-presence check, not sufficient evidence for semantic or operational completeness. No ADR is accepted by this documentation pass. W01–W12 remain PARTIAL.
