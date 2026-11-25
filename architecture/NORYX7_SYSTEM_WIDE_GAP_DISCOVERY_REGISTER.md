@@ -414,3 +414,16 @@ The [Ingress, External Effects, Release Evidence and Cross-Workstream Closure Re
 - Structural audit outputs, CI success, architecture acceptance and deployment/release approval need separate evidence schemas and scopes.
 - Per-platform artifact provenance and release coverage remain incomplete in the inspected inventory.
 These are source-grounded gaps/unknowns, not proof of an exploitable endpoint or a failed production deployment. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — source-level conflict discoveries across W01–W12
+
+See [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md). Newly explicit gaps:
+- Two different `StateJournal` classes exist: `noryx7_runtime.state.StateJournal` (in-memory reservations/attestations used by RuntimeEngine) and `core.state_journal.StateJournal` (SQLite verified-state commits used by StateStore). A canonical adapter/transaction/recovery relationship is not established.
+- RuntimeEngine retains reservations after dispatch/commit exceptions, but the six-state execution lifecycle cannot represent indeterminate external effects or reconciliation.
+- FastAPI `/api/chat` directly invokes OperationalNORYXRuntime while `/v1/execute` uses the gateway session verifier; deployment proxy equivalence remains unknown. A separate standalone gateway server also exposes gateway routes.
+- ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor implement distinct dispatch/failover paths; no single retry/effect coordinator is demonstrated.
+- AgentCoordinator truncates assignment to `max_agents`, runs assignments sequentially and creates its own execution ID; AgentMesh uses lexical-first role routing. Multi-step aggregation and same-task consensus semantics need separation.
+- OfflineSyncQueue is in-memory and local failure removes its queued item; durable outbox and uncertain local-effect recovery remain open.
+- Runtime dispatch receipt hashes a type representation/exception type, not an independently observed target effect.
+These are source-level bounded findings and unknowns, not declarations of exploitable vulnerabilities. W01–W12 remain PARTIAL.
