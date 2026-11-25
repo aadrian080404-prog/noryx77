@@ -604,3 +604,7 @@ No duplicate ADR series is introduced. The new distributed-evidence/memory/resea
 - **M03:** signed build/release/rollback and controlled self-improvement admission.
 - **M04:** specialist qualification, jurisdiction/scope, domain validity and independent review.
 All listed decisions remain OPEN pending alternatives, owner, rationale, cross-plane compatibility and acceptance criteria. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Source-pass reconciliation (reuse existing decisions)
+
+The 2026-11-25 agent/memory/provider/operations source map introduces no new ADR series. Reconcile its findings into the existing open decisions for: canonical agent registry and qualification/delegation; provider effect lifecycle, idempotency and uncertain outcomes; memory custody, encryption/key lifecycle and durable recovery; NEXUS evidence provenance and forecast calibration; device/browser surface trust and egress; supply-chain/release attestation; and W12 ledger/impact evidence. Do not infer ADR IDs from topic names. Existing decision owners and exact statuses remain authoritative in the preceding backlog entries. No decision is marked resolved by this source inspection.
