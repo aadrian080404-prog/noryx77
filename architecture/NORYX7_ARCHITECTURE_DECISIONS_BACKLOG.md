@@ -633,3 +633,20 @@ The [Parallel Closure Acceleration, Dependency DAG and Integration Readiness](NO
 - **H04/H05/H06/H08/H10 and M01–M07:** remain mapped to the parallel workstream lanes and retain their existing acceptance criteria.
 
 The acceleration protocol permits concurrent source discovery and specification, but shared contract decisions remain serialized through ADR ownership. The first integration target after an approved architecture freeze is one authenticated vertical slice. No ADR is accepted, no architecture freeze is declared and no integration/test campaign is authorized by this update. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Operational composition and data-custody decision refinement
+
+The [Operational Composition, State Machine, Memory and Surface Contract Reconciliation](NORYX7_OPERATIONAL_COMPOSITION_STATE_MACHINE_MEMORY_AND_SURFACE_CONTRACT_RECONCILIATION.md) refines existing decisions only; it creates no new ADR identifiers and accepts none:
+
+- **B01/B06/B09/B10:** direct chat/session route convergence and canonical PrincipalAssertion.
+- **B02/B07/B10:** coordinator-issued operation identity, facade ownership and explicit orchestration/effect outcome semantics.
+- **B03/B11/H08:** memory namespace parity, durable journal ownership, backup/deletion and cross-journal recovery.
+- **B04/B12/B79/B80/B85/B87:** complete plan DAG, agent qualification, delegation leases, partial outcomes and independence metadata.
+- **B05/H01/H03/H11:** multimodal SourceArtifact/SourceSpan custody, evidence lineage and semantic result admission.
+- **H04/H05/H06/H08/H12:** resource placement leases, simulation fidelity, offline trust and separate audit/evidence/financial ledgers.
+- **B71/B72/B77/B96/B98:** media/system acquisition, egress, release provenance and controlled platform execution.
+- **B76/B99:** domain qualification, jurisdiction and independent review.
+- **B83/B84/B101:** segregated funds, accounting reconciliation, governance and independently measured impact.
+
+The September 2026 operational notes remain historical context; their test totals are not current CI evidence. No ADR is accepted, no freeze is declared and no integration or test campaign is authorized. W01–W12 remain PARTIAL.
