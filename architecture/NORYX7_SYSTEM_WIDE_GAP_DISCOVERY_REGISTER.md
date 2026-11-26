@@ -642,3 +642,16 @@ These gaps identify architecture closure work; they do not claim that a vulnerab
 | GAP-SPECIALIST-CREDENTIAL-VERIFICATION | W01/W06/W10 | Issuer-verified scoped credentials, jurisdiction, expiry, conflict and independent review. |
 
 These are source-reconciliation closure requirements, not proof of exploitability or absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Call-site, composition-root and enforcement gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-HTTP-INGRESS-PRINCIPAL-AND-POLICY-PARITY | W01/W02/W08/W09 | Align direct and session-protected routes; resolve client labels to enrolled principals and enforce audience, scope, device binding and policy epoch |
+| GAP-COMPOSITION-ROOT-AND-EXECUTION-PLANE-OWNERSHIP | W02/W03/W04/W08/W09/W11 | Declare supported production composition roots and map HYPERSYNTH, RuntimeEngine and CanonicalSystemFabric without implicit duplicate authority/state owners |
+| GAP-STANDALONE-GATEWAY-BOOTSTRAP-INJECTION | W02/W05/W08 | Inject a configured ModelFabric/runtime into the standalone gateway entry point or explicitly retire/document that unsupported startup mode |
+| GAP-CROSS-PLANE-PROVIDER-EFFECT-COORDINATION | W02/W05/W09/W11/W12 | Unify operation identity, attempt identity, idempotency, uncertain-effect reconciliation and retry ownership across provider dispatch paths |
+| GAP-ASSURANCE-COMPONENT-COMPOSITION-AND-DELIVERY | W03/W09/W11 | Bind boot, alerting, self-improvement and fleet components to actual consumers, durable evidence, delivery acknowledgements and rollback |
+
+The standalone gateway constructor finding is bounded to `gateway/__main__.py → NoryxGateway() → RuntimeAdapter() → OperationalNORYXRuntime()`; Render's configured `web.app` composition injects a ModelFabric-backed runtime and is not classified as having the same startup mismatch. These are architecture closure requirements, not exploitability claims. All W01–W12 remain PARTIAL.
