@@ -795,3 +795,39 @@ Added `NORYX7_CANONICAL_HANDOFF_SCHEMAS_VERSIONING_FAILURE_AND_OWNERSHIP_CATALOG
 | `ecosystem/global_scale.py` | In-process health/capacity selection, metrics and staged healing | Atomic fenced leases, durable fleet, deployment and DR evidence |
 
 Exact inspected revision: `6231e7caaccedfdea5c8a4e6f73aef0f4e5129af`. See `NORYX7_VERIFICATION_TRUST_BOOTSTRAP_RESEARCH_EGRESS_AND_GLOBAL_OPERATIONS_SOURCE_AUDIT.md` for detailed observations. These rows describe inspected code only and do not rule out upstream/external controls.
+
+
+## 2026-11-26 — Cross-stream call-site and composition-root source anchors
+
+Exact inspected branch snapshot: `b23206485241b9b4f51ad9b3db3a5f921dfe867c`. Detailed call-site and enforcement observations are in `NORYX7_CROSS_STREAM_CALLSITE_COMPOSITION_ROOT_AND_ENFORCEMENT_BOUNDARY_AUDIT.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `web/app.py` | `a03d012d6f9f2fdbfb8a5e64397511e5ac692360` | Render web composition; shared cached runtime across direct chat and gateway routes |
+| `render.yaml` | `5d0b53c9578eb3d0cedc955cdee834faf31cb6ac` | Hosted entry point is `uvicorn web.app:app` |
+| `gateway/server.py` | `b434cdbe118ecea48029adcd2c954fa1ac14461c` | Gateway constructor defaults to RuntimeAdapter |
+| `gateway/runtime_adapter.py` | `6661fbc150c77ba79d3b1f16cc0f66742b20f935` | Caller client_id is carried into task constraints; no enrolled-principal resolution in this adapter |
+| `gateway/auth.py` | `fa456172c99b183dcb2acd0ec99303ec540d2583` | HMAC session binds caller-supplied client_id, expiry and nonce |
+| `gateway/__main__.py` | `84a12211d50a3302ee5f0e9eb416ed03c00a243b` | Standalone entry point invokes default gateway constructor |
+| `core/operational_runtime.py` | `0106879b43b8de90a87a11ca9c361be72ab37072` | Operational runtime requires injected ModelFabric and composes AgentRuntime/OperationalAgentFabric |
+| `core/runtime.py` | `454f90e6b06ca6f013e325640a16d349b18797ae` | NORYXRuntime composes HYPERSYNTH and optional core StateJournal |
+| `core/hypersynth_runtime.py` | `8df911b42f558274e2e560be66846a2dba4c35e9` | Creates verifier, ActionGate, ToolExecutor and registers frontier capabilities |
+| `core/system_fabric.py` | `cf28bd8a144480467b6bd2cf3726b510a7b7924f` | CanonicalSystemFabric asserts selected object identity; not injected by inspected web root |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | AuthorizationAuthority/ActionGate action-level gate |
+| `core/tools.py` | `a5c2797cce7c803abb272bab761b3288ba0f7e72` | ToolExecutor uses ActionGate and verifier |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | Structural task/output/result/state verification |
+| `core/evaluation.py` | `df35992d09ffb2a9a82e0c1c739b4de3f1b7dd4e` | EvaluationMatrix aggregates supplied result records |
+| `core/frontier_capabilities.py` | `e76ace57c6d43b5db7d391ab533b0fa41ed5a6cc` | WebResearchCapability registered through ToolExecutor; no egress-policy injection shown here |
+| `core/secure_boot.py` | `32436ebc39f0044768e13340e8e6d1274cd5c51a` | SecureBootChain local stage/admission helper |
+| `core/alerting.py` | `f8caee629f5c7e1ec0446c0a7d9c18f7cf3ac1b8` | AlertRouter creates/stores alerts; delivery adapter not shown in web composition |
+| `core/self_improvement.py` | `2cc85de48becd7243e6d3d572dded25841587a08` | ImprovementPipeline local staged state machine |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | Direct provider resolution/execution |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | Separate ExecutionFabric-backed provider gateway |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Separate bounded retry/failover executor |
+| `noryx7_runtime/engine.py` | `128e0522cb2234e115ae2b2e770279374a633a4d` | Distinct RuntimeEngine dispatch/attestation/reservation lifecycle |
+| `noryx7_runtime/state.py` | `444aba1fb92a4bb70ee2ee31b23d3946680bb630` | RuntimeEngine append/reservation journal |
+| `noryx7_runtime/model_fabric.py` | `abb8bd9bb3217fff967e898afbdc491eb5082f45` | ModelFabric requires configured models and optionally runtime binding |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | In-process region/cell/capacity registry and accounting |
+| `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | In-process global memory/identity indexes |
+
+These are exact source anchors, not test results or universal absence claims. The Render web path is distinguished from the standalone gateway module path. No tests were run.
