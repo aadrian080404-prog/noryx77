@@ -696,3 +696,16 @@ The source audit `NORYX7_VERIFICATION_TRUST_BOOTSTRAP_RESEARCH_EGRESS_AND_GLOBAL
 - **W01/W06/W10 / specialist authority:** define credential issuer, jurisdiction, scope, expiry, conflict and independent reviewer.
 
 All related decisions remain OPEN pending alternatives, owner review and explicit acceptance evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Call-site and composition-root decision evidence
+
+The [Cross-Stream Call-Site, Composition-Root and Enforcement-Boundary Audit](NORYX7_CROSS_STREAM_CALLSITE_COMPOSITION_ROOT_AND_ENFORCEMENT_BOUNDARY_AUDIT.md) adds evidence to existing OPEN decisions; no duplicate ADR series is created and no decision is accepted by this register:
+- **B01/B06/B09/B10/B22:** route-level PrincipalAssertion, session audience/scope/epoch, enrolled client/device binding and one ingress policy owner.
+- **B02/B03/B07/B10/B22/B24:** supported runtime composition root, canonical execution-plane ownership, journal/recovery adapters and explicit lifecycle compatibility.
+- **B02/B07/B10/B22/B24:** one provider operation/effect coordinator across direct router, ExecutionFabric gateway and resilient retry paths.
+- **B05/B88/B90/B97/B91:** separate structural verification, semantic admission, source custody and independently attested evaluation.
+- **B42/B72/B77/B78/B95/B26/B27/B29:** compose trust bootstrap, durable alert/incident delivery, release approval and global fleet leases into actual consumers.
+- **B43/B83/B84/B101:** keep high-risk provider capability invocation separate from ledger, settlement, escrow, reconciliation and independently measured impact.
+
+The standalone gateway constructor mismatch is a bounded entry-point/configuration decision; the deployed Render `web.app` entry point supplies the configured runtime. All related decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
