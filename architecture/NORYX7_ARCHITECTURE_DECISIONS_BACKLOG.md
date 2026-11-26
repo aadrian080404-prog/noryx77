@@ -709,3 +709,15 @@ The [Cross-Stream Call-Site, Composition-Root and Enforcement-Boundary Audit](NO
 - **B43/B83/B84/B101:** keep high-risk provider capability invocation separate from ledger, settlement, escrow, reconciliation and independently measured impact.
 
 The standalone gateway constructor mismatch is a bounded entry-point/configuration decision; the deployed Render `web.app` entry point supplies the configured runtime. All related decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Lifecycle and recovery decision evidence
+
+The [Cross-Plane Lifecycle, Commit, Receipt and Recovery Semantics](NORYX7_CROSS_PLANE_LIFECYCLE_EFFECT_COMMIT_AND_RECOVERY_SEMANTICS.md) supplies evidence to existing OPEN decisions without accepting or duplicating them:
+- **B01/B02/B06/B07/B09/B10/B22:** stable operation/attempt identity, grant-consumption receipt, execution/effect separation and operation-level authorization lineage.
+- **B02/B03/B07/B10/B22/B24:** authoritative journal per execution plane, durable reservation/commit/replay and crash reconciliation.
+- **B05/B07/B42/B72/B77/B78/B95:** typed EffectReceipt/VerificationReceipt and independent observer/verifier semantics.
+- **B02/B05/B10/B22/B24:** retry/idempotency, unknown-effect quarantine, cross-store commit ownership and compensation as a new authorized operation.
+- **B42/B43/B83/B84/B88/B90/B97/B101:** separate execution, settlement, refund, ledger and impact state machines.
+
+The proposed canonical state machine and records remain pending owner decision and implementation. Existing decisions remain OPEN; W01–W12 remain PARTIAL.
