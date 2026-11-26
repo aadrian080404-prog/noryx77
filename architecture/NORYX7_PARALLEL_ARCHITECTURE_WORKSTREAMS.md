@@ -611,3 +611,22 @@ The [Cross-Stream Call-Site, Composition-Root and Enforcement-Boundary Audit](NO
 - W12: high-risk payment capability registration is not a ledger, settlement or impact-accounting system.
 
 The audit also records a bounded standalone gateway startup mismatch: `gateway/__main__.py` invokes the default constructor chain without the required ModelFabric, whereas Render starts `web.app` and injects its configured runtime. No inference is made that the deployed Render entry point has this same startup defect. Discovery continues concurrently; all W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Cross-plane lifecycle and recovery continuation
+
+The [Cross-Plane Lifecycle, Commit, Receipt and Recovery Semantics](NORYX7_CROSS_PLANE_LIFECYCLE_EFFECT_COMMIT_AND_RECOVERY_SEMANTICS.md) advances all twelve streams from lifecycle semantics:
+- W01: authorization grant consumption is distinct from principal identity and dispatch.
+- W02: execution terminal status is distinct from operation/effect disposition; propagate stable operation/attempt IDs.
+- W03: reservation, append, durable commit, crash recovery and reconciliation need distinct receipts and ownership.
+- W04: agent result consensus requires provenance and independence assumptions, not only structural equality.
+- W05: retries require target idempotency, unknown-effect handling and compensation ownership.
+- W06: verifier identity/profile and evidence lineage must bind to exact artifact digests; caller booleans are not proofs.
+- W07: simulated outcomes are never production EffectReceipts; Reality Bridge remains separately approved.
+- W08: client disconnect/timeout must not silently cancel or negate an external operation.
+- W09: grant consumption, attestation, audit and incident records have independent lifecycles.
+- W10: domain results require qualified specialists and domain-specific evidence.
+- W11: capacity reservations need owner/TTL/fencing/recovery semantics.
+- W12: payment, settlement, refund, ledger commit and impact evidence require separate state machines.
+
+The proposed canonical operation state machine is normative design material pending decision-owner review. It does not replace existing local lifecycles and is not an implementation claim. All W01–W12 remain PARTIAL.
