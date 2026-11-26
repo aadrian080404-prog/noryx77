@@ -655,3 +655,17 @@ These are source-reconciliation closure requirements, not proof of exploitabilit
 | GAP-ASSURANCE-COMPONENT-COMPOSITION-AND-DELIVERY | W03/W09/W11 | Bind boot, alerting, self-improvement and fleet components to actual consumers, durable evidence, delivery acknowledgements and rollback |
 
 The standalone gateway constructor finding is bounded to `gateway/__main__.py → NoryxGateway() → RuntimeAdapter() → OperationalNORYXRuntime()`; Render's configured `web.app` composition injects a ModelFabric-backed runtime and is not classified as having the same startup mismatch. These are architecture closure requirements, not exploitability claims. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Cross-plane lifecycle and recovery gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-OPERATION-EFFECT-STATE-MACHINE-AND-UNKNOWN-OUTCOME | W02/W03/W05/W08/W09/W11/W12 | Define durable operation/effect state independently from execution terminal status; unknown outcomes block blind retries |
+| GAP-AUTHORIZATION-CONSUMPTION-TO-DISPATCH-RECEIPT-LINKAGE | W01/W02/W05/W09 | Persist consumed grant and dispatch attempt against one stable operation identity; executor failure is not proof of no effect |
+| GAP-CROSS-STORE-COMMIT-AND-RECONCILIATION | W02/W03/W05/W09/W11/W12 | Define recovery across runtime journal, HYPERSYNTH StateStore/SQLite, external committer and target-system effect |
+| GAP-RECEIPT-EVIDENCE-SEMANTICS | W01/W05/W06/W07/W09/W12 | Bind receipts to typed observer evidence and exact artifact/effect; do not promote type-only digest or caller booleans into proof |
+| GAP-AGENT-CONSENSUS-INDEPENDENCE-AND-PROVENANCE | W04/W06/W10 | Declare independence assumptions for agents, verifiers and sources; output equality is structural agreement, not independent corroboration |
+| GAP-RETRY-IDEMPOTENCY-AND-COMPENSATION-OWNERSHIP | W02/W05/W09/W11/W12 | Specify idempotency retention, target lookup, retry authority and separately authorized compensation |
+
+These requirements are proposals pending ADR owner review. The existing RuntimeEngine local terminal lifecycle and HYPERSYNTH state commit API are not collapsed into a single status enum. W01–W12 remain PARTIAL.
