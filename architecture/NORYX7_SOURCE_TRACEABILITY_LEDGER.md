@@ -831,3 +831,29 @@ Exact inspected branch snapshot: `b23206485241b9b4f51ad9b3db3a5f921dfe867c`. Det
 | `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | In-process global memory/identity indexes |
 
 These are exact source anchors, not test results or universal absence claims. The Render web path is distinguished from the standalone gateway module path. No tests were run.
+
+
+## 2026-11-26 — Lifecycle, commit and recovery source anchors
+
+Exact source snapshot: `12a439ffd27692570b01d75e96f5ab33e9d3ea76`. See `NORYX7_CROSS_PLANE_LIFECYCLE_EFFECT_COMMIT_AND_RECOVERY_SEMANTICS.md` for the full transition analysis and proposed canonical records.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `noryx7_runtime/contracts.py` | `9bb6632b214e8d9d3221c9ccf03ab6233209a184` | Local execution statuses and action/attestation records |
+| `noryx7_runtime/lifecycle.py` | `71d1079f0cf1aa9cd70a097ad2a9e6365dce38b5` | Immutable local terminal-state transition guard |
+| `noryx7_runtime/engine.py` | `128e0522cb2234e115ae2b2e770279374a633a4d` | Pre-dispatch reservation, execution, verification, attestation, journal append and external committer |
+| `noryx7_runtime/state.py` | `444aba1fb92a4bb70ee2ee31b23d3946680bb630` | Step reservation, append and reservation restoration |
+| `noryx7_runtime/attestation.py` | `b417bdb09f5ad920f7b6cf96910aea5c6447ac2a` | Ed25519 attestation and chain-verification primitives |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | One-shot HMAC grant; consume-before-execute |
+| `core/contracts.py` | `a75491921288cbea6f1759ead99f97c83cfdc43d` | Task/action/result contract shapes |
+| `core/coordination.py` | `c5743872a5b50765db04e4a42739e9ad238ad983` | Sequential agent execution, structural result admission and equality consensus |
+| `core/state.py` | `f1dd791359038d799a63852ea850ce7f3d738148` | StateStore accepts caller-provided verification_valid/stage and identity metadata |
+| `core/state_journal.py` | `4ea3419cb05a4edbb228966ea2584894197caa83` | Durable SQLite state commit journal |
+| `ecosystem/dispatch_contract.py` | `87be053ccad3776d7eebf1cad280a4f52fec9ab6` | DispatchReceipt evidence digest contract |
+| `ecosystem/runtime_dispatch.py` | `9f4f628c322aabb571fce64d54c3d6740cb142fd` | Principal authorization, handler invocation and receipt construction |
+| `core/evaluation.py` | `df35992d09ffb2a9a82e0c1c739b4de3f1b7dd4e` | EvaluationMatrix aggregates submitted EvaluationResult records |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case generation; records externally supplied pass/score/evidence |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted Ed25519 manifest and artifact digest verification |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | Local capacity selection and accounting |
+
+Source observations are scoped to these blobs; proposed operation/effect schemas are not current runtime contracts.
