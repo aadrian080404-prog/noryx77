@@ -669,3 +669,18 @@ The standalone gateway constructor finding is bounded to `gateway/__main__.py �
 | GAP-RETRY-IDEMPOTENCY-AND-COMPENSATION-OWNERSHIP | W02/W05/W09/W11/W12 | Specify idempotency retention, target lookup, retry authority and separately authorized compensation |
 
 These requirements are proposals pending ADR owner review. The existing RuntimeEngine local terminal lifecycle and HYPERSYNTH state commit API are not collapsed into a single status enum. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Schema compatibility and contract interoperability gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-CONTRACT-IDENTITY-AND-ATTESTATION-TYPE-COLLISIONS | W01/W04/W09/W11 | Give agent-statement, execution-step and runtime-measurement attestations distinct schema IDs, issuer roots, audience and revocation semantics; forbid same-name interchangeability |
+| GAP-STATUS-VOCABULARY-AND-TERMINAL-MAPPING | W02/W03/W05/W08/W09/W11/W12 | Maintain aggregate-specific state machines and explicit loss-aware mappings; unknown effect must not map to failed/no-effect |
+| GAP-RESULT-RECEIPT-AND-VERIFICATION-PROOF-NONINTEROPERABILITY | W02/W04/W05/W06/W07/W09/W12 | Define receipt-stage types and promotion policy; distinguish handler return, dispatch acceptance, structural verification, signed attestation, observed effect and commit |
+| GAP-LEGACY-PRINCIPAL-FALLBACK-AND-SESSION-IDENTITY-SEMANTICS | W01/W02/W08/W09 | Separate front/client labels from issuer-authenticated principal assertions; remove implicit identity promotion and bind audience/device/tenant/policy epoch |
+| GAP-MULTIMODAL-CUSTODY-AND-OFFLINE-ACK-SEMANTICS | W03/W06/W07/W08/W09/W11 | Bind media digest to custody/consent/rights and offline sync to durable outbox/inbox plus authenticated remote commit receipt |
+| GAP-CROSS-PLANE-ENVELOPE-ADAPTER-COMPATIBILITY | W01–W12 | Inventory each producer/consumer mapping, schema version, lossiness, rejected fields and migration/deprecation path |
+| GAP-SKILL-REGISTRATION-AND-AUTHORITY-SEPARATION | W01/W04/W05/W10 | Keep skill/tool registration, qualification, delegation and per-operation authorization distinct and issuer-owned |
+
+These gaps record semantic interoperability requirements in inspected source definitions. They do not assert exploitability or universal absence of external adapters. W01–W12 remain PARTIAL.
