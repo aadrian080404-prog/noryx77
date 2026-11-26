@@ -630,3 +630,15 @@ The [Cross-Plane Lifecycle, Commit, Receipt and Recovery Semantics](NORYX7_CROSS
 - W12: payment, settlement, refund, ledger commit and impact evidence require separate state machines.
 
 The proposed canonical operation state machine is normative design material pending decision-owner review. It does not replace existing local lifecycles and is not an implementation claim. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Schema compatibility and interoperability continuation
+
+The [Schema Compatibility, Contract Collisions and Interoperability Audit](NORYX7_SCHEMA_COMPATIBILITY_CONTRACT_COLLISIONS_AND_INTEROPERABILITY_AUDIT.md) advances all twelve lanes by tracing exact contract definitions rather than adding another generic schema catalog:
+- W01/W09: three distinct attestation subjects and trust profiles; front/client labels cannot be promoted to principal assertions.
+- W02/W03: intent, task, action, plan, execution and effect lifecycles need explicit typed adapters and loss-aware state mappings.
+- W04/W10: AgentResult, skill registration, qualification, delegation and authority are separate semantics.
+- W05/W12: ToolResult, DispatchReceipt, VerificationResult and execution attestation cannot be treated as one generic success receipt; provider invocation is not settlement.
+- W06/W07: digests and structural verification do not establish semantic truth, source custody or real-world effect.
+- W08/W11: offline snapshot/outbox/acknowledgement need durable authenticated delivery and remote commit semantics.
+No schema registry or adapter is implemented by this document. No runtime changes or tests. All W01–W12 remain PARTIAL.
