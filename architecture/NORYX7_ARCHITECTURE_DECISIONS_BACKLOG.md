@@ -721,3 +721,16 @@ The [Cross-Plane Lifecycle, Commit, Receipt and Recovery Semantics](NORYX7_CROSS
 - **B42/B43/B83/B84/B88/B90/B97/B101:** separate execution, settlement, refund, ledger and impact state machines.
 
 The proposed canonical state machine and records remain pending owner decision and implementation. Existing decisions remain OPEN; W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Schema compatibility decision evidence
+
+The [Schema Compatibility, Contract Collisions and Interoperability Audit](NORYX7_SCHEMA_COMPATIBILITY_CONTRACT_COLLISIONS_AND_INTEROPERABILITY_AUDIT.md) adds evidence to existing OPEN decisions without accepting a new ADR series:
+- **B01/B06/B09/B10/B22:** distinct attestation schema IDs and issuer/trust profiles; front/client labels versus PrincipalAssertion; session audience/device/tenant binding.
+- **B02/B03/B07/B10/B22/B24:** explicit intent/task/action/plan/execution/step lineage and aggregate-specific state vocabularies.
+- **B04/B12/B25/B76:** skill registration, qualification, delegation, agent identity and result admission remain distinct.
+- **B05/B88/B90/B97/B91:** typed evidence/receipt stages, verifier identity, custody and proof of semantic scope.
+- **B42/B72/B77/B78/B95/B26/B27/B29:** domain-separated attestation, offline durability, authenticated acknowledgements and recovery.
+- **B43/B83/B84/B101:** provider/tool success cannot stand in for settlement, ledger commit or independently measured impact.
+
+The audit's compatibility mappings are proposals pending decision-owner review. Existing decisions remain OPEN; W01–W12 remain PARTIAL.
