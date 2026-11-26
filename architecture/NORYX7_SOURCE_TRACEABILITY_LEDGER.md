@@ -857,3 +857,25 @@ Exact source snapshot: `12a439ffd27692570b01d75e96f5ab33e9d3ea76`. See `NORYX7_C
 | `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | Local capacity selection and accounting |
 
 Source observations are scoped to these blobs; proposed operation/effect schemas are not current runtime contracts.
+
+
+## 2026-11-26 — Schema compatibility and contract-collision source anchors
+
+Exact source-tree snapshot: `f0b43470d6855567f8c4034bb50b68db10453565`. See `NORYX7_SCHEMA_COMPATIBILITY_CONTRACT_COLLISIONS_AND_INTEROPERABILITY_AUDIT.md` for the detailed semantic comparison.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/contracts.py` | `a75491921288cbea6f1759ead99f97c83cfdc43d` | TaskSpec, ActionSpec, VerificationResult and AgentResult local contracts |
+| `noryx7_runtime/contracts.py` | `9bb6632b214e8d9d3221c9ccf03ab6233209a184` | Intent, ExecutionContext, PlanStep, ActionEnvelope, ExecutionStatus and runtime Attestation |
+| `core/identity.py` | `e6e8e5b03135251baca489643f86c7d81a755a08` | Ed25519 AgentIdentity and AgentAttestation |
+| `core/attestation.py` | `48a5145b33c73c9e8d3b1f0051050dd97f89786f` | External runtime measurement Attestation/Verifier |
+| `noryx7_runtime/attestation.py` | `b417bdb09f5ad920f7b6cf96910aea5c6447ac2a` | Signed runtime execution attestation and chain digest |
+| `core/tool_protocol.py` | `1c529fbbf5352469be8ab6633edc48113da8a3bf` | ToolResult is a handler outcome/provenance record, not an effect receipt |
+| `ecosystem/boundaries.py` | `a42ad0bdbde8aa05ee694b6aa9f5e2891538e718` | IntentEnvelope; make_intent defaults absent principal to front label |
+| `ecosystem/dispatch_contract.py` | `87be053ccad3776d7eebf1cad280a4f52fec9ab6` | DispatchReceipt hashes supplied evidence bytes but does not attest truth/effect |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | Structural verification and local status/verdict vocabulary |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Offline snapshot/outbox integrity and in-memory queue/ack semantics |
+| `core/agent_skills.py` | `281d294ee0142a8dd33db5d61f634f95943db231` | Skill registration is declarative and does not grant authority |
+| `core/agent_fabric.py` | `3704dd7bf66815274cc319c9583c45ae575f3d36` | Principal-bound native dispatch with identity and authorization callback |
+
+These anchors establish local source semantics only; they are not test results, production traces or exhaustive call-site proof.
