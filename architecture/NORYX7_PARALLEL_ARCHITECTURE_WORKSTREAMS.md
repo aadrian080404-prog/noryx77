@@ -597,3 +597,17 @@ The [Canonical Handoff Schemas, Versioning, Failure and Ownership Catalog](NORYX
 ## 2026-11-25 — Parallel source audit wave: verification, trust, acquisition and operations
 
 All lanes were advanced through a common audit of `core/verification.py`, `core/evaluation.py`, `core/universal_intelligence.py`, `core/secure_boot.py`, `core/frontier_capabilities.py`, `core/observability.py`, `core/alerting.py`, `core/self_improvement.py`, `ecosystem/global_fabric.py` and `ecosystem/global_scale.py`. The source-grounded reconciliation is in `NORYX7_VERIFICATION_TRUST_BOOTSTRAP_RESEARCH_EGRESS_AND_GLOBAL_OPERATIONS_SOURCE_AUDIT.md`. Follow-up owners: W06 semantic/evaluation evidence; W09 measured trust and incident chain; W05/W08 egress enforcement; W11 capacity leases and DR; W10 qualification; W02/W03 operation/effect and durable evidence; W12 impact separation. No source code was modified. All workstreams remain PARTIAL.
+
+
+## 2026-11-26 — Cross-stream call-site and composition-root continuation
+
+The [Cross-Stream Call-Site, Composition-Root and Enforcement-Boundary Audit](NORYX7_CROSS_STREAM_CALLSITE_COMPOSITION_ROOT_AND_ENFORCEMENT_BOUNDARY_AUDIT.md) advances all twelve lanes against actual constructors and consumers:
+- W01/W08: direct chat and session-protected gateway ingress differ; signed client_id remains a label absent enrolled-principal resolution in RuntimeAdapter.
+- W02/W03: deployed HYPERSYNTH runtime, standalone RuntimeEngine and CanonicalSystemFabric are distinct composition/execution/state planes; optional journals remain separate.
+- W04/W10: agent fabric and specialist admission still require qualified principal/credential and explicit delegation/result semantics.
+- W05/W11: ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor are separate; local region/cell/capacity abstractions do not create fenced fleet leases.
+- W06/W07: structural verification, evaluation aggregation, research acquisition and simulation evidence remain distinct.
+- W09: secure boot, alert delivery and self-improvement admission are not shown as composed into the inspected web root.
+- W12: high-risk payment capability registration is not a ledger, settlement or impact-accounting system.
+
+The audit also records a bounded standalone gateway startup mismatch: `gateway/__main__.py` invokes the default constructor chain without the required ModelFabric, whereas Render starts `web.app` and injects its configured runtime. No inference is made that the deployed Render entry point has this same startup defect. Discovery continues concurrently; all W01–W12 remain PARTIAL.
