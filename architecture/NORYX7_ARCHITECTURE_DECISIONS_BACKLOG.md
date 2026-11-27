@@ -789,3 +789,19 @@ The [W12 Financial, Ledger, Governance, Marketplace and Impact Lifecycle Audit](
 - **B12/B25/B76:** qualified specialists and accountable human review for regulated, jurisdiction-specific or safety-critical decisions.
 
 All related decisions remain OPEN pending explicit owner review, legal operating-model review where relevant and acceptance evidence. The audit is architecture-only; no financial service or test campaign is claimed. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Network-presence lease and disconnected-by-default decisions
+
+The [Disconnected-by-Default Network Presence, Access Leases and Egress Architecture](NORYX7_DISCONNECTED_BY_DEFAULT_NETWORK_PRESENCE_LEASE_AND_EGRESS_ARCHITECTURE.md) contributes unresolved decision questions to the existing OPEN architecture backlog; no ADR is accepted here:
+
+- Define the canonical NetworkAccessLease issuer, audience, principal/device binding, purpose, destinations, DNS/TLS identity, data class, budgets, expiry, revocation and audit schema.
+- Decide which NORYX7 surfaces can operate DISCONNECTED, ON_DEMAND, ACTIVE_SESSION, MAINTENANCE and INCIDENT_LOCKDOWN, including explicit user-visible semantics.
+- Select the supported Android enforcement profile per deployment class: app-level broker only, per-app VPN/firewall, managed-device/device-owner or privileged firmware integration. Do not equate any of these with physical radio shutdown.
+- Define the one authoritative transport mediation architecture for WebView subresources, direct gateway clients, providers, plugins, updates, telemetry and background jobs.
+- Define foreground/idle/locked/process-death session revocation and prohibit silent background reconnect outside a valid lease.
+- Define durable offline outbox, signed per-operation server receipts, idempotency and unknown-effect reconciliation.
+- Define regional server-side egress policies and bounded revocation propagation across W11.
+- Require future acceptance tests for DNS rebinding, redirect, IPv6/QUIC, proxy/native bypass, service workers, WebSockets, background jobs, offline replay and app/device radio-control claims.
+
+All related decisions remain OPEN pending platform owner review, architecture acceptance and later implementation/validation. This document does not modify browser/runtime code or claim network shutdown is implemented.
