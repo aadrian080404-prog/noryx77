@@ -686,3 +686,16 @@ The [Branching Cognition, Evidence Admission, Model Calibration and MIRROR WORLD
 - W10: keyword routing and skill registration do not qualify specialists; FINCH outputs remain heuristic until calibrated and drift-monitored.
 - W12: environmental, social and economic outcomes require baselines/counterfactuals and independently measured impact receipts; simulation estimates are not realized impact.
 Nine new gaps recorded; no implementation or test campaign is claimed. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — W12 financial and public-impact lifecycle continuation
+
+The [W12 Financial, Ledger, Governance, Marketplace and Impact Lifecycle Audit](NORYX7_W12_FINANCIAL_LEDGER_GOVERNANCE_IMPACT_AND_MARKETPLACE_LIFECYCLE_AUDIT.md) advances W12 and its cross-stream handoffs:
+- W01/W08/W09: contributor/account identity, privacy, consent, replay protection, signed provider receipts and durable audit must precede financial action.
+- W02/W05: agent dispatch and provider invocation are not payment authorization, capture or settlement; ambiguous post-request outcomes require idempotent reconciliation.
+- W03: a cached balance or generic state journal is not the authoritative double-entry ledger; postings require immutable source-event references and recovery.
+- W04/W10: skill routing and model-generated recommendations cannot authorize disbursements or regulated decisions; specialist qualification and human accountability remain separate.
+- W06/W07: impact claims require source lineage, calibrated measurement and independent baseline/counterfactual review; simulated estimates are not realized outcomes.
+- W11: treasury allocation, legal-entity/fund segregation, global placement and disaster recovery need explicit ownership and fenced reservations.
+- W12: contribution, payment attempt, provider settlement, ledger posting, treasury allocation, marketplace fulfilment, internal reward, governance decision and impact measurement are distinct bounded contexts and state machines.
+Ten new gaps are recorded. This remains design/source reconciliation, not a deployed financial service or legal operating model. W01–W12 remain PARTIAL.
