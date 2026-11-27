@@ -1035,3 +1035,26 @@ Exact source-tree HEAD: `10f139a539b11d27df97f4c974b5175bf00afdcd`. Full reconci
 | `noryx7_runtime/contracts.py` | `9bb6632b214e8d9d3221c9ccf03ab6233209a184` | Separate Intent/ExecutionContext/PlanStep/ActionEnvelope/Attestation family; explicit adapter needed against core contracts |
 
 Inspected test files (not run): `core/test_offline_snapshot_rollback.py` (`80b855fb770ca6e0b6a45d12800e014208d50935`), `core/test_state_journal_integration.py` (`3f16420b2470176d0db550f9b76e700d029bb38f`), `core/test_hypersynth_runtime_contract.py` (`987a4731742aa014124f6192c8ff3c2a7110d715`). Their bounded coverage is recorded in the audit.
+
+
+## 2026-11-28 — Execution-plane composition source anchors
+
+Exact source-tree HEAD: `3045257dbce31c901dbac48077ce505908a21af4`. Full reconciliation: `NORYX7_EXECUTION_PLANE_OWNERSHIP_COMPOSITION_ROOT_AND_INGRESS_PARITY_AUDIT.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `web/app.py` | `a03d012d6f9f2fdbfb8a5e64397511e5ac692360` | Cached OperationalNORYXRuntime shared by gateway and direct `/api/chat`; direct chat handler has no gateway Bearer-session check |
+| `gateway/runtime_adapter.py` | `6661fbc150c77ba79d3b1f16cc0f66742b20f935` | Maps gateway client_id into TaskSpec constraints; no independent device principal binding here |
+| `core/operational_runtime.py` | `0106879b43b8de90a87a11ca9c361be72ab37072` | Composes NORYXRuntime, ModelFabric and OperationalAgentFabric for HYPERSYNTH |
+| `core/operational_fabric.py` | `a2f6a46c1fdec47f3fe1f95f6c20f9848673f127` | Agent router/supervisor/verifier dispatch and admission fabric; distinct from JARVIS CanonicalSystemFabric |
+| `core/runtime.py` | `454f90e6b06ca6f013e325640a16d349b18797ae` | Core HypersynthRuntime, Core StateStore and optional Core SQLite StateJournal |
+| `jarvis/core/runtime.py` | `09134dbd587b118f43dfbd07a6c054eddedd1cc8` | Separate JARVIS policy/identity/authorization/tool/runtime/state/recovery/provider composition |
+| `core/system_fabric.py` | `cf28bd8a144480467b6bd2cf3726b510a7b7924f` | Object-identity consistency guard for components supplied to JARVIS bridge |
+| `core/jarvis_runtime_bridge.py` | `0f5611bdccfa917c601a34b471c198a65fcbd48c` | Maps JARVIS plan to RuntimeEngine and ToolExecutor; validates output shape and returns ActionResults |
+| `jarvis/runtime_facade.py` | `b1a50f1c8c6566804151f81daf93114205f2afb9` | Default facade constructs Request with literal principal_id `user` |
+| `ecosystem/global_closure.py` | `d4f84e5cb23a764c1a85527fb0cf101ebaf11457` | Module/symbol/path and browser-isolation checks; not full composition proof |
+| `ecosystem/completeness.py` | `c4fb481703c6c2059d1cfea08a24300e7277f270` | Structural registry/manifest/browser-isolation gate |
+| `services/jarvis-gateway-go/main.go` | `1d9baa84b229ad8056be69f3a0955ead3d1f981e` | Health and raw-body digest endpoints; not Python authenticated execution protocol |
+| `services/jarvis-runtime-rs/src/lib.rs` | `035960c0d08f1db5825f01a78ce314f7055516c0` | serde_json envelope digest helper; not full canonical signed operation protocol |
+
+External reverse-proxy and deployment controls were not inspected and are not ruled out.
