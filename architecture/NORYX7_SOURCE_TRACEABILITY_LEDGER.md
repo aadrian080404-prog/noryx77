@@ -907,3 +907,35 @@ Exact source snapshot: `491738a688771effde756a6779a455ef514b8587`. See `NORYX7_M
 | `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | In-process region/cell health, capacity selection and control-plane primitives |
 
 These are exact source anchors, not runtime traces, test outcomes or proof that external adapters do not exist.
+
+
+## 2026-11-27 — JARVIS, Browser, polyglot and observation source anchors
+
+Exact audited source-tree HEAD: `e463e5a003cebe3d8e9b6ea2d384f0c703a3bcff`. Full bounded analysis: `NORYX7_JARVIS_BROWSER_POLYGLOT_AND_OBSERVATION_AUTHORITY_RECONCILIATION.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/hypersynth.py` | `187699d6e0945a2b1e8a9b194cd9001b1af8cd9f` | HYPERSYNTH cognitive pipeline and bounded injected execution/evidence components |
+| `jarvis/core/runtime.py` | `09134dbd587b118f43dfbd07a6c054eddedd1cc8` | Legacy orchestrator plus Core ActionGate/ToolExecutor and RuntimeEngine bridge; separate provider execution/resilience instances |
+| `jarvis/core/contracts.py` | `bb1338248f68a627b292cf4e475f4b64eff9662c` | Request/Plan/PlanStep/ActionResult contracts |
+| `jarvis/core/decomposition.py` | `bde8c9466a8c78b51befb3086b66a66f48f9d72d` | Default deterministic single compute step |
+| `jarvis/runtime_facade.py` | `b1a50f1c8c6566804151f81daf93114205f2afb9` | Caller-supplied plan and literal `user` principal |
+| `jarvis/agent/front_end.py` | `b34314c24cebf2435202716035ff6b83ebbfacd1` | Wake session and `verified_wake` interaction metadata |
+| `jarvis/perception/audio.py` | `c2b8fa33f13124a6a6f8ae4b0c3274e914ccd95a` | Clap-pattern wake detector explicitly not an action authority |
+| `jarvis/observation/fabric.py` | `1d4a081b38a3c377929436ce7e8ea6a4531a530f` | Callback-authorized local reader and textual provenance label |
+| `jarvis/context/authorized.py` | `339cef4a01efbb34293ebcd93eff1289e4fec5c2` | Callback-gated context source access |
+| `jarvis/core/state.py` | `7895e63ff82a7d3d0d147eb41c4e1b1fb4c2bc2f` | In-memory reservations/commits and caller-provided verification boolean |
+| `jarvis/security/audit.py` | `d92b9b6347b3d1989dbb553ea530729f7fafcaaa` | In-memory hash-chained audit log |
+| `jarvis/security/authorization.py` | `dd7db5e133632061bbfbac88ed47bede27bc387c` | In-memory exact principal/capability/target grants |
+| `jarvis/tools/registry.py` | `aeb2464971f196fac882971ed2a0f7f2cf0a60fb` | JARVIS-to-Core capability registry adapter |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NavigationPolicy.kt` | `d1fb80964f4319929a6054742101c996ea8abf53` | HTTPS/host/no-userinfo main-frame URL policy |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NoryxWebViewClient.kt` | `3939342eef0757250b76fe2f06bf714d7a7e9243` | Main-frame navigation callback enforcement |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NoryxGatewayClient.kt` | `c759625005c13cc706f36aa91160267bff25b8ca` | Bootstrap-token/client-ID session and bearer execution client |
+| `services/jarvis-gateway-go/main.go` | `1d9baa84b229ad8056be69f3a0955ead3d1f981e` | Health and raw POST-body digest endpoints |
+| `services/jarvis-runtime-rs/src/lib.rs` | `035960c0d08f1db5825f01a78ce314f7055516c0` | Small JSON execution envelope digest and boolean authorization helper |
+| `core/multimodal.py` | `8c3fb71a6277806d98c2c294444443ddcc3ff9ee` | MediaRef digest/locator contract |
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Synthetic sandbox simulation |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Heuristic event fusion and forecast |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted Ed25519 artifact manifest verification |
+
+Source observations are bounded to these definitions and do not prove that external deployment adapters are absent.
