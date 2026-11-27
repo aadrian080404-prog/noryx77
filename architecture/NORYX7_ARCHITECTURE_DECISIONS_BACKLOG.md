@@ -862,3 +862,16 @@ The [Cross-Plane Failure Containment, Degraded Modes and Recovery Contract](NORY
 - Define per-stream degraded capability allowlists and restoration evidence; no service health signal self-promotes trust.
 - Specify canary/rollback gates and independent approval for recovery after compromise.
 All decisions remain OPEN. No implementation or tests.
+
+
+## 2026-11-28 — Temporal consistency decisions (OPEN)
+
+The [Global Temporal Consistency, Causal Order and Version Authority Architecture](NORYX7_GLOBAL_TEMPORAL_CONSISTENCY_CAUSAL_ORDER_AND_VERSION_AUTHORITY_ARCHITECTURE.md) adds unresolved decisions; none is accepted:
+- Select HLC representation, causal-parent/vector-clock profile, bounds and truncation behavior; define how these align with the canonical polyglot wire format.
+- Define trusted time statement issuers, maximum clock skew, offline grace, reboot/monotonic-anchor failure and TIME_UNCERTAIN behavior.
+- Assign single-writer or quorum/fencing authority per critical aggregate class; define authority epoch and stale-writer rejection.
+- Define bitemporal schemas and evidence freshness/revalidation/invalidation rules for memory, NEXUS/FRL, MIRROR WORLD, specialist credentials and W12 claims.
+- Decide which explicitly commutative low-risk data classes may use CRDTs; prohibit generic last-write-wins for identity, revocation, finance, governance and physical actuation.
+- Define signed checkpoint coverage, causal frontier, external anchor custody and recovery watermarks across regions.
+- Define future fault-injection and Python/Kotlin/Go/Rust conformance suite for clock skew/rollback, causal gaps, partition, stale epochs, duplicate delivery and replay.
+All decisions remain OPEN pending owner review and later implementation/validation. No ADR accepted; W01–W12 remain PARTIAL.
