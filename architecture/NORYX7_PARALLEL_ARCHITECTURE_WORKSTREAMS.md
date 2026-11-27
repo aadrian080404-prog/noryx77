@@ -670,3 +670,19 @@ The [JARVIS, Browser, Polyglot Runtime and Observation Authority Reconciliation]
 - W09/W11: Go/Rust/Kotlin/Python need one canonical versioned encoding, signature, replay and receipt protocol; raw SHA-256 is not an authorization or effect proof.
 - W12: payment, governance and environmental/social impact need separate outcome records and independent measurement.
 No implementation or test campaign is claimed; all W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Branching cognition, evidence and world-model reconciliation
+
+The [Branching Cognition, Evidence Admission, Model Calibration and MIRROR WORLD Reconciliation](NORYX7_BRANCHING_COGNITION_EVIDENCE_CALIBRATION_AND_MIRROR_WORLD_CLOSURE_AUDIT.md) advances all streams through shared evidence and experiment lifecycles:
+- W01: distinguish authenticated principal, target owner authorization, specialist qualification, evaluator identity and human accountability.
+- W02: separate hypothesis branch graph, executable plan DAG, execution operation and external effect; define lifecycle and deterministic replay.
+- W03: durable branch history, source evidence, world snapshots, experiment manifests and evaluation receipts.
+- W04: agent critique and collaboration need independence profiles and claim-level evidence lineage.
+- W05/W11: branch/simulation scheduling needs DAG readiness, resource vectors, concurrency ceilings, fenced worker leases and durable result collection; agent count is not concurrency.
+- W06: NEXUS claims need exact source spans and transformations; FRL proof claims bind to exact proposition/theory/checker; semantic, formal and empirical evidence remain distinct.
+- W07: MIRROR WORLD requires scoped model validity, calibration, uncertainty propagation, experiment reproducibility and separate Reality Bridge evidence.
+- W08/W09: multimodal originals, transcripts, OCR, browser captures and sensor observations require custody, transformation lineage and signed provenance.
+- W10: keyword routing and skill registration do not qualify specialists; FINCH outputs remain heuristic until calibrated and drift-monitored.
+- W12: environmental, social and economic outcomes require baselines/counterfactuals and independently measured impact receipts; simulation estimates are not realized impact.
+Nine new gaps recorded; no implementation or test campaign is claimed. W01–W12 remain PARTIAL.
