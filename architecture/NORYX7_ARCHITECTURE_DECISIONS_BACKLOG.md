@@ -805,3 +805,19 @@ The [Disconnected-by-Default Network Presence, Access Leases and Egress Architec
 - Require future acceptance tests for DNS rebinding, redirect, IPv6/QUIC, proxy/native bypass, service workers, WebSockets, background jobs, offline replay and app/device radio-control claims.
 
 All related decisions remain OPEN pending platform owner review, architecture acceptance and later implementation/validation. This document does not modify browser/runtime code or claim network shutdown is implemented.
+
+
+## 2026-11-27 — Systems Understanding authorization and evidence decisions
+
+The [Authorized Systems Understanding, Observation Custody and Reconstruction Assurance Audit](NORYX7_AUTHORIZED_SYSTEMS_UNDERSTANDING_OBSERVATION_CUSTODY_AND_RECONSTRUCTION_ASSURANCE_AUDIT.md) adds unresolved design decisions; no ADR is accepted:
+- Define a distinct asset-owner/controller identity and signed delegation schema, separate from agent identity and action grants.
+- Define target/interface/method/purpose/time/region scope, prohibited actions, revocation, replay protection and ownership evidence.
+- Define passive observation, owner-supplied artifact analysis, controlled lab tests and real-system active tests as separate capability classes.
+- Define immutable capture manifests, source-span anchoring, transformations, sensitive-data handling, consent and retention/deletion.
+- Define reconstruction model versioning, observed/inferred/unknown semantics, branch lineage, counterexamples and scope expiry.
+- Define independent verifier identity, qualification, held-out traces/oracles and common failure-domain disclosure.
+- Replace untyped `verified` semantics at future integration boundaries with typed SimulationReceipt, ObservationReceipt and ReconstructionVerificationReceipt.
+- Define NEXUS/FRL admission rules that prevent simulated results from being promoted to empirical fact or action authority.
+- Define specialist qualification and human escalation for protocol, OS, hardware and industrial domains.
+
+All decisions remain OPEN pending owner review, architecture acceptance and later implementation/isolated validation. The audit does not authorize active testing or modify the cyber-range runtime.
