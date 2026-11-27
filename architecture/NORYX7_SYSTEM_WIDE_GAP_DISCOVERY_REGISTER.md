@@ -811,3 +811,21 @@ The gaps are based on named source paths at the recorded snapshot. They do not e
 | GAP-W02-W05-W11-PROVIDER-AND-EXECUTION-PLANE-RECONCILIATION | W02/W05/W09/W11/W12 | Explicit ModelFabric/provider/ToolExecutor dispatch owner, idempotency, unknown effect and retry policy |
 
 These are bounded source findings, not claims that reverse proxies or external deployment controls do not exist. Multiple runtime planes are not inherently wrong; ambiguous authority is. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Cross-plane failure containment and recovery gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-TRUST-DEPENDENCY-LOSS-AND-REVOCATION-PROPAGATION | W01/W09/W11 | Issuer/key/revocation outage cannot create fallback identity or stale privilege |
+| GAP-W02-W03-DURABLE-GLOBAL-RECOVERY-EPOCH-AND-FENCING | W02/W03/W09/W11 | Durable distributed epoch and stale worker/node fencing |
+| GAP-W02-W05-UNKNOWN-EFFECT-AND-SAFE-FAILOVER | W02/W05/W09/W12 | Shared idempotency and target reconciliation before retry after ambiguous effect |
+| GAP-W03-W08-DURABLE-OFFLINE-OUTBOX-INBOX-AND-COMMIT-ACK | W03/W08/W11 | Crash-safe outbox/inbox, typed signed remote commit receipt and safe acknowledgement |
+| GAP-W04-W11-DISTRIBUTED-AGENT-AND-NODE-MEMBERSHIP-LEASES | W04/W08/W11 | Attested leases, expiry, revocation propagation and stale rejoin fencing |
+| GAP-W06-W07-EVIDENCE-AND-SIMULATION-DEGRADATION-INVALIDATION | W06/W07/W09/W10 | Evidence freshness/checker/fidelity failures invalidate dependent conclusions and prevent actuation |
+| GAP-W09-W11-DURABLE-INDEPENDENT-AUDIT-AND-ALERT-DELIVERY | W09/W11 | Durable independent event chain, delivery acknowledgement and explicit buffer exhaustion |
+| GAP-W10-DOMAIN-SPECIALIST-AND-EVIDENCE-STALE-MODE | W06/W10/W12 | Expired specialist/source/jurisdiction evidence yields INDETERMINATE and escalation |
+| GAP-W11-GLOBAL-PARTITION-QUORUM-AND-REJOIN-FENCING | W03/W08/W11 | Partition-safe authority, quorum, fencing and safe node rejoin |
+| GAP-W12-FINANCIAL-GOVERNANCE-UNKNOWN-OUTCOME-RECOVERY | W01/W03/W09/W12 | Freeze uncertain settlement/vote/impact claims and reconcile independently |
+
+The new mode taxonomy is proposed and does not imply implementation. W01–W12 remain PARTIAL.
