@@ -734,3 +734,21 @@ These are architecture closure requirements from bounded source inspection, not 
 | GAP-SPECIALIST-QUALIFICATION-AND-DOMAIN-COVERAGE | W01/W04/W06/W10 | Distinguish keyword routing/skill registration from competence, benchmark evidence, jurisdiction, scope, expiry and reviewer |
 
 These are closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence claims. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — W12 financial, governance, marketplace and impact gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W12-PAYMENT-SETTLEMENT-AND-UNKNOWN-OUTCOME | W01/W02/W05/W09/W12 | Provider-specific authorization/capture/settlement/refund/chargeback lifecycles, authenticated receipts, stable idempotency and unknown-outcome reconciliation |
+| GAP-W12-DOUBLE-ENTRY-LEDGER-AND-IMMUTABLE-CORRECTIONS | W03/W09/W12 | Balanced per-currency journal, immutable postings, reversal/correction links, source-event idempotency, period close and audit |
+| GAP-W12-TREASURY-SEGREGATION-AND-RESERVATION | W01/W09/W11/W12 | Legal-entity/fund segregation, restricted balances, available/reserved/committed accounting, dual control, liquidity and restore evidence |
+| GAP-W12-MARKETPLACE-FULFILMENT-AND-PAYOUT-PROOF | W01/W05/W08/W09/W10/W12 | Order/delivery/dispute/payout state separation, producer provenance and lawful custody/settlement model |
+| GAP-W12-INTERNAL-CREDIT-AND-CASH-CLAIM-CLASSIFICATION | W01/W09/W10/W12 | Keep reputation, non-cash credits, reimbursement, compensation, donation and ownership/equity distinct with explicit redemption/transfer/tax treatment |
+| GAP-W12-GOVERNANCE-ELIGIBILITY-QUORUM-AND-APPEAL | W01/W09/W10/W12 | Immutable proposals, voter eligibility snapshot, privacy, conflicts, quorum, auditable tally, appeal and delegated execution authority |
+| GAP-W12-IMPACT-BASELINE-COUNTERFACTUAL-AND-ADDITIONALITY | W06/W07/W09/W10/W12 | Independently verified outcomes with baseline/counterfactual, uncertainty, additionality, leakage, durability and double-counting controls |
+| GAP-W12-FINANCIAL-RECONCILIATION-AND-DUAL-CONTROL | W02/W03/W09/W11/W12 | Independent provider/bank-to-ledger matching, variance ownership, immutable close evidence and separation of proposer/approver/operator/poster |
+| GAP-W12-JURISDICTION-AND-REGULATED-PARTNER-BOUNDARY | W01/W08/W09/W10/W12 | Jurisdiction-specific legal classification and qualified/regulated partner gate before custody, transfer, escrow, stored value or cross-border payout |
+| GAP-W12-FINANCIAL-PRIVACY-AND-SAFEGUARDING | W01/W03/W08/W09/W12 | Data minimization, identity/ballot/beneficiary separation, consent, retention, fraud controls, incident response and accountable review |
+
+These are architecture closure requirements from bounded source inspection, not legal conclusions, confirmed vulnerabilities or claims that external controls do not exist. W01–W12 remain PARTIAL.
