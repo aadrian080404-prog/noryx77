@@ -939,3 +939,27 @@ Exact audited source-tree HEAD: `e463e5a003cebe3d8e9b6ea2d384f0c703a3bcff`. Full
 | `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted Ed25519 artifact manifest verification |
 
 Source observations are bounded to these definitions and do not prove that external deployment adapters are absent.
+
+
+## 2026-11-27 — Branching cognition, evidence and MIRROR WORLD source anchors
+
+Exact audited source-tree HEAD: `d3630a9857b81801585144ea5fb58cbb416249c1`. Full bounded analysis: `NORYX7_BRANCHING_COGNITION_EVIDENCE_CALIBRATION_AND_MIRROR_WORLD_CLOSURE_AUDIT.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/hypersynth.py` | `187699d6e0945a2b1e8a9b194cd9001b1af8cd9f` | One hypothesis per plan step, bounded plan/agent limits and sequential assignment execution |
+| `core/reasoning.py` | `7bf5d905f07b4805e3505e13408a685d81f7842b` | Hypothesis objective copied from plan step; simulator checks nonempty statement/task identity and result structure |
+| `core/metacognition.py` | `9aed7b2522175f6e4a097631566682cdff6a118f` | Pipeline consistency and challenge-verifier seam; independence/calibration not established by interface alone |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | Task/result identity checks; generic output verification checks presence |
+| `core/collaboration.py` | `31e0545a9a6f8f50a09d570d617956cf6cf3572e` | Sequential Primary/Secondary critique/reconciliation and output text digests |
+| `core/evaluation.py` | `df35992d09ffb2a9a82e0c1c739b4de3f1b7dd4e` | Typed result aggregation and all-records-pass decision |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case/holdout manifest; case execution and independent evidence external |
+| `core/adversarial.py` | `e23813c99f2d7c5b3f6b39f75571d83d4ec101f9` | Deterministic synthetic case generation |
+| `core/universal_intelligence.py` | `986dd5976b6451a5a75950535c13f4355f57fb0f` | Keyword routing and caller-supplied evidence-strength/assessment fields |
+| `core/agent_skills.py` | `281d294ee0142a8dd33db5d61f634f95943db231` | Declarative skill registry, not competence certification |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Severity/keyword heuristics and arithmetic mean severity forecast |
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Synthetic sandbox targets and symbolic actions |
+| `core/multimodal.py` | `8c3fb71a6277806d98c2c294444443ddcc3ff9ee` | Modality/content type/digest/locator without full custody semantics |
+| `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md` | `61d53f8a47dd5b03e5988fc8f7888d6f337dc993` | Architecture specification; explicitly no simulator implementation claimed |
+| `architecture/NORYX7_CROSS_CUTTING_ARCHITECTURE_CONTRACTS.md` | `3f24597d0f37f2b8e0424376f9eb810874c74a61` | NEXUS/FRL/research/multimodal/systems-understanding architecture contracts |
+
