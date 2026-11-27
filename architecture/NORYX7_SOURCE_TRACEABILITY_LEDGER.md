@@ -963,3 +963,19 @@ Exact audited source-tree HEAD: `d3630a9857b81801585144ea5fb58cbb416249c1`. Full
 | `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md` | `61d53f8a47dd5b03e5988fc8f7888d6f337dc993` | Architecture specification; explicitly no simulator implementation claimed |
 | `architecture/NORYX7_CROSS_CUTTING_ARCHITECTURE_CONTRACTS.md` | `3f24597d0f37f2b8e0424376f9eb810874c74a61` | NEXUS/FRL/research/multimodal/systems-understanding architecture contracts |
 
+
+## 2026-11-27 — W12 financial and governance source anchors
+
+Exact audited source-tree HEAD: `1bc030726047790c5c9f3622b34d980bff1aedfd`. Full bounded analysis: `NORYX7_W12_FINANCIAL_LEDGER_GOVERNANCE_IMPACT_AND_MARKETPLACE_LIFECYCLE_AUDIT.md`.
+
+| Source path / inventory | Blob SHA | Bounded observation |
+|---|---|---|
+| `ecosystem/boundaries.py` | `a42ad0bdbde8aa05ee694b6aa9f5e2891538e718` | Generic four-front intent envelope; front-name principal fallback is a label, not authenticated identity |
+| `ecosystem/runtime_dispatch.py` | `9f4f628c322aabb571fce64d54c3d6740cb142fd` | Injected principal authorization and topology check; success evidence is return-value type metadata, not provider settlement or ledger proof |
+| `ecosystem/closure_contract.py` | `c4cb5b27f0b05462f1bf7658e2a82455d49d19ac` | Structural front/boundary manifest validation, not financial-service deployment assurance |
+| Recursive Git tree inventory | `e4c5c80d42fea0f70934b14c134e0347a2abae70` | Filtered financial/payment/ledger/marketplace/governance/impact path inventory found architecture specifications but no dedicated executable service path under those names in this inspected tree |
+| `architecture/BUSINESS_PROJECT_FABRIC.md` | `30297c96c506553f8b8b94dd57c297b8b3b096ca` | Business/project/commission/accounting boundary model; design evidence only |
+| `architecture/NORYX7_AGENT_EVIDENCE_MIRROR_WORLD_AND_GLOBAL_IMPACT_RECONCILIATION.md` | `e2ee98e058fe2a27f05d8f1d3b98c78403937c18` | Agent/evidence/MIRROR WORLD/global impact architecture; not a deployed impact-accounting service |
+| `architecture/NORYX7_DOMAIN_CALIBRATION_SPECIALIST_QUALIFICATION_CYBER_RANGE_AND_PUBLIC_IMPACT_RECONCILIATION.md` | `b3421fd266abc2654bb21a2cd321ca02ac925e3e` | Domain qualification, forecast calibration and public-impact assurance requirements |
+
+The inventory conclusion is bounded to the inspected recursive tree and named files; it does not rule out external providers, uninspected services or other branches. Source path presence does not establish deployed behavior.
