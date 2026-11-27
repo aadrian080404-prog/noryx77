@@ -768,3 +768,17 @@ The [Execution Plane Ownership, Composition Root and Ingress Parity Audit](NORYX
 - W11: replicas/regions follow one operation identity, fencing and commit authority.
 - W12: financial settlement remains a separate ledger consuming verified operation receipts.
 Multiple runtime planes may remain; their logical ownership and delegation must be explicit. All workstreams remain PARTIAL.
+
+
+## 2026-11-28 — Failure containment and degraded operation across all streams
+
+The [Cross-Plane Failure Containment, Degraded Modes and Recovery Contract](NORYX7_CROSS_PLANE_FAILURE_CONTAINMENT_DEGRADED_MODES_AND_RECOVERY_CONTRACT.md) adds:
+- W01/W09: identity, key and revocation loss -> deny new privileged work; no fallback identity.
+- W02/W03: coordinator or journal loss -> fence stale epochs, preserve attempts and recover canonical state.
+- W04/W11: agent/node loss -> isolate, revoke delegation and require attested rejoin.
+- W05: provider ambiguity -> UNKNOWN_OUTCOME; no blind failover after possible effect.
+- W06/W07: stale evidence/checker or simulator fidelity loss -> invalidate dependent conclusions and block real-world actuation.
+- W08: offline/device loss -> bounded snapshot scope, durable sync receipts and no implicit network reconnect.
+- W10: specialist/source expiry -> INDETERMINATE and escalation, not guessed certainty.
+- W12: settlement/governance conflict -> freeze affected state and reconcile independently.
+The contract introduces explicit global modes NORMAL, DEGRADED, DISCONNECTED, QUARANTINED, INCIDENT, LOCKDOWN, RECOVERY and VERIFIED_RESUME. These are proposed architecture semantics, not implemented states. All workstreams remain PARTIAL.
