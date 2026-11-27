@@ -717,3 +717,20 @@ These requirements are bounded to the inspected source paths and do not assert v
 | GAP-W12-FINANCIAL-GOVERNANCE-AND-IMPACT-OUTCOME-LEDGER | W02/W09/W11/W12 | Separate contribution, payment attempt, settlement, refund, governance decision and independently measured impact receipts |
 
 These are architecture closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Branching cognition, evidence and MIRROR WORLD gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-HYPOTHESIS-ALTERNATIVE-AND-FALSIFICATION-LIFECYCLE | W02/W04/W06/W07 | Versioned competing hypotheses, parent/child lineage, evidence, assumptions, predicted observations, falsifiers and contradiction-preserving lifecycle |
+| GAP-HYPERSYNTH-DEPENDENCY-DAG-CONCURRENCY-AND-BUDGET-SEPARATION | W02/W04/W05/W11 | Separate plan DAG dependencies, branch count, agent capacity, worker concurrency, resource vectors, cancellation and deterministic replay |
+| GAP-SIMULATOR-SEMANTIC-MODEL-AND-VALIDITY-EVIDENCE | W06/W07/W10 | Replace structural feasibility claims with domain model semantics, assumptions, calibration, counterexamples and scoped validity evidence |
+| GAP-AGENT-CRITIQUE-INDEPENDENCE-AND-EVIDENCE-LINEAGE | W04/W06/W09/W10 | Record model/provider/corpus/tool/failure-domain independence and claim-level source lineage; distinguish diverse critique from corroboration |
+| GAP-EVALUATION-HOLDOUT-ISOLATION-AND-CASE-EXECUTION | W01/W03/W06/W09/W11 | Execute immutable cases, seal holdout access, attest evaluator and artifact/environment, record raw outcome and leakage audit |
+| GAP-FORECAST-PROBABILITY-CALIBRATION-AND-DRIFT | W06/W07/W10/W11/W12 | Define target/horizon/base rate, validate with proper scoring rules and reliability, monitor drift and label uncalibrated output heuristic |
+| GAP-MIRROR-WORLD-REALITY-DATA-CALIBRATION-LIFECYCLE | W03/W06/W07/W08/W09/W11 | Bind world snapshots and experiments to source lineage, model validity, calibration, uncertainty, reproducibility and separate reality observations |
+| GAP-MULTIMODAL-SOURCE-CUSTODY-AND-TRANSFORMATION-LINEAGE | W01/W03/W06/W08/W09 | Preserve original media, capture identity/time, consent/rights, transformations, alignment, derived artifacts and retention |
+| GAP-SPECIALIST-QUALIFICATION-AND-DOMAIN-COVERAGE | W01/W04/W06/W10 | Distinguish keyword routing/skill registration from competence, benchmark evidence, jurisdiction, scope, expiry and reviewer |
+
+These are closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence claims. W01–W12 remain PARTIAL.
