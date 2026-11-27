@@ -844,3 +844,23 @@ The new mode taxonomy is proposed and does not imply implementation. W01–W12 r
 | GAP-W12-EFFECTIVE-RECORDED-TIME-AND-LEDGER-ORDER | W01/W03/W09/W12 | Distinct effective/recorded times, immutable correction lineage, ledger sequence and idempotent settlement reconciliation |
 
 These are architecture closure requirements, not confirmed vulnerabilities or claims that external time services are absent. HLC/vector clocks do not replace consensus or authority. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Elastic Agent Fabric scale gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W04-CANONICAL-AGENT-IDENTITY-AND-REGISTRY-OWNERSHIP | W01/W04/W10/W11 | Canonical identity/profile/instance registry, qualification and revocation without conflating role and authority |
+| GAP-W02-W04-DURABLE-DAG-SCHEDULER-AND-FULL-PLAN-COVERAGE | W02/W04/W05 | Durable DAG scheduling, bounded concurrency, dependency/cancellation lifecycle and no silent plan truncation |
+| GAP-W04-W11-DISTRIBUTED-WORKER-LEASE-AND-FENCING | W01/W04/W09/W11 | Durable lease, heartbeat, fencing token, stale worker rejection and safe rejoin |
+| GAP-W04-W05-ATOMIC-CAPACITY-RESERVATION-AND-RESOURCE-BUDGET | W04/W05/W11 | Atomic multidimensional capacity reservation per task/tenant/provider/region |
+| GAP-W04-W05-FAIRNESS-BACKPRESSURE-AND-ADAPTIVE-CONCURRENCY | W02/W04/W05/W11 | Quotas, fairness, overload admission, bounded queues and starvation protection |
+| GAP-W01-W04-QUALIFICATION-DELEGATION-AND-CAPABILITY-ATTENUATION | W01/W04/W10 | Separate skill/role/qualification/delegation with issuer, scope, expiry and revocation |
+| GAP-W04-W06-INDEPENDENT-VERIFICATION-AND-COMMON-FAILURE-DOMAINS | W04/W06/W10 | Evidence independence, holdout, dissent and independent result admission |
+| GAP-W02-W03-W04-ATTEMPT-IDEMPOTENCY-AND-UNKNOWN-OUTCOME-RECONCILIATION | W02/W03/W04/W05/W12 | Durable attempt ledger, deduplication, effect receipts and safe retry/reconciliation |
+| GAP-W03-W04-TASK-SCOPED-MEMORY-AND-CANONICAL-COMMIT | W03/W04/W06 | Isolated task context, provenance, cache invalidation and canonical write only after admission |
+| GAP-W05-W09-MULTI-PROVIDER-QUOTA-SECRET-AND-PRIVACY-BROKER | W05/W08/W09/W11 | Provider adapters with secret custody, retention, residency, cost and rate-limit policy |
+| GAP-W09-W11-AGENT-WORKER-ISOLATION-AND-FLEET-KILL-SWITCH | W01/W04/W08/W09/W11 | Worker sandbox, egress enforcement, revocation and fleet quarantine |
+| GAP-W11-1000-AGENT-CAPACITY-SLO-AND-RECOVERY-PROOF | W04/W05/W09/W11 | Repeatable benchmarks, real capacity evidence, multi-region recovery and cost envelope before claiming 1,000 scale |
+
+These are proposed architecture closure requirements, not verified defects or existing implementation claims. All W01–W12 remain PARTIAL.
