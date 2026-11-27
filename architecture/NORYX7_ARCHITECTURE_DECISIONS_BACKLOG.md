@@ -734,3 +734,17 @@ The [Schema Compatibility, Contract Collisions and Interoperability Audit](NORYX
 - **B43/B83/B84/B101:** provider/tool success cannot stand in for settlement, ledger commit or independently measured impact.
 
 The audit's compatibility mappings are proposals pending decision-owner review. Existing decisions remain OPEN; W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Memory, model, evidence and distributed operations decision evidence
+
+The [Memory, Model Routing, Evidence and Distributed Execution Reconciliation](NORYX7_MEMORY_MODEL_EVIDENCE_AND_DISTRIBUTED_EXECUTION_RECONCILIATION.md) adds source evidence to existing OPEN decisions without accepting or duplicating ADRs:
+- **B01/B03/B09/B26/B27/B29:** production key hierarchy, KMS/HSM composition, key rotation/revocation and authenticated memory tier-transfer/replica receipts.
+- **B02/B05/B07/B10/B22/B24:** provider failover policy, operation/attempt identity, target idempotency and unknown-effect reconciliation.
+- **B03/B08/B23:** durable encrypted memory backend, tier promotion/demotion, backup/restore, offline outbox/inbox and signed remote commit acknowledgement.
+- **B04/B12/B25/B76:** model candidate provenance, agent/specialist qualification, evaluator independence and calibrated domain confidence.
+- **B05/B88/B90/B91/B97:** immutable evaluation runs, holdout isolation, source custody and separate synthetic/real-world evidence profiles.
+- **B42/B72/B77/B78/B95:** supply-chain build provenance, trusted release, placement lease, node attestation and rollback.
+- **B43/B83/B84/B101:** separate provider effect, financial settlement, ledger commit and independently measured impact.
+
+All corresponding decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
