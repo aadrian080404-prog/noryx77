@@ -796,3 +796,16 @@ The [Global Temporal Consistency, Causal Order and Version Authority Architectur
 - W11: scoped authority epochs, fenced leases, causal replication and explicit partition/rejoin watermarks.
 - W12: ledger sequence and effective-vs-recorded time, immutable correction lineage and eligibility snapshots.
 HLC is a sortable event label, not consensus; vector clocks express concurrency, not authorization. Critical non-commutative domains require a fenced single-writer/quorum authority; generic last-write-wins is prohibited. All workstreams remain PARTIAL.
+
+
+## 2026-11-28 — Elastic Agent Fabric and 10–1,000 scale target
+
+The [Agent Fabric Elastic Scale 10–1,000 Architecture](NORYX7_AGENT_FABRIC_ELASTIC_SCALE_10_TO_1000_CONCURRENT_EXECUTION_ARCHITECTURE.md) adds cross-stream obligations:
+- W01/W04/W10: separate agent identity, instance, skill, qualification, delegation and authority; bind every lease to principal, scope, epoch and expiry.
+- W02/W04: canonical DAG task graph, complete plan coverage, bounded concurrent scheduler, attempt lifecycle, cancellation and result admission.
+- W03/W04: durable queue/outbox/inbox, task-scoped context, idempotency, receipts and canonical commit.
+- W04/W05/W11: worker membership, atomic capacity reservation, placement, lease/fencing, fairness, quotas, backpressure and adaptive concurrency.
+- W05/W09: provider broker, secrets, privacy/residency, rate limits, cost and egress mediation.
+- W06/W10: independent verifier and specialist qualification; common failure domains and dissent remain explicit.
+- W07/W08/W12: sandboxed simulation/device/economy agents with domain-specific actuation and approval boundaries.
+The scale ladder 10→32→100→256→500→1,000 distinguishes logical registrations from measured execution slots. Slot targets remain hypotheses pending hardware/provider benchmarks. All W01–W12 remain PARTIAL; architecture only.
