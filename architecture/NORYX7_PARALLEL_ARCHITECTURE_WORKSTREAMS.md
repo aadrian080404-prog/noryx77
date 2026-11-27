@@ -699,3 +699,20 @@ The [W12 Financial, Ledger, Governance, Marketplace and Impact Lifecycle Audit](
 - W11: treasury allocation, legal-entity/fund segregation, global placement and disaster recovery need explicit ownership and fenced reservations.
 - W12: contribution, payment attempt, provider settlement, ledger posting, treasury allocation, marketplace fulfilment, internal reward, governance decision and impact measurement are distinct bounded contexts and state machines.
 Ten new gaps are recorded. This remains design/source reconciliation, not a deployed financial service or legal operating model. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Cross-stream network-presence and disconnected-by-default continuation
+
+The [Disconnected-by-Default Network Presence, Access Leases and Egress Architecture](NORYX7_DISCONNECTED_BY_DEFAULT_NETWORK_PRESENCE_LEASE_AND_EGRESS_ARCHITECTURE.md) advances the shared W01–W12 boundary:
+- W01 issues device/principal/audience-bound authority; a network lease cannot be minted by an agent or UI label.
+- W02 binds network attempts to operation/attempt identity and ambiguous-effect reconciliation.
+- W03 owns durable encrypted outbox, lease/revocation checkpoints and signed sync receipt persistence.
+- W04 can request but cannot grant network access.
+- W05 routes only to lease-authorized providers and preserves cost/rate/idempotency controls.
+- W06/W07 keep acquired sources and simulated network observations distinct until evidence admission.
+- W08 defines disconnected/on-demand/session modes and browser/device lifecycle.
+- W09 provides signed lease/receipt verification, incident revocation and independently enforced egress controls.
+- W10 constrains external domain calls by purpose, qualification and data minimization.
+- W11 enforces per-region/per-workload egress, revocation propagation and network segmentation.
+- W12 budgets paid-provider usage without allowing governance or budget owners to override security deny rules.
+Physical radio control is explicitly separated from application-level egress denial; ordinary application code must not claim universal Wi-Fi/cellular shutdown capability. Seven gaps added. All workstreams remain PARTIAL.
