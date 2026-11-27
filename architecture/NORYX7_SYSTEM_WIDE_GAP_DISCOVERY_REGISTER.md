@@ -796,3 +796,18 @@ These gaps are based on bounded inspection of named source paths; they are not c
 | GAP-W04-W05-W09-POLYGLOT-TOOL-AND-RESULT-RECEIPT-COMPATIBILITY | W04/W05/W09 | Versioned typed tool/provider/result/effect receipts with explicit loss-aware adapters and conformance tests |
 
 The gaps are based on named source paths at the recorded snapshot. They do not establish that every deployment or external provider lacks these controls. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Composition-root, execution ownership and ingress parity gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W02-ALL-INGRESS-IDENTITY-AND-POLICY-PARITY | W01/W02/W08/W09 | Every route binds authenticated principal, device, audience, session and policy consistently; no untrusted fallback identity |
+| GAP-W02-W04-CANONICAL-RUNTIME-PLANE-OWNERSHIP | W02/W04/W05/W06 | Normative ownership/delegation across OperationalNORYXRuntime/HYPERSYNTH, JARVIS RuntimeEngine and Agent/Provider Fabric |
+| GAP-W02-W03-W09-SINGLE-AUTHORITATIVE-OPERATION-STATE | W02/W03/W09/W11/W12 | One logical operation-state authority, cross-store receipt/reconciliation, projections and crash-safe commit semantics |
+| GAP-W01-W02-W09-PRODUCTION-COMPOSITION-MANIFEST-AND-ATTESTATION | W01/W02/W08/W09/W11 | Signed manifest binds every ingress to runtime, principal, policy, verifier, egress, state, recovery and deployment digest |
+| GAP-W06-W09-STRUCTURAL-VS-OPERATIONAL-CLOSURE-EVIDENCE | W02/W06/W09/W11 | Separate structural, composition, runtime, semantic, external assurance and operational readiness gates |
+| GAP-W04-W05-W09-POLYGLOT-SERVICE-AUTHORITY-PARITY | W04/W05/W08/W09/W11 | Go/Kotlin/Rust/Python share authenticated session, canonical operation, authorization and signed receipt semantics |
+| GAP-W02-W05-W11-PROVIDER-AND-EXECUTION-PLANE-RECONCILIATION | W02/W05/W09/W11/W12 | Explicit ModelFabric/provider/ToolExecutor dispatch owner, idempotency, unknown effect and retry policy |
+
+These are bounded source findings, not claims that reverse proxies or external deployment controls do not exist. Multiple runtime planes are not inherently wrong; ambiguous authority is. W01–W12 remain PARTIAL.
