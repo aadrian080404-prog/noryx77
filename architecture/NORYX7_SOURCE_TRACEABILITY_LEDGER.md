@@ -1096,3 +1096,22 @@ External orchestrator, firewall, durable alert transport, KMS/HSM and cloud cont
 | `core/audit.py` | `61deb17b4e9afba8b2b5a582de79d8089d3b51b8` | In-process hash chain and HMAC checkpoint primitive; no durable external timestamp/global order established by module alone |
 
 See `NORYX7_GLOBAL_TEMPORAL_CONSISTENCY_CAUSAL_ORDER_AND_VERSION_AUTHORITY_ARCHITECTURE.md` for proposed temporal envelope, bitemporal semantics, HLC/causal context, scoped authority epochs, fencing, offline expiry and future fault-injection criteria. Bounded findings do not rule out external time, database or orchestration controls.
+
+
+## 2026-11-28 — Agent Fabric elastic-scale source reconciliation
+
+Source-tree HEAD reviewed: 5b57a247d8d96d5964df20876925637c8e6f2603 (PR #212). Full analysis: NORYX7_AGENT_FABRIC_ELASTIC_SCALE_10_TO_1000_CONCURRENT_EXECUTION_ARCHITECTURE.md.
+
+| Source | Blob SHA | Bounded observation |
+|---|---|---|
+| core/agent_fabric.py | 3704dd7bf66815274cc319c9583c45ae575f3d36 | MAX_FABRIC_AGENTS=1024 bounds local registration; does not establish active worker slots, durable distributed scheduling or concurrent execution |
+| core/coordination.py | c5743872a5b50765db04e4a42739e9ad238ad983 | assign() truncates to plan.steps[:max_agents]; execute() invokes agents sequentially and verifies each result inline |
+| core/agent_mesh.py | 25c9162750708e53742862f9f413fdf5200ca08f | role routing selects first sorted matching agent; no capacity, fairness, locality or failure-domain scoring |
+| core/agent_runtime.py | c6e0b0edd40fdcfc2264e8dc19ba5ae43b0187da | local start/heartbeat/status view; not a durable distributed lease or fencing authority |
+| core/supervisor.py | f9350dfd1a31105a2d5b8d2e11674a6d38fcae5e | selection/admission primitive; not a durable fleet scheduler |
+| core/agent_skills.py | 281d294ee0142a8dd33db5d61f634f95943db231 | bounded local skill registry; skill presence is not qualification or authority |
+| core/limits.py | ec331b0272e78e89c420b0c0df1e9d0469cf134c | per-task resource/action/time limits; no aggregate fleet/tenant quota or fairness in this module |
+| core/resource_router.py | 4f7bf28200edd05f1236d9779437e4aa43bba8ab | static DEVICE/EDGE/CLOUD selection; not live capacity reservation or attested placement |
+| ecosystem/global_scale.py | 7393cda34d4b57e2310d20cafccc0489a1ab813e | in-process region/cell selection, capacity helpers, queue and resource budget; not durable distributed reservation/fencing or production orchestration |
+
+The observations are bounded to the inspected modules and snapshot; external brokers, orchestration, hardware and deployment controls are not ruled out.
