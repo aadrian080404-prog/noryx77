@@ -979,3 +979,22 @@ Exact audited source-tree HEAD: `1bc030726047790c5c9f3622b34d980bff1aedfd`. Full
 | `architecture/NORYX7_DOMAIN_CALIBRATION_SPECIALIST_QUALIFICATION_CYBER_RANGE_AND_PUBLIC_IMPACT_RECONCILIATION.md` | `b3421fd266abc2654bb21a2cd321ca02ac925e3e` | Domain qualification, forecast calibration and public-impact assurance requirements |
 
 The inventory conclusion is bounded to the inspected recursive tree and named files; it does not rule out external providers, uninspected services or other branches. Source path presence does not establish deployed behavior.
+
+
+## 2026-11-27 — Network-presence and disconnected-mode source anchors
+
+Exact source-tree HEAD: `8a2bdafda79c03950ee52cbbe07296f2a01da6a6`. Full reconciliation: `NORYX7_DISCONNECTED_BY_DEFAULT_NETWORK_PRESENCE_LEASE_AND_EGRESS_ARCHITECTURE.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/egress.py` | `e50095f8a0265adfcac4812aa06778cece58fe83` | In-memory allowlist keyed by component/host/port/protocol; not OS packet enforcement or universal socket mediation |
+| `core/device.py` | `4f7d82ec5a1e40b595c4c341ab7d3ed551f3ac14` | Device trust and audience/expiry/epoch capability gate; local state, not physical radio control |
+| `core/device_fabric.py` | `3b0ead031e03040d25bb7df3a716aaa50fa8591c` | Process-local device online/capability registry; not measured reachability |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Offline snapshot, capability and encrypted in-memory outbox; local queue sequence does not prove durable remote commit |
+| `noryx-browser/app/src/main/AndroidManifest.xml` | `e4a6a15ccc40476620463d1601340130cb7a5a22` | Static INTERNET permission; cleartext disabled and backup disabled |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NavigationPolicy.kt` | `d1fb80964f4319929a6054742101c996ea8abf53` | HTTPS/host/no-userinfo main-frame URL policy |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NoryxWebViewClient.kt` | `3939342eef0757250b76fe2f06bf714d7a7e9243` | Main-frame policy callbacks; non-main-frame resource requests are not blocked here |
+| `noryx-browser/app/src/main/java/com/noryx/browser/NoryxGatewayClient.kt` | `c759625005c13cc706f36aa91160267bff25b8ca` | Direct HttpURLConnection transport, in-memory bearer token, lazy authentication and 401 reauthentication |
+| `noryx-browser/app/src/main/java/com/noryx/browser/MainActivity.kt` | `851ad411ca1c675b9f8207e09c953b109c29ac7f` | Gateway client lifecycle is not bound in inspected source to a short-lived network-presence lease |
+
+Tests inspected as existing source evidence (not executed in this pass): `core/test_egress.py`, `core/test_device.py`, `tests/test_runtime_offline.py`, `noryx7_runtime/test_platform_egress.py`. Existing tests cover local default-deny allowlisting, component/port/protocol binding and capability expiry/revocation; they do not establish OS-level mediation of all app network paths or physical radio control.
