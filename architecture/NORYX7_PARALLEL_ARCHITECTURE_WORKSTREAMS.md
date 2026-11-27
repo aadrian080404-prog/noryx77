@@ -750,3 +750,21 @@ The [Polyglot Canonical Wire Protocol, Offline Commit and Session Binding Audit]
 - W11: replication, fencing and split-brain commit reconciliation.
 - W12: same canonical envelope with distinct financial/domain invariants.
 The wire encoding choice (deterministic CBOR vs constrained canonical JSON) remains OPEN pending Python/Kotlin/Go/Rust golden and negative vectors. All workstreams remain PARTIAL.
+
+
+## 2026-11-28 — System-wide composition and plane ownership
+
+The [Execution Plane Ownership, Composition Root and Ingress Parity Audit](NORYX7_EXECUTION_PLANE_OWNERSHIP_COMPOSITION_ROOT_AND_INGRESS_PARITY_AUDIT.md) defines cross-stream ownership:
+- W01: one authenticated principal/device/delegation context for every ingress; no caller-string principal defaults.
+- W02: declare the authoritative execution runtime, operation lifecycle and per-route composition manifest.
+- W03: select one logical operation-state authority; other journals are projections with explicit reconciliation.
+- W04: Agent Fabric owns qualification/assignment/results, not execution authority.
+- W05: ModelFabric/provider adapters remain untrusted transports; explicit retry/effect ownership.
+- W06: distinguish structural closure from evidence/semantic/operational closure.
+- W07: simulation and Reality Bridge cannot inherit production execution authority.
+- W08: browser, voice and API surfaces converge on route-normalization and session/device binding.
+- W09: policy, authorization, verifier, audit, egress and trust roots must be bound in a composition manifest.
+- W10: specialist qualifications remain separate from runtime and domain authority.
+- W11: replicas/regions follow one operation identity, fencing and commit authority.
+- W12: financial settlement remains a separate ledger consuming verified operation receipts.
+Multiple runtime planes may remain; their logical ownership and delegation must be explicit. All workstreams remain PARTIAL.
