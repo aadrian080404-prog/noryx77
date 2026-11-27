@@ -701,3 +701,19 @@ These gaps record semantic interoperability requirements in inspected source def
 | GAP-SUPPLY-CHAIN-BUILD-PROVENANCE-AND-ROLLBACK | W01/W09/W11 | Bind source, dependency/SBOM, builder, reproducible artifact, trusted signer, approval, canary and rollback anchor |
 
 These requirements are bounded to the inspected source paths and do not assert vulnerabilities or universal absence of external implementations. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — JARVIS, Browser, polyglot and observation authority gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-JARVIS-HYPERSYNTH-COGNITIVE-PLANE-OWNERSHIP | W02/W04/W05/W06/W10 | Define JARVIS as a surface/runtime adapter and HYPERSYNTH as cognitive proposal plane, with one execution/policy authority and typed handoff |
+| GAP-JARVIS-FACADE-PRINCIPAL-AND-PLAN-TRUST-BOUNDARY | W01/W02/W04/W08 | Replace literal principal fallback with authenticated principal assertion; bind caller-supplied Plan to request, issuer, digest, policy epoch and approved provenance |
+| GAP-WAKE-VOICE-AND-OBSERVATION-AUTHORITY-SEPARATION | W01/W04/W08/W09/W10 | Separate wake session, speaker/principal, device attestation, source authorization and action grant; typed sensor custody and calibration |
+| GAP-JARVIS-STATE-AUDIT-DURABILITY-AND-VERIFICATION-RECEIPT | W02/W03/W06/W09/W11 | Durable reservation/commit/audit, signed checkpoints and anti-truncation; require exact typed VerificationReceipt rather than caller boolean |
+| GAP-BROWSER-DEVICE-ENROLLMENT-AND-EGRESS-POLICY | W01/W08/W09/W11 | Bind browser session to enrolled device/principal/audience/epoch and enforce destination, DNS, redirect, subresource, download and signed response receipt policies |
+| GAP-POLYGLOT-CANONICAL-ENCODING-AND-SIGNED-OPERATION-PROTOCOL | W01/W02/W05/W09/W11 | Define common schema/version/canonical encoding/signature/replay/receipt contract with golden vectors across Go, Rust, Kotlin and Python |
+| GAP-NEXUS-MIRROR-WORLD-REALITY-BRIDGE-EVIDENCE-ADMISSION | W06/W07/W08/W09/W10 | Preserve source/transformation/custody and keep transcript, sensor, browser, synthetic and simulated evidence classes separate; require independently authenticated reality observations |
+| GAP-W12-FINANCIAL-GOVERNANCE-AND-IMPACT-OUTCOME-LEDGER | W02/W09/W11/W12 | Separate contribution, payment attempt, settlement, refund, governance decision and independently measured impact receipts |
+
+These are architecture closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence of external controls. W01–W12 remain PARTIAL.
