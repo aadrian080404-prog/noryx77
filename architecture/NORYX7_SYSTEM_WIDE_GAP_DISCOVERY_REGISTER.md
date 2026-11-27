@@ -829,3 +829,18 @@ These are bounded source findings, not claims that reverse proxies or external d
 | GAP-W12-FINANCIAL-GOVERNANCE-UNKNOWN-OUTCOME-RECOVERY | W01/W03/W09/W12 | Freeze uncertain settlement/vote/impact claims and reconcile independently |
 
 The new mode taxonomy is proposed and does not imply implementation. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Global temporal consistency and causal authority gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-TRUSTED-TIME-AND-CREDENTIAL-VALIDITY | W01/W08/W09/W11 | Issuer time statements, skew bounds, reboot/rollback handling and bounded offline grant validity; caller wall-clock cannot extend authority |
+| GAP-W02-W03-CAUSAL-OPERATION-ORDER-AND-COMMIT-WATERMARK | W02/W03/W05/W11/W12 | Stable causal IDs, per-aggregate authoritative sequence, commit watermark and unknown/missing-parent handling |
+| GAP-W03-W06-BITEMPORAL-MEMORY-AND-EVIDENCE-LINEAGE | W03/W06/W07/W10/W12 | Separate valid/capture/ingest/verification/transaction times, append-only corrections and dependent-claim invalidation |
+| GAP-W04-W10-LEASE-AND-QUALIFICATION-FRESHNESS | W01/W04/W10/W11 | Signed lease/credential validity, freshness bounds, revocation epoch and stale worker/specialist fencing |
+| GAP-W08-W11-OFFLINE-MONOTONIC-CONTINUITY-AND-REJOIN | W03/W08/W09/W11 | Reboot-aware monotonic anchor, signed snapshot time bounds, authority watermark reconciliation and fail-closed rejoin |
+| GAP-W11-DISTRIBUTED-HLC-VERSION-VECTOR-AND-FENCING-PROFILE | W02/W03/W09/W11 | Canonical HLC/causal context, scoped aggregate versions, partition/quorum rules and monotonic fencing tokens |
+| GAP-W12-EFFECTIVE-RECORDED-TIME-AND-LEDGER-ORDER | W01/W03/W09/W12 | Distinct effective/recorded times, immutable correction lineage, ledger sequence and idempotent settlement reconciliation |
+
+These are architecture closure requirements, not confirmed vulnerabilities or claims that external time services are absent. HLC/vector clocks do not replace consensus or authority. All W01–W12 remain PARTIAL.
