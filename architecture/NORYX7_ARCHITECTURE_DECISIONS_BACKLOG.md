@@ -875,3 +875,18 @@ The [Global Temporal Consistency, Causal Order and Version Authority Architectur
 - Define signed checkpoint coverage, causal frontier, external anchor custody and recovery watermarks across regions.
 - Define future fault-injection and Python/Kotlin/Go/Rust conformance suite for clock skew/rollback, causal gaps, partition, stale epochs, duplicate delivery and replay.
 All decisions remain OPEN pending owner review and later implementation/validation. No ADR accepted; W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Agent Fabric elastic-scale decisions (OPEN)
+
+The [Agent Fabric Elastic Scale 10–1,000 Architecture](NORYX7_AGENT_FABRIC_ELASTIC_SCALE_10_TO_1000_CONCURRENT_EXECUTION_ARCHITECTURE.md) adds unresolved decisions; none is accepted:
+- Choose the canonical AgentProfile, TaskNode, DispatchLease, AttemptReceipt, ResultReceipt and AdmissionReceipt schemas, aligned with the canonical polyglot protocol.
+- Select durable queue/broker, lease store, scheduler runtime, worker isolation and RPC/transport architecture.
+- Define lease issuer, heartbeat, expiry, fencing token, epoch ownership, revocation and partition behavior.
+- Select DAG scheduling, fairness/priority, tenant quotas, adaptive concurrency, backpressure and cancellation semantics.
+- Define multidimensional capacity reservations and cost/rate limits across CPU/GPU/RAM/token/provider/region/energy.
+- Define provider broker, API secret custody, retention/training/data residency and failure-domain disclosure.
+- Define qualification issuers, specialist review and independent verification levels; shared models/providers/corpora do not count as independent voters.
+- Set measured SLOs, benchmark methodology, hardware/provider capacity, cost envelope and staged rollout gates for 10→32→100→256→500→1,000.
+- Define durable attempt/effect reconciliation and task-scoped memory/commit semantics.
+All decisions remain OPEN pending owner review, alternatives and evidence. No implementation or tests.
