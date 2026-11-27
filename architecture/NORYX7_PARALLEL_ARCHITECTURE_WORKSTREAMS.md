@@ -733,3 +733,20 @@ The [Authorized Systems Understanding, Observation Custody and Reconstruction As
 - W11: capture workers and evidence stores require region, key-custody and retention controls.
 - W12: permission to inspect does not imply ownership, compensation, publication or disclosure rights.
 Seven new gaps added. This remains architecture-only; all workstreams remain PARTIAL.
+
+
+## 2026-11-28 — Canonical wire protocol and offline commit cross-stream convergence
+
+The [Polyglot Canonical Wire Protocol, Offline Commit and Session Binding Audit](NORYX7_POLYGLOT_CANONICAL_WIRE_PROTOCOL_OFFLINE_COMMIT_AND_SESSION_BINDING_AUDIT.md) adds:
+- W01: issuer/subject/device/audience/session/revocation fields; caller-supplied client IDs remain labels, not principal proof.
+- W02: stable operation ID, per-attempt ID, idempotency key and explicit unknown-outcome reconciliation.
+- W03: crash-safe durable outbox, atomic receipt verification/tombstone, journal namespace and schema migration.
+- W04: agent/tool results signed over canonical typed envelopes.
+- W05: provider dispatch/effect/commit receipts and target idempotency semantics.
+- W06/W07: preserve integrity vs semantic truth and synthetic vs observed evidence distinctions.
+- W08: surface-bound sessions and offline synchronization authority.
+- W09: canonical signature preimage, domain separation, key rotation/revocation, replay and audit.
+- W10: scoped specialist qualification records.
+- W11: replication, fencing and split-brain commit reconciliation.
+- W12: same canonical envelope with distinct financial/domain invariants.
+The wire encoding choice (deterministic CBOR vs constrained canonical JSON) remains OPEN pending Python/Kotlin/Go/Rust golden and negative vectors. All workstreams remain PARTIAL.
