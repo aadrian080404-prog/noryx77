@@ -782,3 +782,17 @@ The [Cross-Plane Failure Containment, Degraded Modes and Recovery Contract](NORY
 - W10: specialist/source expiry -> INDETERMINATE and escalation, not guessed certainty.
 - W12: settlement/governance conflict -> freeze affected state and reconcile independently.
 The contract introduces explicit global modes NORMAL, DEGRADED, DISCONNECTED, QUARANTINED, INCIDENT, LOCKDOWN, RECOVERY and VERIFIED_RESUME. These are proposed architecture semantics, not implemented states. All workstreams remain PARTIAL.
+
+
+## 2026-11-28 — Temporal consistency handoffs across W01–W12
+
+The [Global Temporal Consistency, Causal Order and Version Authority Architecture](NORYX7_GLOBAL_TEMPORAL_CONSISTENCY_CAUSAL_ORDER_AND_VERSION_AUTHORITY_ARCHITECTURE.md) adds the following cross-stream obligations:
+- W01/W09: issuer time, validity interval, monotonic revocation epoch, replay windows and bounded offline grants; clock rollback never renews authority.
+- W02/W05: causal operation/attempt/effect identity, authoritative sequence and explicit unknown outcome; timeout is not proof of no effect.
+- W03/W06: bitemporal state/evidence, source/capture/ingest/verification times, causal dependencies and invalidation lineage.
+- W04/W10: agent lease/qualification freshness and stale worker fencing; domain credential validity evaluated at decision time.
+- W07: model/calibration validity interval and simulation-time separation from empirical time.
+- W08: reboot-aware monotonic domains, signed snapshot age, bounded offline lease and time-uncertain mode.
+- W11: scoped authority epochs, fenced leases, causal replication and explicit partition/rejoin watermarks.
+- W12: ledger sequence and effective-vs-recorded time, immutable correction lineage and eligibility snapshots.
+HLC is a sortable event label, not consensus; vector clocks express concurrency, not authorization. Critical non-commutative domains require a fenced single-writer/quorum authority; generic last-write-wins is prohibited. All workstreams remain PARTIAL.
