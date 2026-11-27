@@ -879,3 +879,31 @@ Exact source-tree snapshot: `f0b43470d6855567f8c4034bb50b68db10453565`. See `NOR
 | `core/agent_fabric.py` | `3704dd7bf66815274cc319c9583c45ae575f3d36` | Principal-bound native dispatch with identity and authorization callback |
 
 These anchors establish local source semantics only; they are not test results, production traces or exhaustive call-site proof.
+
+
+## 2026-11-27 — Memory, model, evidence and distributed execution source anchors
+
+Exact source snapshot: `491738a688771effde756a6779a455ef514b8587`. See `NORYX7_MEMORY_MODEL_EVIDENCE_AND_DISTRIBUTED_EXECUTION_RECONCILIATION.md` for full source-to-contract findings.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/memory.py` | `1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd` | Bounded process-local execution-scoped MemoryStore |
+| `core/memory_hierarchy.py` | `d908fcb7252e97072501b94dada23ae571807850` | In-process L0–L5 hierarchy and promotion |
+| `core/secure_memory.py` | `27727ce69802f3ad4f082bf4b9bc4ef013fa7812` | Versioned JSON adapter over encrypted record store |
+| `core/secure_storage.py` | `0fd726f2bad1ff6e133b46c04039ae2c943d350f` | In-memory ciphertext dictionary with namespace/record AAD |
+| `core/crypto.py` | `ce0f534fb6f786838325dc22469c2364aee4ee9b` | AES-256-GCM/HKDF primitives and injectable KeyProvider; in-memory provider test-only |
+| `ecosystem/global_fabric.py` | `d0f10d09cc739616f88f3e24966e3302e4aadb30` | Global memory digest/version/replica metadata; external storage and transport adapters |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Encrypted in-memory outbox, recovery-guarded offline commit and caller-triggered queue acknowledgement |
+| `noryx7_runtime/model_fabric.py` | `abb8bd9bb3217fff967e898afbdc491eb5082f45` | Capability/cost/latency ranking, sequential candidate execution, optional verifier/synthesizer and digest/MAC |
+| `core/llm/model_fabric_bridge.py` | `544dd80facf249278adbb797b276f82935564305` | Single-model text-only bridge with no model tools |
+| `core/provider_router.py` | `9bd085ddaf660ac53039dd80eb6c822cb9226eba` | Ordered provider routing and exception-driven failover |
+| `core/provider_execution.py` | `93e63c085321e2b4413dbcf4878a4c4f6a82953e` | Per-call ExecutionFabric authorization before provider handler |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Bounded failover with exception-driven alternate provider attempts |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Reproducible case/holdout generation and externally supplied evaluation records |
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Symbolic synthetic sandbox simulation only |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Heuristic relevance/anomaly scoring and mean-severity forecast |
+| `core/supply_chain.py` | `4cf383541d1623a3fbb9cecd70f4d4dd8cfbb9f5` | Trusted Ed25519 manifest and artifact digest verification |
+| `core/universal_intelligence.py` | `986dd5976b6451a5a75950535c13f4355f57fb0f` | Keyword specialist routing and evidence-bearing assessment contracts |
+| `ecosystem/global_scale.py` | `7393cda34d4b57e2310d20cafccc0489a1ab813e` | In-process region/cell health, capacity selection and control-plane primitives |
+
+These are exact source anchors, not runtime traces, test outcomes or proof that external adapters do not exist.
