@@ -1015,3 +1015,23 @@ Exact source-tree HEAD: `badb8f12e6d45d6a497d938f45ab130a044bbd19`. Full reconci
 | `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case/holdout manifest generation; no case execution or independent evidence attestation |
 
 Tests above were inspected, not executed. The source observations do not imply that external test infrastructure or controls are absent; they describe the named paths at the recorded snapshot.
+
+
+## 2026-11-28 — Canonical protocol, offline and gateway source anchors
+
+Exact source-tree HEAD: `10f139a539b11d27df97f4c974b5175bf00afdcd`. Full reconciliation: `NORYX7_POLYGLOT_CANONICAL_WIRE_PROTOCOL_OFFLINE_COMMIT_AND_SESSION_BINDING_AUDIT.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/contracts.py` | `a75491921288cbea6f1759ead99f97c83cfdc43d` | Python dataclasses; nested Any/Mapping; no wire schema registry in this module |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | Local sorted compact JSON action fingerprint; not a universal cross-language signature profile |
+| `core/tool_protocol.py` | `1c529fbbf5352469be8ab6633edc48113da8a3bf` | In-process ToolSpec/ToolResult with string provenance; no versioned signed remote effect receipt |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Encrypted in-memory outbox/sequence; ack deletes by execution ID after optional base-state-version equality, without typed signed remote commit receipt |
+| `core/offline_adapters.py` | `bcdd8210b71f60a5f07f50b8975798fdd8c6b6f3` | Local policy/output-presence/authenticated-cipher adapters; not remote commit proof |
+| `core/offline_anchor.py` | `a130043ae7dff949b072ae97fd00137d8051d2ea` | SQLite monotonic snapshot timestamp/ID anchor; not durable outbox or hardware-backed guarantee by itself |
+| `core/state_journal.py` | `4ea3419cb05a4edbb228966ea2584894197caa83` | SQLite WAL/FULL, sequence and SHA-256 digest; no signature or cross-journal namespace/checkpoint protocol in inspected schema |
+| `gateway/auth.py` | `fa456172c99b183dcb2acd0ec99303ec540d2583` | HMAC session from bootstrap token + caller-provided client_id, expiry and nonce; no device/audience/server-side revocation registry in inspected path |
+| `gateway/server.py` | `b434cdbe118ecea48029adcd2c954fa1ac14461c` | Session token client_id forwarded as runtime client identity |
+| `noryx7_runtime/contracts.py` | `9bb6632b214e8d9d3221c9ccf03ab6233209a184` | Separate Intent/ExecutionContext/PlanStep/ActionEnvelope/Attestation family; explicit adapter needed against core contracts |
+
+Inspected test files (not run): `core/test_offline_snapshot_rollback.py` (`80b855fb770ca6e0b6a45d12800e014208d50935`), `core/test_state_journal_integration.py` (`3f16420b2470176d0db550f9b76e700d029bb38f`), `core/test_hypersynth_runtime_contract.py` (`987a4731742aa014124f6192c8ff3c2a7110d715`). Their bounded coverage is recorded in the audit.
