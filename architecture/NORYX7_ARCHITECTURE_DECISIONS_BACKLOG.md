@@ -762,3 +762,16 @@ The [JARVIS, Browser, Polyglot Runtime and Observation Authority Reconciliation]
 - **B43/B83/B84/B101:** W12 contribution/payment/settlement/refund/governance/impact outcome separation.
 
 All related decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Branching cognition, evidence and MIRROR WORLD decision evidence
+
+The [Branching Cognition, Evidence Admission, Model Calibration and MIRROR WORLD Reconciliation](NORYX7_BRANCHING_COGNITION_EVIDENCE_CALIBRATION_AND_MIRROR_WORLD_CLOSURE_AUDIT.md) adds source evidence to existing OPEN decisions without accepting ADRs:
+- **B02/B04/B05/B10/B22/B24:** hypothesis branch lifecycle, plan DAG scheduling, semantic result admission, collaboration independence and verifier provenance.
+- **B05/B12/B25/B76/B88/B90:** specialist qualification, evidence-source independence, exact claim spans and formal/empirical result separation.
+- **B05/B88/B90/B91/B97:** evaluation protocol, sealed holdout, case execution receipts, model calibration and Reality Bridge admission.
+- **B03/B08/B09/B26/B27/B29:** multimodal media custody, original/derived artifact lineage, consent, rights and retention.
+- **B42/B72/B77/B78/B95:** deterministic experiment execution, distributed worker leases, model/kernel provenance, replay and durable measurement collection.
+- **B43/B83/B84/B101:** counterfactual baselines and independently measured environmental/social/economic impact outcomes.
+
+All related decisions remain OPEN pending owner review and acceptance evidence. W01–W12 remain PARTIAL.
