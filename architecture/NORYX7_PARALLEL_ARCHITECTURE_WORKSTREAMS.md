@@ -656,3 +656,17 @@ The [Memory, Model Routing, Evidence and Distributed Execution Reconciliation](N
 - W11: region/cell selection and replica labels do not constitute fenced durable placement or replication acknowledgements.
 - W12: provider success/effect, financial settlement and measured impact remain distinct states and evidence classes.
 The document proposes typed transfer, model, provider, remote-commit, placement and reality-observation receipts; no schema implementation or ADR acceptance is claimed. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — JARVIS, Browser, polyglot and observation continuation
+
+The [JARVIS, Browser, Polyglot Runtime and Observation Authority Reconciliation](NORYX7_JARVIS_BROWSER_POLYGLOT_AND_OBSERVATION_AUTHORITY_RECONCILIATION.md) advances all twelve workstreams across interface, cognition, trust, evidence, operations and impact:
+- W01/W02: JARVIS facade's literal `user` principal and caller-supplied Plan require authenticated principal and immutable plan provenance; JARVIS and HYPERSYNTH need explicit cognitive/runtime ownership.
+- W03/W09/W11: JARVIS state reservations/commits and audit hash chain are in-process; durable state, signed checkpoints, anti-truncation and restore evidence remain open.
+- W04/W05/W10: wake/voice/observation, agent identity, specialist authority and capability grants remain distinct; a wake session cannot authorize an action.
+- W06: Browser, transcript, sensor and model outputs need typed source custody, exact claim anchoring and verifier receipts before scoped NEXUS/FRL admission.
+- W07: synthetic simulation outputs remain distinct from authenticated reality observations and Reality Bridge approval.
+- W08: Android Browser navigation/session requires device enrollment, principal binding, redirect/subresource egress controls and signed server receipts.
+- W09/W11: Go/Rust/Kotlin/Python need one canonical versioned encoding, signature, replay and receipt protocol; raw SHA-256 is not an authorization or effect proof.
+- W12: payment, governance and environmental/social impact need separate outcome records and independent measurement.
+No implementation or test campaign is claimed; all W01–W12 remain PARTIAL.
