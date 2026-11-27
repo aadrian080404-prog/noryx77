@@ -775,3 +775,17 @@ The [Branching Cognition, Evidence Admission, Model Calibration and MIRROR WORLD
 - **B43/B83/B84/B101:** counterfactual baselines and independently measured environmental/social/economic impact outcomes.
 
 All related decisions remain OPEN pending owner review and acceptance evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — W12 financial, governance and impact decision evidence
+
+The [W12 Financial, Ledger, Governance, Marketplace and Impact Lifecycle Audit](NORYX7_W12_FINANCIAL_LEDGER_GOVERNANCE_IMPACT_AND_MARKETPLACE_LIFECYCLE_AUDIT.md) adds source evidence and design constraints to existing OPEN decisions without accepting ADRs or duplicating the decision series:
+- **B01/B06/B09/B10/B22/B24:** authenticated contributor/account identity, legal-entity/tenant scope, consent, principal propagation and action-specific authorization; front labels cannot create financial identity.
+- **B02/B05/B07/B10/B22/B24:** payment operation/attempt identity, provider idempotency, unknown-effect state, typed transaction/settlement receipts and no blind retry after ambiguous external effects.
+- **B03/B08/B23/B26/B27/B29:** immutable double-entry ledger, source-event idempotency, durable journal sequence, recovery, financial data segregation and retention.
+- **B42/B72/B77/B78/B95:** provider/bank reconciliation, treasury reservations, dual control, durable audit and disaster recovery.
+- **B43/B83/B84/B101:** separate contribution, provider settlement, ledger posting, marketplace delivery/payout, governance authorization, reward classification and independently measured impact.
+- **B05/B88/B90/B91/B97:** claim-level impact evidence, baseline/counterfactual, additionality, uncertainty, independent verifier and explicit dispute/correction lineage.
+- **B12/B25/B76:** qualified specialists and accountable human review for regulated, jurisdiction-specific or safety-critical decisions.
+
+All related decisions remain OPEN pending explicit owner review, legal operating-model review where relevant and acceptance evidence. The audit is architecture-only; no financial service or test campaign is claimed. W01–W12 remain PARTIAL.
