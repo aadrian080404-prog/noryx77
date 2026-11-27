@@ -642,3 +642,17 @@ The [Schema Compatibility, Contract Collisions and Interoperability Audit](NORYX
 - W06/W07: digests and structural verification do not establish semantic truth, source custody or real-world effect.
 - W08/W11: offline snapshot/outbox/acknowledgement need durable authenticated delivery and remote commit semantics.
 No schema registry or adapter is implemented by this document. No runtime changes or tests. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Memory, model, evidence and distributed execution continuation
+
+The [Memory, Model Routing, Evidence and Distributed Execution Reconciliation](NORYX7_MEMORY_MODEL_EVIDENCE_AND_DISTRIBUTED_EXECUTION_RECONCILIATION.md) advances all twelve lanes concurrently:
+- W01/W09: AES-GCM/HKDF primitives are present, but production KMS/HSM, rotation, revocation, recovery and audited key custody must be proven at composition root.
+- W02/W05: provider failover after arbitrary handler exceptions must distinguish pre-effect failure from ambiguous post-effect timeout; stable operation IDs and target idempotency are required.
+- W03/W08: encrypted local memory/outbox abstractions are in-process; tier transfer, durable backend, remote commit receipt and deletion propagation remain separate closure requirements.
+- W04/W10: model candidates and specialist assessments need issuer/evaluator identity, independence assumptions and calibrated task/domain evidence.
+- W06: campaign manifests generate cases/holdouts but do not execute or independently attest them; FINCH heuristic outputs are not calibrated probabilities.
+- W07: CyberRange symbolic synthetic actions and simulation evidence cannot be promoted to real-world observations.
+- W11: region/cell selection and replica labels do not constitute fenced durable placement or replication acknowledgements.
+- W12: provider success/effect, financial settlement and measured impact remain distinct states and evidence classes.
+The document proposes typed transfer, model, provider, remote-commit, placement and reality-observation receipts; no schema implementation or ADR acceptance is claimed. All W01–W12 remain PARTIAL.
