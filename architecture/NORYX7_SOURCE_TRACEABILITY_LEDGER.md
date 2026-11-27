@@ -1080,3 +1080,19 @@ Source-tree HEAD reviewed: `a5600924a8e12deb6f33e6adec3a23e2f880aa14`. Full anal
 | `core/self_improvement.py` | `2cc85de48becd7243e6d3d572dded25841587a08` | Proposal-only staged improvement and external admission boundary |
 
 External orchestrator, firewall, durable alert transport, KMS/HSM and cloud control-plane behavior were not inspected and are not ruled out.
+
+
+## 2026-11-28 — Temporal and causal consistency source reconciliation
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/state_journal.py` | `4ea3419cb05a4edbb228966ea2584894197caa83` | SQLite WAL/FULL, local unique sequence and contiguous replay; no signed distributed authority epoch or causal merge in this module |
+| `core/identity.py` | `e6e8e5b03135251baca489643f86c7d81a755a08` | Ed25519 identity/attestation with in-process trust registry; no durable distributed revocation epoch/time authority in inspected path |
+| `core/device.py` | `4f7d82ec5a1e40b595c4c341ab7d3ed551f3ac14` | Capability expiry checks caller-supplied `now` and `epoch`; no trusted clock or epoch issuer established in this module |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Snapshot carries issued_at and policy/artifact/state versions plus integrity digest; these fields do not alone prove signed time or global version authority |
+| `ecosystem/global_scale.py` | reviewed at branch snapshot | Region/cell health and version labels with in-process selection; no distributed lease/quorum/fencing demonstrated |
+| `core/observability.py` | `05dea0228b9b05c8684db7fe0aa890d7faa44485` | Event timestamp uses local `time.time()`; event ID is local buffer sequence, not global causal order |
+| `core/finch.py` | `4de84c583ba41faa6ff169dd7ed28f2306ed1d09` | Observation has numeric timestamp and graph relation edges; no clock-quality or ingest/valid-time model in inspected record |
+| `core/audit.py` | `61deb17b4e9afba8b2b5a582de79d8089d3b51b8` | In-process hash chain and HMAC checkpoint primitive; no durable external timestamp/global order established by module alone |
+
+See `NORYX7_GLOBAL_TEMPORAL_CONSISTENCY_CAUSAL_ORDER_AND_VERSION_AUTHORITY_ARCHITECTURE.md` for proposed temporal envelope, bitemporal semantics, HLC/causal context, scoped authority epochs, fencing, offline expiry and future fault-injection criteria. Bounded findings do not rule out external time, database or orchestration controls.
