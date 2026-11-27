@@ -998,3 +998,20 @@ Exact source-tree HEAD: `8a2bdafda79c03950ee52cbbe07296f2a01da6a6`. Full reconci
 | `noryx-browser/app/src/main/java/com/noryx/browser/MainActivity.kt` | `851ad411ca1c675b9f8207e09c953b109c29ac7f` | Gateway client lifecycle is not bound in inspected source to a short-lived network-presence lease |
 
 Tests inspected as existing source evidence (not executed in this pass): `core/test_egress.py`, `core/test_device.py`, `tests/test_runtime_offline.py`, `noryx7_runtime/test_platform_egress.py`. Existing tests cover local default-deny allowlisting, component/port/protocol binding and capability expiry/revocation; they do not establish OS-level mediation of all app network paths or physical radio control.
+
+
+## 2026-11-27 — Systems Understanding and cyber-range source anchors
+
+Exact source-tree HEAD: `badb8f12e6d45d6a497d938f45ab130a044bbd19`. Full reconciliation: `NORYX7_AUTHORIZED_SYSTEMS_UNDERSTANDING_OBSERVATION_CUSTODY_AND_RECONSTRUCTION_ASSURANCE_AUDIT.md`.
+
+| Source path | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/cyber_range.py` | `2896f5b5fc95d7e2653d380fa40c4f0dc772e4be` | Synthetic sandbox-only targets and symbolic techniques; owner authorization is principal/ID/expiry fields without signature, target/scope/method binding or revocation; report sets `verified=True` after symbolic construction |
+| `core/test_cyber_range.py` | `3d13abfe6ea0a48ba23d526e55cf41a212b2acc5` | Tests principal mismatch, expiry, sandbox-only target and symbolic report flag; does not validate signed owner scope, custody or empirical behavior |
+| `core/identity.py` | `e6e8e5b03135251baca489643f86c7d81a755a08` | Ed25519 agent identity/attestation and in-memory identity trust/revocation; not asset-owner authorization |
+| `core/actions.py` | `5e2fc212abea2873bb471b12e6fe6f5021664e97` | HMAC one-shot action grant binds action fingerprint, execution, principal key fingerprint, nonce and expiry; not shown composed with cyber-range target-owner scope |
+| `core/reasoning.py` | `7bf5d905f07b4805e3505e13408a685d81f7842b` | One plan-step-derived hypothesis and structural feasibility check; no capture-backed system reconstruction |
+| `core/verification.py` | `ca80253776bd66a1c0ff4ef32f019c85bf510927` | Output presence/task-result structural checks; no semantic model-to-observation verification |
+| `core/evaluation_campaign.py` | `44db107096abf02f0cde62ba0393f87eda465753` | Deterministic case/holdout manifest generation; no case execution or independent evidence attestation |
+
+Tests above were inspected, not executed. The source observations do not imply that external test infrastructure or controls are absent; they describe the named paths at the recorded snapshot.
