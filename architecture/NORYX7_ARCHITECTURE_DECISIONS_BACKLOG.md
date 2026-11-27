@@ -834,3 +834,17 @@ The [Polyglot Canonical Wire Protocol, Offline Commit and Session Binding Audit]
 - Bind sessions to authenticated principal, enrolled device/workload, audience, surface, expiry, policy epoch and revocation handle; client_id remains metadata only.
 - Publish cross-language golden/negative vectors and crash/partition/replay fault-injection suites before declaring interoperability.
 All decisions remain OPEN. The inspected acknowledgement path and in-memory queue are not to be represented as proof of remote commit. No source/runtime/test changes.
+
+
+## 2026-11-28 — Composition root and execution ownership decisions
+
+The [Execution Plane Ownership, Composition Root and Ingress Parity Audit](NORYX7_EXECUTION_PLANE_OWNERSHIP_COMPOSITION_ROOT_AND_INGRESS_PARITY_AUDIT.md) adds OPEN decisions; none is accepted:
+- Define logical plane owners and explicit delegation between HYPERSYNTH, Agent Fabric, JARVIS, RuntimeEngine, ToolExecutor, ModelFabric and provider transports.
+- Decide whether the production API routes must converge through a common ingress/session authority; specify any intentionally public route and its exact restricted capability.
+- Define signed CompositionManifest and startup/deployment attestation from actual dependency injection.
+- Select one authoritative operation-state owner and define journal projections, transaction boundaries, outbox/inbox, saga and reconciliation.
+- Specify health/readiness levels for structural presence, dependency health, identity/authorization, runtime execution and evidence/commit.
+- Inventory every runtime constructor and ingress route; reject unmanifested production paths and fallback principals.
+- Define cross-language Go/Kotlin/Rust/Python protocol implementation milestones, not just digest helpers.
+- Separate structural closure status from runtime, semantic, integration and external assurance status.
+All decisions remain OPEN. No source/runtime/test changes.
