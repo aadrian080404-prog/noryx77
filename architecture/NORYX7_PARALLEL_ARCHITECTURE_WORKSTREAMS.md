@@ -716,3 +716,20 @@ The [Disconnected-by-Default Network Presence, Access Leases and Egress Architec
 - W11 enforces per-region/per-workload egress, revocation propagation and network segmentation.
 - W12 budgets paid-provider usage without allowing governance or budget owners to override security deny rules.
 Physical radio control is explicitly separated from application-level egress denial; ordinary application code must not claim universal Wi-Fi/cellular shutdown capability. Seven gaps added. All workstreams remain PARTIAL.
+
+
+## 2026-11-27 — Systems Understanding, capture custody and reconstruction lifecycle
+
+The [Authorized Systems Understanding, Observation Custody and Reconstruction Assurance Audit](NORYX7_AUTHORIZED_SYSTEMS_UNDERSTANDING_OBSERVATION_CUSTODY_AND_RECONSTRUCTION_ASSURANCE_AUDIT.md) advances the common systems-understanding boundary:
+- W01: authenticate requester and asset owner/controller separately; bind delegation to exact target, interface, method, purpose and time.
+- W02: bind every observation or active test attempt to operation/authorization/attempt identity and reconcile ambiguous external outcomes.
+- W03: preserve immutable source captures, transformation lineage, consent/retention and durable custody.
+- W04: agents may request scope and analyze artifacts but cannot self-issue owner authorization.
+- W05: target-specific observation authorization composes with (and never replaces) the network egress lease.
+- W06: NEXUS/FRL distinguish observation, inference, hypothesis, formal proof, simulation and disputed claim; require source spans, counterexamples and independent verifier receipts.
+- W07: synthetic simulation reports cannot become real-world evidence or Reality Bridge authority.
+- W08/W09: browser/device captures require privacy, custody, local-first processing and separate external model egress approval.
+- W10: protocol/OS/hardware/industrial interpretation requires scope-specific qualification and human escalation.
+- W11: capture workers and evidence stores require region, key-custody and retention controls.
+- W12: permission to inspect does not imply ownership, compensation, publication or disclosure rights.
+Seven new gaps added. This remains architecture-only; all workstreams remain PARTIAL.
