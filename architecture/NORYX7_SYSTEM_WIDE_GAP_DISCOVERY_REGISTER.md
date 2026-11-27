@@ -684,3 +684,20 @@ These requirements are proposals pending ADR owner review. The existing RuntimeE
 | GAP-SKILL-REGISTRATION-AND-AUTHORITY-SEPARATION | W01/W04/W05/W10 | Keep skill/tool registration, qualification, delegation and per-operation authorization distinct and issuer-owned |
 
 These gaps record semantic interoperability requirements in inspected source definitions. They do not assert exploitability or universal absence of external adapters. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Memory, model, evidence and distributed execution gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-MEMORY-TIER-TRANSFER-AND-DURABLE-CUSTODY | W03/W06/W08/W09/W11 | Canonical memory envelope, durable tier adapters, authenticated replica acknowledgements, retention/deletion propagation and restore evidence |
+| GAP-KEY-LIFECYCLE-AND-PRODUCTION-KMS-COMPOSITION | W01/W03/W09/W11 | Production key custody, purpose/tenant separation, rotation, revocation, recovery, destruction and audited key access |
+| GAP-MODEL-ENSEMBLE-INDEPENDENCE-AND-CALIBRATION | W02/W04/W06/W10 | Distinguish fan-out from concurrency and independent evaluation; bind model/version/evaluator and calibrate confidence by task/domain |
+| GAP-PROVIDER-FAILOVER-UNKNOWN-EFFECT-AND-IDEMPOTENCY | W02/W05/W09/W11/W12 | Do not fail over after ambiguous post-effect exceptions without target lookup/idempotency; use stable operation/attempt and EffectReceipt |
+| GAP-OFFLINE-REMOTE-COMMIT-RECEIPT-AND-DURABLE-OUTBOX | W03/W08/W09/W11 | Durable outbox/inbox and signed remote commit receipt bound to exact execution, payload digest, sequence and target transaction |
+| GAP-EVALUATION-RUNNER-HOLDOUT-AND-INDEPENDENT-EVIDENCE | W02/W06/W09/W11 | Execute immutable case manifests, enforce holdout isolation and bind results to runner/evaluator/build/raw evidence |
+| GAP-SIMULATION-REALITY-EVIDENCE-AND-FINCH-CALIBRATION | W06/W07/W10/W11 | Separate synthetic evidence from real observations; define simulation fidelity and calibrate forecast scores against held-out observations |
+| GAP-GLOBAL-PLACEMENT-LEASE-AND-DEPLOYMENT-ATTESTATION | W05/W09/W11 | Durable atomic reservation, TTL/fencing, node attestation, renewal/release and measured deployment/restore proof |
+| GAP-SUPPLY-CHAIN-BUILD-PROVENANCE-AND-ROLLBACK | W01/W09/W11 | Bind source, dependency/SBOM, builder, reproducible artifact, trusted signer, approval, canary and rollback anchor |
+
+These requirements are bounded to the inspected source paths and do not assert vulnerabilities or universal absence of external implementations. W01–W12 remain PARTIAL.
