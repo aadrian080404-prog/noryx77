@@ -821,3 +821,16 @@ The [Authorized Systems Understanding, Observation Custody and Reconstruction As
 - Define specialist qualification and human escalation for protocol, OS, hardware and industrial domains.
 
 All decisions remain OPEN pending owner review, architecture acceptance and later implementation/isolated validation. The audit does not authorize active testing or modify the cyber-range runtime.
+
+
+## 2026-11-28 — Canonical wire, offline synchronization and session decisions
+
+The [Polyglot Canonical Wire Protocol, Offline Commit and Session Binding Audit](NORYX7_POLYGLOT_CANONICAL_WIRE_PROTOCOL_OFFLINE_COMMIT_AND_SESSION_BINDING_AUDIT.md) adds unresolved decisions; none is accepted:
+- Choose and freeze a deterministic canonical encoding profile (evaluate deterministic CBOR vs constrained canonical JSON) with exact Unicode, number, duplicate-key, null/absent, size and unknown-field semantics.
+- Define signature preimage, domain separation, algorithm agility, key ID, issuer/audience binding and replay/revocation rules.
+- Establish one schema registry and loss-aware adapters for core contracts, runtime contracts, gateway, Android/Kotlin, Go and Rust.
+- Specify durable outbox, operation/attempt/idempotency identities, remote acceptance vs effect vs commit receipts, unknown-outcome reconciliation and atomic tombstone.
+- Define journal namespace/owner, signed checkpoint, storage threat model, migration ledger and key lifecycle.
+- Bind sessions to authenticated principal, enrolled device/workload, audience, surface, expiry, policy epoch and revocation handle; client_id remains metadata only.
+- Publish cross-language golden/negative vectors and crash/partition/replay fault-injection suites before declaring interoperability.
+All decisions remain OPEN. The inspected acknowledgement path and in-memory queue are not to be represented as proof of remote commit. No source/runtime/test changes.
