@@ -1058,3 +1058,25 @@ Exact source-tree HEAD: `3045257dbce31c901dbac48077ce505908a21af4`. Full reconci
 | `services/jarvis-runtime-rs/src/lib.rs` | `035960c0d08f1db5825f01a78ce314f7055516c0` | serde_json envelope digest helper; not full canonical signed operation protocol |
 
 External reverse-proxy and deployment controls were not inspected and are not ruled out.
+
+
+## 2026-11-28 — Failure containment source anchors
+
+Source-tree HEAD reviewed: `a5600924a8e12deb6f33e6adec3a23e2f880aa14`. Full analysis: `NORYX7_CROSS_PLANE_FAILURE_CONTAINMENT_DEGRADED_MODES_AND_RECOVERY_CONTRACT.md`.
+
+| Source | Blob SHA | Bounded observation |
+|---|---|---|
+| `core/recovery.py` | `226193d08b0b8c57f275125e25b7823886ea163d` | Explicit local recovery state machine and monotonic in-process epoch; no distributed durable fencing shown |
+| `core/offline.py` | `6d0c5a76134fa679279406da1a514e628240debd` | Bounded encrypted outbox with execution AAD and digest; in-process records/sequence |
+| `core/provider_resilience.py` | `a678329d5b29a184a7b26ca9bc71ff0a232df136` | Bounded provider attempts; provider exceptions trigger exclusion/failover, but exception may follow external effect |
+| `ecosystem/global_scale.py` | reviewed at this HEAD | In-process region/cell health and capacity selection; no distributed reservation/fencing contract demonstrated |
+| `noryx7_runtime/lifecycle.py` | `71d1079f0cf1aa9cd70a097ad2a9e6365dce38b5` | CREATED/RUNNING/terminal local lifecycle; no durable unknown-effect state |
+| `noryx7_runtime/recovery.py` | `ecd5743a494a150e13556e5c3932b77a6b08aaa7` | Validates runtime journal sequence, identity and attestation continuity |
+| `core/agent_fabric.py` | `3704dd7bf66815274cc319c9583c45ae575f3d36` | Local trusted agent registration and principal dispatch callback |
+| `core/device_fabric.py` | `3b0ead031e03040d25bb7df3a716aaa50fa8591c` | Process-local device online metadata |
+| `core/egress.py` | `e50095f8a0265adfcac4812aa06778cece58fe83` | In-process default-deny egress allowlist |
+| `core/observability.py` | `05dea0228b9b05c8684db7fe0aa890d7faa44485` | Bounded in-memory event buffer with explicit capacity exhaustion |
+| `core/alerting.py` | `f8caee629f5c7e1ec0446c0a7d9c18f7cf3ac1b8` | Verified-event alert creation; delivery adapters external |
+| `core/self_improvement.py` | `2cc85de48becd7243e6d3d572dded25841587a08` | Proposal-only staged improvement and external admission boundary |
+
+External orchestrator, firewall, durable alert transport, KMS/HSM and cloud control-plane behavior were not inspected and are not ruled out.
