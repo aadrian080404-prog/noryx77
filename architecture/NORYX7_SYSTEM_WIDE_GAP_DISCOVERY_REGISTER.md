@@ -767,3 +767,18 @@ These are architecture closure requirements from bounded source inspection, not 
 | GAP-W11-DISTRIBUTED-NETWORK-LEASE-REVOCATION-AND-FAILURE-DOMAIN | W01/W09/W11 | Signed regional/workload lease distribution, bounded revocation latency, network segmentation and failover without scope expansion |
 
 These are bounded source/architecture gaps, not claims of a confirmed exploit or absence of external OS/network controls. All workstreams remain PARTIAL.
+
+
+## 2026-11-27 — Authorized systems understanding and evidence custody gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W07-SYSTEM-OWNER-AUTHORIZATION-AND-SCOPE-BINDING | W01/W02/W07/W09 | Signed, revocable asset-owner delegation bound to exact asset/interface/method/purpose/time, principal/device, policy epoch and prohibited scope |
+| GAP-W03-W06-OBSERVATION-CAPTURE-CUSTODY-AND-TRANSFORMATION-LINEAGE | W03/W06/W08/W09 | Immutable capture manifest with observer, authorization, consent, original digest, source spans, transformations, retention and custody events |
+| GAP-W06-SYSTEM-RECONSTRUCTION-CLAIM-AND-COUNTEREXAMPLE-LIFECYCLE | W06/W07/W10 | Versioned reconstruction models with claim-level evidence, observed/inferred/unknown distinction, competing hypotheses, coverage, counterexamples and revalidation |
+| GAP-W06-INDEPENDENT-RECONSTRUCTION-VERIFIER-AND-HELDOUT-ORACLE | W06/W09/W10 | Independent verifier identity/qualification, held-out traces/oracle, negative/boundary tests, reproducibility and failure-domain declaration |
+| GAP-W07-SYNTHETIC-REPORT-FLAG-AND-REALITY-EVIDENCE-SEPARATION | W06/W07/W09 | Typed simulation receipt and explicit separation from empirical observation, vulnerability confirmation and Reality Bridge authorization |
+| GAP-W08-W09-CAPTURE-DATA-PRIVACY-AND-EXTERNAL-MODEL-EXPORT | W03/W08/W09/W10 | Capture sensitivity, consent, data minimization, retention/deletion and separate purpose-bound network lease before external model/provider processing |
+| GAP-W10-SYSTEMS-UNDERSTANDING-SPECIALIST-QUALIFICATION | W06/W10 | Scope-specific protocol/OS/hardware/industrial qualification evidence, benchmark lineage, calibration and human escalation |
+
+These gaps are based on bounded inspection of named source paths; they are not claims of a confirmed vulnerability or authorization to test real targets. W01–W12 remain PARTIAL.
