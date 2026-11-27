@@ -752,3 +752,18 @@ These are closure requirements from bounded source inspection, not confirmed vul
 | GAP-W12-FINANCIAL-PRIVACY-AND-SAFEGUARDING | W01/W03/W08/W09/W12 | Data minimization, identity/ballot/beneficiary separation, consent, retention, fraud controls, incident response and accountable review |
 
 These are architecture closure requirements from bounded source inspection, not legal conclusions, confirmed vulnerabilities or claims that external controls do not exist. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Disconnected-by-default network presence and egress gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W08-DEFAULT-DENY-NETWORK-PRESENCE-LEASE | W01/W02/W05/W08/W09/W11 | Purpose-bound, short-lived, device/principal/audience-bound network lease and explicit disconnected/on-demand/session/maintenance/lockdown lifecycle |
+| GAP-W08-ANDROID-PER-APP-RADIO-REALITY-BOUNDARY | W08/W09 | Distinguish application egress denial, OS/VPN/device-owner enforcement and physical radio control; claims must match platform privilege and validation |
+| GAP-W08-WEBVIEW-SUBRESOURCE-AND-DIRECT-TRANSPORT-MEDIATION | W05/W08/W09 | Mediate WebView subresources, redirects, WebSockets, downloads, DNS and direct gateway/socket transports under a consistent policy |
+| GAP-W08-SESSION-AND-BACKGROUND-RECONNECT-LIFECYCLE | W01/W02/W08/W09 | Bind bearer/session lifecycle to network lease, user presence, idle/lock/logout, revocation and process teardown; prohibit silent background reauthentication |
+| GAP-W09-OS-ENFORCED-EGRESS-CONTROL-AND-BYPASS-INVENTORY | W05/W08/W09/W11 | Inventory and enforce all direct/native/proxy/DNS/IPv6/background paths through OS/container/network policy, not only local allowlist |
+| GAP-W03-W08-OFFLINE-OUTBOX-DURABILITY-AND-RECONCILIATION | W02/W03/W08/W09 | Durable encrypted outbox, signed remote receipt bound to exact operation and payload, no deletion/replay before authenticated commit/rejection |
+| GAP-W11-DISTRIBUTED-NETWORK-LEASE-REVOCATION-AND-FAILURE-DOMAIN | W01/W09/W11 | Signed regional/workload lease distribution, bounded revocation latency, network segmentation and failover without scope expansion |
+
+These are bounded source/architecture gaps, not claims of a confirmed exploit or absence of external OS/network controls. All workstreams remain PARTIAL.
