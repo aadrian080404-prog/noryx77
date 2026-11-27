@@ -782,3 +782,17 @@ These are bounded source/architecture gaps, not claims of a confirmed exploit or
 | GAP-W10-SYSTEMS-UNDERSTANDING-SPECIALIST-QUALIFICATION | W06/W10 | Scope-specific protocol/OS/hardware/industrial qualification evidence, benchmark lineage, calibration and human escalation |
 
 These gaps are based on bounded inspection of named source paths; they are not claims of a confirmed vulnerability or authorization to test real targets. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Polyglot protocol and offline commit gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-CANONICAL-WIRE-ENCODING-AND-SIGNATURE-PREIMAGE | W01/W04/W05/W06/W08/W09/W11 | Accepted canonical byte profile, exact signature preimage/domain separation, schema registry and Python/Kotlin/Go/Rust golden + negative vectors |
+| GAP-W02-W03-OFFLINE-OUTBOX-DURABILITY-AND-ATOMIC-TOMBSTONE | W02/W03/W08/W11 | Crash-safe durable enqueue/sequence, receipt verification + tombstone atomicity, restart/partition recovery and replay retention |
+| GAP-W02-W03-W05-REMOTE-COMMIT-RECEIPT-AND-IDEMPOTENCY | W02/W03/W05/W09/W11/W12 | Signed remote receipt binding operation/attempt/idempotency key/payload/effect/final version/server sequence; no blind retry on unknown outcome |
+| GAP-W01-W08-SESSION-PRINCIPAL-DEVICE-AUDIENCE-AND-REVOCATION | W01/W08/W09/W11 | Principal issuer, enrolled device, audience, session nonce, expiry, policy epoch and server-side revocation at enforcement boundary |
+| GAP-W03-W09-JOURNAL-NAMESPACE-CHECKPOINT-AND-MIGRATION | W03/W09/W11 | Journal namespace/owner, signed checkpoint, key lifecycle, schema migration ledger, cross-journal consistency and recovery evidence |
+| GAP-W04-W05-W09-POLYGLOT-TOOL-AND-RESULT-RECEIPT-COMPATIBILITY | W04/W05/W09 | Versioned typed tool/provider/result/effect receipts with explicit loss-aware adapters and conformance tests |
+
+The gaps are based on named source paths at the recorded snapshot. They do not establish that every deployment or external provider lacks these controls. All W01–W12 remain PARTIAL.
