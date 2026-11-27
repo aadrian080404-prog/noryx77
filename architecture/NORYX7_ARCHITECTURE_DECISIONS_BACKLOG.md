@@ -848,3 +848,17 @@ The [Execution Plane Ownership, Composition Root and Ingress Parity Audit](NORYX
 - Define cross-language Go/Kotlin/Rust/Python protocol implementation milestones, not just digest helpers.
 - Separate structural closure status from runtime, semantic, integration and external assurance status.
 All decisions remain OPEN. No source/runtime/test changes.
+
+
+## 2026-11-28 — Failure, degradation and recovery decisions
+
+The [Cross-Plane Failure Containment, Degraded Modes and Recovery Contract](NORYX7_CROSS_PLANE_FAILURE_CONTAINMENT_DEGRADED_MODES_AND_RECOVERY_CONTRACT.md) adds OPEN decisions:
+- Define global vs component-local mode authority and precedence across NORMAL, DEGRADED, DISCONNECTED, QUARANTINED, INCIDENT, LOCKDOWN, RECOVERY and VERIFIED_RESUME.
+- Choose durable distributed epoch/fencing authority and partition behavior; local RecoveryController epochs are insufficient as global fencing.
+- Define per-edge hard/soft dependency, timeout, circuit-breaker, fallback independence, cancellation and freshness contracts.
+- Define typed UNKNOWN_OUTCOME and reconciliation lifecycle for provider, browser, offline, financial and physical effects.
+- Select durable independent audit and alert-delivery acknowledgement contracts, including both-channel outage and buffer exhaustion.
+- Define node/agent/device lease expiry, revocation propagation and safe rejoin.
+- Define per-stream degraded capability allowlists and restoration evidence; no service health signal self-promotes trust.
+- Specify canary/rollback gates and independent approval for recovery after compromise.
+All decisions remain OPEN. No implementation or tests.
