@@ -748,3 +748,17 @@ The [Memory, Model Routing, Evidence and Distributed Execution Reconciliation](N
 - **B43/B83/B84/B101:** separate provider effect, financial settlement, ledger commit and independently measured impact.
 
 All corresponding decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — JARVIS, Browser, polyglot and observation decision evidence
+
+The [JARVIS, Browser, Polyglot Runtime and Observation Authority Reconciliation](NORYX7_JARVIS_BROWSER_POLYGLOT_AND_OBSERVATION_AUTHORITY_RECONCILIATION.md) adds source evidence to existing OPEN decisions without accepting or duplicating ADRs:
+- **B01/B02/B06/B07/B10/B22/B24:** JARVIS/HYPERSYNTH ownership, authenticated principal propagation, caller-plan provenance and one policy/execution authority.
+- **B01/B08/B09/B26/B27/B29:** browser device enrollment, gateway audience, origin/egress policy, observation source attestation and key custody.
+- **B02/B03/B07/B10/B22/B24:** durable JARVIS state reservations/commit, audit checkpoints, typed verification receipts and recovery.
+- **B04/B12/B25/B76:** wake/speaker/device distinction, agent qualification and independent source/evaluator provenance.
+- **B05/B88/B90/B91/B97:** Browser/transcript/sensor custody, NEXUS claim anchoring, FRL checker scope and MIRROR WORLD reality evidence admission.
+- **B42/B72/B77/B78/B95:** cross-language canonical encoding, signed operation/effect receipts, schema migration and node/device attestation.
+- **B43/B83/B84/B101:** W12 contribution/payment/settlement/refund/governance/impact outcome separation.
+
+All related decisions remain OPEN pending explicit owner review and acceptance evidence. W01–W12 remain PARTIAL.
