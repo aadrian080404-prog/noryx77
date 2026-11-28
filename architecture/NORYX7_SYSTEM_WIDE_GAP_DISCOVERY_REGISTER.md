@@ -1,0 +1,904 @@
+# NORYX7 — System-wide architecture gap discovery register
+
+**Status:** active discovery baseline; architecture-only; not a completeness claim  
+**Parent:** System-wide Architecture Closure / PR #212
+
+## 1. Purpose
+
+The architecture cannot be declared complete merely because every known plane has a document. Discovery must also find capabilities absent from the initial decomposition, overlapping implementations, hidden authority paths, missing lifecycle states and operational conditions that emerge across subsystem boundaries.
+
+The cryptographic inventory is a concrete example: the repository already contains crypto boundaries, envelope encryption, key lifecycle, secure channel, identity, attestation, trust-chain and multi-authorization components. Finding these later means the original architecture map was not sufficiently exhaustive. The response is not to bolt on an isolated crypto feature; it is to repeat discovery systematically across every plane and cross-cutting domain.
+
+This register controls discovery and reconciliation. It does not claim that every listed source has been exhaustively read or that proposed contracts are implemented.
+
+## 2. Independent status axes
+
+**Architecture status:** UNKNOWN, DISCOVERED, MAPPED, CONTRACTED, DECIDED, DEFERRED, FROZEN.
+
+**Implementation/evidence status:** ABSENT, PRESENT, PARTIAL, UNASSESSED, VERIFIED. VERIFIED is permitted only with evidence tied to an exact commit, configuration, environment and acceptance scope.
+
+Never collapse these axes. A present implementation can be architecturally unmapped; a contracted capability can be absent from code; a green test can verify only a narrow behavior.
+
+## 3. Gap taxonomy
+
+| Code | Class | Meaning |
+|---|---|---|
+| G01 | Missing | Required capability or lifecycle step has no identified owner/design |
+| G02 | Ambiguous | Responsibility, term, state or boundary admits multiple interpretations |
+| G03 | Duplicate | Multiple components claim the same canonical responsibility |
+| G04 | Conflict | Contracts or authorities contradict one another |
+| G05 | Orphan | Component, data, API, job or surface has no owning lifecycle |
+| G06 | Unbounded | Work, storage, retries, fan-out, cost, time or privilege lacks a hard bound |
+| G07 | Unverified | Claim lacks required evidence; not proof that code is defective |
+| G08 | Stale | Contract, schema, key, model, policy or artifact can outlive validity |
+| G09 | Unsupported | Required environment, mode, failure or interoperability case is not covered |
+| G10 | Unsafe fallback | Failure can silently become success, permissive behavior or ambiguous state |
+| G11 | Hidden coupling | Dependency on implicit call path, global state or undocumented ordering |
+| G12 | Governance gap | Approval, accountability, ownership, retention or escalation is undefined |
+
+## 4. Twelve parallel workstreams — discovery obligations
+
+| Stream | Domain | Required discovery beyond current ADRs | Main gap classes |
+|---|---|---|---|
+| W01 | Identity, trust and authority | Human, service, agent, device, workload and tenant principals; enrollment, binding, delegation, consent, policy epochs, revocation, emergency authority, break-glass and trust-root recovery | G01–G05, G08, G10, G12 |
+| W02 | Runtime topology | Every process entrypoint, coordinator, engine, facade, worker, plugin host, JARVIS lifecycle, startup/shutdown, upgrade and compatibility path | G02–G05, G11 |
+| W03 | State, data and recovery | All stores, journals, caches, checkpoints, event streams, snapshots, replicas, migrations, retention, erasure, restore and uncertain external side effects | G01–G06, G08–G10 |
+| W04 | Agent fabric | Every agent type and invocation path, capability manifest, trust binding, lease, delegation, supervision, collaboration, cancellation and result admission | G02–G06, G10–G11 |
+| W05 | Routing and resources | Provider/model choice, agent allocation, task scheduling, placement, dispatch, quotas, reservations, fairness, backpressure and cost accounting | G02, G04, G06, G11 |
+| W06 | Semantics, knowledge and evidence | NEXUS schemas, ontology, canonicalization, source lineage, claims, uncertainty, contradiction, temporal validity, formal proof and scientific evidence | G01–G04, G07–G09 |
+| W07 | MIRROR WORLD | Synthetic web, cyber range, software models, digital twins, physical/environmental/economic worlds, simulation fidelity, experiment isolation and Reality Bridge | G01–G04, G06–G10 |
+| W08 | Surfaces and distribution | Browser, voice, multimodal, terminal, mobile, desktop, API, edge/cloud/offline, session handoff, local authority and synchronization | G02–G06, G08–G11 |
+| W09 | Security and assurance | Cryptographic boundaries, key custody, secure boot, attestation, channel security, authorization replay, audit, threat model, incident response and supply chain | G01–G10, G12 |
+| W10 | Domain fabrics | Health, law, finance, science, engineering, agriculture, ecology, climate, education, logistics and public-interest/community domains | G01–G04, G07–G09, G12 |
+| W11 | Performance and operations | SLOs, capacity, telemetry, quotas, queueing, overload, degradation, fairness, cost, deployment, upgrades, incident and disaster recovery | G01–G06, G08–G10 |
+| W12 | Product and ecosystem | Tenant lifecycle, marketplace, integrations, financial rails, billing, metering, community projects, contributor identity, governance and dispute handling | G01–G05, G08–G12 |
+
+All streams progress concurrently. Dependencies constrain contract acceptance, not discovery: a stream may record a dependency before its upstream decision is frozen.
+
+## 5. Cross-cutting capability checklist
+
+Search for these across all planes, not only in modules whose names suggest them:
+
+1. Identity, authentication, authorization, delegation, consent and revocation.
+2. Cryptography, key custody, key rotation, algorithm agility, secure boot, attestation and trust recovery.
+3. Data classification, privacy, tenant isolation, retention, deletion, export, residency and replica reconciliation.
+4. Provenance, evidence, epistemic state, source independence, temporal validity and audit integrity.
+5. Formal methods, proof checking, theorem/counterexample handling, scientific validation and model fidelity.
+6. Multimodal ingestion, transformation, alignment, spatial/time coordinates and original-artifact preservation.
+7. Human oversight, approvals, emergency stop, appeal, accountability and operator separation.
+8. Supply-chain integrity for source, dependencies, builds, models, datasets, plugins and update channels.
+9. Scheduling, quotas, budgets, metering, fairness, overload, backpressure and graceful degradation.
+10. Federation, discovery, interoperability, protocol/schema negotiation, offline operation and conflict resolution.
+11. Observability, audit, alerting, incident response, forensics, backup, restore and disaster recovery.
+12. Self-improvement, configuration/policy evolution, staged rollout, rollback and immutable trust roots.
+13. Product lifecycle: onboarding, setup, account recovery, support, billing, portability, deletion and exit.
+14. Domain validity: jurisdiction, standards, units, uncertainty, expert review and prohibited inferences.
+15. Physical-world safety: device capabilities, actuator bounds, fail-safe states, environmental conditions and human override.
+16. Accessibility, localization, usability, user comprehension and consent UX.
+
+## 6. Mandatory questions for every component
+
+For every source file, service, API, agent, tool, store, job, surface, model or domain package, record:
+
+- What need does it serve, and what is out of scope?
+- Is it code, configuration, schema, documentation, fixture, adapter or external dependency?
+- Who owns its lifecycle? Which plane is primary and which are secondary?
+- Who may invoke it, under what identity, scope, consent and capability?
+- What are its inputs, outputs, side effects and canonical identifiers?
+- Which schemas, versions, units, canonicalization rules and provenance are required?
+- Which state does it own, read, mutate, replicate or cache?
+- What are startup, shutdown, expiry, cancellation and upgrade semantics?
+- What happens on timeout, partial completion, duplicate request, crash, partition and uncertain acknowledgement?
+- Which limits bound CPU, memory, tokens, fan-out, storage, retries, time and money?
+- What is observable and audited, and what sensitive data must not be logged?
+- What are the threat, abuse, misuse and safety cases?
+- How is it isolated, backed up, restored, migrated and decommissioned?
+- What is its compatibility and deprecation contract?
+- What measurable evidence would later establish contract satisfaction?
+
+## 7. Repository discovery protocol
+
+The source inventory must include more than obvious source modules:
+
+1. Full tracked tree: source, tests, docs, examples, scripts, migrations, schemas, assets and generated files.
+2. Build/runtime manifests: packaging, Android/Gradle, lockfiles, containers, build definitions and toolchains.
+3. CI/CD and automation: workflows, release pipelines, secret references, permissions, artifact retention and deployment configuration.
+4. Entry points and invocation graph: imports alone are insufficient; trace constructors, factories, registries, callbacks, CLI/API routes, event handlers and background workers.
+5. Persistence and external I/O: databases, files, caches, queues, network clients, subprocess boundaries, device APIs and third-party providers.
+6. Configuration and environment: defaults, precedence, secret injection, feature flags, tenant settings and unsafe fallback behavior.
+7. Tests and fixtures: evidence of intended behavior, not proof that untested paths or production deployments are complete.
+8. Existing architecture references: reconcile overlapping and historical documents; preserve provenance and identify stale claims.
+9. Product requirements: include capabilities described in plans even when no implementation path exists.
+10. External dependencies: trust, availability, licensing, data handling, versioning and exit strategy.
+
+Search results and filename matches are discovery leads, not exhaustive proof. Every source review records inspected ref/commit, paths and scope.
+
+## 8. Closure evidence per workstream
+
+A workstream is not closed until it has:
+- complete source/capability inventory with explicit inspected scope;
+- one primary owner per responsibility and documented shared contracts;
+- authority, identity and trust dependencies mapped;
+- canonical data, state and event lifecycles;
+- normal, failure, degraded, cancellation and recovery paths;
+- threat, privacy, safety and abuse cases;
+- bounded resource and operational assumptions;
+- versioning, compatibility, migration and deprecation rules;
+- explicit decisions or deferred items with owner and rationale;
+- traceability from requirements to components to later acceptance criteria.
+
+No 100% score is permitted while any in-scope category remains UNKNOWN. DEFERRED is transparent, not equivalent to complete.
+
+## 9. Current cycle findings and priorities
+
+ADR-002 through ADR-005 remain proposals. Unresolved evidence includes runtime call-site/constructor inventory, all persistence namespaces and recovery consumers, every direct agent invocation, and provider/placement ownership.
+
+The source traceability ledger identifies crypto-related families including core/crypto.py, core/key_lifecycle.py, core/secure_channel.py, core/identity.py, core/attestation.py, core/trust_chain.py, core/secure_boot.py, core/multiauth.py, core/authorization_replay.py, core/security_integration.py, core/secure_memory.py and core/secure_storage.py. This is a discovery inventory only. It does not establish complete key custody, algorithm agility, rotation under partition, trust-root recovery, certificate lifecycle, hardware-backed protection or post-quantum migration.
+
+The next reconciliation cycle must treat W01/W09 cryptographic authority and trust lifecycle, W02/W03 runtime-state lifecycle, W04/W05 invocation/resource lifecycle, and W06 evidence/semantic lifecycle as coupled design clusters while continuing W07–W12 discovery in parallel.
+
+## 10. Freeze prohibition
+
+Architecture freeze is prohibited while an in-scope plane or cross-cutting capability is UNKNOWN; a source family is unclassified; authority or state ownership is contradictory; a required failure/recovery path is undefined; a critical assumption has no owner/disposition; traceability is broken; or the architecture depends on unbounded or implicit behavior.
+
+This register does not authorize integration, implementation, testing, deployment or merge. Those phases begin only after explicit architecture-freeze approval.
+
+## Additional gaps discovered — 2026-11-22
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-INGRESS-01 | conflicting / ambiguous | `web/app.py`: direct `/api/chat` vs gateway-authenticated `/v1/execute` | Route-by-route canonical ingress/auth policy and upstream enforcement evidence |
+| G-CONTEXT-01 | unbounded trust / incomplete provenance | `jarvis/context/authorized.py` | Versioned source manifest, tenant/purpose scope, consent, classification, retention and attestation |
+| G-OBSERVATION-01 | unverified / stale evidence | `jarvis/observation/fabric.py` | Trusted capture time, monotonic sequence, digest/signature, freshness and anti-replay |
+| G-PERCEPTION-01 | authority ambiguity | `jarvis/perception/audio.py` | Keep wake event separate from identity, explicit user intent and ActionGate authorization |
+| G-CONSENT-01 | incomplete lifecycle | `core/user_understanding.py` | Durable purpose-specific consent, inference lineage, correction, deletion and tombstones |
+| G-CYBER-01 | weak authorization evidence | `core/cyber_range.py` | Signed owner authorization and independent Reality Bridge policy gate |
+| G-DEVICE-01 | local-only selection | `core/device_fabric.py` | Attested enrollment, leases, revocation, capacity/residency-aware selection |
+| G-DISTRIBUTED-01 | declared-not-proven security | `core/distributed.py` | Cryptographic shard manifest, key custody, replication and anti-rollback |
+| G-SCALE-01 | in-memory control-plane primitive | `ecosystem/global_scale.py` | Durable queue, atomic capacity lease, fencing, deduplication and reconciliation |
+| G-PROVIDER-01 | underspecified adapter contract | `jarvis/providers/base.py` | Versioned typed provider contract, usage, privacy, timeout, cancellation and idempotency |
+
+These are architecture discovery findings, not test-proven defects.
+
+## Additional assurance and operational gaps — 2026-11-23
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-SECOPS-01 | local-only / non-durable | `core/observability.py` | Authenticated durable events, trusted sequence, incident and containment owners |
+| G-EGRESS-01 | enforcement ambiguity | `core/egress.py` | Prove mandatory mediation and close DNS/redirect/proxy/socket bypasses |
+| G-SUPPLY-01 | incomplete provenance | `core/supply_chain.py` | SBOM, builder provenance, signer lifecycle, independent approvals and rollback |
+| G-SELF-01 | governance boundary unresolved | `core/self_improvement.py` | Independent external admission, protected zones and release signer separation |
+| G-OFFLINE-01 | digest mistaken for authenticity risk | `core/offline.py` | Signed snapshot, device/tenant binding, trust root and bounded revocation freshness |
+| G-OUTBOX-01 | in-memory / indeterminate effects | `core/offline.py` | Durable outbox, receipt, deduplication, delivery semantics and reconciliation |
+| G-ANCHOR-01 | hardware root absent | `core/offline_anchor.py` | Protected storage/TPM/HSM or explicit reduced-assurance mode |
+| G-SEMANTIC-01 | structural verification overclaim | `core/verification.py`, `core/reasoning.py` | Evidence-backed semantic and domain validation levels |
+| G-CONFIDENCE-01 | uncalibrated score | `core/metacognition.py`, `core/universal_intelligence.py` | Name score semantics and establish calibration/validation protocols |
+| G-FREEZE-01 | structural completeness conflated with closure | `core/architecture_gate.py` | Separate source/callsite/deployment/evidence-backed freeze manifest |
+| G-DOMAIN-01 | specialist qualification missing | `core/universal_intelligence.py` | Domain manifests, jurisdiction, qualified review and liability ownership |
+
+These are architecture discovery findings, not test-proven defects.
+
+## Additional four-front, memory and ecosystem gaps — 2026-11-23
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-FRONT-ID-01 | unsafe default / identity ambiguity | `ecosystem/boundaries.py` | Front labels cannot substitute for issuer-verified principals |
+| G-DISPATCH-01 | coarse lifecycle / idempotency ambiguity | `ecosystem/runtime_dispatch.py` | Separate intent/idempotency/execution/action/receipt and indeterminate outcomes |
+| G-MEMORY-REPLICA-01 | declared redundancy | `ecosystem/global_fabric.py` | Verify replica identity, health, independent failure domains and content digest |
+| G-MEMORY-DELETE-01 | incomplete data lifecycle | `ecosystem/global_fabric.py` | Tenant isolation, retention, tombstones and anti-resurrection across tiers/backups |
+| G-AUTH-INDEX-01 | local cache mistaken for authority | `ecosystem/global_fabric.py` | Signed issuer chain, expiry, epoch, revocation and cache freshness |
+| G-PRODUCT-IMPL-01 | architecture intent vs implementation ambiguity | `architecture/BUSINESS_PROJECT_FABRIC.md`; inspected `ecosystem/` inventory | Classify payment/ledger/marketplace/community as implemented, external, planned or unknown |
+| G-FUNDS-SEG-01 | ownership/ledger boundary | Business Project Fabric | Segregated beneficial ownership, regulated payment boundary, double-entry settlement and disputes |
+| G-COMMUNITY-GOV-01 | governance and safeguarding | Community architecture requirements | Membership/appeal/conflict/safety/compensation/exit and independent fund audit |
+| G-IMPACT-MEASURE-01 | impact measurement overclaim risk | Environmental/community architecture requirements | Baseline, boundary, net impact, uncertainty and independent measurement |
+
+These are architecture discovery findings, not test-proven defects.
+
+
+## Additional agent/runtime lifecycle gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-AGENT-OWNER-01 | overlapping authority/dispatch surfaces | `core/agent_fabric.py`, `core/operational_fabric.py`, `core/coordination.py`, `core/agent_mesh.py` | Complete constructor/call-site graph; define registry, selection, delegation, execution, admission and commit owners |
+| G-AGENT-MESH-01 | discovery label exceeds enforcement evidence | `core/agent_mesh.py` | Define authenticated membership, capabilities, liveness lease, capacity and policy enforcement or retain as role lookup only |
+| G-AGENT-LIVE-01 | local heartbeat mistaken for distributed liveness | `core/agent_runtime.py` | Signed heartbeat, lease expiry, failure detector, fencing and partition semantics |
+| G-AGENT-CAPACITY-01 | plan truncation semantics unresolved | `core/coordination.py` | Reject, queue, wave-delegate or explicitly defer excess steps; never silently imply whole-plan completion |
+| G-CONSENSUS-TYPE-01 | universal equality consensus overreach | `core/coordination.py` | Typed comparison, uncertainty, evidence independence and domain-specific disagreement handling |
+| G-DAG-PARALLEL-01 | topological order confused with parallel execution | `noryx7_runtime/scheduler.py`, `noryx7_runtime/engine.py` | Specify bounded concurrent executor, dependency barriers, conflicts, cancellation, fairness and deterministic admission |
+| G-EFFECT-UNKNOWN-01 | FAILED does not prove no external side effect | `noryx7_runtime/engine.py`, `noryx7_runtime/contracts.py` | Add indeterminate/reconciliation states, idempotency and authoritative adapter receipts; prohibit blind retry |
+| G-PLANE-FREEZE-01 | path existence confused with architecture closure | `core/architecture_gate.py`, `core/architecture_registry.py` | Separate structural gate from evidence-backed source/callsite/boundary/test/deployment freeze manifest |
+
+These are architecture discovery findings, not test-proven defects.
+
+
+## Additional cognitive/evidence/global-scale gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-EVIDENCE-LADDER-01 | assurance levels conflated | `core/evaluation.py`, `core/metacognitive_challenge.py`, `core/verification.py` | Define explicit structural/synthetic/independent/empirical/operational evidence levels and promotion criteria |
+| G-EVAL-MANIFEST-01 | evaluation evidence lacks complete governance | `core/evaluation_campaign.py`, `core/evaluation.py` | Signed manifests, evaluator identity, result uniqueness, holdout controls, statistical power and durable approval |
+| G-FINCH-CALIBRATION-01 | heuristic forecast can be mistaken for probability | `core/finch.py` | Temporal backtest, base rates, calibration, confidence intervals, drift and provenance |
+| G-MIRROR-DOMAIN-01 | physical/domain simulation validity unproven | `core/reasoning.py`, `core/finch.py` | Domain-specific model validation, uncertainty, external holdout and Reality Bridge safety |
+| G-MEDIA-CUSTODY-01 | media digest/locator is not secure custody | `core/multimodal.py` | Authenticated locator, encryption, consent, tenant, retention/deletion and lineage |
+| G-GLOBAL-DURABILITY-01 | global fabric primitives are local/in-memory | `core/distributed.py`, `ecosystem/global_scale.py` | Durable queues, authenticated membership, leases, replication, autoscaling, quotas and DR |
+| G-RESEARCH-EGRESS-01 | HTTPS fetch not equivalent to safe egress | `core/frontier_capabilities.py` | DNS/IP and redirect policy, private-address denial, content isolation, source trust and provenance |
+| G-PROVIDER-ATTEST-01 | provider `verified` field is self-asserted | `core/frontier_capabilities.py` | Signed receipts, response/quote binding, replay/idempotency, human confirmation and reconciliation |
+| G-COLLAB-INDEPENDENCE-01 | agent diversity not equivalent to independent evidence | `core/collaboration.py` | Model/provider/evidence lineage, independent source policy and disagreement adjudication |
+
+These are architecture discovery findings, not test-proven defects.
+
+
+## Additional NEXUS, research, specialist and impact gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-CLAIM-LINEAGE-01 | semantic lineage absent from inspected verifier path | `core/verification.py`, `core/reasoning.py` | Typed claims, source spans, immutable artifact identity, support/contradiction links, temporal validity and reviewer scope |
+| G-SOURCE-AUTHORITY-01 | source authenticity/authority not established by digest | `core/frontier_capabilities.py` | Authenticated publisher/source identity, authority scope, capture time, correction/retraction and source independence |
+| G-EGRESS-REDIRECT-01 | network destination enforcement incomplete in inspected fetch path | `core/frontier_capabilities.py` | DNS/IP/private-address controls, redirect revalidation, proxy handling and mandatory egress mediation |
+| G-CONTENT-INSTRUCTION-01 | retrieved content can cross trust boundary | `core/frontier_capabilities.py` | Explicit untrusted-data/instruction separation, parser isolation and prompt-injection-resistant ingestion contract |
+| G-SPECIALIST-QUAL-01 | routing label can be mistaken for qualified competence | `core/universal_intelligence.py`, `core/subtask_uif.py` | Versioned qualification manifest, independent assessment, jurisdiction, validity/expiry and escalation |
+| G-SUBTASK-SEMANTIC-01 | structural subtask verification can be mistaken for semantic truth | `core/subtask_verification.py` | Bind each result to evidence, semantic validator, reviewer and exact claim scope |
+| G-PROVIDER-RECEIPT-01 | provider response integrity and effect certainty incomplete | `core/frontier_capabilities.py` | Signed receipt binding request/response/quote/recipient/amount/time/idempotency and reconciliation |
+| G-MODEL-VALIDITY-01 | simulation validity not established by structural feasibility | `core/reasoning.py`, `core/finch.py` | Model manifests, calibration, independent validation, uncertainty, OOD envelope and field transfer criteria |
+| G-IMPACT-BASELINE-01 | project activity can be misreported as net impact | domain assurance and community architecture | Baseline, counterfactual, additionality, leakage/rebound, lifecycle boundary, uncertainty and independent measurement |
+| G-CONTRIBUTOR-SAFETY-01 | contributor safeguards/fair compensation not evidenced in inspected ecosystem modules | `ecosystem/` inventory; community requirements | Voluntary terms, safety/insurance, safeguarding, grievance, stop-work authority, compensation and exit |
+| G-FUNDS-LEDGER-02 | fund categories and project restrictions lack source-level ledger trace in inspected scope | `architecture/BUSINESS_PROJECT_FABRIC.md` | Beneficial ownership, segregated funds, double-entry ledger, payment reconciliation, refunds/disputes and independent audit |
+
+These are architecture discovery gaps, not test-proven defects. The inspected `ecosystem/` directory is not a claim about all repository subtrees or external services.
+
+
+## Additional ingress, memory, offline and operational trust gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-SESSION-PRINCIPAL-02 | identity binding incomplete | `gateway/auth.py`, `gateway/runtime_adapter.py` | Bind session to enrolled principal, issuer, device/workload, audience, scope, key ID and revocation epoch; client_id is metadata only |
+| G-SESSION-REVOCATION-01 | revocation lifecycle absent in inspected token authority | `gateway/auth.py` | Server-side session registry or revocation epoch, logout/compromise handling, key rotation and nonce/replay policy |
+| G-MEMORY-CONTEXT-SCOPE-01 | context hydration not execution-scoped | `core/context.py` | Apply explicit execution/principal/tenant scope and record authorized sharing grants |
+| G-MEMORY-DEGRADED-01 | silent empty-context fallback | `core/context.py` | Typed complete/empty/partial/stale/denied/unavailable state; prohibit silent downgrade for critical tasks |
+| G-OFFLINE-DURABILITY-02 | encrypted queue is process-local | `core/offline.py` | Durable transactional outbox with crash recovery, sequence and signed acknowledgement chain |
+| G-OFFLINE-EFFECT-UNKNOWN-02 | pending record can be removed after exception | `core/offline.py` | Preserve intent on uncertain dispatch; reconcile using idempotency key and authoritative receipt; compensate when required |
+| G-STATE-ROOT-01 | local digest not independent trust root | `core/state_journal.py` | Protected signed checkpoint/root, key lifecycle and cross-store recovery protocol |
+| G-RECOVERY-DISTRIBUTED-01 | recovery lock is process-local | `core/recovery.py` | Define distributed epoch/fencing and behavior across nodes, partitions and restarts |
+| G-EGRESS-ENFORCEMENT-02 | allowlist not proven at network boundary | `core/egress.py` | Mandatory socket/DNS/redirect/proxy enforcement and bypass tests after architecture freeze |
+| G-PROVIDER-RETRY-SAFETY-01 | generic exception failover may duplicate external effect | `core/provider_router.py` | Typed failure certainty, unique idempotency, receipt and reconciliation before retry |
+| G-RESOURCE-PLACEMENT-01 | static resource choice lacks live hard constraints | `core/resource_router.py` | Residency, jurisdiction, capacity, health, cost, energy and quota-aware placement |
+| G-RELEASE-PROVENANCE-02 | artifact signature does not cover complete release chain | `core/supply_chain.py`, `core/self_improvement.py` | SBOM/build provenance, independent approvals, signer lifecycle, staged promotion and rollback |
+| G-SECURITY-EVENT-DURABILITY-02 | security events are process-local | `core/observability.py` | Durable protected event stream, incident owner, alert acknowledgement and containment audit |
+| G-POLYGLOT-DEPLOYMENT-01 | polyglot source presence mistaken for integrated deployment | `render.yaml`, Go/Rust service entry points | Authoritative service inventory, service identity, API compatibility, health, secrets, rollout and DR contracts |
+
+These are architecture discovery gaps, not test-proven defects. The context-scope finding is a source-level observation; no runtime behavior was changed or tested in this architecture-only phase.
+
+
+## Additional structural gate, secure memory, audit and platform assurance gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-PLANE-GATE-SCOPE-02 | structural predicate overclaimed risk | `core/architecture_gate.py`, `core/architecture_registry.py` | Evidence-backed per-plane manifest with source/callsite/integration/trust/enforcement/test/deployment references and signed approvals |
+| G-SECURE-MEMORY-DURABILITY-01 | encrypted interface backed by process-local map | `core/secure_memory.py`, `core/secure_storage.py` | Durable backend, transactional writes, crash recovery, replica consistency and protected key lifecycle |
+| G-MEMORY-METADATA-01 | encrypted memory schema incomplete for governance | `core/secure_memory.py` | Tenant/principal, consent/purpose, source artifact, retention/expiry, tombstones and derived-data deletion |
+| G-AUDIT-CHECKPOINT-CUSTODY-01 | authenticated checkpoint not externally retained by audit class | `core/audit.py` | Durable append-only event custody, external checkpoint retention, trusted time, signer/key governance and restore proof |
+| G-AGENT-SKILL-QUAL-02 | skill registration confused with verified competence | `core/agent_skills.py` | Versioned qualification manifest, scope/jurisdiction, reviewer identity, validity and escalation |
+| G-PLATFORM-GRANT-01 | local grants not issuer-attested | `core/platform.py`, iOS adapter | Signed grants, enrollment, hardware attestation, remote revocation and policy freshness |
+| G-MOBILE-REPLAY-DURABILITY-01 | consumed-action replay set process-local | iOS adapter | Durable or server-authoritative idempotency/replay record and crash/restore semantics |
+| G-BROWSER-ISOLATION-ASSURANCE-01 | static marker scan not runtime security proof | `ecosystem/browser_isolation.py` | Build/dependency/runtime network review, OS permission analysis, WebView threat model and variant coverage |
+| G-TERMINAL-IMPLEMENTATION-01 | target architecture not located as implementation in inspected tree | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md`, recursive tree snapshot | Classify as planned until source/runtime path exists; then trace sandbox, remote identity, cancellation, secret and audit lifecycle |
+
+These are architecture discovery gaps, not test-proven defects. No claim is made about code outside the inspected source snapshot.
+
+
+## Additional agent/evidence/MIRROR WORLD/global-impact gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-AGENT-DISPATCH-OWNER-02 | overlapping local dispatch authorities | `core/agent_core.py`, `core/agent_fabric.py`, `core/agent_mesh.py`, `core/coordination.py`, `core/operational_fabric.py` | Canonical lifecycle owner, adapters, request/attempt/lease IDs, cancellation/retry/effect and durable receipts |
+| G-AGENT-DAG-COVERAGE-01 | assignment truncation semantics | `core/coordination.py` | Explicit DAG scheduler, full step coverage, dependency semantics, concurrency, backpressure and fairness |
+| G-CONSENSUS-INDEPENDENCE-02 | distinct agent IDs mistaken for independent evidence | `core/coordination.py` | Independence groups for model/provider/data/team/failure domain and correlated-error policy |
+| G-SEMANTIC-EVIDENCE-02 | structural verification marker/output presence not semantic support | `core/verification.py`, `core/subtask_verification.py`, `core/universal_intelligence.py` | Claim-source anchoring, entailment, contradiction graph, calibrated uncertainty and reviewer admission |
+| G-EVAL-CAMPAIGN-EVIDENCE-01 | campaign manifest/approval predicate not executed campaign proof | `core/evaluation_campaign.py` | Immutable results, evaluator identity, holdout custody, execution provenance, reproducibility and independent sign-off |
+| G-MIRROR-WORLD-VALIDITY-02 | deterministic scenario execution not real-world validity | `architecture/NORYX7_MIRROR_WORLD_ARCHITECTURE.md`, `core/reasoning.py` | Domain model manifests, calibration, independent holdout, uncertainty, OOD envelope and Reality Bridge safety case |
+| G-FINCH-FORECAST-CALIBRATION-01 | forecast-shaped output without demonstrated calibration | `core/finch.py` | Fixed target/horizon, leakage-safe temporal holdout, proper scoring, calibration and drift monitoring |
+| G-GLOBAL-MEMORY-REPLICA-02 | replica labels counted without independent health/durability proof | `ecosystem/global_fabric.py` | Replica identity/health, failure-domain separation, payload durability, digest agreement and repair protocol |
+| G-GLOBAL-IDENTITY-AUTHORITY-02 | local identity/session index not canonical issuer/revocation service | `ecosystem/global_fabric.py` | Issuer chain, tenant/session/device scope, expiry, revocation epoch and freshness policy |
+| G-W12-LEDGER-OPERATIONS-01 | finance/community docs are target architecture not service proof | `architecture/BUSINESS_PROJECT_FABRIC.md`, ecosystem inventory | Regulated payment boundary, double-entry ledger, segregated funds, settlement/disputes and independent audit |
+| G-W12-IMPACT-OUTCOME-02 | activity counts can be mistaken for net impact | `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, lifecycle boundaries, leakage/rebound, uncertainty, independent verification and durability monitoring |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Additional tool/provider/protocol/effect gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-TOOL-AUTH-CONTEXT-01 | authorization context too narrow at registry seam | `core/tool_protocol.py` | Signed principal/tenant/session/device, policy epoch, target, risk and exact action binding |
+| G-TOOL-PROVENANCE-01 | tool@version label is not artifact/lineage provenance | `core/tool_protocol.py` | Immutable artifact/build digest, input/output digest, schema, source and authorization receipt |
+| G-PROVIDER-FAILOVER-EFFECT-01 | generic exception treated as retry/failover trigger | `core/provider_resilience.py` | Provider-specific effect certainty, operation lookup, idempotency and compensation state machine |
+| G-PROVIDER-IDEMPOTENCY-01 | attempt ID can repeat across separate invocations | `core/provider_resilience.py` | Caller-supplied durable operation ID and provider-supported idempotency key |
+| G-HTTP-EGRESS-DNS-01 | URL/TLS/redirect validation not socket/DNS isolation | `core/http_provider.py`, `core/egress.py` | Canonical DNS resolution, resolved-IP policy, pinning and mandatory transport mediation |
+| G-TRACE-DURABILITY-01 | execution hash chain exists only in process memory | `core/execution_trace.py` | Durable append-only storage, external checkpoint, trusted time, signer and restore semantics |
+| G-TRACE-COMPLETENESS-01 | local chain cannot prove omitted events were never emitted | `core/execution_trace.py` | Independent dispatch receipts, sequence authority and external head anchoring |
+| G-PROVIDER-QUALIFICATION-01 | provider selection does not encode residency/semantic equivalence | `core/provider_router.py`, `core/provider_resilience.py` | Signed provider manifest, allowed data class/region, capability equivalence, SLO/cost and revocation |
+| G-OFFLINE-PROVIDER-RECONCILIATION-01 | offline queue and provider effect state not shown as one durable lifecycle | `core/offline.py`, provider adapters | Unified intent/idempotency/receipt/indeterminate/remote-reconcile protocol |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Additional memory, crypto, multimodal and global placement gaps — 2026-11-24
+
+| Gap | Class | Evidence anchor | Required closure |
+|---|---|---|---|
+| G-MEM-CONTEXT-EXEC-01 | execution scope not propagated into memory query | `core/context.py` | Pass execution ID into storage query; typed hydration result and explicit degraded context |
+| G-MEM-CUSTODY-01 | memory schema lacks tenant/consent/retention/deletion lineage | `core/memory.py`, `core/secure_memory.py` | Canonical scoped memory envelope, tombstones and derived-data deletion graph |
+| G-MEM-DURABILITY-01 | encrypted backing store remains in-process | `core/secure_storage.py` | Durable encrypted backend, replication, backup/restore and consistency evidence |
+| G-KEY-AUTHORITY-01 | key lifecycle metadata does not establish external KMS/HSM authority | `core/key_lifecycle.py`, `core/crypto.py` | External key custody, signer roles, key epochs, rotation and distributed revocation |
+| G-ATTEST-REVOCATION-01 | runtime attestation trust freshness/replay lifecycle external | `core/attestation.py`, `core/identity.py` | Durable nonce registry, remote revocation, trust-root rotation and hardware evidence |
+| G-MEDIA-LINEAGE-01 | media digest/locator lacks capture provenance and derivative custody | `core/multimodal.py` | Authenticated locator, encrypted object custody, consent, retention and transformation graph |
+| G-AGENT-QUALIFICATION-01 | first-match dispatch and declarative skills do not qualify specialist execution | `core/agent_fabric.py`, `core/agent_skills.py` | Signed specialist scope, qualification evidence, health/capacity and independence group |
+| G-PLACEMENT-TELEMETRY-01 | static placement thresholds do not admit against live capacity/residency/cost | `core/resource_router.py`, `ecosystem/global_scale.py` | Fresh telemetry, reservations, data residency, energy/cost and failure-domain policy |
+| G-GLOBAL-REPLICA-HEALTH-01 | replica labels do not prove independent healthy durable copies | `ecosystem/global_fabric.py` | Replica attestations, read/write quorum, consistency watermark and restore drills |
+| G-SUPPLY-CHAIN-PROVENANCE-01 | signed artifact manifest lacks SBOM/build/release signer lifecycle | `core/supply_chain.py` | Build provenance, dependency graph, signer roles/revocation and staged release approvals |
+| G-OPS-EVENT-DURABILITY-01 | security event bus is in-process and bounded | `core/observability.py` | Durable append, sequence authority, alert routing, retention and incident response |
+
+These are architecture discovery gaps, not test-proven defects. W01–W12 remain PARTIAL.
+
+
+## Branching cognition, FRL, reverse engineering and domain operations — 2026-11-24
+
+| Gap ID | Observed gap | Source anchor | Required architecture closure |
+|---|---|---|---|
+| G-HYP-BRANCH-01 | HypothesisEngine emits one plan-aligned hypothesis per step; no explicit alternative branch lifecycle | `core/hypersynth.py`, `core/reasoning.py`, `core/planning.py` | Branch identity/parentage, assumptions, evidence, budgets, pruning, contradiction and merge semantics |
+| G-HYP-SIM-02 | InternalSimulator is structural feasibility check, not calibrated domain simulation | `core/reasoning.py` | Typed domain models, units, parameter provenance, calibration, uncertainty and independent validation |
+| G-FRL-KERNEL-01 | MIF/FRL proof architecture is specified but dedicated general proof-kernel runtime is not established in reviewed source inventory | `architecture/NORYX7_CRYPTOGRAPHIC_AND_MATHEMATICAL_INTELLIGENCE_ARCHITECTURE.md` | Formal language/theory, proof object, trusted kernel, independent replay and scoped result states |
+| G-EVAL-EXEC-02 | Campaign creates deterministic cases/manifests but does not execute cases or authenticate result producers | `core/evaluation_campaign.py`, `core/evaluation.py` | Signed campaign execution ledger, per-case uniqueness, evaluator identity, holdout custody and statistical plan |
+| G-CLAIM-LINEAGE-03 | Evidence source/claim strings and strength fields lack canonical source-span lineage | `core/universal_intelligence.py`, `core/subtask_verification.py` | Immutable source/version, claim spans, typed support/contradiction graph and correction/expiry |
+| G-RE-WORKBENCH-01 | Cyber range is synthetic/symbolic; no dedicated authorized reverse-engineering workbench evidenced | `core/cyber_range.py`, `core/sandbox.py` | Signed scope manifest, static/dynamic sandbox, protocol state models, artifact lineage and responsible disclosure |
+| G-TERMINAL-RUNTIME-01 | PowerShell/Cloud Terminal is target architecture, not evidenced dedicated runtime | `architecture/POWERSHELL_CLOUD_TERMINAL_FABRIC.md` | Session broker, shell adapter, sandbox, policy, secret boundary, remote attestation and durable audit |
+| G-BROWSER-ASSURANCE-02 | Browser isolation scan is static marker check | `ecosystem/browser_isolation.py` | Runtime WebView/device/network threat model and independent platform assurance |
+| G-SPECIALIST-QUAL-03 | Domain route/skill label is not qualification or jurisdictional authorization | `core/universal_intelligence.py`, `core/agent_skills.py` | Signed domain manifests, qualification evidence, scope, calibration, expiry and expert escalation |
+| G-IMPACT-NET-04 | Activity/output metrics can be confused with verified environmental/community net outcomes | `architecture/NORYX7_DOMAIN_OPERATIONAL_ASSURANCE.md`, `architecture/NORYX7_NEXUS_RESEARCH_SPECIALIST_DOMAINS_AND_IMPACT_RECONCILIATION.md` | Baseline/counterfactual, leakage/rebound, independent sampling, uncertainty, safeguards and restricted funds |
+
+All findings remain architecture gaps; no runtime defect or test failure is inferred. W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — cognitive branching, formal evidence, MIRROR WORLD and systems understanding reconciliation
+
+- HYPERSYNTH: no general competing-hypothesis tree/branch lifecycle demonstrated; one hypothesis is derived from each plan step; inspected assignments execute sequentially.
+- Evidence: output presence/contract checks, generated evaluation manifests and confidence fields do not independently establish semantic truth, source authenticity, campaign execution or calibrated probability.
+- FRL/NEXUS: formal proof scope, checker/build trust and empirical-to-formal fidelity must remain distinct; unavailable or untrusted checkers fail closed.
+- MIRROR WORLD: model manifests, calibration, independent validation, uncertainty/OOD, drift/expiry and Reality Bridge safety approval remain closure requirements.
+- Systems understanding: authorized acquisition, artifact custody, isolated analysis, behavior reconstruction and IP/safety boundaries need one lifecycle; reverse-engineering source path was not found at the inspected path/ref (404), not a repo-wide absence finding.
+- Terminal/surfaces: target architecture exists; runtime, scoped capabilities, filesystem/process/egress controls, artifact provenance and offline reconciliation remain to be source-mapped.
+- Domains: skill labels are not qualifications; scope, jurisdiction, reviewer independence, expiry and escalation are required.
+- Placement: static tier thresholds and bounded global primitives do not prove production scheduling, live health/capacity, residency enforcement or cost/energy optimization.
+- W12: ledger, restricted funds, disputes/refunds, safeguards and independently verified net environmental outcomes remain open.
+All findings map to existing ADRs B71–B104; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — execution semantics, agent scheduling, provider effects and distributed fabric reconciliation
+
+- HYPERSYNTH couples default plan/action bounds to `max_agents`; plan cardinality, concurrency and action budget need separate semantics.
+- AgentCoordinator truncates to `plan.steps[:max_agents]` and creates a fresh execution ID; preserve complete DAG and caller-bound execution identity.
+- AgentMesh chooses alphabetically first role match; qualification, liveness, capacity, trust freshness and independence are not scheduler inputs.
+- ProviderRouter retries on any exception; must distinguish not-dispatched, rejected, confirmed and indeterminate external effects.
+- ProviderExecutionGateway action ID lacks a unique request/operation/attempt binding and its result lacks canonical durable receipt/effect state.
+- Offline encrypted queue and global memory/control-plane registries are in-process; encryption and metadata do not prove durable payload custody or distributed health.
+- StateJournal local SQLite durability is not an independently witnessed checkpoint; RecoveryController epoch/lock is in-process.
+- MediaRef digest/locator is not a custody capability or transformation/consent/retention lineage.
+- Egress allowlist does not prove DNS pinning/socket mediation; supply-chain signature verification does not itself provide key lifecycle/SBOM/build provenance.
+- Global placement primitives do not prove capacity reservation, distributed leases, live telemetry freshness or production worker orchestration.
+All findings map to existing B71–B104; W01–W12 remain PARTIAL.
+
+
+## 2026-11-24 — domain calibration, specialist qualification, cyber-range assurance and public-impact accounting
+
+- FINCH `Forecast.likelihood` is arithmetic mean severity; no time-to-event model or calibration. Type heuristic scores separately from probabilities and require temporal holdout, proper scoring, calibration and drift lifecycle.
+- Universal Intelligence has six explicit domain keyword maps plus general reasoning while the domain architecture catalog specifies thirteen domains; track coverage explicitly without assuming unimplemented modules.
+- Specialist routing and skill registration do not establish competence, jurisdiction, expiry, independence or execution authority.
+- AgentCollaboration's SHA-256 digests cover generated output strings, not source evidence; distinct agent IDs do not prove independent model/provider/source/failure domains.
+- EvaluationMatrix accepts caller pass flags and non-empty evidence strings; campaign manifest/result must bind exact artifact, evaluator, holdout, raw test results and independence.
+- CyberRange's synthetic sandbox restriction is useful; OwnerAuthorization lacks target/method/environment/issuer/revocation/single-use scope, and `verified=True` means simulation path completed, not real-world validation.
+- W12 needs segregated ledgers, double-entry accounting, independent audit, governance/appeal and impact records with baseline/counterfactual/additionality/leakage/rebound/permanence/uncertainty.
+All remain architecture gaps; no domain qualification, calibrated forecast, independent evaluator, cyber validation or payment/impact service is claimed implemented.
+
+## Cross-workstream collision discovery — 2026-11-25
+
+The cross-stream collision and handoff model is consolidated in [Cross-Workstream Dependency and Canonical Ownership Reconciliation](NORYX7_CROSS_WORKSTREAM_DEPENDENCY_AND_CANONICAL_OWNERSHIP_RECONCILIATION.md). Add explicit discovery coverage for: (a) multiple runtime coordinators/facades; (b) identity registries and capability issuers; (c) state stores, journals, memory replicas and recovery consumers; (d) agent/provider/scheduler routing overlap; (e) evidence, audit, telemetry and business-ledger separation; (f) cyber-range/MIRROR WORLD and simulation-to-reality boundaries; (g) offline revocation/state epochs; and (h) product/community records versus runtime authority. These are collision hypotheses until source evidence resolves them. Discovery remains parallel; contract freeze follows upstream dependencies. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — ingress, effects and release-evidence gaps
+
+The [Ingress, External Effects, Release Evidence and Cross-Workstream Closure Reconciliation](NORYX7_INGRESS_EFFECTS_RELEASE_AND_CLOSURE_EVIDENCE_RECONCILIATION.md) deepens existing ADR-B56–B62 without creating duplicate IDs. Track the following as unresolved architecture gaps:
+- Gateway-session `/v1/execute` and direct `/api/chat` paths are not proven to share the same route-level authentication boundary; upstream proxy behavior remains unknown.
+- ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor require composed retry ownership; nested retry amplification and duplicate side effects are not resolved.
+- Logical operation, attempt, downstream idempotency, dispatch receipt, observed effect and durable commit need distinct identities/states.
+- Topological scheduling does not by itself establish bounded parallel execution, resource reservation, cancellation or partial-result joins.
+- Structural audit outputs, CI success, architecture acceptance and deployment/release approval need separate evidence schemas and scopes.
+- Per-platform artifact provenance and release coverage remain incomplete in the inspected inventory.
+These are source-grounded gaps/unknowns, not proof of an exploitable endpoint or a failed production deployment. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — source-level conflict discoveries across W01–W12
+
+See [Source-Level Authority, State and Effect Conflict Reconciliation](NORYX7_SOURCE_LEVEL_AUTHORITY_STATE_AND_EFFECT_CONFLICT_RECONCILIATION.md). Newly explicit gaps:
+- Two different `StateJournal` classes exist: `noryx7_runtime.state.StateJournal` (in-memory reservations/attestations used by RuntimeEngine) and `core.state_journal.StateJournal` (SQLite verified-state commits used by StateStore). A canonical adapter/transaction/recovery relationship is not established.
+- RuntimeEngine retains reservations after dispatch/commit exceptions, but the six-state execution lifecycle cannot represent indeterminate external effects or reconciliation.
+- FastAPI `/api/chat` directly invokes OperationalNORYXRuntime while `/v1/execute` uses the gateway session verifier; deployment proxy equivalence remains unknown. A separate standalone gateway server also exposes gateway routes.
+- ProviderRouter, ProviderExecutionGateway and ResilientProviderExecutor implement distinct dispatch/failover paths; no single retry/effect coordinator is demonstrated.
+- AgentCoordinator truncates assignment to `max_agents`, runs assignments sequentially and creates its own execution ID; AgentMesh uses lexical-first role routing. Multi-step aggregation and same-task consensus semantics need separation.
+- OfflineSyncQueue is in-memory and local failure removes its queued item; durable outbox and uncertain local-effect recovery remain open.
+- Runtime dispatch receipt hashes a type representation/exception type, not an independently observed target effect.
+These are source-level bounded findings and unknowns, not declarations of exploitable vulnerabilities. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — single-cycle W01–W12 end-to-end reconciliation
+
+See [Single-Cycle W01–W12 End-to-End Architecture Reconciliation](NORYX7_SINGLE_CYCLE_W01_W12_END_TO_END_ARCHITECTURE_RECONCILIATION.md). This concurrent pass reconciles identity/authority, runtime ingress, dual state journals, provider retry/effects, agent selection/scheduling, offline custody, evidence classes, simulation-to-reality, specialist qualification, global placement/release and financial/community impact. It records canonical object families, cross-stream collision targets, linked execution/effect lifecycles and the next constructor/registration/call-site source pass. Findings are bounded to named source snapshots; unknowns are not absence claims. W01–W12 remain PARTIAL; no ADR is silently accepted, no implementation or integration is authorized, and no test campaign, merge, deployment or freeze is claimed.
+
+
+## 2026-11-25 — constructor, authority, offline and ledger source reconciliation
+
+See [Constructor, Call-Site, Authority, Offline and Ledger Reconciliation](NORYX7_CONSTRUCTOR_CALLSITE_AUTHORITY_OFFLINE_AND_LEDGER_RECONCILIATION.md). Added source anchors identify ActionGate and exact one-shot grants, identity/replay scope, separate runtime and SQLite journals, runtime recovery and recovery epochs, offline encrypted outbox versus durable monotonic anchor, ingress divergence, ExecutionFabric registration and W12 fund-segregation architecture. Durable anti-rollback is present; the inspected outbox remains in-memory. Existing tests are evidence of test specifications, not tests executed. W01–W12 remain PARTIAL.
+
+
+## 8. Newly reconciled cross-plane gaps — 2026-11-25
+
+| Gap | Affected streams | Evidence/impact | Required closure artifact |
+|---|---|---|---|
+| Authority composition and principal normalization | W01/W02/W07/W08/W09 | Core identity, action grants, gateway sessions, JARVIS authorization and global session/device authorization are separate local authorities | Constructor profile matrix, composition root, canonical PrincipalAssertion and revocation/freshness contract |
+| Cross-journal transaction ownership | W02/W03/W08/W09 | Runtime reservation/attestation journal and SQLite verified-state journal have different durability and recovery semantics | Operation transaction state machine and crash/restart reconciliation matrix |
+| Effect certainty and retry multiplication | W02/W05/W08/W11 | Provider routing, execution gateway and resilience wrapper expose distinct retry behavior; raw exceptions do not prove no target effect | Single retry coordinator, typed effect outcomes and target idempotency/compensation contract |
+| Agent lineage and incomplete assignment | W04/W05/W07/W11 | Assignment is bounded by max_agents; execute creates a new execution ID and runs sequentially; consensus requires exact output equality | Parent-child DAG lineage, overflow policy, concurrency/lease/cancel/join and typed consensus contract |
+| Offline queue durability | W03/W08/W09 | Snapshot anti-rollback anchor is durable, but the inspected outbox and acknowledgement deletion are process-local | Durable outbox/inbox, signed remote receipt, replay and crash-safe acknowledgement contract |
+| Global memory/placement operationalization | W03/W05/W08/W09 | Replica IDs and placement primitives do not establish replica acknowledgement, durable payload custody or resource leases | Storage/replication adapter contract, consistency model, placement lease and node attestation |
+| W12 financial and impact execution authority | W07/W09/W10/W12 | Tree inventory did not establish production ledger/payment/escrow implementation; business/project architecture remains proposal-level evidence | Double-entry ledger, segregation, payment/escrow controls, reconciliation and independent impact methodology |
+| Release provenance and rollback | W09/W11 | CI workflow and signed manifest verifier do not establish source-to-artifact-to-deployment chain or staged rollback | Signed provenance chain, builder identity, SBOM, approval quorum, promotion and rollback evidence |
+
+These are architecture gaps to resolve, not assertions that no external integration exists. W01–W12 remain PARTIAL; no gap is closed by path presence alone.
+
+
+## 9. Memory, multimodal and surface gaps — 2026-11-25
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| Memory custody and durable hydration | W03/W06/W08/W09 | tenant/principal/session/execution scope, source lineage, purpose/consent, retention/deletion, durable backend and typed partial/stale/error outcomes |
+| Key governance | W02/W03/W08/W09 | production KMS/HSM, key version/rotation, compromise/revocation, backup/restore and offline-device recovery |
+| Multimodal provenance | W06/W08/W09/W10 | authenticated source/capture, rights/consent, immutable transforms, timestamps/segments and claim-to-source verification |
+| Model evidence and independence | W02/W04/W05/W06/W10 | invocation provenance, correlated-provider analysis, calibrated verification and typed evidence admission |
+| Tool protocol convergence | W02/W04/W05/W07/W08 | converge callback-authorized ToolRegistry and ActionGate ToolExecutor on canonical ActionSpec/effect lifecycle |
+| Device and placement attestation | W05/W07/W08/W09/W11 | signed device/node identity, remote revocation, capacity lease, fencing, residency and completion receipt |
+| Browser surface assurance | W07/W08/W09 | runtime sandbox, network egress, URL/origin, downloads, cookie/session custody and update rollback evidence |
+| Durable observability | W08/W09/W11 | durable tamper-evident events, trace lineage, delivery acknowledgement, alerting and incident containment |
+
+These are architecture gaps, not claims that no external backend or provider exists. W01–W12 remain PARTIAL.
+
+
+## 10. Product-level capability and realization gaps — 2026-11-25
+
+| Gap | Streams | Why it matters | Required closure |
+|---|---|---|---|
+| Product intent versus operational guarantee | W01–W12 | A capability may be specified and have source files without one reachable, governed production path | Per-capability owner, composition/call-site map, runtime boundary, failure model and acceptance evidence |
+| End-to-end object chain | W01/W02/W03/W04/W05/W07/W08/W09 | Principal, interaction, evidence, cognitive run, plan, delegation, action, effect, verification and commit are not yet one canonical versioned chain | Canonical schemas, IDs, state transitions, migration/compatibility and cross-plane conformance |
+| Cognitive branching versus execution concurrency | W04/W05/W07/W08 | Cognitive phases and plan DAGs exist, but scheduler output is consumed sequentially by RuntimeEngine | Bounded concurrent executor, lease/conflict model, cancellation, partial-result semantics and deterministic audit |
+| Semantic evidence and specialist qualification | W04/W06/W10/W12 | Structural verification and keyword specialist routing do not establish source entailment, calibration or professional competence | Claim-span evidence, authenticated sources, calibration, qualification registry and human escalation |
+| MIRROR WORLD reality validity | W06/W10/W11 | Deterministic or synthetic simulation does not establish real-world predictive validity | Domain kernel manifests, calibration/holdout, uncertainty, OOD limits and isolated Reality Bridge safety case |
+| Systems reverse-engineering realization | W06/W07/W08/W10 | Architecture intent and synthetic cyber-range code do not establish a general authorized system-understanding engine | Asset authorization manifest, passive/active tiers, instrumentation isolation, protocol evidence and report standard |
+| Global operating guarantees | W03/W05/W08/W09/W11 | Local registries, replica labels and resource selection do not prove durable global service | Durable multi-region control/data plane, signed node trust, capacity leases, replication acknowledgements and DR evidence |
+| W12 delivery and public impact | W07/W09/W10/W12 | Community and financial architecture is not proof of live payment, custody, ledger or independently verified environmental/social outcomes | Regulated financial controls, double-entry/reconciliation, independent impact baseline/counterfactual and field evidence |
+
+This register is a design/closure inventory, not a claim that no external service exists. W01–W12 remain PARTIAL; no implementation, test campaign or freeze is authorized by this entry.
+
+
+## 11. Agent, evidence, simulation and release assurance gaps — 2026-11-25
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| Structural gate mistaken for architecture closure | W01–W12 | Separate path-presence checks from contract conformance, constructor/call-site integration and acceptance evidence |
+| Agent role selection and assignment completeness | W01/W04/W05/W10 | Qualification manifest, full plan coverage, overflow policy, parent-child lineage, independent verifier and capacity-aware scheduling |
+| Sequential coordinator and consensus semantics | W02/W04/W05 | Bounded concurrent DAG execution, leases, cancellation/join, partial outcomes and semantic consensus preserving dissent |
+| Structural evidence promoted to truth | W06/W10 | Typed claims, immutable source spans, entailment/contradiction edges, calibrated uncertainty and reviewer lineage |
+| MIRROR WORLD source-to-reality validity | W06/W07/W10 | Implemented domain kernels, source custody, independent holdouts, calibration, OOD policy and isolated Reality Bridge |
+| Cyber range generalized beyond sandbox | W07/W08/W09 | Explicit authorized asset manifests, passive/active tiers, safe acquisition, production isolation and reproducible evidence |
+| FINCH forecast probability interpretation | W06/W07/W10/W11 | Target definitions, temporal holdouts, proper scoring, calibration curves, uncertainty and independent field validation |
+| Evaluation campaign evidence independence | W06/W10/W11 | Campaign execution, evaluator identity, holdout custody, leakage controls, reproducibility and approval evidence |
+| Provider retry and uncertain side effects | W02/W08/W09/W11 | Single retry coordinator, idempotency, typed uncertain-effect state, authenticated target receipt and reconciliation |
+| Dispatch receipt overclaim | W01/W02/W08/W09 | Separate acceptance, returned payload digest, signer identity, observed effect and verified commit |
+| Browser source scan overclaim | W08/W09/W11 | Runtime sandbox/OS boundary, egress mediation, origin/session/download controls and adversarial platform evidence |
+| Signed manifest versus full release provenance | W09/W11 | Trusted builder, dependency/SBOM, key lifecycle, approval quorum, deployment identity, promotion and rollback chain |
+
+These are architecture gaps, not claims that no external provider or service exists. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — additional source-reconciled gaps
+
+| Gap | Workstreams | Required architecture closure |
+|---|---|---|
+| Core/JARVIS memory duplication and storage semantics differ | W03/W08/W09 | Canonical memory ownership, adapter/migration contract, tier backend, namespace, retention and restore matrix |
+| Encrypted memory is not necessarily durable memory | W03/W09/W11 | Durable backend, backup/restore, replication, key rotation, deletion/tombstone propagation and recovery evidence |
+| Offline queue durability is distinct from monotonic anchor durability | W02/W03/W08/W09 | Durable outbox/inbox/ack lifecycle, idempotent sync, conflict resolution and replay-safe recovery |
+| Provider paths have divergent selection, action IDs and retry behavior | W02/W04/W05/W08/W09 | Unified logical operation/idempotency identity, attempt model, dispatch/effect certainty and signed adapter receipts |
+| ToolRegistry and ToolExecutor have different authorization/result contracts | W01/W02/W08/W09 | Canonical ToolSpec/ActionSpec, principal/tenant binding, result evidence and effect lifecycle |
+| Model fan-out/provenance does not establish independence or correctness | W04/W05/W06/W10/W11 | Model/source lineage, common-cause groups, independent evaluation and calibrated confidence |
+| FINCH forecast likelihood is heuristic | W06/W07/W10/W11 | Forecast target/horizon/calibration cohort, probability distribution, proper scoring and drift evaluation |
+| NEXUS source citations lack a single fully established custody graph | W06/W09/W10 | SourceArtifact/SourceSpan, immutable acquisition, exact extraction spans, contradiction/correction/retraction graph |
+| Formal proof, empirical observation and simulation output can be conflated | W06/W07/W10 | Typed epistemic artifacts, checker identity and explicit limits of proof/model assumptions |
+| Cyber range does not constitute general authorized reverse engineering | W07/W08/W09/W10 | Asset authorization manifest, passive/active tiers, sandbox, egress limits, stop conditions and signed findings |
+| Browser source scan is not runtime containment | W08/W09/W11 | Process/OS sandbox, origin and download policy, network egress mediation and adversarial validation |
+| Artifact signature is not full release provenance | W09/W11 | Builder identity, dependency/SBOM, approval, artifact promotion, deployment attestation and rollback chain |
+| W12 financial and environmental impact evidence remains separate | W10/W11/W12 | Segregated double-entry ledger, payment reconciliation, independent outcome measurement and dispute/audit workflow |
+
+These are unresolved architecture gaps, not claims that no external system or service exists. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Newly isolated cross-plane gaps
+
+- **GAP-AGENT-REGISTRY-CONSOLIDATION:** AgentFabric, AgentRuntime/router status and other agent selection/coordinator paths do not yet prove one canonical lifecycle/qualification authority.
+- **GAP-MEMORY-CUSTODY-CONSOLIDATION:** hot MemoryStore, L0–L5 hierarchy, encrypted adapter and JARVIS store have no demonstrated common durability/replication/deletion/recovery contract.
+- **GAP-PROVIDER-EFFECT-RECONCILIATION:** ProviderExecutionGateway and ResilientProviderExecutor are separate; retry after ambiguous remote completion needs idempotency and reconciliation before failover.
+- **GAP-RELEASE-ATTESTATION-CHAIN:** trusted Ed25519 manifest and artifact digest are useful primitives, but do not prove builder provenance, key lifecycle, SBOM, approvals, deployment measurement or rollback.
+- **GAP-FORECAST-CALIBRATION:** FINCH likelihood is mean severity, not calibrated event probability; temporal holdout and calibration evidence are absent in this module.
+- **GAP-SURFACE-TRUST-ENFORCEMENT:** local device registry and static browser scanner do not establish hardware attestation, renderer isolation or enforced egress.
+
+These are discovery labels, not new ADR identifiers. Full source evidence and closure gates are in `NORYX7_AGENT_FABRIC_MEMORY_CUSTODY_PROVIDER_EFFECTS_AND_OPERATIONAL_PLANE_SOURCE_MAP.md`. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Additional trust and agent execution gaps
+
+- **GAP-AGENTCORE-AUTH-PROFILE:** AgentCore accepts an optional authorization hook; every production caller must declare its authorization profile or planning-only restriction.
+- **GAP-SKILL-EXECUTABILITY-QUALIFICATION:** declarative skill registration can use a no-op handler and does not prove implementation or qualification.
+- **GAP-ATTESTATION-PLANE-SEPARATION:** runtime measurement attestation and agent operation attestation are distinct trust planes and need explicit linked envelopes.
+- **GAP-KEY-LIFECYCLE-DURABILITY:** KeyLifecycle tracks metadata in process memory; KMS/HSM binding, durable version state and revocation propagation are not established here.
+- **GAP-CROSS-JOURNAL-RECOVERY:** local RecoveryController and RuntimeRecovery do not demonstrate coordinated recovery across all journals, provider effects and replicas.
+- **GAP-VERIFICATION-OBJECT:** bare boolean verification does not bind source evidence, verifier identity, method or policy version.
+
+These labels are discovery entries, not ADR IDs. W01–W12 remain PARTIAL.
+
+## 2026-11-25 — Cognitive, acquisition, global and enforcement gaps
+
+- **GAP-SIMULATION-FIDELITY-TIERS:** InternalSimulator checks plan consistency; domain simulation and digital-twin fidelity are not established by it.
+- **GAP-SEMANTIC-INDEPENDENT-ORACLE:** PipelineChallengeVerifier checks structural correspondence; independent semantic truth needs protected external/domain oracles.
+- **GAP-SOURCE-TO-CLAIM-PROVENANCE:** research content hashes do not alone establish publisher authority, exact supporting spans, rights, freshness or source independence.
+- **GAP-GLOBAL-REPLICA-ACKNOWLEDGEMENT:** replica identifiers in local memory metadata are not signed write acknowledgements or quorum evidence.
+- **GAP-CAPACITY-LEASE-FENCING:** local region/cell/compute selection is not a distributed expiring lease with fencing.
+- **GAP-EGRESS-ENFORCEMENT-COVERAGE:** an allow-list primitive does not prove all network-capable components traverse it.
+- **GAP-TRUSTCHAIN-REPLAY-DURABILITY:** default replay guard scope is instance-local unless shared/injected; distributed persistence is not shown.
+- **GAP-EVALUATION-HOLDOUT-ASSURANCE:** campaign manifest generation and evidence recording do not prove execution, holdout isolation or independent evidence provenance.
+
+These are discovery labels, not ADR identifiers. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Parallel integration-readiness gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-INGRESS-ROUTE-PARITY | W01/W02/W08/W09 | Inventory every HTTP/API/CLI/JARVIS entrypoint and prove common principal, request, execution, authorization and result-admission semantics or document explicit adapters. |
+| GAP-CANONICAL-RUNTIME-COMPOSITION | W02/W03/W04/W08 | Prove constructor/call-site adoption of one canonical runtime composition; classify compatibility facades and prohibit silent alternate authority paths. |
+| GAP-PROVIDER-RETRY-IDEMPOTENCY | W02/W05/W08/W09/W11 | Reconcile provider gateways/retry executors with one logical operation ID, idempotency key, uncertain-effect state and authenticated reconciliation receipt. |
+| GAP-STATE-JOURNAL-DEPLOYMENT | W02/W03/W08/W11 | Prove durable journal configuration in each target deployment, namespace ownership, backup/restore and cross-journal recovery. |
+| GAP-SEMANTIC-VERIFICATION-BOUNDARY | W06/W07/W10 | Distinguish contract/output-presence verification from independent semantic/domain correctness and bind verdicts to evidence, evaluator and policy version. |
+| GAP-STRUCTURAL-GATE-SCOPE | W01–W12 | Keep module/path/contract-shape gates distinct from call-site integration, runtime behavior, external hardware/service validation and semantic acceptance. |
+| GAP-PRIMARY-SECONDARY-INDEPENDENCE | W04/W05/W06/W10 | Define common-cause independence, shared context/model/provider lineage, dissent retention and independent evaluator requirements. |
+| GAP-ACCELERATION-EVIDENCE-INVALIDATION | W01–W12 | Define source-ref-bound evidence cards and invalidate dependent conclusions when source blobs, contracts or constructors change. |
+
+These gaps are source-reconciliation findings, not proof of a vulnerability or absence of external infrastructure. The corresponding architecture decisions remain open. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Operation, memory custody, ingress and placement gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-DIRECT-CHAT-INGRESS-PARITY | W01/W02/W08/W09 | Resolve direct `/api/chat` versus session-authenticated `/v1/execute`; define trusted upstream identity and route policy. |
+| GAP-PRINCIPAL-ASSERTION-CANONICALIZATION | W01/W08/W09 | Define signed/verified principal assertion with issuer, tenant, audience, session/device/workload, assurance, policy epoch, expiry and delegation lineage. |
+| GAP-OPERATION-IDENTIFIER-CONTINUITY | W02/W04/W05/W08 | Preserve coordinator-issued operation/execution identity across plan, child task, agent, tool, provider, journal, evidence and receipt. |
+| GAP-EXECUTION-EFFECT-STATE-SEPARATION | W02/W03/W05/W09 | Separate orchestration lifecycle from external-effect certainty; add indeterminate, partial, compensation and reconciliation semantics before retry policy freeze. |
+| GAP-AGENT-DAG-COMPLETE-ASSIGNMENT | W02/W04/W05 | Preserve all plan nodes; define queue/backpressure, lease, cancellation, join, partial outcome and no silent max-agent truncation. |
+| GAP-AGENT-QUALIFICATION-AND-PLACEMENT | W04/W05/W07/W10/W11 | Select by qualification, health, capacity, jurisdiction, trust freshness, independence and expiring fenced lease, not role/lexical order alone. |
+| GAP-MEMORY-SEMANTIC-PARITY | W03/W08 | Reconcile core and JARVIS memory semantics; enforce tenant/execution scope, deep-copy/isolation, unavailable-vs-empty and explicit sharing grants. |
+| GAP-MULTIMODAL-CUSTODY | W03/W06/W08/W09/W10 | Bind media capture authenticity, consent/rights, acquisition source, transformation lineage, retention and claim spans beyond digest/locator. |
+| GAP-RESOURCE-PLACEMENT-LEASE | W05/W07/W08/W11 | Extend static tier heuristic with live capacity, residency, cost/latency/energy, attestation, lease expiry, fencing and failover semantics. |
+| GAP-HISTORICAL-OPS-EVIDENCE-FRESHNESS | W01–W12 | Treat 2026-09-08 operations notes and their test totals as historical until rerun/reconciled against current HEAD and deployment. |
+| GAP-IMPACT-LEDGER-SEPARATION | W06/W09/W10/W12 | Keep financial accounting, security audit, evidence provenance and independently measured public impact in separate correlated ledgers. |
+
+These are architecture closure requirements, not proof of a vulnerability or absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Product-plane realization gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-NEXUS-SEMANTIC-GRAPH-REALIZATION | W06 | Specify/implement versioned Claim/Evidence/SourceArtifact/SourceSpan graph, contradiction, temporal scope, independence and correction lifecycle; current evidence/domain primitives are narrower. |
+| GAP-FRL-PROOF-CHECKER-REALIZATION | W06/W09 | Define exact proof artifacts, theory/checker identity, checker trust, resource limits and independently reproducible verification. |
+| GAP-MIRROR-WORLD-INTEGRATED-KERNELS | W06/W07/W10 | Distinguish plan consistency and synthetic cyber simulation from calibrated physical/environmental/economic kernels, experiment ledger and Reality Bridge. |
+| GAP-SYSTEMS-RE-ACQUISITION-TIERS | W07/W08/W09/W10 | Define authorized asset manifests, passive/active/lab modes, artifact custody, safe acquisition and report/evidence standards; synthetic CyberRange alone is not general reverse engineering. |
+| GAP-SPECIALIST-QUALIFICATION-REGISTRY | W01/W04/W06/W10 | Replace domain labels/keyword routes as competence claims with independent qualification, jurisdiction, scope, expiry, conflict and review records. |
+| GAP-GLOBAL-FLEET-OPERATIONS-ASSURANCE | W05/W08/W09/W11 | Prove node/region membership, attestation, durable capacity leases/fencing, replication/quorum, SLO/DR and release/deployment provenance. |
+| GAP-W12-EXECUTABLE-LEDGER-AND-PAYMENTS | W01/W09/W11/W12 | Establish explicit authorized payment adapters, segregated double-entry ledgers, settlement/refund/dispute/reconciliation and audit. |
+| GAP-W12-INDEPENDENT-IMPACT-MEASUREMENT | W06/W07/W10/W12 | Establish baseline/counterfactual, boundary, methodology, independent verifier, uncertainty, net outcome and correction/grievance. |
+
+These gaps describe missing or incomplete evidence in the inspected repository source scope; they do not assert that no external provider exists. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Handoff contract and schema-governance gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-CANONICAL-ENVELOPE-IMPLEMENTATION-MAP | W01–W12 | Map each proposed envelope to existing types, adapters, serializers, API schemas and all consumers; identify duplicate/contradictory shapes. |
+| GAP-SCHEMA-REGISTRY-AND-COMPATIBILITY | W01–W12 | Assign one owner/registry per canonical contract, major/minor/patch compatibility, unknown-field policy, deprecation and loss-aware adapters. |
+| GAP-HANDOFF-ISSUER-CONSUMER-TRACE | W01/W02/W04/W05/W06/W08/W09 | Trace every producer/consumer and validate issuer, audience, scope, policy epoch, signature and lineage at the actual enforcement boundary. |
+| GAP-LIFECYCLE-ERROR-VOCABULARY-COLLISION | W02/W03/W04/W05/W06/W07/W08/W09/W11/W12 | Reconcile local enums without forcing unrelated operation/effect/evidence/qualification/lease/release states into one enum. |
+| GAP-EVIDENCE-INVALIDATION-DEPENDENCY-GRAPH | W01–W12 | Bind evidence cards to exact source blobs and transitive dependencies; invalidate affected claims when source or contract changes. |
+| GAP-RETRY-OWNER-AND-COMPENSATION-MAP | W02/W03/W05/W09/W11/W12 | Identify one retry/effect coordinator per side-effect path; document idempotency, unknown effect, compensation and financial reconciliation. |
+
+These gaps identify architecture closure work; they do not claim that a vulnerability exists. W01–W12 remain PARTIAL.
+
+
+## 2026-11-25 — Verification, bootstrap, acquisition and global operations gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-SEMANTIC-RESULT-ADMISSION | W02/W04/W06/W10 | Independent semantic evaluator, source-bound claims, scope/uncertainty, calibration and evaluator identity. |
+| GAP-EVALUATION-EVIDENCE-ATTESTATION | W06/W09/W11 | Bind each score/pass to immutable case, build, evaluator, raw output and reproducible evidence; prove holdout isolation. |
+| GAP-SECURE-BOOT-ANCHOR-CHAIN | W01/W09/W11 | Cryptographically chain ordered measured stages to configured root; validate signatures, anti-rollback and runtime admission consumer. |
+| GAP-RESEARCH-URL-EGRESS-ENFORCEMENT | W05/W06/W08/W09/W11 | Prove DNS/IP/redirect validation and network-level egress policy for every acquisition path; bind bytes and spans to custody records. |
+| GAP-OBSERVABILITY-DURABLE-INCIDENT-CHAIN | W03/W09/W11 | Durable signed event chain, gap detection, delivery acknowledgements, incident ownership and recovery evidence. |
+| GAP-GLOBAL-CAPACITY-LEASE-AND-FENCING | W05/W08/W11 | Atomic expiring reservations, node attestation, fencing, split-brain and failover evidence. |
+| GAP-SELF-IMPROVEMENT-RELEASE-ATTESTATION | W06/W09/W11 | Bind proposal to exact tested artifact, independent verification, signed approval, canary, deployment measurement and rollback. |
+| GAP-SPECIALIST-CREDENTIAL-VERIFICATION | W01/W06/W10 | Issuer-verified scoped credentials, jurisdiction, expiry, conflict and independent review. |
+
+These are source-reconciliation closure requirements, not proof of exploitability or absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Call-site, composition-root and enforcement gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-HTTP-INGRESS-PRINCIPAL-AND-POLICY-PARITY | W01/W02/W08/W09 | Align direct and session-protected routes; resolve client labels to enrolled principals and enforce audience, scope, device binding and policy epoch |
+| GAP-COMPOSITION-ROOT-AND-EXECUTION-PLANE-OWNERSHIP | W02/W03/W04/W08/W09/W11 | Declare supported production composition roots and map HYPERSYNTH, RuntimeEngine and CanonicalSystemFabric without implicit duplicate authority/state owners |
+| GAP-STANDALONE-GATEWAY-BOOTSTRAP-INJECTION | W02/W05/W08 | Inject a configured ModelFabric/runtime into the standalone gateway entry point or explicitly retire/document that unsupported startup mode |
+| GAP-CROSS-PLANE-PROVIDER-EFFECT-COORDINATION | W02/W05/W09/W11/W12 | Unify operation identity, attempt identity, idempotency, uncertain-effect reconciliation and retry ownership across provider dispatch paths |
+| GAP-ASSURANCE-COMPONENT-COMPOSITION-AND-DELIVERY | W03/W09/W11 | Bind boot, alerting, self-improvement and fleet components to actual consumers, durable evidence, delivery acknowledgements and rollback |
+
+The standalone gateway constructor finding is bounded to `gateway/__main__.py → NoryxGateway() → RuntimeAdapter() → OperationalNORYXRuntime()`; Render's configured `web.app` composition injects a ModelFabric-backed runtime and is not classified as having the same startup mismatch. These are architecture closure requirements, not exploitability claims. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Cross-plane lifecycle and recovery gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-OPERATION-EFFECT-STATE-MACHINE-AND-UNKNOWN-OUTCOME | W02/W03/W05/W08/W09/W11/W12 | Define durable operation/effect state independently from execution terminal status; unknown outcomes block blind retries |
+| GAP-AUTHORIZATION-CONSUMPTION-TO-DISPATCH-RECEIPT-LINKAGE | W01/W02/W05/W09 | Persist consumed grant and dispatch attempt against one stable operation identity; executor failure is not proof of no effect |
+| GAP-CROSS-STORE-COMMIT-AND-RECONCILIATION | W02/W03/W05/W09/W11/W12 | Define recovery across runtime journal, HYPERSYNTH StateStore/SQLite, external committer and target-system effect |
+| GAP-RECEIPT-EVIDENCE-SEMANTICS | W01/W05/W06/W07/W09/W12 | Bind receipts to typed observer evidence and exact artifact/effect; do not promote type-only digest or caller booleans into proof |
+| GAP-AGENT-CONSENSUS-INDEPENDENCE-AND-PROVENANCE | W04/W06/W10 | Declare independence assumptions for agents, verifiers and sources; output equality is structural agreement, not independent corroboration |
+| GAP-RETRY-IDEMPOTENCY-AND-COMPENSATION-OWNERSHIP | W02/W05/W09/W11/W12 | Specify idempotency retention, target lookup, retry authority and separately authorized compensation |
+
+These requirements are proposals pending ADR owner review. The existing RuntimeEngine local terminal lifecycle and HYPERSYNTH state commit API are not collapsed into a single status enum. W01–W12 remain PARTIAL.
+
+
+## 2026-11-26 — Schema compatibility and contract interoperability gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-CONTRACT-IDENTITY-AND-ATTESTATION-TYPE-COLLISIONS | W01/W04/W09/W11 | Give agent-statement, execution-step and runtime-measurement attestations distinct schema IDs, issuer roots, audience and revocation semantics; forbid same-name interchangeability |
+| GAP-STATUS-VOCABULARY-AND-TERMINAL-MAPPING | W02/W03/W05/W08/W09/W11/W12 | Maintain aggregate-specific state machines and explicit loss-aware mappings; unknown effect must not map to failed/no-effect |
+| GAP-RESULT-RECEIPT-AND-VERIFICATION-PROOF-NONINTEROPERABILITY | W02/W04/W05/W06/W07/W09/W12 | Define receipt-stage types and promotion policy; distinguish handler return, dispatch acceptance, structural verification, signed attestation, observed effect and commit |
+| GAP-LEGACY-PRINCIPAL-FALLBACK-AND-SESSION-IDENTITY-SEMANTICS | W01/W02/W08/W09 | Separate front/client labels from issuer-authenticated principal assertions; remove implicit identity promotion and bind audience/device/tenant/policy epoch |
+| GAP-MULTIMODAL-CUSTODY-AND-OFFLINE-ACK-SEMANTICS | W03/W06/W07/W08/W09/W11 | Bind media digest to custody/consent/rights and offline sync to durable outbox/inbox plus authenticated remote commit receipt |
+| GAP-CROSS-PLANE-ENVELOPE-ADAPTER-COMPATIBILITY | W01–W12 | Inventory each producer/consumer mapping, schema version, lossiness, rejected fields and migration/deprecation path |
+| GAP-SKILL-REGISTRATION-AND-AUTHORITY-SEPARATION | W01/W04/W05/W10 | Keep skill/tool registration, qualification, delegation and per-operation authorization distinct and issuer-owned |
+
+These gaps record semantic interoperability requirements in inspected source definitions. They do not assert exploitability or universal absence of external adapters. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Memory, model, evidence and distributed execution gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-MEMORY-TIER-TRANSFER-AND-DURABLE-CUSTODY | W03/W06/W08/W09/W11 | Canonical memory envelope, durable tier adapters, authenticated replica acknowledgements, retention/deletion propagation and restore evidence |
+| GAP-KEY-LIFECYCLE-AND-PRODUCTION-KMS-COMPOSITION | W01/W03/W09/W11 | Production key custody, purpose/tenant separation, rotation, revocation, recovery, destruction and audited key access |
+| GAP-MODEL-ENSEMBLE-INDEPENDENCE-AND-CALIBRATION | W02/W04/W06/W10 | Distinguish fan-out from concurrency and independent evaluation; bind model/version/evaluator and calibrate confidence by task/domain |
+| GAP-PROVIDER-FAILOVER-UNKNOWN-EFFECT-AND-IDEMPOTENCY | W02/W05/W09/W11/W12 | Do not fail over after ambiguous post-effect exceptions without target lookup/idempotency; use stable operation/attempt and EffectReceipt |
+| GAP-OFFLINE-REMOTE-COMMIT-RECEIPT-AND-DURABLE-OUTBOX | W03/W08/W09/W11 | Durable outbox/inbox and signed remote commit receipt bound to exact execution, payload digest, sequence and target transaction |
+| GAP-EVALUATION-RUNNER-HOLDOUT-AND-INDEPENDENT-EVIDENCE | W02/W06/W09/W11 | Execute immutable case manifests, enforce holdout isolation and bind results to runner/evaluator/build/raw evidence |
+| GAP-SIMULATION-REALITY-EVIDENCE-AND-FINCH-CALIBRATION | W06/W07/W10/W11 | Separate synthetic evidence from real observations; define simulation fidelity and calibrate forecast scores against held-out observations |
+| GAP-GLOBAL-PLACEMENT-LEASE-AND-DEPLOYMENT-ATTESTATION | W05/W09/W11 | Durable atomic reservation, TTL/fencing, node attestation, renewal/release and measured deployment/restore proof |
+| GAP-SUPPLY-CHAIN-BUILD-PROVENANCE-AND-ROLLBACK | W01/W09/W11 | Bind source, dependency/SBOM, builder, reproducible artifact, trusted signer, approval, canary and rollback anchor |
+
+These requirements are bounded to the inspected source paths and do not assert vulnerabilities or universal absence of external implementations. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — JARVIS, Browser, polyglot and observation authority gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-JARVIS-HYPERSYNTH-COGNITIVE-PLANE-OWNERSHIP | W02/W04/W05/W06/W10 | Define JARVIS as a surface/runtime adapter and HYPERSYNTH as cognitive proposal plane, with one execution/policy authority and typed handoff |
+| GAP-JARVIS-FACADE-PRINCIPAL-AND-PLAN-TRUST-BOUNDARY | W01/W02/W04/W08 | Replace literal principal fallback with authenticated principal assertion; bind caller-supplied Plan to request, issuer, digest, policy epoch and approved provenance |
+| GAP-WAKE-VOICE-AND-OBSERVATION-AUTHORITY-SEPARATION | W01/W04/W08/W09/W10 | Separate wake session, speaker/principal, device attestation, source authorization and action grant; typed sensor custody and calibration |
+| GAP-JARVIS-STATE-AUDIT-DURABILITY-AND-VERIFICATION-RECEIPT | W02/W03/W06/W09/W11 | Durable reservation/commit/audit, signed checkpoints and anti-truncation; require exact typed VerificationReceipt rather than caller boolean |
+| GAP-BROWSER-DEVICE-ENROLLMENT-AND-EGRESS-POLICY | W01/W08/W09/W11 | Bind browser session to enrolled device/principal/audience/epoch and enforce destination, DNS, redirect, subresource, download and signed response receipt policies |
+| GAP-POLYGLOT-CANONICAL-ENCODING-AND-SIGNED-OPERATION-PROTOCOL | W01/W02/W05/W09/W11 | Define common schema/version/canonical encoding/signature/replay/receipt contract with golden vectors across Go, Rust, Kotlin and Python |
+| GAP-NEXUS-MIRROR-WORLD-REALITY-BRIDGE-EVIDENCE-ADMISSION | W06/W07/W08/W09/W10 | Preserve source/transformation/custody and keep transcript, sensor, browser, synthetic and simulated evidence classes separate; require independently authenticated reality observations |
+| GAP-W12-FINANCIAL-GOVERNANCE-AND-IMPACT-OUTCOME-LEDGER | W02/W09/W11/W12 | Separate contribution, payment attempt, settlement, refund, governance decision and independently measured impact receipts |
+
+These are architecture closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence of external controls. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Branching cognition, evidence and MIRROR WORLD gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-HYPOTHESIS-ALTERNATIVE-AND-FALSIFICATION-LIFECYCLE | W02/W04/W06/W07 | Versioned competing hypotheses, parent/child lineage, evidence, assumptions, predicted observations, falsifiers and contradiction-preserving lifecycle |
+| GAP-HYPERSYNTH-DEPENDENCY-DAG-CONCURRENCY-AND-BUDGET-SEPARATION | W02/W04/W05/W11 | Separate plan DAG dependencies, branch count, agent capacity, worker concurrency, resource vectors, cancellation and deterministic replay |
+| GAP-SIMULATOR-SEMANTIC-MODEL-AND-VALIDITY-EVIDENCE | W06/W07/W10 | Replace structural feasibility claims with domain model semantics, assumptions, calibration, counterexamples and scoped validity evidence |
+| GAP-AGENT-CRITIQUE-INDEPENDENCE-AND-EVIDENCE-LINEAGE | W04/W06/W09/W10 | Record model/provider/corpus/tool/failure-domain independence and claim-level source lineage; distinguish diverse critique from corroboration |
+| GAP-EVALUATION-HOLDOUT-ISOLATION-AND-CASE-EXECUTION | W01/W03/W06/W09/W11 | Execute immutable cases, seal holdout access, attest evaluator and artifact/environment, record raw outcome and leakage audit |
+| GAP-FORECAST-PROBABILITY-CALIBRATION-AND-DRIFT | W06/W07/W10/W11/W12 | Define target/horizon/base rate, validate with proper scoring rules and reliability, monitor drift and label uncalibrated output heuristic |
+| GAP-MIRROR-WORLD-REALITY-DATA-CALIBRATION-LIFECYCLE | W03/W06/W07/W08/W09/W11 | Bind world snapshots and experiments to source lineage, model validity, calibration, uncertainty, reproducibility and separate reality observations |
+| GAP-MULTIMODAL-SOURCE-CUSTODY-AND-TRANSFORMATION-LINEAGE | W01/W03/W06/W08/W09 | Preserve original media, capture identity/time, consent/rights, transformations, alignment, derived artifacts and retention |
+| GAP-SPECIALIST-QUALIFICATION-AND-DOMAIN-COVERAGE | W01/W04/W06/W10 | Distinguish keyword routing/skill registration from competence, benchmark evidence, jurisdiction, scope, expiry and reviewer |
+
+These are closure requirements from bounded source inspection, not confirmed vulnerabilities or universal absence claims. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — W12 financial, governance, marketplace and impact gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W12-PAYMENT-SETTLEMENT-AND-UNKNOWN-OUTCOME | W01/W02/W05/W09/W12 | Provider-specific authorization/capture/settlement/refund/chargeback lifecycles, authenticated receipts, stable idempotency and unknown-outcome reconciliation |
+| GAP-W12-DOUBLE-ENTRY-LEDGER-AND-IMMUTABLE-CORRECTIONS | W03/W09/W12 | Balanced per-currency journal, immutable postings, reversal/correction links, source-event idempotency, period close and audit |
+| GAP-W12-TREASURY-SEGREGATION-AND-RESERVATION | W01/W09/W11/W12 | Legal-entity/fund segregation, restricted balances, available/reserved/committed accounting, dual control, liquidity and restore evidence |
+| GAP-W12-MARKETPLACE-FULFILMENT-AND-PAYOUT-PROOF | W01/W05/W08/W09/W10/W12 | Order/delivery/dispute/payout state separation, producer provenance and lawful custody/settlement model |
+| GAP-W12-INTERNAL-CREDIT-AND-CASH-CLAIM-CLASSIFICATION | W01/W09/W10/W12 | Keep reputation, non-cash credits, reimbursement, compensation, donation and ownership/equity distinct with explicit redemption/transfer/tax treatment |
+| GAP-W12-GOVERNANCE-ELIGIBILITY-QUORUM-AND-APPEAL | W01/W09/W10/W12 | Immutable proposals, voter eligibility snapshot, privacy, conflicts, quorum, auditable tally, appeal and delegated execution authority |
+| GAP-W12-IMPACT-BASELINE-COUNTERFACTUAL-AND-ADDITIONALITY | W06/W07/W09/W10/W12 | Independently verified outcomes with baseline/counterfactual, uncertainty, additionality, leakage, durability and double-counting controls |
+| GAP-W12-FINANCIAL-RECONCILIATION-AND-DUAL-CONTROL | W02/W03/W09/W11/W12 | Independent provider/bank-to-ledger matching, variance ownership, immutable close evidence and separation of proposer/approver/operator/poster |
+| GAP-W12-JURISDICTION-AND-REGULATED-PARTNER-BOUNDARY | W01/W08/W09/W10/W12 | Jurisdiction-specific legal classification and qualified/regulated partner gate before custody, transfer, escrow, stored value or cross-border payout |
+| GAP-W12-FINANCIAL-PRIVACY-AND-SAFEGUARDING | W01/W03/W08/W09/W12 | Data minimization, identity/ballot/beneficiary separation, consent, retention, fraud controls, incident response and accountable review |
+
+These are architecture closure requirements from bounded source inspection, not legal conclusions, confirmed vulnerabilities or claims that external controls do not exist. W01–W12 remain PARTIAL.
+
+
+## 2026-11-27 — Disconnected-by-default network presence and egress gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W08-DEFAULT-DENY-NETWORK-PRESENCE-LEASE | W01/W02/W05/W08/W09/W11 | Purpose-bound, short-lived, device/principal/audience-bound network lease and explicit disconnected/on-demand/session/maintenance/lockdown lifecycle |
+| GAP-W08-ANDROID-PER-APP-RADIO-REALITY-BOUNDARY | W08/W09 | Distinguish application egress denial, OS/VPN/device-owner enforcement and physical radio control; claims must match platform privilege and validation |
+| GAP-W08-WEBVIEW-SUBRESOURCE-AND-DIRECT-TRANSPORT-MEDIATION | W05/W08/W09 | Mediate WebView subresources, redirects, WebSockets, downloads, DNS and direct gateway/socket transports under a consistent policy |
+| GAP-W08-SESSION-AND-BACKGROUND-RECONNECT-LIFECYCLE | W01/W02/W08/W09 | Bind bearer/session lifecycle to network lease, user presence, idle/lock/logout, revocation and process teardown; prohibit silent background reauthentication |
+| GAP-W09-OS-ENFORCED-EGRESS-CONTROL-AND-BYPASS-INVENTORY | W05/W08/W09/W11 | Inventory and enforce all direct/native/proxy/DNS/IPv6/background paths through OS/container/network policy, not only local allowlist |
+| GAP-W03-W08-OFFLINE-OUTBOX-DURABILITY-AND-RECONCILIATION | W02/W03/W08/W09 | Durable encrypted outbox, signed remote receipt bound to exact operation and payload, no deletion/replay before authenticated commit/rejection |
+| GAP-W11-DISTRIBUTED-NETWORK-LEASE-REVOCATION-AND-FAILURE-DOMAIN | W01/W09/W11 | Signed regional/workload lease distribution, bounded revocation latency, network segmentation and failover without scope expansion |
+
+These are bounded source/architecture gaps, not claims of a confirmed exploit or absence of external OS/network controls. All workstreams remain PARTIAL.
+
+
+## 2026-11-27 — Authorized systems understanding and evidence custody gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W07-SYSTEM-OWNER-AUTHORIZATION-AND-SCOPE-BINDING | W01/W02/W07/W09 | Signed, revocable asset-owner delegation bound to exact asset/interface/method/purpose/time, principal/device, policy epoch and prohibited scope |
+| GAP-W03-W06-OBSERVATION-CAPTURE-CUSTODY-AND-TRANSFORMATION-LINEAGE | W03/W06/W08/W09 | Immutable capture manifest with observer, authorization, consent, original digest, source spans, transformations, retention and custody events |
+| GAP-W06-SYSTEM-RECONSTRUCTION-CLAIM-AND-COUNTEREXAMPLE-LIFECYCLE | W06/W07/W10 | Versioned reconstruction models with claim-level evidence, observed/inferred/unknown distinction, competing hypotheses, coverage, counterexamples and revalidation |
+| GAP-W06-INDEPENDENT-RECONSTRUCTION-VERIFIER-AND-HELDOUT-ORACLE | W06/W09/W10 | Independent verifier identity/qualification, held-out traces/oracle, negative/boundary tests, reproducibility and failure-domain declaration |
+| GAP-W07-SYNTHETIC-REPORT-FLAG-AND-REALITY-EVIDENCE-SEPARATION | W06/W07/W09 | Typed simulation receipt and explicit separation from empirical observation, vulnerability confirmation and Reality Bridge authorization |
+| GAP-W08-W09-CAPTURE-DATA-PRIVACY-AND-EXTERNAL-MODEL-EXPORT | W03/W08/W09/W10 | Capture sensitivity, consent, data minimization, retention/deletion and separate purpose-bound network lease before external model/provider processing |
+| GAP-W10-SYSTEMS-UNDERSTANDING-SPECIALIST-QUALIFICATION | W06/W10 | Scope-specific protocol/OS/hardware/industrial qualification evidence, benchmark lineage, calibration and human escalation |
+
+These gaps are based on bounded inspection of named source paths; they are not claims of a confirmed vulnerability or authorization to test real targets. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Polyglot protocol and offline commit gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-CANONICAL-WIRE-ENCODING-AND-SIGNATURE-PREIMAGE | W01/W04/W05/W06/W08/W09/W11 | Accepted canonical byte profile, exact signature preimage/domain separation, schema registry and Python/Kotlin/Go/Rust golden + negative vectors |
+| GAP-W02-W03-OFFLINE-OUTBOX-DURABILITY-AND-ATOMIC-TOMBSTONE | W02/W03/W08/W11 | Crash-safe durable enqueue/sequence, receipt verification + tombstone atomicity, restart/partition recovery and replay retention |
+| GAP-W02-W03-W05-REMOTE-COMMIT-RECEIPT-AND-IDEMPOTENCY | W02/W03/W05/W09/W11/W12 | Signed remote receipt binding operation/attempt/idempotency key/payload/effect/final version/server sequence; no blind retry on unknown outcome |
+| GAP-W01-W08-SESSION-PRINCIPAL-DEVICE-AUDIENCE-AND-REVOCATION | W01/W08/W09/W11 | Principal issuer, enrolled device, audience, session nonce, expiry, policy epoch and server-side revocation at enforcement boundary |
+| GAP-W03-W09-JOURNAL-NAMESPACE-CHECKPOINT-AND-MIGRATION | W03/W09/W11 | Journal namespace/owner, signed checkpoint, key lifecycle, schema migration ledger, cross-journal consistency and recovery evidence |
+| GAP-W04-W05-W09-POLYGLOT-TOOL-AND-RESULT-RECEIPT-COMPATIBILITY | W04/W05/W09 | Versioned typed tool/provider/result/effect receipts with explicit loss-aware adapters and conformance tests |
+
+The gaps are based on named source paths at the recorded snapshot. They do not establish that every deployment or external provider lacks these controls. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Composition-root, execution ownership and ingress parity gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W02-ALL-INGRESS-IDENTITY-AND-POLICY-PARITY | W01/W02/W08/W09 | Every route binds authenticated principal, device, audience, session and policy consistently; no untrusted fallback identity |
+| GAP-W02-W04-CANONICAL-RUNTIME-PLANE-OWNERSHIP | W02/W04/W05/W06 | Normative ownership/delegation across OperationalNORYXRuntime/HYPERSYNTH, JARVIS RuntimeEngine and Agent/Provider Fabric |
+| GAP-W02-W03-W09-SINGLE-AUTHORITATIVE-OPERATION-STATE | W02/W03/W09/W11/W12 | One logical operation-state authority, cross-store receipt/reconciliation, projections and crash-safe commit semantics |
+| GAP-W01-W02-W09-PRODUCTION-COMPOSITION-MANIFEST-AND-ATTESTATION | W01/W02/W08/W09/W11 | Signed manifest binds every ingress to runtime, principal, policy, verifier, egress, state, recovery and deployment digest |
+| GAP-W06-W09-STRUCTURAL-VS-OPERATIONAL-CLOSURE-EVIDENCE | W02/W06/W09/W11 | Separate structural, composition, runtime, semantic, external assurance and operational readiness gates |
+| GAP-W04-W05-W09-POLYGLOT-SERVICE-AUTHORITY-PARITY | W04/W05/W08/W09/W11 | Go/Kotlin/Rust/Python share authenticated session, canonical operation, authorization and signed receipt semantics |
+| GAP-W02-W05-W11-PROVIDER-AND-EXECUTION-PLANE-RECONCILIATION | W02/W05/W09/W11/W12 | Explicit ModelFabric/provider/ToolExecutor dispatch owner, idempotency, unknown effect and retry policy |
+
+These are bounded source findings, not claims that reverse proxies or external deployment controls do not exist. Multiple runtime planes are not inherently wrong; ambiguous authority is. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Cross-plane failure containment and recovery gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-TRUST-DEPENDENCY-LOSS-AND-REVOCATION-PROPAGATION | W01/W09/W11 | Issuer/key/revocation outage cannot create fallback identity or stale privilege |
+| GAP-W02-W03-DURABLE-GLOBAL-RECOVERY-EPOCH-AND-FENCING | W02/W03/W09/W11 | Durable distributed epoch and stale worker/node fencing |
+| GAP-W02-W05-UNKNOWN-EFFECT-AND-SAFE-FAILOVER | W02/W05/W09/W12 | Shared idempotency and target reconciliation before retry after ambiguous effect |
+| GAP-W03-W08-DURABLE-OFFLINE-OUTBOX-INBOX-AND-COMMIT-ACK | W03/W08/W11 | Crash-safe outbox/inbox, typed signed remote commit receipt and safe acknowledgement |
+| GAP-W04-W11-DISTRIBUTED-AGENT-AND-NODE-MEMBERSHIP-LEASES | W04/W08/W11 | Attested leases, expiry, revocation propagation and stale rejoin fencing |
+| GAP-W06-W07-EVIDENCE-AND-SIMULATION-DEGRADATION-INVALIDATION | W06/W07/W09/W10 | Evidence freshness/checker/fidelity failures invalidate dependent conclusions and prevent actuation |
+| GAP-W09-W11-DURABLE-INDEPENDENT-AUDIT-AND-ALERT-DELIVERY | W09/W11 | Durable independent event chain, delivery acknowledgement and explicit buffer exhaustion |
+| GAP-W10-DOMAIN-SPECIALIST-AND-EVIDENCE-STALE-MODE | W06/W10/W12 | Expired specialist/source/jurisdiction evidence yields INDETERMINATE and escalation |
+| GAP-W11-GLOBAL-PARTITION-QUORUM-AND-REJOIN-FENCING | W03/W08/W11 | Partition-safe authority, quorum, fencing and safe node rejoin |
+| GAP-W12-FINANCIAL-GOVERNANCE-UNKNOWN-OUTCOME-RECOVERY | W01/W03/W09/W12 | Freeze uncertain settlement/vote/impact claims and reconcile independently |
+
+The new mode taxonomy is proposed and does not imply implementation. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Global temporal consistency and causal authority gaps
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-TRUSTED-TIME-AND-CREDENTIAL-VALIDITY | W01/W08/W09/W11 | Issuer time statements, skew bounds, reboot/rollback handling and bounded offline grant validity; caller wall-clock cannot extend authority |
+| GAP-W02-W03-CAUSAL-OPERATION-ORDER-AND-COMMIT-WATERMARK | W02/W03/W05/W11/W12 | Stable causal IDs, per-aggregate authoritative sequence, commit watermark and unknown/missing-parent handling |
+| GAP-W03-W06-BITEMPORAL-MEMORY-AND-EVIDENCE-LINEAGE | W03/W06/W07/W10/W12 | Separate valid/capture/ingest/verification/transaction times, append-only corrections and dependent-claim invalidation |
+| GAP-W04-W10-LEASE-AND-QUALIFICATION-FRESHNESS | W01/W04/W10/W11 | Signed lease/credential validity, freshness bounds, revocation epoch and stale worker/specialist fencing |
+| GAP-W08-W11-OFFLINE-MONOTONIC-CONTINUITY-AND-REJOIN | W03/W08/W09/W11 | Reboot-aware monotonic anchor, signed snapshot time bounds, authority watermark reconciliation and fail-closed rejoin |
+| GAP-W11-DISTRIBUTED-HLC-VERSION-VECTOR-AND-FENCING-PROFILE | W02/W03/W09/W11 | Canonical HLC/causal context, scoped aggregate versions, partition/quorum rules and monotonic fencing tokens |
+| GAP-W12-EFFECTIVE-RECORDED-TIME-AND-LEDGER-ORDER | W01/W03/W09/W12 | Distinct effective/recorded times, immutable correction lineage, ledger sequence and idempotent settlement reconciliation |
+
+These are architecture closure requirements, not confirmed vulnerabilities or claims that external time services are absent. HLC/vector clocks do not replace consensus or authority. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Elastic Agent Fabric scale gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W04-CANONICAL-AGENT-IDENTITY-AND-REGISTRY-OWNERSHIP | W01/W04/W10/W11 | Canonical identity/profile/instance registry, qualification and revocation without conflating role and authority |
+| GAP-W02-W04-DURABLE-DAG-SCHEDULER-AND-FULL-PLAN-COVERAGE | W02/W04/W05 | Durable DAG scheduling, bounded concurrency, dependency/cancellation lifecycle and no silent plan truncation |
+| GAP-W04-W11-DISTRIBUTED-WORKER-LEASE-AND-FENCING | W01/W04/W09/W11 | Durable lease, heartbeat, fencing token, stale worker rejection and safe rejoin |
+| GAP-W04-W05-ATOMIC-CAPACITY-RESERVATION-AND-RESOURCE-BUDGET | W04/W05/W11 | Atomic multidimensional capacity reservation per task/tenant/provider/region |
+| GAP-W04-W05-FAIRNESS-BACKPRESSURE-AND-ADAPTIVE-CONCURRENCY | W02/W04/W05/W11 | Quotas, fairness, overload admission, bounded queues and starvation protection |
+| GAP-W01-W04-QUALIFICATION-DELEGATION-AND-CAPABILITY-ATTENUATION | W01/W04/W10 | Separate skill/role/qualification/delegation with issuer, scope, expiry and revocation |
+| GAP-W04-W06-INDEPENDENT-VERIFICATION-AND-COMMON-FAILURE-DOMAINS | W04/W06/W10 | Evidence independence, holdout, dissent and independent result admission |
+| GAP-W02-W03-W04-ATTEMPT-IDEMPOTENCY-AND-UNKNOWN-OUTCOME-RECONCILIATION | W02/W03/W04/W05/W12 | Durable attempt ledger, deduplication, effect receipts and safe retry/reconciliation |
+| GAP-W03-W04-TASK-SCOPED-MEMORY-AND-CANONICAL-COMMIT | W03/W04/W06 | Isolated task context, provenance, cache invalidation and canonical write only after admission |
+| GAP-W05-W09-MULTI-PROVIDER-QUOTA-SECRET-AND-PRIVACY-BROKER | W05/W08/W09/W11 | Provider adapters with secret custody, retention, residency, cost and rate-limit policy |
+| GAP-W09-W11-AGENT-WORKER-ISOLATION-AND-FLEET-KILL-SWITCH | W01/W04/W08/W09/W11 | Worker sandbox, egress enforcement, revocation and fleet quarantine |
+| GAP-W11-1000-AGENT-CAPACITY-SLO-AND-RECOVERY-PROOF | W04/W05/W09/W11 | Repeatable benchmarks, real capacity evidence, multi-region recovery and cost envelope before claiming 1,000 scale |
+
+These are proposed architecture closure requirements, not verified defects or existing implementation claims. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Distributed epistemic consistency gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W06-ATOMIC-CLAIM-EVIDENCE-AND-DERIVATION-LINEAGE | W03/W06/W09 | Canonical claim/evidence/derivation contracts and immutable source locators |
+| GAP-W04-W06-AGENT-DEPENDENCY-GRAPH-AND-INDEPENDENCE-ATTESTATION | W04/W05/W06/W10 | Evidence dependency graph and defensible reviewer independence levels |
+| GAP-W06-CONTRADICTION-TAXONOMY-AND-ADJUDICATION-LIFECYCLE | W02/W06/W10/W12 | Typed conflicts, rebuttals, counterevidence, dissent and reopening |
+| GAP-W06-CALIBRATED-CONFIDENCE-AND-FORECAST-VALIDATION | W06/W10 | Confidence semantics, calibration, reference classes and drift |
+| GAP-W03-W06-EPISTEMIC-MEMORY-ADMISSION-AND-INVALIDATION | W03/W06/W09 | Provenance-gated promotion, retrieval status and dependent-claim invalidation |
+| GAP-W06-W07-SIMULATION-REALITY-BOUNDARY-AND-MODEL-CALIBRATION | W06/W07 | Distinguish symbolic/synthetic/simulated/observed evidence with calibrated model validity |
+| GAP-W01-W06-W10-SOURCE-EVALUATOR-AND-DECISION-AUTHORITY | W01/W06/W10/W12 | Issuer, reviewer qualification, jurisdiction, conflicts and decision scope |
+| GAP-W06-W09-SIGNED-CLAIM-EVIDENCE-AND-DECISION-RECEIPTS | W01/W06/W09/W11 | Canonical signatures, provenance, policy versions and audit binding |
+| GAP-W03-W11-CONFLICT-PRESERVING-DISTRIBUTED-KNOWLEDGE-MERGE | W03/W06/W11 | Deterministic merge, causal completeness and no silent overwrite |
+| GAP-W06-W12-HIGH-IMPACT-CLAIM-AND-DECISION-ASSURANCE | W06/W10/W12 | Financial, governance, health, safety and impact assurance with independent authority |
+
+Proposed closure requirements only; not accepted ADRs or verified implementation defects. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Canonical cross-plane protocol gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-CANONICAL-PROTOCOL-AND-SIGNATURE-PROFILE | W01/W09/W11 | Normative schema registry, deterministic bytes, signature preimage and domain separation |
+| GAP-W01-W02-PRINCIPAL-DEVICE-AND-DELEGATION-BINDING | W01/W02/W08 | Authenticated principal/device/workload identity and attenuated delegation |
+| GAP-W02-W03-UNIFIED-OPERATION-ATTEMPT-AND-RECEIPT-LINEAGE | W02/W03/W04/W05 | Durable IDs and exact lineage across orchestration, actions, effects, verification and commits |
+| GAP-W02-W05-TYPED-PROVIDER-EFFECT-AND-SETTLEMENT-RECEIPTS | W02/W05/W12 | Provider-issued effect proof distinct from local dispatch/acceptance |
+| GAP-W03-W09-VERIFICATION-RECEIPT-BOUND-STATE-COMMIT | W03/W06/W09 | Replace caller booleans with exact receipt references and atomic admission |
+| GAP-W03-W08-DURABLE-OFFLINE-OUTBOX-AND-SIGNED-SYNC-COMMIT | W03/W08/W11 | Crash-safe queue, authenticated reconnect, remote receipt and atomic tombstone |
+| GAP-W04-W05-TOOL-AND-AGENT-INTEROPERABILITY-CONTRACT | W04/W05 | Portable manifests, capability scope, typed input/output and result provenance |
+| GAP-W04-W06-VERIFIER-INDEPENDENCE-AND-ATTESTATION-BINDING | W04/W06/W10 | Verifier identity, qualification, dependency profile and exact subject binding |
+| GAP-W09-W11-CROSS-REGION-REVOCATION-REPLAY-AND-IDEMPOTENCY | W01/W09/W11 | Durable replay protection, revocation freshness, authority epoch and partition behavior |
+| GAP-W01-W02-W09-SCHEMA-VERSIONING-AND-DOWNGRADE-RESISTANCE | W01/W02/W09 | Schema negotiation, unknown critical fields and compatibility lifecycle |
+| GAP-W05-W08-W09-PROVIDER-SECRET-AND-PAYLOAD-PRIVACY-BOUNDARY | W05/W08/W09 | Data minimization, purpose, retention, residency and secret separation |
+| GAP-W01-W04-W05-W06-W07-W08-W10-W12-RECEIPT-ISSUER-AUTHORITY-MATRIX | W01/W04/W05/W06/W07/W08/W10/W12 | Define which actor may issue each receipt type and what it proves |
+
+Proposed closure requirements only; not accepted ADRs or verified implementation defects. All W01–W12 remain PARTIAL.
