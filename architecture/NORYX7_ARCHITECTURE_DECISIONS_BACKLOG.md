@@ -906,3 +906,21 @@ The [Distributed Knowledge Consistency Architecture](NORYX7_DISTRIBUTED_KNOWLEDG
 - Revocation/invalidation propagation guarantees across memory tiers and regions.
 - Human review and separation-of-duties thresholds for high-impact decisions.
 No graph database, ontology, event broker, proof assistant or consensus technology is selected. All remain OPEN pending alternatives, owners and evidence.
+
+
+## 2026-11-28 — Canonical protocol decisions (OPEN)
+
+The [Canonical Cross-Plane Operation Protocol Architecture](NORYX7_CANONICAL_CROSS_PLANE_OPERATION_PROTOCOL_AND_CONTRACT_UNIFICATION_ARCHITECTURE.md) leaves unresolved:
+- Deterministic CBOR vs constrained canonical JSON or another encoding profile.
+- Schema registry format, ownership, governance and compatibility/deprecation policy.
+- Signature algorithms, key custody, federation and issuer trust per domain.
+- Principal/device/workload enrollment and delegation/revocation model.
+- Durable event/outbox/inbox and idempotency store technology.
+- Receipt issuer authority matrix and external provider effect/settlement contracts.
+- Offline conflict, remote commit and atomic tombstone protocol.
+- Verifier independence assurance levels and qualification registry.
+- Payload reference/content-addressed storage, privacy, retention and deletion.
+- Cross-region revocation freshness, replay protection and partition policy.
+- Transport selection and authenticated session/channel binding.
+- Human escalation thresholds for unknown high-impact effects.
+No broker, database, serialization library, consensus algorithm, transport or KMS/HSM vendor selected. All remain OPEN pending alternatives, owners and evidence.
