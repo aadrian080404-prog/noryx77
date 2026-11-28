@@ -1115,3 +1115,23 @@ Source-tree HEAD reviewed: 5b57a247d8d96d5964df20876925637c8e6f2603 (PR #212). F
 | ecosystem/global_scale.py | 7393cda34d4b57e2310d20cafccc0489a1ab813e | in-process region/cell selection, capacity helpers, queue and resource budget; not durable distributed reservation/fencing or production orchestration |
 
 The observations are bounded to the inspected modules and snapshot; external brokers, orchestration, hardware and deployment controls are not ruled out.
+
+
+## 2026-11-28 — Distributed epistemic consistency source reconciliation
+
+Snapshot reviewed: c0656b593b600e63730450609541728d00becfc9. Full analysis: NORYX7_DISTRIBUTED_KNOWLEDGE_CONSISTENCY_CONTRADICTION_AND_DECISION_RECONCILIATION_ARCHITECTURE.md.
+
+| Source | Blob SHA | Bounded observation |
+|---|---|---|
+| core/reasoning.py | 7bf5d905f07b4805e3505e13408a685d81f7842b | One hypothesis per plan-step objective; structural feasibility predicate; no competing falsifiable causal branches |
+| core/verification.py | ca80253776bd66a1c0ff4ef32f019c85bf510927 | Contract/risk, output-presence, identity/status and enum checks; not semantic truth or source entailment |
+| core/metacognition.py | 9aed7b2522175f6e4a097631566682cdff6a118f | Structural identity/count checks; confidence is a boolean pass ratio; injected challenge interface does not prove independence |
+| core/collaboration.py | 31e0545a9a6f8f50a09d570d617956cf6cf3572e | Primary/Secondary/Primary handshake checks distinct agent IDs and digests, not model/provider/corpus/prompt/tool/failure-domain independence |
+| core/evaluation.py | df35992d09ffb2a9a82e0c1c739b4de3f1b7dd4e | Validates types/ranges/nonempty evidence strings; no evaluator or evidence authentication |
+| core/evaluation_campaign.py | 44db107096abf02f0cde62ba0393f87eda465753 | Deterministic generated cases/holdout labels; no case execution, holdout secrecy or evidence attestation |
+| core/universal_intelligence.py | 986dd5976b6451a5a75950535c13f4355f57fb0f | Keyword routing and caller-supplied evidence/confidence/uncertainty; mean declared strength is not verified coverage |
+| core/finch.py | 4de84c583ba41faa6ff169dd7ed28f2306ed1d09 | Forecast likelihood is arithmetic mean severity, not calibrated event probability |
+| core/multimodal.py | 8c3fb71a6277806d98c2c294444443ddcc3ff9ee | Media digest binds bytes; no capture authenticity, consent, custody or transformation lineage in this contract |
+| core/memory.py | 1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd | Bounded in-process store with execution filtering; no distributed canonical claim/evidence graph or authority-gated promotion |
+
+These findings are bounded to the listed modules and snapshot, not proof of absence from external services or uninspected systems.
