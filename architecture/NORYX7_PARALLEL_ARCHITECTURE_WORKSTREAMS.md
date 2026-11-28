@@ -823,3 +823,21 @@ The [Distributed Knowledge Consistency Architecture](NORYX7_DISTRIBUTED_KNOWLEDG
 - W09/W11: signed receipts, causal completeness, deterministic conflict materialization and revocation propagation.
 - W12: independently assured financial/governance/impact claims and decisions.
 Ten cross-stream gaps are proposed, not accepted or implemented. W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Canonical cross-plane protocol obligations
+
+The [Canonical Cross-Plane Operation Protocol Architecture](NORYX7_CANONICAL_CROSS_PLANE_OPERATION_PROTOCOL_AND_CONTRACT_UNIFICATION_ARCHITECTURE.md) adds:
+- W01: authenticated principal/device/workload identity, delegation, audience and revocation.
+- W02: distinct operation/execution/step/attempt IDs and explicit effect-unknown lifecycle.
+- W03: durable outbox/inbox, receipt-bound state commit and idempotent recovery.
+- W04: portable agent identity, delegated task scope, worker lease and verifier binding.
+- W05: tool/provider manifests, secret custody, idempotency and authoritative effect receipts.
+- W06: typed verification/evidence receipts and proof-scope binding.
+- W07: explicit simulation vs real external effect issuer boundaries.
+- W08: cryptographic reconnect and offline signed sync receipts.
+- W09: canonical encoding, signatures, key lifecycle, replay defense and downgrade resistance.
+- W10: qualification and jurisdiction-bound specialist attestations.
+- W11: cross-region idempotency, revocation freshness and fencing.
+- W12: actual payment/settlement/governance authority-issued receipts.
+Twelve gaps proposed, not implemented or accepted. W01–W12 remain PARTIAL.
