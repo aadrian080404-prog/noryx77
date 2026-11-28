@@ -864,3 +864,21 @@ These are architecture closure requirements, not confirmed vulnerabilities or cl
 | GAP-W11-1000-AGENT-CAPACITY-SLO-AND-RECOVERY-PROOF | W04/W05/W09/W11 | Repeatable benchmarks, real capacity evidence, multi-region recovery and cost envelope before claiming 1,000 scale |
 
 These are proposed architecture closure requirements, not verified defects or existing implementation claims. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Distributed epistemic consistency gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W06-ATOMIC-CLAIM-EVIDENCE-AND-DERIVATION-LINEAGE | W03/W06/W09 | Canonical claim/evidence/derivation contracts and immutable source locators |
+| GAP-W04-W06-AGENT-DEPENDENCY-GRAPH-AND-INDEPENDENCE-ATTESTATION | W04/W05/W06/W10 | Evidence dependency graph and defensible reviewer independence levels |
+| GAP-W06-CONTRADICTION-TAXONOMY-AND-ADJUDICATION-LIFECYCLE | W02/W06/W10/W12 | Typed conflicts, rebuttals, counterevidence, dissent and reopening |
+| GAP-W06-CALIBRATED-CONFIDENCE-AND-FORECAST-VALIDATION | W06/W10 | Confidence semantics, calibration, reference classes and drift |
+| GAP-W03-W06-EPISTEMIC-MEMORY-ADMISSION-AND-INVALIDATION | W03/W06/W09 | Provenance-gated promotion, retrieval status and dependent-claim invalidation |
+| GAP-W06-W07-SIMULATION-REALITY-BOUNDARY-AND-MODEL-CALIBRATION | W06/W07 | Distinguish symbolic/synthetic/simulated/observed evidence with calibrated model validity |
+| GAP-W01-W06-W10-SOURCE-EVALUATOR-AND-DECISION-AUTHORITY | W01/W06/W10/W12 | Issuer, reviewer qualification, jurisdiction, conflicts and decision scope |
+| GAP-W06-W09-SIGNED-CLAIM-EVIDENCE-AND-DECISION-RECEIPTS | W01/W06/W09/W11 | Canonical signatures, provenance, policy versions and audit binding |
+| GAP-W03-W11-CONFLICT-PRESERVING-DISTRIBUTED-KNOWLEDGE-MERGE | W03/W06/W11 | Deterministic merge, causal completeness and no silent overwrite |
+| GAP-W06-W12-HIGH-IMPACT-CLAIM-AND-DECISION-ASSURANCE | W06/W10/W12 | Financial, governance, health, safety and impact assurance with independent authority |
+
+Proposed closure requirements only; not accepted ADRs or verified implementation defects. All W01–W12 remain PARTIAL.
