@@ -882,3 +882,23 @@ These are proposed architecture closure requirements, not verified defects or ex
 | GAP-W06-W12-HIGH-IMPACT-CLAIM-AND-DECISION-ASSURANCE | W06/W10/W12 | Financial, governance, health, safety and impact assurance with independent authority |
 
 Proposed closure requirements only; not accepted ADRs or verified implementation defects. All W01–W12 remain PARTIAL.
+
+
+## 2026-11-28 — Canonical cross-plane protocol gaps (proposed)
+
+| Gap | Streams | Closure requirement |
+|---|---|---|
+| GAP-W01-W09-CANONICAL-PROTOCOL-AND-SIGNATURE-PROFILE | W01/W09/W11 | Normative schema registry, deterministic bytes, signature preimage and domain separation |
+| GAP-W01-W02-PRINCIPAL-DEVICE-AND-DELEGATION-BINDING | W01/W02/W08 | Authenticated principal/device/workload identity and attenuated delegation |
+| GAP-W02-W03-UNIFIED-OPERATION-ATTEMPT-AND-RECEIPT-LINEAGE | W02/W03/W04/W05 | Durable IDs and exact lineage across orchestration, actions, effects, verification and commits |
+| GAP-W02-W05-TYPED-PROVIDER-EFFECT-AND-SETTLEMENT-RECEIPTS | W02/W05/W12 | Provider-issued effect proof distinct from local dispatch/acceptance |
+| GAP-W03-W09-VERIFICATION-RECEIPT-BOUND-STATE-COMMIT | W03/W06/W09 | Replace caller booleans with exact receipt references and atomic admission |
+| GAP-W03-W08-DURABLE-OFFLINE-OUTBOX-AND-SIGNED-SYNC-COMMIT | W03/W08/W11 | Crash-safe queue, authenticated reconnect, remote receipt and atomic tombstone |
+| GAP-W04-W05-TOOL-AND-AGENT-INTEROPERABILITY-CONTRACT | W04/W05 | Portable manifests, capability scope, typed input/output and result provenance |
+| GAP-W04-W06-VERIFIER-INDEPENDENCE-AND-ATTESTATION-BINDING | W04/W06/W10 | Verifier identity, qualification, dependency profile and exact subject binding |
+| GAP-W09-W11-CROSS-REGION-REVOCATION-REPLAY-AND-IDEMPOTENCY | W01/W09/W11 | Durable replay protection, revocation freshness, authority epoch and partition behavior |
+| GAP-W01-W02-W09-SCHEMA-VERSIONING-AND-DOWNGRADE-RESISTANCE | W01/W02/W09 | Schema negotiation, unknown critical fields and compatibility lifecycle |
+| GAP-W05-W08-W09-PROVIDER-SECRET-AND-PAYLOAD-PRIVACY-BOUNDARY | W05/W08/W09 | Data minimization, purpose, retention, residency and secret separation |
+| GAP-W01-W04-W05-W06-W07-W08-W10-W12-RECEIPT-ISSUER-AUTHORITY-MATRIX | W01/W04/W05/W06/W07/W08/W10/W12 | Define which actor may issue each receipt type and what it proves |
+
+Proposed closure requirements only; not accepted ADRs or verified implementation defects. All W01–W12 remain PARTIAL.
