@@ -1135,3 +1135,23 @@ Snapshot reviewed: c0656b593b600e63730450609541728d00becfc9. Full analysis: NORY
 | core/memory.py | 1fc3ca97ab6239d045964b55c3d13f2fc7e6d9cd | Bounded in-process store with execution filtering; no distributed canonical claim/evidence graph or authority-gated promotion |
 
 These findings are bounded to the listed modules and snapshot, not proof of absence from external services or uninspected systems.
+
+
+## 2026-11-28 — Canonical protocol source reconciliation
+
+Snapshot reviewed: a5d13222064dc3b74395eb69f555b982e678ca0c. Full analysis: NORYX7_CANONICAL_CROSS_PLANE_OPERATION_PROTOCOL_AND_CONTRACT_UNIFICATION_ARCHITECTURE.md.
+
+| Source | Blob SHA | Bounded observation |
+|---|---|---|
+| core/contracts.py | a75491921288cbea6f1759ead99f97c83cfdc43d | Python-local dataclasses and Any/Mapping; no common language-neutral wire schema |
+| noryx7_runtime/contracts.py | 9bb6632b214e8d9d3221c9ccf03ab6233209a184 | Separate Intent/ExecutionContext/PlanStep/ActionEnvelope/Attestation family |
+| ecosystem/boundaries.py | a42ad0bdbde8aa05ee694b6aa9f5e2891538e718 | IntentEnvelope defaults principal_id to front label when omitted; label is not authenticated principal |
+| core/actions.py | 5e2fc212abea2873bb471b12e6fe6f5021664e97 | HMAC action grant uses local JSON serialization; not a cross-language canonicalization profile |
+| core/identity.py | e6e8e5b03135251baca489643f86c7d81a755a08 | Ed25519 identity/attestation and process-local trust registry; attestation is not an action/effect/commit receipt |
+| core/tool_protocol.py | 1c529fbbf5352469be8ab6633edc48113da8a3bf | ToolResult has Any value and free-form provenance; no portable signed effect receipt |
+| ecosystem/dispatch_contract.py | 87be053ccad3776d7eebf1cad280a4f52fec9ab6 | DispatchReceipt digest is not external effect proof |
+| ecosystem/runtime_dispatch.py | 9f4f628c322aabb571fce64d54c3d6740cb142fd | Success evidence hashes result type repr; exception evidence hashes exception type |
+| core/state.py | f1dd791359038d799a63852ea850ce7f3d738148 | StateStore.commit accepts caller boolean verification_valid and stage label, not a typed verifier receipt |
+| core/offline.py | 6d0c5a76134fa679279406da1a514e628240debd | Process-local queue/sequence, ID-only acknowledgement, boolean reconnect flags and no typed signed remote commit receipt in this module |
+
+Findings are module/snapshot bounded. No claim is made about external gateways, provider systems or deployment controls not inspected.
