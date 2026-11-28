@@ -809,3 +809,17 @@ The [Agent Fabric Elastic Scale 10–1,000 Architecture](NORYX7_AGENT_FABRIC_ELA
 - W06/W10: independent verifier and specialist qualification; common failure domains and dissent remain explicit.
 - W07/W08/W12: sandboxed simulation/device/economy agents with domain-specific actuation and approval boundaries.
 The scale ladder 10→32→100→256→500→1,000 distinguishes logical registrations from measured execution slots. Slot targets remain hypotheses pending hardware/provider benchmarks. All W01–W12 remain PARTIAL; architecture only.
+
+
+## 2026-11-28 — Epistemic consistency obligations across W01–W12
+
+The [Distributed Knowledge Consistency Architecture](NORYX7_DISTRIBUTED_KNOWLEDGE_CONSISTENCY_CONTRADICTION_AND_DECISION_RECONCILIATION_ARCHITECTURE.md) adds:
+- W01/W10: source, evaluator, specialist and decision-owner identity, qualification, scope and revocation.
+- W02: explicit claim extraction, review, challenge, adjudication and commit lifecycle.
+- W03: immutable claim/evidence lineage, bitemporal memory, provenance-aware retrieval, invalidation and conflict-preserving merge.
+- W04/W05: agent dependency graph, common-mode provider/model/corpus disclosure and bounded independent challenge.
+- W06: typed proof obligations, source entailment, alternative hypotheses, falsifiers, evaluator attestation, holdout integrity and calibrated forecast semantics.
+- W07/W08: explicit simulation/observation boundary, source capture/custody and offline provenance.
+- W09/W11: signed receipts, causal completeness, deterministic conflict materialization and revocation propagation.
+- W12: independently assured financial/governance/impact claims and decisions.
+Ten cross-stream gaps are proposed, not accepted or implemented. W01–W12 remain PARTIAL.
