@@ -890,3 +890,19 @@ The [Agent Fabric Elastic Scale 10–1,000 Architecture](NORYX7_AGENT_FABRIC_ELA
 - Set measured SLOs, benchmark methodology, hardware/provider capacity, cost envelope and staged rollout gates for 10→32→100→256→500→1,000.
 - Define durable attempt/effect reconciliation and task-scoped memory/commit semantics.
 All decisions remain OPEN pending owner review, alternatives and evidence. No implementation or tests.
+
+
+## 2026-11-28 — Epistemic consistency decisions (OPEN)
+
+The [Distributed Knowledge Consistency Architecture](NORYX7_DISTRIBUTED_KNOWLEDGE_CONSISTENCY_CONTRADICTION_AND_DECISION_RECONCILIATION_ARCHITECTURE.md) leaves unresolved:
+- Canonical claim/proposition ontology, entity resolution and scope language.
+- Source trust classes, issuer authority, consent, custody and jurisdiction rules.
+- Evidence dependency graph and independence attestation availability/thresholds.
+- Confidence, calibration, uncertainty and forecast scoring representation.
+- Conflict taxonomy, severity, adjudicator selection, appeals and reopening triggers.
+- Holdout custody/secrecy and evaluator identity/qualification.
+- NEXUS/FRL proof language, semantic oracle and solver boundaries.
+- Immutable evidence storage, privacy, retention, correction and deletion obligations.
+- Revocation/invalidation propagation guarantees across memory tiers and regions.
+- Human review and separation-of-duties thresholds for high-impact decisions.
+No graph database, ontology, event broker, proof assistant or consensus technology is selected. All remain OPEN pending alternatives, owners and evidence.
